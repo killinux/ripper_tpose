@@ -194,23 +194,21 @@ foreach ($id in $allIds) {
                 $convertDir = Join-Path $outDir $fmt
                 New-Item -ItemType Directory -Force $convertDir | Out-Null
 
+                # Use cmd /c to isolate Blender stderr from PowerShell ErrorAction
+                $blenderCmd = ('"{0}" --background --python "{1}" -- "{2}" "{3}" {4} 2>&1' -f $BlenderExe, $convertPy, $mainFbx.FullName, $convertDir, $fmt)
+
                 if ($fmt -eq 'glb') {
-                    # GLB: use Blender headless (built-in glTF, no addon needed)
                     Write-Host ("  -> GLB via Blender...") -ForegroundColor White
-                    & $BlenderExe --background --python $convertPy -- $mainFbx.FullName $convertDir glb 2>&1 |
-                        Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
                 }
                 elseif ($fmt -eq 'xps') {
-                    # XPS: try Noesis first (faster, no addon dependency), fallback to Blender
                     Write-Host ("  -> XPS via Blender + XNALaraMesh...") -ForegroundColor White
-                    & $BlenderExe --background --python $convertPy -- $mainFbx.FullName $convertDir xps 2>&1 |
-                        Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
                 }
                 elseif ($fmt -eq 'pmx') {
                     Write-Host ("  -> PMX via Blender + mmd_tools...") -ForegroundColor White
-                    & $BlenderExe --background --python $convertPy -- $mainFbx.FullName $convertDir pmx 2>&1 |
-                        Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
                 }
+
+                cmd /c $blenderCmd |
+                    Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
 
                 $converted = Get-ChildItem $convertDir -File -ErrorAction SilentlyContinue
                 if ($converted) {
