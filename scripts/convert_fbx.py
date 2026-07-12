@@ -34,6 +34,19 @@ def main():
     basename = os.path.splitext(os.path.basename(fbx_path))[0]
     os.makedirs(out_dir, exist_ok=True)
 
+    # 有的 FBX 是纯空节点层级(如 g02 的 nk_bs：相机/挂点树，无网格无骨架)，
+    # 提前明确报错，让调用方(extract_character.ps1)换下一个候选源
+    objs = list(bpy.context.scene.objects)
+    n_mesh = sum(1 for o in objs if o.type == 'MESH')
+    n_arm = sum(1 for o in objs if o.type == 'ARMATURE')
+    print(f"[convert] Imported: {len(objs)} objects ({n_mesh} meshes, {n_arm} armatures)")
+    if n_mesh == 0:
+        print("[convert] ERROR: no mesh in FBX (empty hierarchy dump?) - nothing to export")
+        sys.exit(3)
+    if fmt in ('xps', 'pmx') and n_arm == 0:
+        print(f"[convert] ERROR: no armature in FBX - unsuitable for rigged {fmt} export")
+        sys.exit(3)
+
     if fmt == 'glb':
         out_path = os.path.join(out_dir, basename + '.glb')
         print(f"[convert] Exporting GLB -> {out_path}")

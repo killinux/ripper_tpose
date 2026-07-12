@@ -191,21 +191,15 @@ foreach ($id in $allIds) {
         if ($pcFbx.Count -eq 0) {
             Write-Host "  No character FBX found to convert" -ForegroundColor Red
         } else {
-            # Pick the main body FBX (largest pc_<id>_nk* or pc_<id>_hd*)
-            $mainFbx = $pcFbx | Where-Object { $_.Name -match "nk_bs|nk_model|_nk\." } |
-                       Sort-Object Length -Descending | Select-Object -First 1
-            if (-not $mainFbx) {
-                $mainFbx = $pcFbx | Sort-Object Length -Descending | Select-Object -First 1
-            }
-
-            Write-Host ("  Source: " + $mainFbx.Name + " (" + [math]::Round($mainFbx.Length/1MB,2) + " MB)")
+            # 候选转换源：nk(裸模)优先、其余按大小排。有的角色 nk_bs 是空层级
+            # (无网格无骨架，如 g02)，转换失败时自动换下一个候选
+            $nkFbx   = @($pcFbx | Where-Object { $_.Name -match "nk_bs|nk_model|_nk\." } | Sort-Object Length -Descending)
+            $restFbx = @($pcFbx | Where-Object { $_.FullName -notin $nkFbx.FullName } | Sort-Object Length -Descending)
+            $candidates = @(@($nkFbx) + @($restFbx) | Select-Object -First 3)
 
             foreach ($fmt in $formats) {
                 $convertDir = Join-Path $outDir $fmt
                 New-Item -ItemType Directory -Force $convertDir | Out-Null
-
-                # Use cmd /c to isolate Blender stderr from PowerShell ErrorAction
-                $blenderCmd = ('"{0}" --background --python "{1}" -- "{2}" "{3}" {4} 2>&1' -f $BlenderExe, $convertPy, $mainFbx.FullName, $convertDir, $fmt)
 
                 if ($fmt -eq 'glb') {
                     Write-Host ("  -> GLB via Blender...") -ForegroundColor White
@@ -217,16 +211,27 @@ foreach ($id in $allIds) {
                     Write-Host ("  -> PMX via Blender + mmd_tools...") -ForegroundColor White
                 }
 
-                cmd /c $blenderCmd |
-                    Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
+                $done = $false
+                foreach ($src in $candidates) {
+                    Write-Host ("    Source: " + $src.Name + " (" + [math]::Round($src.Length/1MB,2) + " MB)")
 
-                $converted = Get-ChildItem $convertDir -File -ErrorAction SilentlyContinue
-                if ($converted) {
-                    foreach ($cf in $converted) {
-                        Write-Host ("    " + [math]::Round($cf.Length/1MB,3) + " MB  " + $cf.Name) -ForegroundColor Green
+                    # Use cmd /c to isolate Blender stderr from PowerShell ErrorAction
+                    $blenderCmd = ('"{0}" --background --python "{1}" -- "{2}" "{3}" {4} 2>&1' -f $BlenderExe, $convertPy, $src.FullName, $convertDir, $fmt)
+                    cmd /c $blenderCmd |
+                        Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
+
+                    $converted = Get-ChildItem $convertDir -File -ErrorAction SilentlyContinue
+                    if ($converted) {
+                        foreach ($cf in $converted) {
+                            Write-Host ("    " + [math]::Round($cf.Length/1MB,3) + " MB  " + $cf.Name) -ForegroundColor Green
+                        }
+                        $done = $true
+                        break
                     }
-                } else {
-                    Write-Host ("    No output for $fmt (check Blender/Noesis logs)") -ForegroundColor Red
+                    Write-Host ("    " + $src.Name + " produced no output, trying next candidate...") -ForegroundColor Yellow
+                }
+                if (-not $done) {
+                    Write-Host ("    No output for $fmt (check Blender logs)") -ForegroundColor Red
                 }
             }
         }
