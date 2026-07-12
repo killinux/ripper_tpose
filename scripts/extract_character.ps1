@@ -202,23 +202,9 @@ foreach ($id in $allIds) {
                 }
                 elseif ($fmt -eq 'xps') {
                     # XPS: try Noesis first (faster, no addon dependency), fallback to Blender
-                    if (Test-Path $NoesisExe) {
-                        $xpsOut = Join-Path $convertDir ($mainFbx.BaseName + '.mesh')
-                        Write-Host ("  -> XPS via Noesis...") -ForegroundColor White
-                        & $NoesisExe "?cmode" $mainFbx.FullName $xpsOut 2>&1 |
-                            ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkGray }
-                        if (Test-Path $xpsOut) {
-                            Write-Host ("    OK: " + $xpsOut) -ForegroundColor Green
-                        } else {
-                            Write-Host "    Noesis failed, trying Blender..." -ForegroundColor DarkYellow
-                            & $BlenderExe --background --python $convertPy -- $mainFbx.FullName $convertDir xps 2>&1 |
-                                Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
-                        }
-                    } else {
-                        Write-Host ("  -> XPS via Blender...") -ForegroundColor White
-                        & $BlenderExe --background --python $convertPy -- $mainFbx.FullName $convertDir xps 2>&1 |
-                            Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
-                    }
+                    Write-Host ("  -> XPS via Blender + XNALaraMesh...") -ForegroundColor White
+                    & $BlenderExe --background --python $convertPy -- $mainFbx.FullName $convertDir xps 2>&1 |
+                        Select-String '\[convert\]' | ForEach-Object { Write-Host ("    " + $_.Line) -ForegroundColor DarkGray }
                 }
                 elseif ($fmt -eq 'pmx') {
                     Write-Host ("  -> PMX via Blender + mmd_tools...") -ForegroundColor White
