@@ -198,8 +198,11 @@ D:\roe_exports\a01\
 ```
 File > Import > FBX
   Automatic Bone Orientation: ON
-  Scale: 1.0
+  Scale: 1.0  (脚本已用 --fbx-scale-factor 100 导出，Blender 这里保持 1.0 即可)
 ```
+
+> 如果模型导入后极小(厘米级),说明 FBX 用了旧版 scale-factor=1 导出——
+> 把 Import Scale 改成 **100**,或导入后全选 → `S` → `100` → Enter → `Ctrl+A` Apply Scale。
 
 导入后检查:
 - Armature 存在,rest pose 是 T/A-pose

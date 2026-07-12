@@ -140,7 +140,7 @@ foreach ($id in $allIds) {
         $stageDir,
         '-m', 'splitObjects',
         '--fbx-animation', 'skip',
-        '--fbx-scale-factor', '1',
+        '--fbx-scale-factor', '100',
         '-g', 'sceneHierarchy',
         '-o', $outDir,
         '--log-level', 'warning'
