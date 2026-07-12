@@ -48,7 +48,7 @@ def main():
         print(f"[convert] Done: {out_path}")
 
     elif fmt == 'xps':
-        out_path = os.path.join(out_dir, basename + '.mesh.ascii')
+        out_path = os.path.join(out_dir, basename + '.mesh')
         print(f"[convert] Exporting XPS -> {out_path}")
         try:
             import io_scene_xps_tools

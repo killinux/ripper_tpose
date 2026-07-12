@@ -203,7 +203,7 @@ foreach ($id in $allIds) {
                 elseif ($fmt -eq 'xps') {
                     # XPS: try Noesis first (faster, no addon dependency), fallback to Blender
                     if (Test-Path $NoesisExe) {
-                        $xpsOut = Join-Path $convertDir ($mainFbx.BaseName + '.mesh.ascii')
+                        $xpsOut = Join-Path $convertDir ($mainFbx.BaseName + '.mesh')
                         Write-Host ("  -> XPS via Noesis...") -ForegroundColor White
                         & $NoesisExe "?cmode" $mainFbx.FullName $xpsOut 2>&1 |
                             ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkGray }
