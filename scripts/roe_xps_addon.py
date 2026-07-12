@@ -11,6 +11,7 @@ N 面板(侧边栏) > ROE 页签，三步：
 依赖: 第 3 步需要 XNALaraMesh 插件已启用。
 """
 import os
+import re
 
 import bpy
 from bpy.props import StringProperty, PointerProperty
@@ -348,13 +349,34 @@ class ROE_OT_apply_materials(Operator):
             self.report({'ERROR'}, "贴图目录无效: %s" % tex_dir)
             return {'CANCELLED'}
 
-        face_tex = find_tex(tex_dir, '*face*Albedo*.png')
-        iris_tex = find_tex(tex_dir, '*eye_iris*Albedo*.png')
-        brow_tex = find_tex(tex_dir, '*eyebrow*Albedo*.png')
-        hair_tex = find_tex(tex_dir, '*hair*Albedo*.png')
-
-        meshes = scene_meshes()
+        meshes = [o for o in scene_meshes() if not re.match(r'^\d+_', o.name)]
         head = find_head(meshes)
+
+        # 体型字母(pc_g11_... -> g)：贴图目录里有多体型/LD 共享贴图，必须精确匹配
+        bt = None
+        for o in meshes:
+            mm = re.match(r'pc_([a-z])\d', o.name)
+            if mm:
+                bt = mm.group(1)
+                break
+
+        def pick(*patterns):
+            for pat in patterns:
+                if pat:
+                    hit = find_tex(tex_dir, pat)
+                    if hit:
+                        return hit
+            return None
+
+        face_tex = pick('pc_%s_nk_face*Albedo*.png' % bt if bt else None,
+                        'pc_*_nk_face*Albedo*.png', '*face*Albedo*.png')
+        iris_tex = pick('pc_%s_nk_eye_iris*Albedo*.png' % bt if bt else None,
+                        '*eye_iris*Albedo*.png')
+        brow_tex = pick('pc_%s_nk_eyebrow*Albedo*.png' % bt if bt else None,
+                        '*eyebrow*Albedo*.png')
+        hair_tex = pick('pc_%s_nk_hair*Albedo*.png' % bt if bt else None,
+                        'pc_%s_*hair*Albedo*.png' % bt if bt else None,
+                        '*hair*Albedo*.png')
 
         for o in meshes:
             if o is head:
@@ -407,10 +429,11 @@ class ROE_OT_export_xps(Operator):
             return {'CANCELLED'}
         p = context.scene.roe
         tex_dir = bpy.path.abspath(p.tex_dir)
-        meshes = scene_meshes()
+        # 跳过 XPS 导入的网格(名字以"数字_"开头)，只导出 FBX 那套
+        meshes = [o for o in scene_meshes() if not re.match(r'^\d+_', o.name)]
         head = find_head(meshes)
         if not meshes:
-            self.report({'ERROR'}, "场景里没有网格")
+            self.report({'ERROR'}, "场景里没有(FBX 来源的)网格")
             return {'CANCELLED'}
         if not os.path.isdir(tex_dir):
             tex_dir = os.path.dirname(bpy.path.abspath(p.fbx_path))
@@ -422,21 +445,44 @@ class ROE_OT_export_xps(Operator):
 
         fallback_group = []  # 兜底自建的组，导出后删除（防止污染后续 XPS 导入）
 
+        def group_output_linked(gt):
+            gout = next((n for n in gt.nodes if n.type == 'GROUP_OUTPUT'), None)
+            return bool(gout and any(l.to_node == gout for l in gt.links))
+
+        def repair_group(gt):
+            """半成品组（建组中途异常）：内部 Principled 没连到组输出 -> 材质全黑。
+            补上缺失的输出连接。"""
+            principled = next((n for n in gt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+            gout = next((n for n in gt.nodes if n.type == 'GROUP_OUTPUT'), None)
+            if principled and gout and not any(l.to_node == gout for l in gt.links):
+                try:
+                    gt.links.new(principled.outputs['BSDF'], gout.inputs[0])
+                except Exception:
+                    pass
+            return group_output_linked(gt)
+
+        def group_valid(gt):
+            return gt is not None and 'Alpha' in gt.inputs and group_output_linked(gt)
+
         def get_xps_group():
             """XNALaraMesh 导出器只认 'XPS Shader' 节点组（按输入插槽名找贴图）。
             优先用 XNALaraMesh 自己的 xps_shader_group() 创建，保证与其导入器兼容——
-            残缺的同名组会让 XPS 导入报 KeyError: 'Alpha'。"""
+            残缺组会让 XPS 导入报 KeyError: 'Alpha' 或渲染全黑（缺输出连接）。"""
             gt = bpy.data.node_groups.get('XPS Shader')
-            if gt is not None and 'Alpha' not in gt.inputs:
-                gt.name = 'XPS Shader.broken'   # 旧版插件建的残缺组：改名让位
-                gt = None
+            if gt is not None and not group_valid(gt):
+                if 'Alpha' not in gt.inputs or not repair_group(gt):
+                    gt.name = 'XPS Shader.broken'   # 修不好的残缺组：改名让位
+                    gt = None
             if gt:
                 return gt
             import importlib
             for modname in ('XNALaraMesh-master', 'XNALaraMesh'):
                 try:
                     mc = importlib.import_module(modname + '.material_creator')
-                    return mc.xps_shader_group()
+                    gt = mc.xps_shader_group()
+                    if group_valid(gt) or repair_group(gt):
+                        return gt
+                    gt.name = 'XPS Shader.broken'
                 except Exception:
                     continue
             # 兜底：自建最小组（含 Alpha），仅本次导出用，结束即删
@@ -501,6 +547,10 @@ class ROE_OT_export_xps(Operator):
                 if m:
                     dup.data.materials.append(m)
                     temp_mats.append(m)
+                # 源 FBX 可能有多材质槽(body1=cloth+skin)，合并为单槽后必须把
+                # 面索引归零，否则 XNALaraMesh 按索引分桶会丢面/写 missing.png
+                for q in dup.data.polygons:
+                    q.material_index = 0
                 # XPS 网格名用 _ 作分隔符，名字本体里的 _ 必须换掉
                 dup.name = '7_%s_0.1' % o.name.split('.')[0].replace('_', '-')
                 temps.append(dup)
@@ -532,6 +582,8 @@ class ROE_OT_export_xps(Operator):
                         if m:
                             part.data.materials.append(m)
                             temp_mats.append(m)
+                        for q in part.data.polygons:
+                            q.material_index = 0
                         part.name = '%s_%s_0.1' % (rg, xname)
                         temps.append(part)
                 else:
