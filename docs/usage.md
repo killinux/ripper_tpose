@@ -209,6 +209,9 @@ File > Import > FBX
 - 每个 mesh 有 Armature 修改器 + 按骨骼命名的顶点组(权重已在)
 - Shape Keys(若用 GUI 导出)
 
+贴材质(含眼球/睫毛/眉毛修复)用 `scripts/blender_face_materials.py` 一键完成,
+原理和调参见 [face-eye-materials.md](face-eye-materials.md)。
+
 ---
 
 ## 故障排查
