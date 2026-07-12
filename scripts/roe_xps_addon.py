@@ -325,7 +325,7 @@ class ROE_OT_import_fbx(Operator):
                 bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
                 self.report({'INFO'}, "导入完成(已自动 x100): %d 个物体" % len(new))
                 return {'FINISHED'}
-        for area in context.screen.areas:
+        for area in (context.screen.areas if context.screen else []):
             if area.type == 'VIEW_3D':
                 for space in area.spaces:
                     if space.type == 'VIEW_3D':
@@ -419,22 +419,39 @@ class ROE_OT_export_xps(Operator):
         out_path = bpy.path.abspath(p.xps_out) if p.xps_out else \
             os.path.join(tex_dir, base + '_fixed.mesh')
 
+        fallback_group = []  # 兜底自建的组，导出后删除（防止污染后续 XPS 导入）
+
         def get_xps_group():
             """XNALaraMesh 导出器只认 'XPS Shader' 节点组（按输入插槽名找贴图）。
-            复用已有的组；没有则建一个带全部 9 个插槽的最小实现。"""
+            优先用 XNALaraMesh 自己的 xps_shader_group() 创建，保证与其导入器兼容——
+            残缺的同名组会让 XPS 导入报 KeyError: 'Alpha'。"""
             gt = bpy.data.node_groups.get('XPS Shader')
+            if gt is not None and 'Alpha' not in gt.inputs:
+                gt.name = 'XPS Shader.broken'   # 旧版插件建的残缺组：改名让位
+                gt = None
             if gt:
                 return gt
+            import importlib
+            for modname in ('XNALaraMesh-master', 'XNALaraMesh'):
+                try:
+                    mc = importlib.import_module(modname + '.material_creator')
+                    return mc.xps_shader_group()
+                except Exception:
+                    continue
+            # 兜底：自建最小组（含 Alpha），仅本次导出用，结束即删
             gt = bpy.data.node_groups.new('XPS Shader', 'ShaderNodeTree')
             for s in ('Diffuse', 'Lightmap', 'Specular', 'Emission', 'Bump Map',
                       'Bump Mask', 'MicroBump 1', 'MicroBump 2', 'Environment'):
                 gt.inputs.new('NodeSocketColor', s)
+            a = gt.inputs.new('NodeSocketFloatFactor', 'Alpha')
+            a.default_value = 1.0
             gt.outputs.new('NodeSocketShader', 'Shader')
             gi = gt.nodes.new('NodeGroupInput'); gi.location = (-300, 0)
             go = gt.nodes.new('NodeGroupOutput'); go.location = (300, 0)
             em = gt.nodes.new('ShaderNodeEmission')
             gt.links.new(gi.outputs['Diffuse'], em.inputs['Color'])
             gt.links.new(em.outputs['Emission'], go.inputs['Shader'])
+            fallback_group.append(gt)
             return gt
 
         def simple_export_mat(name, image):
@@ -553,6 +570,12 @@ class ROE_OT_export_xps(Operator):
             for m in temp_mats:
                 try:
                     bpy.data.materials.remove(m)
+                except Exception:
+                    pass
+            for gt in fallback_group:
+                try:
+                    if gt.users == 0:
+                        bpy.data.node_groups.remove(gt)
                 except Exception:
                     pass
             for o in hidden:
