@@ -378,15 +378,19 @@ class ROE_OT_apply_materials(Operator):
                         'pc_%s_*hair*Albedo*.png' % bt if bt else None,
                         '*hair*Albedo*.png')
 
+        no_tex = []
         for o in meshes:
             if o is head:
                 continue
             me = o.data
             if 'hair' in o.name.lower():
-                m = albedo_mat(o.name + '_mat', hair_tex)
+                tex = hair_tex
+                m = albedo_mat(o.name + '_mat', tex)
             else:
                 tex = find_tex(tex_dir, o.name.split('.')[0] + '*Albedo*.png')
                 m = albedo_mat(o.name + '_mat', tex, desat=('body1' in o.name), hashed=True)
+            if not tex:
+                no_tex.append(o.name)
             me.materials.clear()
             me.materials.append(m)
             while len(me.materials) < max((q.material_index for q in me.polygons), default=0) + 1:
@@ -410,7 +414,11 @@ class ROE_OT_apply_materials(Operator):
         for q in me.polygons:
             q.material_index = cls[q.index]
         me.update()
-        self.report({'INFO'}, "材质完成(head 已分 5 槽)。EEVEE 编译 shader 需几秒")
+        if no_tex:
+            self.report({'WARNING'},
+                        "完成，但这些网格没找到贴图(导出会是 missing.png): %s" % ', '.join(no_tex))
+        else:
+            self.report({'INFO'}, "材质完成(head 已分 5 槽)。EEVEE 编译 shader 需几秒")
         return {'FINISHED'}
 
 
