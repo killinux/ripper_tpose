@@ -551,8 +551,11 @@ class ROE_OT_export_xps(Operator):
                 # 面索引归零，否则 XNALaraMesh 按索引分桶会丢面/写 missing.png
                 for q in dup.data.polygons:
                     q.material_index = 0
-                # XPS 网格名用 _ 作分隔符，名字本体里的 _ 必须换掉
-                dup.name = '7_%s_0.1' % o.name.split('.')[0].replace('_', '-')
+                # XPS 网格名用 _ 作分隔符，名字本体里的 _ 必须换掉。
+                # body 贴图 alpha 全 255，用 RG5(不透明)——RG7 的 alpha 混合
+                # 会让大网格(夹克)在 Blender 里排序错乱像半透明;头发保留 RG7
+                rg = '7' if 'hair' in o.name.lower() else '5'
+                dup.name = '%s_%s_0.1' % (rg, o.name.split('.')[0].replace('_', '-'))
                 temps.append(dup)
 
             # 复制 head 并按材质槽拆分
