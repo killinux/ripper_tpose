@@ -12,7 +12,7 @@
 |---|---|---|
 | AssetStudioModCLI | `E:\tools\AssetStudioModCLI_net472\...\AssetStudioModCLI.exe` | 解析 Unity AssetBundle、导出 FBX |
 | Blender 3.6 | `D:\Program Files\blender-3.6.15-windows-x64\blender.exe` | 格式转换(XPS/PMX/GLB) |
-| Noesis | `E:\tools\noesisv\Noesis.exe` | XPS 转换备选(更快) |
+| Noesis | `E:\tools\noesisv\Noesis.exe` | 可选(当前流程未使用,仅保留参数) |
 | Rise of Eros | `D:\Program Files (x86)\Steam\steamapps\common\Rise of Eros` | 游戏资产来源 |
 
 > 以上路径已写为默认值。若安装位置不同,用 `-CliExe`/`-BlenderExe`/`-NoesisExe`/`-GameRoot` 参数覆盖。
@@ -65,8 +65,9 @@ a01, a02, a03, ... k06, l01
 .\extract_character.ps1 a01 -Format xps
 ```
 
-优先用 Noesis 转(快、无 addon 依赖);Noesis 失败时自动回退 Blender + b2xps_addon。
-产物: `D:\roe_exports\a01\xps\pc_a01_nk_bs.mesh.ascii`
+用 Blender + XNALaraMesh 导出(白模无贴图;要带材质用 `roe_xps_addon.py` 插件)。
+源 FBX 自动选:nk(裸模)优先,是空层级时自动换下一个候选(如 `pc_<id>_hd`)。
+产物: `D:\roe_exports\a01\xps\pc_a01_nk_bs.mesh`
 
 ### 转 PMX(MikuMikuDance)
 
@@ -222,6 +223,7 @@ File > Import > FBX
 | 现象 | 原因 | 解法 |
 |---|---|---|
 | FBX 只有 2-3 根骨 | 共享骨架 bundle 没加载 | 加 `-IncludeShare` |
+| XPS 转换报 `poll() failed, context is incorrect` / xps 目录为空 | 选中的 `nk_bs` FBX 是纯空节点层级(无网格无骨架，如 g02) | 已自动处理：转换失败会换下一个候选 FBX(如 `pc_<id>_hd`)重试 |
 | PMX 导出失败 | mmd_tools 不在 Blender 3.6 addon 路径 | 把 mmd_tools 从 3.5 复制到 3.6 的 addons |
 | XPS 导出失败(Noesis+Blender 都不行) | XPS addon 未启用 | 在 Blender 里 Edit > Preferences > Add-ons 搜 XPS 并启用 |
 | 转换很慢 | Blender 无头启动约 5-10 秒开销 | 正常,每格式约 10-20 秒 |
