@@ -670,6 +670,44 @@ class ROE_OT_export_xps(Operator):
         return {'FINISHED'}
 
 
+class ROE_OT_fix_xps_armature(Operator):
+    bl_idname = "roe.fix_xps_armature"
+    bl_label = "4. 修正XPS骨架方向"
+    bl_description = "XPS 是 Y-up 坐标系，XNALaraMesh 导入后骨架躺在地上；转正(+90°X 烘进骨架数据)，网格不受影响"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        import math
+        fixed = []
+        for arm in [o for o in context.scene.objects if o.type == 'ARMATURE']:
+            heads = [b.head_local for b in arm.data.bones]
+            if not heads:
+                continue
+            zs = max(abs(h.z) for h in heads)
+            ys = max(abs(h.y) for h in heads)
+            if ys <= zs * 2 or ys < 0.3:   # 骨架不是躺平的，跳过
+                continue
+            kids = [o for o in context.scene.objects if o.parent is arm]
+            mats = {o: o.matrix_world.copy() for o in kids}
+            for o in kids:                  # 暂时解除父子，网格保持原位
+                o.parent = None
+                o.matrix_world = mats[o]
+            arm.rotation_euler.x += math.radians(90)
+            bpy.ops.object.select_all(action='DESELECT')
+            arm.select_set(True)
+            context.view_layer.objects.active = arm
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+            for o in kids:                  # 挂回去
+                o.parent = arm
+                o.matrix_parent_inverse = arm.matrix_world.inverted()
+            fixed.append(arm.name)
+        if fixed:
+            self.report({'INFO'}, "已转正骨架: %s" % ', '.join(fixed))
+        else:
+            self.report({'INFO'}, "没有发现躺平的骨架")
+        return {'FINISHED'}
+
+
 # ----------------------------------------------------------------------- panel
 
 class ROE_PT_panel(Panel):
@@ -689,10 +727,12 @@ class ROE_PT_panel(Panel):
         col.separator()
         col.prop(p, 'xps_out')
         col.operator('roe.export_xps', icon='EXPORT')
+        col.separator()
+        col.operator('roe.fix_xps_armature', icon='ARMATURE_DATA')
 
 
 classes = (ROE_Props, ROE_OT_import_fbx, ROE_OT_apply_materials,
-           ROE_OT_export_xps, ROE_PT_panel)
+           ROE_OT_export_xps, ROE_OT_fix_xps_armature, ROE_PT_panel)
 
 
 def register():
