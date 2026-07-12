@@ -152,11 +152,12 @@ foreach ($id in $allIds) {
         Write-Host ""
         Write-Host "[3/$stepCount] Exporting textures (PNG)..." -ForegroundColor Cyan
         $texDir = Join-Path $outDir "_textures"
+        # 不按角色名过滤：脸/眼/眉/发等共享贴图叫 pc_<体型>_nk_*（不含角色 ID），
+        # 过滤会漏掉它们；stage 里本来就只有该角色的 bundle
         $texArgs = @(
             $stageDir,
             '-m', 'export',
             '-t', 'tex2d',
-            '--filter-by-name', $id,
             '--image-format', 'png',
             '-g', 'none',
             '-o', $texDir,
