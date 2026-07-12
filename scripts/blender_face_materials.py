@@ -56,8 +56,9 @@ def tex_node(nt, path, loc=(-500, 200)):
     return t
 
 
-def albedo_mat(name, tex_path, desat=False):
-    """普通网格材质：Albedo + 贴图 alpha（CLIP），可选降饱和。"""
+def albedo_mat(name, tex_path, desat=False, hashed=False):
+    """普通网格材质：Albedo + 贴图 alpha，可选降饱和。
+    hashed=True 用 HASHED 半透明（丝袜等半透明衣物 CLIP 会被裁没）。"""
     m, nt, b = new_mat(name)
     if not tex_path:
         return m
@@ -70,7 +71,7 @@ def albedo_mat(name, tex_path, desat=False):
     else:
         nt.links.new(t.outputs['Color'], b.inputs['Base Color'])
     nt.links.new(t.outputs['Alpha'], b.inputs['Alpha'])
-    m.blend_method = 'CLIP'
+    m.blend_method = 'HASHED' if hashed else 'CLIP'
     m.shadow_method = 'CLIP'
     return m
 
@@ -233,7 +234,7 @@ def apply_all(tex_dir):
         else:
             # body 网格按自身名字匹配贴图；body1（带裸露皮肤）降饱和
             tex = find_tex(tex_dir, o.name + '*Albedo*.png')
-            m = albedo_mat(o.name + '_mat', tex, desat=('body1' in o.name))
+            m = albedo_mat(o.name + '_mat', tex, desat=('body1' in o.name), hashed=True)
         me.materials.clear()
         me.materials.append(m)
         # 原 FBX 可能有多个槽（如 body1+skin），全部指向同一材质

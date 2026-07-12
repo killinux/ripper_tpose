@@ -78,7 +78,7 @@ def _tex_node(nt, path, loc=(-500, 200)):
     return t
 
 
-def albedo_mat(name, tex_path, desat=False):
+def albedo_mat(name, tex_path, desat=False, hashed=False):
     m, nt, b = _new_mat(name)
     if not tex_path:
         return m
@@ -91,7 +91,8 @@ def albedo_mat(name, tex_path, desat=False):
     else:
         nt.links.new(t.outputs['Color'], b.inputs['Base Color'])
     nt.links.new(t.outputs['Alpha'], b.inputs['Alpha'])
-    m.blend_method = 'CLIP'
+    # 丝袜等半透明衣物 CLIP 会被裁没，body 用 HASHED
+    m.blend_method = 'HASHED' if hashed else 'CLIP'
     m.shadow_method = 'CLIP'
     return m
 
@@ -363,7 +364,7 @@ class ROE_OT_apply_materials(Operator):
                 m = albedo_mat(o.name + '_mat', hair_tex)
             else:
                 tex = find_tex(tex_dir, o.name.split('.')[0] + '*Albedo*.png')
-                m = albedo_mat(o.name + '_mat', tex, desat=('body1' in o.name))
+                m = albedo_mat(o.name + '_mat', tex, desat=('body1' in o.name), hashed=True)
             me.materials.clear()
             me.materials.append(m)
             while len(me.materials) < max((q.material_index for q in me.polygons), default=0) + 1:
@@ -454,6 +455,8 @@ class ROE_OT_export_xps(Operator):
             fallback_group.append(gt)
             return gt
 
+        used_images = []
+
         def simple_export_mat(name, image):
             m = bpy.data.materials.new('xps_' + name)
             m.use_nodes = True
@@ -464,6 +467,7 @@ class ROE_OT_export_xps(Operator):
             grp.node_tree = get_xps_group()
             t = nt.nodes.new('ShaderNodeTexImage'); t.location = (-300, 100)
             t.image = image
+            used_images.append(image)
             nt.links.new(t.outputs['Color'], grp.inputs['Diffuse'])
             nt.links.new(grp.outputs[0], out.inputs['Surface'])
             return m
@@ -540,6 +544,18 @@ class ROE_OT_export_xps(Operator):
                         temp_mats.append(m)
                     dup.name = '5_face_0.1'
                     temps.append(dup)
+
+            # 输出目录可能不存在；贴图不在输出目录时复制过去（XPS 按 .mesh 同目录找贴图）
+            import shutil
+            out_dir = os.path.dirname(out_path)
+            os.makedirs(out_dir, exist_ok=True)
+            for img in used_images:
+                if img is None:
+                    continue
+                src = bpy.path.abspath(img.filepath)
+                if os.path.isfile(src) and \
+                        os.path.normcase(os.path.dirname(src)) != os.path.normcase(out_dir):
+                    shutil.copy2(src, out_dir)
 
             # 隐藏原件，只导出临时件 + 骨架
             for o in meshes:
