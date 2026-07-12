@@ -113,7 +113,16 @@ foreach ($id in $allIds) {
     }
     $commonFiles = Get-ChildItem $abDir -Recurse -File -Filter "chara_armor_common*.ab"
 
-    $collected = @($charFiles) + @($commonFiles)
+    # 体型共享包：脸/眼球/眉毛/头发贴图在 chara_tex_bare_pc_<体型>_common*（不含角色 ID）
+    $bodyType = ($id -replace '[0-9].*$', '')
+    $bodyCommonFiles = @()
+    if ($bodyType) {
+        $bodyCommonFiles = Get-ChildItem $abDir -Recurse -File | Where-Object {
+            $_.Name -match "chara_.*_pc_${bodyType}_common"
+        }
+    }
+
+    $collected = @($charFiles) + @($commonFiles) + @($bodyCommonFiles)
 
     if ($IncludeShare) {
         $shareFiles = Get-ChildItem $abDir -Recurse -File | Where-Object {
