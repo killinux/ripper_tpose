@@ -7,7 +7,10 @@
 
 ## 0. 结论(TL;DR)
 
-**放弃用 Ninja Ripper 抓静态网格 + 手搓 `NR_Rig`;改用 Unity 资产提取工具(AssetStudioMod / AssetRipper)从游戏自带的 AssetBundle 里直接导出「带骨架 + bind pose + 蒙皮权重 + 表情 blendshape」的原始模型,并可顺带导出游戏原生动画。** 你现在手工建骨架、刷权重的活儿基本全省——拿到的就是美术做好的绑定角色。
+**放弃用 Ninja Ripper 抓静态网格 + 手搓 `NR_Rig`;改用 Unity 资产提取工具从游戏自带的 AssetBundle 里直接导出「带骨架 + bind pose + 蒙皮权重 + 表情 blendshape」的原始模型,并可顺带导出游戏原生动画。** 你现在手工建骨架、刷权重的活儿基本全省——拿到的就是美术做好的绑定角色。
+
+> **本项目最终落地的是 AssetStudio(命令行版 AssetStudioModCLI)。** 整条流水线(`scripts/extract_character.ps1`、v1.0x 基线、a01/g11 等验证)全部基于它。
+> **AssetRipper 只是当时评估过的备选,没有进入流程**——下的是跑不起来的源码仓库(见 §2.1),定位仅是"某角色 FBX 炸开时导 GLB 交叉验证"。两者名字相近,别记混:干活的是 **AssetStudio**。
 
 三条独立证据(经对抗性复核未被推翻):
 
@@ -37,8 +40,8 @@
 
 | 工具 | 定位 | 对本任务 |
 |---|---|---|
-| **AssetStudioMod**(aelurum 分支) | 直接从场景层级导出**单个角色的绑定 FBX** | **首选**——最直达"一个角色 → 一个带骨架 FBX",可退役 NR 流程 |
-| **AssetRipper**(你已下载) | 导出 **GLB(glTF)** 或整个 Unity 工程 | **可用**,GLB 保留骨架/权重/blendshape,Blender 原生可导入;也是排查"炸开"问题的交叉验证工具 |
+| **AssetStudioMod**(aelurum 分支) | 直接从场景层级导出**单个角色的绑定 FBX** | ✅ **本项目采用**——最直达"一个角色 → 一个带骨架 FBX";命令行版 AssetStudioModCLI 已封进 `extract_character.ps1` |
+| **AssetRipper**(你已下载) | 导出 **GLB(glTF)** 或整个 Unity 工程 | 备选,**未采用**——GLB 保留骨架/权重/blendshape,可作"炸开"交叉验证;但下的是跑不起来的源码(见 §2.1) |
 | 原版 Perfare/AssetStudio | 2023 已归档,不支持 2022.3 | **别用** |
 | Ninja Ripper | 只抓静态网格,无骨架 | 退居边角(见 §7) |
 
