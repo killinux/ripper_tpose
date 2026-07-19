@@ -20,7 +20,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 bl_info = {
     "name": "ROE XPS Tools",
     "author": "ripper_tpose",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > ROE",
     "description": "Rise of Eros 角色: 导入 FBX / 修脸材质 / 导出 XPS",
@@ -41,13 +41,28 @@ LASH_DARKEN = 0.55
 
 def find_tex(tex_dir, pattern):
     import glob
+    # Accept either the exported _textures directory or the character export root.
     hits = sorted(glob.glob(os.path.join(tex_dir, pattern)))
+    if not hits:
+        hits = sorted(glob.glob(os.path.join(tex_dir, '**', pattern), recursive=True))
     return hits[0] if hits else None
 
 
 def find_head(objects):
-    return next((o for o in objects if o.type == 'MESH'
-                 and any('Eyeball' in g.name for g in o.vertex_groups)), None)
+    meshes = [o for o in objects if o.type == 'MESH']
+    weighted = [o for o in meshes
+                if any('eyeball' in g.name.lower() for g in o.vertex_groups)]
+    if weighted:
+        return max(weighted, key=lambda o: len(o.data.polygons))
+
+    # Some AssetStudio exports rename all facial bones to Xtra*, but preserve the
+    # renderer/object name (for example pc_a05_hd_head).
+    named = []
+    for o in meshes:
+        names = (o.name, getattr(o.data, 'name', ''))
+        if any('head' in re.split(r'[_\W]+', name.lower()) for name in names):
+            named.append(o)
+    return max(named, key=lambda o: len(o.data.polygons)) if named else None
 
 
 def scene_meshes():
@@ -193,9 +208,10 @@ def classify_head(o):
     gi = {g.index: g.name for g in o.vertex_groups}
 
     def gclass(name):
-        if 'Eyeball' in name: return 'eyeball'
-        if 'Eyebrow' in name: return 'brow'
-        if 'Eyelid' in name or 'eyelid' in name: return 'lid'
+        name = name.lower()
+        if 'eyeball' in name: return 'eyeball'
+        if 'eyebrow' in name: return 'brow'
+        if 'eyelid' in name: return 'lid'
         return 'other'
 
     vclass = {}
@@ -206,32 +222,83 @@ def classify_head(o):
             d[c] = d.get(c, 0) + g.weight
         vclass[v.index] = d
 
+    if not me.uv_layers.active:
+        return {p.index: 0 for p in me.polygons}
     uvd = me.uv_layers.active.data
     comps = {}
     for p in me.polygons:
         r = find(p.vertices[0])
         c = comps.setdefault(r, {'polys': 0, 'w': {'eyeball': 0, 'brow': 0, 'lid': 0, 'other': 0},
-                                 'umin': 9.0, 'umax': -9.0})
+                                 'verts': set(), 'umin': 9.0, 'umax': -9.0,
+                                 'vmin': 9.0, 'vmax': -9.0})
         c['polys'] += 1
+        c['verts'].update(p.vertices)
         for vi in p.vertices:
             for k, val in vclass[vi].items():
                 c['w'][k] += val
         for li in p.loop_indices:
-            u = uvd[li].uv[0]
+            u, v = uvd[li].uv
             if u < c['umin']: c['umin'] = u
             if u > c['umax']: c['umax'] = u
+            if v < c['vmin']: c['vmin'] = v
+            if v > c['vmax']: c['vmax'] = v
+
+    for c in comps.values():
+        coords = [me.vertices[vi].co for vi in c['verts']]
+        c['center_z'] = sum(co.z for co in coords) / len(coords)
+        c['size_z'] = max(co.z for co in coords) - min(co.z for co in coords)
 
     cls = {}
+    has_semantic_groups = any(gclass(name) != 'other' for name in gi.values())
+    eye_roots = set()
     for r, c in comps.items():
         w = c['w']
         tot = sum(w.values()) + 1e-6
-        if w['eyeball'] > 0.9 * tot:
+        u_span = c['umax'] - c['umin']
+        v_span = c['vmax'] - c['vmin']
+        uv0 = c['umin'] >= -0.01 and c['umax'] <= 1.01 \
+            and c['vmin'] >= -0.01 and c['vmax'] <= 1.01
+        geometric_eye = (not has_semantic_groups and uv0 and 250 <= c['polys'] <= 800
+                         and u_span > 0.85 and v_span > 0.85)
+        if w['eyeball'] > 0.9 * tot or geometric_eye:
+            eye_roots.add(r)
+
+    eye_z = (sum(comps[r]['center_z'] for r in eye_roots) / len(eye_roots)
+             if eye_roots else None)
+    eye_height = (sum(comps[r]['size_z'] for r in eye_roots) / len(eye_roots)
+                  if eye_roots else 0.0)
+
+    for r, c in comps.items():
+        w = c['w']
+        tot = sum(w.values()) + 1e-6
+        u_span = c['umax'] - c['umin']
+        v_span = c['vmax'] - c['vmin']
+        uv0 = c['umin'] >= -0.01 and c['umax'] <= 1.01 \
+            and c['vmin'] >= -0.01 and c['vmax'] <= 1.01
+        near_eye = (eye_z is not None
+                    and abs(c['center_z'] - eye_z) <= max(eye_height * 0.45, 1e-6))
+
+        if r in eye_roots:
             cls[r] = 1
-        elif c['umax'] <= 1.01 and c['polys'] < 400 and w['brow'] > w['other'] and w['brow'] > w['lid']:
+        elif has_semantic_groups and c['umax'] <= 1.01 and c['polys'] < 400 \
+                and w['brow'] > w['other'] and w['brow'] > w['lid']:
             cls[r] = 3
-        elif c['umax'] <= 1.01 and c['polys'] < 400 and w['lid'] > w['other']:
+        elif has_semantic_groups and c['umax'] <= 1.01 and c['polys'] < 400 \
+                and w['lid'] > w['other']:
             cls[r] = 2
-        elif c['umax'] > 1.01 and (c['umax'] - c['umin']) < 0.15 and c['polys'] > 100 and w['lid'] > 0.3 * tot:
+        elif has_semantic_groups and c['umax'] > 1.01 and u_span < 0.15 \
+                and c['polys'] > 100 and w['lid'] > 0.3 * tot:
+            cls[r] = 4
+        elif not has_semantic_groups and uv0 and 60 <= c['polys'] <= 300 \
+                and u_span > 0.5 and v_span > 0.4 and eye_z is not None \
+                and c['center_z'] > eye_z + eye_height * 0.15:
+            cls[r] = 3
+        elif not has_semantic_groups and uv0 and 100 <= c['polys'] <= 300 \
+                and u_span > 0.45 and v_span > 0.35 and near_eye:
+            cls[r] = 2
+        elif not has_semantic_groups and c['umin'] > 1.0 \
+                and u_span < 0.2 and v_span < 0.2 \
+                and 100 <= c['polys'] <= 600 and near_eye:
             cls[r] = 4
     return {p.index: cls.get(find(p.vertices[0]), 0) for p in me.polygons}
 
@@ -377,6 +444,8 @@ class ROE_OT_apply_materials(Operator):
         hair_tex = pick('pc_%s_nk_hair*Albedo*.png' % bt if bt else None,
                         'pc_%s_*hair*Albedo*.png' % bt if bt else None,
                         '*hair*Albedo*.png')
+        print('[mat] textures: face=%s iris=%s brow=%s hair=%s' %
+              (face_tex, iris_tex, brow_tex, hair_tex))
 
         no_tex = []
         for o in meshes:
@@ -397,10 +466,12 @@ class ROE_OT_apply_materials(Operator):
                 me.materials.append(m)
 
         if head is None:
-            self.report({'WARNING'}, "没找到 head 网格(无 Eyeball 顶点组)，只处理了 body/hair")
+            self.report({'WARNING'}, "没找到 head 网格(名称或 Eyeball 顶点组均未匹配)，只处理了 body/hair")
             return {'FINISHED'}
         if not (face_tex and iris_tex and brow_tex):
-            self.report({'ERROR'}, "缺少 face/eye_iris/eyebrow 贴图，检查贴图目录")
+            missing = [name for name, path in (('face', face_tex), ('eye_iris', iris_tex),
+                                               ('eyebrow', brow_tex)) if not path]
+            self.report({'ERROR'}, "缺少贴图: %s；可选择 _textures 或角色导出根目录" % ', '.join(missing))
             return {'CANCELLED'}
 
         me = head.data
@@ -411,9 +482,12 @@ class ROE_OT_apply_materials(Operator):
         me.materials.append(stroke_mat('brow', brow_tex))
         me.materials.append(transparent_mat('eye_overlay'))
         cls = classify_head(head)
+        counts = {}
         for q in me.polygons:
             q.material_index = cls[q.index]
+            counts[q.material_index] = counts.get(q.material_index, 0) + 1
         me.update()
+        print('[mat] head=%s slots=%s' % (head.name, counts))
         if no_tex:
             self.report({'WARNING'},
                         "完成，但这些网格没找到贴图(导出会是 missing.png): %s" % ', '.join(no_tex))
