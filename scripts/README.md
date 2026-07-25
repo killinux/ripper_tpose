@@ -35,6 +35,7 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | 依赖 | 默认路径 | 覆盖参数 |
 |---|---|---|
 | 游戏本体 | `D:\Program Files (x86)\Steam\steamapps\common\Rise of Eros` | `-GameRoot` |
+| 运行时资源缓存 | `%USERPROFILE%\AppData\LocalLow\Pinkcore\Rise of Eros\AssetBundles` | `-CacheRoot` |
 | AssetStudioModCLI | `E:\tools\AssetStudioModCLI_net472\AssetStudioModCLI_net472_win32_64\AssetStudioModCLI.exe` | `-CliExe` |
 | Blender 3.6 | `D:\Program Files\blender-3.6.15-windows-x64\blender.exe` | `-BlenderExe`（仅 `-Format xps/pmx` 需要） |
 | Noesis | `E:\tools\noesisv\Noesis.exe` | `-NoesisExe`（可选，XPS 快速通道） |
@@ -46,6 +47,23 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 .\extract_character.ps1 -List                    # 列出全部可提取角色 ID
 .\extract_character.ps1 g11 -ExportTextures     # FBX + 全部贴图（推荐，后面挂材质要用）
 ```
+
+脚本会合并游戏安装目录与运行时下载缓存；同名 AssetBundle 优先使用更新时间更晚的
+版本，同时从安装目录补齐公共包。`-List` 同时识别 armor 和 bare 模型，因此新角色、
+活动角色和只有裸模的 NPC 不需要等待 Steam 安装目录更新。
+
+### 提取结果中的关键目录（以 a07 为例）
+
+`D:\roe_exports\a07\` 里用于 Blender 挂材质的关键内容是：
+
+- **模型来源**：`pc_a07_hd (1)\FBX_GameObjects\pc_a07_hd\pc_a07_hd.fbx`
+- **ROE 贴图目录**：`D:\roe_exports\a07\_textures\`
+
+`(1)` 不是模型版本号，而是 AssetStudio 遇到同名 Unity 根对象时自动添加的防覆盖
+后缀。当前 a07 的无后缀 `pc_a07_hd` 只有一个身体材质槽，会导致双腿和服装错误地
+共用 `body1`；`pc_a07_hd (1)` 才保存了正确的四槽 `body1/body2` 面分区。因此在
+ROE 面板中不要只凭目录名选择第一份 FBX，应优先选择这份带 `(1)` 且包含完整材质
+分区的 FBX，并把 `_textures` 指定为贴图目录。
 
 > **⚠️ 重跑会清空输出目录：** 再次提取同一角色时，`D:\roe_exports\<角色>\`
 > **整个目录**（含 `_textures\`）先删后建。自己的产物——XPS 导出、烘焙贴图、
@@ -100,6 +118,9 @@ addons 目录名叫 `XNALaraMesh` 或 `XNALaraMesh-master` 都能识别。
 字段说明和故障排查见 [xps-addon.md](../docs/xps-addon.md)。
 
 > **⚠️ 路径填写：**
+> - 「模型来源」→ a07 使用
+>   `D:\roe_exports\a07\pc_a07_hd (1)\FBX_GameObjects\pc_a07_hd\pc_a07_hd.fbx`；
+>   无后缀的 `pc_a07_hd` 缺少身体四槽材质分区。
 > - 「贴图目录」→ 提取时 `-ExportTextures` 生成的 `D:\roe_exports\<角色>\_textures\`。
 > - 「XPS 输出」→ **别放进 `D:\roe_exports\<角色>\`**（重提取会被清空，见上）。
 >   输出目录和贴图目录不同时，插件会把用到的贴图自动复制过去；
