@@ -13,6 +13,10 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 .mesh + 贴图  （XNALara / XPS 直接打开）
 ```
 
+> 提取内核是 **AssetStudio**（命令行版 AssetStudioModCLI，aelurum 维护分支）。
+> **不是 AssetRipper**——那个只当过备选、没用上（名字相近，别记混）。背景见
+> [rise-of-eros-extraction.md](../docs/rise-of-eros-extraction.md) §2。
+
 | 脚本 | 在哪运行 | 作用 | 详细文档 |
 |---|---|---|---|
 | `extract_character.ps1` | 游戏机 PowerShell | 从 AssetBundle 提取带骨架 FBX（+贴图/格式转换） | [usage.md](../docs/usage.md) |
