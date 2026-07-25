@@ -25,7 +25,7 @@
 cd E:\tools   # 或脚本所在目录
 ```
 
-### 列出所有可提取角色(103 个)
+### 列出所有可提取角色
 
 ```powershell
 .\extract_character.ps1 -List
@@ -33,9 +33,12 @@ cd E:\tools   # 或脚本所在目录
 
 输出:
 ```
-Found 103 character IDs:
-a01, a02, a03, ... k06, l01
+Found <N> character IDs across 2 AssetBundle source(s):
+a01, a02, a03, ... m10
 ```
+
+脚本会自动合并 Steam 安装目录与 `LocalLow` 运行时下载缓存，并从 `chara_armor`、
+`chara_bare` 模型包提取 ID。可用 `-CacheRoot` 覆盖缓存目录。
 
 ### 提取单个角色(默认 FBX)
 
@@ -227,4 +230,4 @@ File > Import > FBX
 | PMX 导出失败 | mmd_tools 不在 Blender 3.6 addon 路径 | 把 mmd_tools 从 3.5 复制到 3.6 的 addons |
 | XPS 导出失败(Noesis+Blender 都不行) | XPS addon 未启用 | 在 Blender 里 Edit > Preferences > Add-ons 搜 XPS 并启用 |
 | 转换很慢 | Blender 无头启动约 5-10 秒开销 | 正常,每格式约 10-20 秒 |
-| 角色 ID 不在 -List 里 | 可能是事件/限定角色,在 LocalLow 缓存而非 StreamingAssets 中 | 手动搜 `C:\Users\haoni\AppData\LocalLow\Pinkcore\Rise of Eros\AssetBundles` |
+| 角色 ID 不在 -List 里 | 本机尚未下载对应的 armor/bare 模型包，或缓存路径不同 | 先在游戏内触发资源下载；路径不同时用 `-CacheRoot` 指定缓存目录 |

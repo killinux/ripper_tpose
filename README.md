@@ -6,7 +6,8 @@
 
 > **本仓库落地的实际方案**:目标游戏 Rise of Eros 是 Unity,按下文结论走了**文件级提取**而非 NR——
 > 用 **AssetStudio(命令行版 AssetStudioModCLI)** 直出带骨架 FBX,再转 XPS。可跑的脚本在 `scripts/`,
-> 流程见 [docs/rise-of-eros-extraction.md](docs/rise-of-eros-extraction.md) 与 [scripts/README.md](scripts/README.md)。
+> 流程见 [docs/rise-of-eros-extraction.md](docs/rise-of-eros-extraction.md) 与 [scripts/README.md](scripts/README.md)，
+> 功能更新和操作变化统一记录在 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 > （评估过 AssetRipper 但**没采用**;名字相近,别和 AssetStudio 记混。）本页是背后的通用调研笔记。
 
 ---

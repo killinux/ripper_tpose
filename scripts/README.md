@@ -24,6 +24,8 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `roe_xps_addon.py` | Blender 3.6 插件 | 一步步转带材质的 XPS（**主推**） | [xps-addon.md](../docs/xps-addon.md) |
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../docs/face-eye-materials.md) |
 
+功能新增、操作变化和实现原理统一追加到 [更新日志](../docs/CHANGELOG.md)。
+
 ---
 
 ## extract_character.ps1 —— 提取角色
@@ -116,8 +118,10 @@ addons 目录名叫 `XNALaraMesh` 或 `XNALaraMesh-master` 都能识别。
 
 ### 使用
 
-3D 视口按 `N` → **ROE** 页签，四个按钮按序点：
-**1 导入 FBX → 2 挂材质(修眼睛) → 3 导出 XPS(.mesh)**；
+3D 视口按 `N` → **ROE** 页签，按序点：
+**1 导入 FBX → 2 检查并准备材质 → 3 导出 XPS(.mesh)**；
+若眼球仍为纯白或脸色，点新增的 **「修复眼睛」**，它会兼容骨骼权重缺失但仍保留
+原始 `eye/eyes/iris` 材质名的角色（如 a08），只重新识别和设置眼球面。
 **4 修正XPS骨架方向** 是导回 .mesh 后骨架躺地上时用的。
 字段说明和故障排查见 [xps-addon.md](../docs/xps-addon.md)。
 

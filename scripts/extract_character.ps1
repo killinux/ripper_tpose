@@ -17,6 +17,7 @@ param(
     [string[]]$CharacterIds,
 
     [string]$GameRoot = "D:\Program Files (x86)\Steam\steamapps\common\Rise of Eros",
+    [string]$CacheRoot = "$env:USERPROFILE\AppData\LocalLow\Pinkcore\Rise of Eros\AssetBundles",
     [string]$OutputRoot = "D:\roe_exports",
     [string]$CliExe = "E:\tools\AssetStudioModCLI_net472\AssetStudioModCLI_net472_win32_64\AssetStudioModCLI.exe",
     [string]$BlenderExe = "D:\Program Files\blender-3.6.15-windows-x64\blender.exe",
@@ -32,13 +33,51 @@ param(
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $convertPy = Join-Path $scriptDir "convert_fbx.py"
-$abDir = Join-Path $GameRoot "RiseOfEros_Data\StreamingAssets\AssetBundles"
+$installAbDir = Join-Path $GameRoot "RiseOfEros_Data\StreamingAssets\AssetBundles"
+$assetBundleDirs = @()
+foreach ($candidateDir in @($installAbDir, $CacheRoot)) {
+    if ($candidateDir -and (Test-Path -LiteralPath $candidateDir) -and
+        $candidateDir -notin $assetBundleDirs) {
+        $assetBundleDirs += $candidateDir
+    }
+}
 
-if (-not (Test-Path $abDir)) {
-    Write-Error "AssetBundle dir not found: $abDir"
+if ($assetBundleDirs.Count -eq 0) {
+    Write-Error "No AssetBundle directories found. Checked: $installAbDir ; $CacheRoot"
     exit 1
 }
-if (-not (Test-Path $CliExe)) {
+
+# Build one merged inventory. SourcePriority breaks timestamp ties in favor of
+# runtime-downloaded bundles, while the install directory supplies base/common data.
+$bundleFiles = @()
+for ($priority = 0; $priority -lt $assetBundleDirs.Count; $priority++) {
+    $root = $assetBundleDirs[$priority]
+    $bundleFiles += Get-ChildItem -LiteralPath $root -Recurse -Filter "*.ab" -File | ForEach-Object {
+        [pscustomobject]@{
+            Name           = $_.Name
+            BaseName       = $_.BaseName
+            FullName       = $_.FullName
+            Length         = $_.Length
+            LastWriteTime  = $_.LastWriteTime
+            SourceRoot     = $root
+            SourcePriority = $priority
+        }
+    }
+}
+
+function Select-PreferredBundle {
+    param([object[]]$Candidates)
+
+    $sortProperties = @(
+        @{ Expression = { $_.LastWriteTime }; Descending = $true }
+        @{ Expression = { $_.SourcePriority }; Descending = $true }
+    )
+    @($Candidates | Group-Object Name | ForEach-Object {
+        $_.Group | Sort-Object -Property $sortProperties | Select-Object -First 1
+    })
+}
+
+if (-not $List -and -not (Test-Path $CliExe)) {
     Write-Error "AssetStudioModCLI not found: $CliExe"
     exit 1
 }
@@ -68,10 +107,17 @@ if ($Format) {
 
 # ── List all character IDs ──
 if ($List) {
-    $ids = Get-ChildItem $abDir -Recurse -Filter "chara_armor_pc_*.ab" -File |
-        ForEach-Object { if ($_.BaseName -match 'pc_([a-z]\d+)_') { $Matches[1] } } |
+    # Only model-bearing bundles count. This includes bare-only/NPC models while
+    # excluding IDs that occur solely in voice, SFX, metadata, or video bundles.
+    $ids = $bundleFiles |
+        ForEach-Object {
+            if ($_.BaseName -match '^chara_(?:armor|bare)_pc_([a-z]\d+)(?:_|$)') {
+                $Matches[1].ToLowerInvariant()
+            }
+        } |
         Sort-Object -Unique
-    Write-Host ("Found " + $ids.Count + " character IDs:") -ForegroundColor Cyan
+    Write-Host ("Found " + $ids.Count + " character IDs across " +
+                $assetBundleDirs.Count + " AssetBundle source(s):") -ForegroundColor Cyan
     $ids -join ', '
     exit 0
 }
@@ -108,31 +154,34 @@ foreach ($id in $allIds) {
     if (Test-Path $stageDir) { Remove-Item -Recurse -Force $stageDir }
     New-Item -ItemType Directory -Force $stageDir | Out-Null
 
-    $charFiles = Get-ChildItem $abDir -Recurse -File | Where-Object {
-        $_.Name -match "_${id}_" -or $_.Name -match "_${id}\." -or $_.Name -match "^(bare|eros|suit|accessory|vertex).*${id}"
+    $idPattern = [regex]::Escape($id)
+    $charFiles = $bundleFiles | Where-Object {
+        $_.Name -match "_${idPattern}_" -or $_.Name -match "_${idPattern}\." -or
+        $_.Name -match "^(bare|eros|suit|accessory|vertex).*${idPattern}"
     }
-    $commonFiles = Get-ChildItem $abDir -Recurse -File -Filter "chara_armor_common*.ab"
+    $commonFiles = $bundleFiles | Where-Object { $_.Name -like "chara_armor_common*.ab" }
 
     # 体型共享包：脸/眼球/眉毛/头发贴图在 chara_tex_bare_pc_<体型>_common*（不含角色 ID）
     $bodyType = ($id -replace '[0-9].*$', '')
     $bodyCommonFiles = @()
     if ($bodyType) {
-        $bodyCommonFiles = Get-ChildItem $abDir -Recurse -File | Where-Object {
-            $_.Name -match "chara_.*_pc_${bodyType}_common"
+        $bodyTypePattern = [regex]::Escape($bodyType)
+        $bodyCommonFiles = $bundleFiles | Where-Object {
+            $_.Name -match "chara_.*_pc_${bodyTypePattern}_common"
         }
     }
 
     $collected = @($charFiles) + @($commonFiles) + @($bodyCommonFiles)
 
     if ($IncludeShare) {
-        $shareFiles = Get-ChildItem $abDir -Recurse -File | Where-Object {
+        $shareFiles = $bundleFiles | Where-Object {
             $_.Name -match "chara_.*_share" -and $_.Name -notmatch "chara_tex_enemy" -and $_.Name -notmatch "chara_enemy"
         }
         $collected += @($shareFiles)
         Write-Host "  (including share bundles, enemy textures excluded)"
     }
 
-    $collected = $collected | Sort-Object FullName -Unique
+    $collected = Select-PreferredBundle -Candidates $collected
     foreach ($f in $collected) {
         Copy-Item -LiteralPath $f.FullName -Destination $stageDir -Force
     }

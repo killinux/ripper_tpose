@@ -19,7 +19,8 @@ Edit > Preferences > Add-ons > Install... 选 `roe_xps_addon.py`，勾选启用�
 | FBX | extract_character.ps1 导出的角色 FBX |
 | 贴图目录 | 含 `*_Albedo.png` 的目录（如 `D:\roe_exports\g11\xps`） |
 | **1. 导入 FBX** | 自动骨骼朝向；旧版 cm 级模型自动 ×100 |
-| **2. 挂材质(修眼睛)** | body/hair 挂 Albedo；head 分 5 槽修眼球/睫毛/眉毛（原理见 [face-eye-materials.md](face-eye-materials.md)）。EEVEE 编译 shader 需几秒 |
+| **2. 检查并准备材质** | body/hair 挂 Albedo；head 分 5 槽修眼球/睫毛/眉毛（原理见 [face-eye-materials.md](face-eye-materials.md)）。EEVEE 编译 shader 需几秒 |
+| **修复眼睛** | 眼球仍为纯白或脸色时单独点击；按骨骼权重、眼球几何和原始 `eye/eyes/iris` 材质名重新识别眼球面，只重置眼球材质和误分到眼球槽的面 |
 | XPS 输出 | 留空则自动输出到贴图目录 `<角色>_fixed.mesh` |
 | **3. 导出 XPS(.mesh)** | 见下。场景本身不受影响 |
 | **4. 修正XPS骨架方向** | 导回 .mesh 后骨架躺地上时点一下（+90°X 烘进骨架数据，网格不动） |
@@ -62,6 +63,7 @@ Edit > Preferences > Add-ons > Install... 选 `roe_xps_addon.py`，勾选启用�
 | 导回后**夹克/大件衣服半透明**像消失 | body 网格用了 RG7（alpha 混合），EEVEE 对大网格透明排序错乱 | 新版已改：body 用 RG5（不透明），仅头发/睫毛/眉毛用 RG7 |
 | 导回的**骨架和身体差 90 度**（骨骼摊在地上） | XPS 格式是 Y-up 坐标系，XNALaraMesh 导入只把网格转了 Z-up，骨架保留 Y-up 原样 | 点面板的 **「4. 修正XPS骨架方向」**（+90°X 烘进骨架数据，网格不动）；绑定/权重本来就正确，XPS 软件里显示也正常 |
 | face 选到 LD 低清 / hair 选到别的体型贴图 | 贴图目录含多体型共享贴图，模糊匹配选错 | 新版按 `pc_<体型>_nk_*` 精确匹配 |
+| a08 眼球纯白、没有虹膜 | a08 有 `Eyeball` 顶点组，但眼球顶点没有足够的 Eyeball 权重；旧版因此关闭了几何兜底，把 864 个眼球面判成脸 | 更新到 v1.1.3，重新点 **「2. 检查并准备材质」**；旧场景可直接点 **「修复眼睛」** |
 
 ## 局限
 
