@@ -30,10 +30,19 @@ LASH_DARKEN = 0.55      # 睫毛颜色明度
 
 
 def find_tex(tex_dir, pattern):
-    hits = sorted(glob.glob(os.path.join(tex_dir, pattern)))
-    if not hits:
-        hits = sorted(glob.glob(os.path.join(tex_dir, '**', pattern), recursive=True))
-    return hits[0] if hits else None
+    # g02's original bundles spell the body color suffix "Abedo" instead of
+    # "Albedo". Prefer the canonical spelling, but accept that shipped typo.
+    patterns = [pattern]
+    if 'Albedo' in pattern:
+        patterns.append(pattern.replace('Albedo', 'Abedo'))
+    for candidate in patterns:
+        hits = sorted(glob.glob(os.path.join(tex_dir, candidate)))
+        if not hits:
+            hits = sorted(glob.glob(
+                os.path.join(tex_dir, '**', candidate), recursive=True))
+        if hits:
+            return hits[0]
+    return None
 
 
 def find_head(objects):
@@ -119,21 +128,38 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
     body_tex = None if is_hair else find_tex(
         tex_dir, obj.name.split('.')[0] + '*Albedo*.png')
 
+    def name_variants(name):
+        variants = [name]
+        without_level = re.sub(
+            r'_(?:hd|ld)_', '_', name, count=1, flags=re.IGNORECASE)
+        if without_level != name:
+            variants.append(without_level)
+        return variants
+
+    def named_albedo(name):
+        for candidate in name_variants(name):
+            texture = find_tex(tex_dir, candidate + '*Albedo*.png')
+            if texture:
+                return texture
+        return None
+
     def slot_albedo(source_name):
         """Resolve multi-atlas meshes such as a07 body1/body2 by source slot."""
         compact = re.sub(r'\s+', '', re.sub(r'\.\d{3}$', '', source_name))
         if compact:
-            direct = find_tex(tex_dir, compact + '*Albedo*.png')
+            direct = named_albedo(compact)
             if direct:
                 return direct
-        skin_match = re.search(r'skin(\d*)', compact, re.IGNORECASE)
-        if skin_match:
-            atlas_number = skin_match.group(1) or '1'
-            atlas_name = (compact[:skin_match.start()] + 'body' + atlas_number
-                          + compact[skin_match.end():])
-            skin_tex = find_tex(tex_dir, atlas_name + '*Albedo*.png')
-            if skin_tex:
-                return skin_tex
+        for candidate in name_variants(compact):
+            skin_match = re.search(r'skin(\d*)', candidate, re.IGNORECASE)
+            if skin_match:
+                atlas_number = skin_match.group(1) or '1'
+                atlas_name = (
+                    candidate[:skin_match.start()] + 'body' + atlas_number
+                    + candidate[skin_match.end():])
+                skin_tex = named_albedo(atlas_name)
+                if skin_tex:
+                    return skin_tex
         return body_tex
 
     missing = []
@@ -142,6 +168,12 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
         tokens = re.split(r'[_\W]+', source_name.lower())
         is_skin = any(token == 'skin' or re.fullmatch(r'skin\d+', token)
                       for token in tokens)
+        is_tear = any(token in {'tear', 'tears'} for token in tokens)
+        material_name = '%s_%02d_%s_mat'
+        if is_tear:
+            materials.append(transparent_mat(
+                material_name % (obj.name, index, 'eye_overlay')))
+            continue
         if is_hair:
             role, tex, desat, hashed = 'hair', hair_tex, False, False
         elif 'face' in tokens:
@@ -156,7 +188,7 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
         if not tex:
             missing.append('%s[%d:%s]' % (obj.name, index, source_name or role))
         materials.append(albedo_mat(
-            '%s_%02d_%s_mat' % (obj.name, index, role),
+            material_name % (obj.name, index, role),
             tex,
             desat=desat,
             hashed=hashed,
@@ -315,6 +347,29 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
         c['center_z'] = sum(co.z for co in coords) / len(coords)
         c['size_z'] = max(co.z for co in coords) - min(co.z for co in coords)
 
+    def source_tokens(component):
+        tokens = set()
+        for material_index in component['source_mats']:
+            if 0 <= material_index < len(source_material_names):
+                tokens.update(re.split(
+                    r'[_\W]+', source_material_names[material_index].lower()))
+        return tokens
+
+    def source_is_eye(component):
+        tokens = source_tokens(component)
+        eye_tokens = {'eye', 'eyes', 'iris', 'eyeball'}
+        excluded = {'brow', 'eyebrow', 'eyelid', 'lash', 'tear', 'tears'}
+        return bool(tokens & eye_tokens) and not bool(tokens & excluded)
+
+    def source_is_tear(component):
+        return bool(source_tokens(component) & {'tear', 'tears'})
+
+    def source_is_brow_or_lash(component):
+        return bool(source_tokens(component) & {
+            'brow', 'eyebrow', 'brows', 'eyebrows',
+            'lash', 'lashes', 'eyelash', 'eyelashes',
+        })
+
     cls = {}
     has_semantic_groups = any(gclass(name) != 'other' for name in gi.values())
     eye_roots = set()
@@ -325,8 +380,11 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
         v_span = c['vmax'] - c['vmin']
         uv0 = c['umin'] >= -0.01 and c['umax'] <= 1.01 \
             and c['vmin'] >= -0.01 and c['vmax'] <= 1.01
-        geometric_eye = (not has_semantic_groups and uv0 and 250 <= c['polys'] <= 800
-                         and u_span > 0.85 and v_span > 0.85)
+        geometric_eye = (
+            (not has_semantic_groups or source_is_eye(c))
+            and uv0 and 250 <= c['polys'] <= 800
+            and u_span > 0.85 and v_span > 0.85
+        )
         if w['eyeball'] > 0.9 * tot or geometric_eye:
             eye_roots.add(r)
 
@@ -344,14 +402,12 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
             and c['vmin'] >= -0.01 and c['vmax'] <= 1.01
         near_eye = (eye_z is not None
                     and abs(c['center_z'] - eye_z) <= max(eye_height * 0.45, 1e-6))
-        source_tokens = set()
-        for material_index in c['source_mats']:
-            if 0 <= material_index < len(source_material_names):
-                source_tokens.update(re.split(
-                    r'[_\W]+', source_material_names[material_index].lower()))
+        component_source_tokens = source_tokens(c)
 
         if r in eye_roots:
             cls[r] = 1
+        elif source_is_tear(c):
+            cls[r] = 4
         elif has_semantic_groups and c['umax'] <= 1.01 and c['polys'] < 400 \
                 and w['brow'] > w['other'] and w['brow'] > w['lid']:
             cls[r] = 3
@@ -361,6 +417,11 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
         elif has_semantic_groups and c['umax'] > 1.01 and u_span < 0.15 \
                 and c['polys'] > 100 and w['lid'] > 0.3 * tot:
             cls[r] = 4
+        elif source_is_brow_or_lash(c) and eye_z is not None:
+            if c['center_z'] > eye_z + eye_height * 0.15:
+                cls[r] = 3
+            else:
+                cls[r] = 2
         elif not has_semantic_groups and uv0 and 60 <= c['polys'] <= 300 \
                 and u_span > 0.5 and v_span > 0.4 and eye_z is not None \
                 and c['center_z'] > eye_z + eye_height * 0.15:
@@ -369,7 +430,8 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
                 and u_span > 0.45 and v_span > 0.35 and near_eye:
             cls[r] = 2
         elif not has_semantic_groups and uv0 and c['polys'] < 100 and near_eye \
-                and (('eyebrow' in source_tokens or 'lash' in source_tokens)
+                and (('eyebrow' in component_source_tokens
+                      or 'lash' in component_source_tokens)
                      or (20 <= c['polys'] <= 50 and 0.15 <= u_span <= 0.35
                          and 0.25 <= v_span <= 0.35)):
             # Xtra-bone exports contain four small upper-lash cards (24/48 faces).

@@ -11,7 +11,9 @@
 > [scripts/riseoferos/README.md](scripts/riseoferos/README.md)。
 > FINAL FANTASY VII REBIRTH 是 Unreal IoStore，使用独立的
 > [scripts/final/](scripts/final/) 与
-> [导出文档](docs/final-fantasy-vii-rebirth-extraction.md)，不会改动 ROE 流程。
+> [导出文档](docs/final-fantasy-vii-rebirth-extraction.md)；Player 的
+> [待导出清单与手动流程](docs/ff7rebirth-player-export-inventory.md)
+> 单独维护，不会改动 ROE 流程。
 > 两套脚本总入口见 [scripts/README.md](scripts/README.md)，
 > 功能更新和操作变化统一记录在 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 > （评估过 AssetRipper 但**没采用**;名字相近,别和 AssetStudio 记混。）本页是背后的通用调研笔记。

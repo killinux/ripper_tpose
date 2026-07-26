@@ -158,6 +158,9 @@ UE4SS 注入出现 Fatal Error，也不需要为 FModel 再次启动游戏。游
 - `End/Content/Character/Player` 下有 `109` 个角色/服装变体目录；
 - 其中有 `12` 个名称含 Tifa 的直接变体目录：`10` 个 PC0002 变体，另有
   `PC0099_03_Toad_Tifa` 和 `PC7002_00_Tifa_StandardCFEnd2`；
+- 截至 2026-07-26，本机输出目录已有 `14` 个 Player 一级目录，另有 `95` 个尚未
+  写入磁盘。完整差集、状态判断和逐项手动导出步骤见
+  [`ff7rebirth-player-export-inventory.md`](ff7rebirth-player-export-inventory.md)；
 - 标准版目录是
   `End/Content/Character/Player/PC0002_00_Tifa_Standard`；
 - 标准版虚拟目录共 `65` 个 packages：

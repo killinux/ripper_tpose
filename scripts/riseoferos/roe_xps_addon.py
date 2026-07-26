@@ -24,7 +24,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 bl_info = {
     "name": "ROE XPS Tools",
     "author": "ripper_tpose",
-    "version": (1, 1, 3),
+    "version": (1, 1, 7),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > ROE",
     "description": "Rise of Eros 角色: 导入 FBX / 修脸材质 / 导出 XPS",
@@ -52,11 +52,20 @@ HEAD_REGION_ATTRIBUTE = 'roe_head_region_override'
 
 def find_tex(tex_dir, pattern):
     import glob
+    # g02's original bundles spell the body color suffix "Abedo" instead of
+    # "Albedo". Prefer the canonical spelling, but accept that shipped typo.
+    patterns = [pattern]
+    if 'Albedo' in pattern:
+        patterns.append(pattern.replace('Albedo', 'Abedo'))
     # Accept either the exported _textures directory or the character export root.
-    hits = sorted(glob.glob(os.path.join(tex_dir, pattern)))
-    if not hits:
-        hits = sorted(glob.glob(os.path.join(tex_dir, '**', pattern), recursive=True))
-    return hits[0] if hits else None
+    for candidate in patterns:
+        hits = sorted(glob.glob(os.path.join(tex_dir, candidate)))
+        if not hits:
+            hits = sorted(glob.glob(
+                os.path.join(tex_dir, '**', candidate), recursive=True))
+        if hits:
+            return hits[0]
+    return None
 
 
 def find_head(objects):
@@ -375,6 +384,16 @@ def material_uses_alpha(material):
     return False
 
 
+def material_is_transparent_only(material):
+    if not material or not material.use_nodes or not material.node_tree:
+        return False
+    nodes = material.node_tree.nodes
+    return (
+        any(node.type == 'BSDF_TRANSPARENT' for node in nodes)
+        and not any(node.type == 'BSDF_PRINCIPLED' for node in nodes)
+    )
+
+
 def albedo_mat(name, tex_path, desat=False, hashed=False,
                saturation=SKIN_DESAT):
     m, nt, b = _new_mat(name)
@@ -430,21 +449,38 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
     body_tex = None if is_hair else find_tex(
         tex_dir, obj.name.split('.')[0] + '*Albedo*.png')
 
+    def name_variants(name):
+        variants = [name]
+        without_level = re.sub(
+            r'_(?:hd|ld)_', '_', name, count=1, flags=re.IGNORECASE)
+        if without_level != name:
+            variants.append(without_level)
+        return variants
+
+    def named_albedo(name):
+        for candidate in name_variants(name):
+            texture = find_tex(tex_dir, candidate + '*Albedo*.png')
+            if texture:
+                return texture
+        return None
+
     def slot_albedo(source_name):
         """Resolve multi-atlas meshes such as a07 body1/body2 by source slot."""
         compact = re.sub(r'\s+', '', re.sub(r'\.\d{3}$', '', source_name))
         if compact:
-            direct = find_tex(tex_dir, compact + '*Albedo*.png')
+            direct = named_albedo(compact)
             if direct:
                 return direct
-        skin_match = re.search(r'skin(\d*)', compact, re.IGNORECASE)
-        if skin_match:
-            atlas_number = skin_match.group(1) or '1'
-            atlas_name = (compact[:skin_match.start()] + 'body' + atlas_number
-                          + compact[skin_match.end():])
-            skin_tex = find_tex(tex_dir, atlas_name + '*Albedo*.png')
-            if skin_tex:
-                return skin_tex
+        for candidate in name_variants(compact):
+            skin_match = re.search(r'skin(\d*)', candidate, re.IGNORECASE)
+            if skin_match:
+                atlas_number = skin_match.group(1) or '1'
+                atlas_name = (
+                    candidate[:skin_match.start()] + 'body' + atlas_number
+                    + candidate[skin_match.end():])
+                skin_tex = named_albedo(atlas_name)
+                if skin_tex:
+                    return skin_tex
         return body_tex
 
     missing = []
@@ -454,9 +490,16 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
         tokens = re.split(r'[_\W]+', source_name.lower())
         is_skin = any(token == 'skin' or re.fullmatch(r'skin\d+', token)
                       for token in tokens)
+        is_tear = any(token in {'tear', 'tears'} for token in tokens)
         override = overrides.get(str(index), {})
         override_role = override.get('role', 'AUTO')
         override_tex = bpy.path.abspath(override.get('texture', ''))
+        material_name = '%s_%02d_%s_mat'
+        if override_role == 'TRANSPARENT' \
+                or (override_role == 'AUTO' and is_tear):
+            materials.append(transparent_mat(
+                material_name % (obj.name, index, 'eye_overlay')))
+            continue
         if override_role == 'HAIR' or (override_role == 'AUTO' and is_hair):
             role, tex, desat, hashed = 'hair', hair_tex, False, False
         elif override_role == 'FACE' or (override_role == 'AUTO' and 'face' in tokens):
@@ -474,7 +517,7 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
         if not tex:
             missing.append('%s[%d:%s]' % (obj.name, index, source_name or role))
         materials.append(albedo_mat(
-            '%s_%02d_%s_mat' % (obj.name, index, role),
+            material_name % (obj.name, index, role),
             tex,
             desat=desat,
             hashed=hashed,
@@ -649,6 +692,15 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
         excluded = {'brow', 'eyebrow', 'eyelid', 'lash', 'tear', 'tears'}
         return bool(tokens & eye_tokens) and not bool(tokens & excluded)
 
+    def source_is_tear(component):
+        return bool(source_tokens(component) & {'tear', 'tears'})
+
+    def source_is_brow_or_lash(component):
+        return bool(source_tokens(component) & {
+            'brow', 'eyebrow', 'brows', 'eyebrows',
+            'lash', 'lashes', 'eyelash', 'eyelashes',
+        })
+
     cls = {}
     has_semantic_groups = any(gclass(name) != 'other' for name in gi.values())
     eye_roots = set()
@@ -691,6 +743,12 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
 
         if r in eye_roots:
             cls[r] = 1
+        elif source_is_tear(c):
+            # b02 stores many tiny cornea/tear cards in pc_b_nk_tears.  Their
+            # Eyelid weights vary from card to card, so a weight-only test made
+            # part of the layer opaque face and part dark lash ("one-eye
+            # glasses").  The original material name is unambiguous.
+            cls[r] = 4
         elif has_semantic_groups and c['umax'] <= 1.01 and c['polys'] < 400 \
                 and w['brow'] > w['other'] and w['brow'] > w['lid']:
             cls[r] = 3
@@ -700,6 +758,16 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
         elif has_semantic_groups and c['umax'] > 1.01 and u_span < 0.15 \
                 and c['polys'] > 100 and w['lid'] > 0.3 * tot:
             cls[r] = 4
+        elif source_is_brow_or_lash(c) and eye_z is not None:
+            # Some ROE heads (b02) pack brows plus upper/lower lashes into one
+            # "eyebrow" source material and leave particular cards without a
+            # decisive Eyebrow/Eyelid weight.  Use height only as a fallback
+            # after the historical bone rules, so a06/a07/a08 keep their
+            # established classifications.
+            if c['center_z'] > eye_z + eye_height * 0.15:
+                cls[r] = 3
+            else:
+                cls[r] = 2
         elif not has_semantic_groups and uv0 and 60 <= c['polys'] <= 300 \
                 and u_span > 0.5 and v_span > 0.4 and eye_z is not None \
                 and c['center_z'] > eye_z + eye_height * 0.15:
@@ -841,6 +909,7 @@ class ROE_Props(PropertyGroup):
             ('SKIN', "皮肤", "按皮肤处理并允许降低饱和度"),
             ('FACE', "脸", "使用脸部共享贴图"),
             ('HAIR', "头发", "使用带透明通道的头发材质"),
+            ('TRANSPARENT', "透明罩/隐藏", "使用纯透明材质并在 ROE XPS 导出时跳过"),
         ),
         default='AUTO',
     )
@@ -1249,7 +1318,7 @@ class ROE_OT_diagnose_model(Operator):
                 if material is None:
                     issues.append("%s 槽 %d 为空" % (obj.name, index))
                 elif diffuse_image(material) is None \
-                        and material.name.lower() != 'eye_overlay':
+                        and not material_is_transparent_only(material):
                     flat_materials += 1
 
         armatures = related_armatures(meshes)
@@ -1554,6 +1623,10 @@ class ROE_OT_export_xps(Operator):
                 base_name = o.name.split('.')[0].replace('_', '-')
                 used_slots = sorted({q.material_index for q in o.data.polygons})
                 for slot_index in used_slots:
+                    pm = (o.material_slots[slot_index].material
+                          if slot_index < len(o.material_slots) else None)
+                    if is_roe and material_is_transparent_only(pm):
+                        continue
                     part = o.copy(); part.data = o.data.copy()
                     context.collection.objects.link(part)
                     if len(used_slots) > 1:
@@ -1566,8 +1639,6 @@ class ROE_OT_export_xps(Operator):
                         bm.free()
                         part.data.update()
 
-                    pm = (o.material_slots[slot_index].material
-                          if slot_index < len(o.material_slots) else None)
                     img = image_for_slot(o, slot_index, pm)
                     m = simple_export_mat(
                         '%s-%d' % (o.name, slot_index), img, pm)

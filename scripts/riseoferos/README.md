@@ -25,6 +25,9 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
 
 功能新增、操作变化和实现原理统一追加到 [更新日志](../../docs/CHANGELOG.md)。
+自动准备后仍有局部材质错误时，按
+[ROE 材质手动修复指南](../../docs/roe-manual-material-repair.md) 修复身体槽、透明罩
+或头部所选面。
 
 ---
 
@@ -76,6 +79,24 @@ ROE 面板中不要只凭目录名选择第一份 FBX，应优先选择这份带
 > 改过的文件——**不要放在这个目录里**，放到外面（如 `D:\roe_exports\xps_export\`）。
 > 踩过的坑：导出的 .mesh 旁边的贴图被重提取连带清空，导回全黑。
 
+### 旧导出出现白脸
+
+如果身体已有贴图，但脸或头发仍为白色，先检查 `_textures` 是否包含当前体型的
+公共头部贴图。例如 g03 至少需要：
+
+```text
+pc_g_nk_face_rgbx_Albedo.png
+pc_g_nk_eye_iris_rgbx_Albedo.png
+pc_g_nk_eyebrow_rgbx_Albedo.png
+pc_g_nk_hair_rgbx_Albedo.png
+```
+
+缺少这些文件通常表示角色目录由旧版流程或不完整的 AssetBundle 集合导出。当前
+脚本会自动合并 `pc_g_common` 公共包，备份自己的产物后重新运行
+`.\extract_character.ps1 g03 -ExportTextures`，再在 Blender 中重新点击
+“检查并准备材质”即可。不要通过修改 UV、权重或把身体贴图强行挂到脸上来处理；
+那些数据并没有损坏。
+
 ---
 
 ## convert_fbx.py —— 格式转换助手（白模）
@@ -97,6 +118,30 @@ blender --background --python convert_fbx.py -- <输入.fbx> <输出目录> <xps
 
 FBX 里没有网格/骨架时会明确报错退出（有的角色的 `nk_bs` 是纯空节点层级，
 如 g02）；ps1 调用时会自动换下一个候选 FBX（一般是 `pc_<id>_hd`）重试。
+
+g02 的原始 HD/LD 身体颜色贴图文件名把 `Albedo` 拼成了 `Abedo`：
+
+```text
+pc_g02_hd_body_rgbx_Abedo.png
+pc_g02_ld_body_rgbx_Abedo.png
+```
+
+ROE XPS Tools `1.1.4` 和同步的 `blender_face_materials.py` 会先查标准
+`*Albedo*.png`，找不到时再兼容 `*Abedo*.png`。因此不要手工改贴图文件名；更新插件并
+重启 Blender 后，把贴图目录指向 `D:\roe_exports\g02\_textures\`，重新点击
+“检查并准备材质”即可。
+
+b02 左眼上像“眼镜片”的物体实际来自 `pc_b_nk_tears` 透明眼部罩层，不是需要单独
+删除的眼镜模型。该槽同时存在于 head 与身体网格；v1.1.6 修复两处罩层和权重不足的
+下睫毛：更新插件后无需重新导入，
+对现有 b02 直接再点一次“检查并准备材质”。正确头部分槽应为 face `13920`、
+eye `864`、lash `804`、brow `228`、eye_overlay `116`；身体网格的 tear 槽 `32`
+面应使用纯 `Transparent BSDF`。
+
+g07 的原始身体槽名包含 `_hd_`，但颜色贴图名省略了该段。v1.1.7 会在精确匹配失败
+后兼容这种命名，自动得到 `skin/body1 → pc_g07_body1_rgbx_Albedo.png`、
+`body2 → pc_g07_body2_rgbx_Albedo.png`。旧场景只需重新点击一次
+“检查并准备材质”；不需要修改 UV、权重或重命名 PNG。
 
 ---
 

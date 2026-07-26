@@ -10,6 +10,10 @@
 | `prepare_fmodel.ps1` | 检查游戏的 `.utoc/.ucas`，建立独立输出目录，可选启动 FModel |
 | `ff7rebirth_tools.py` | Blender 插件：先选 FModel 导出目录，再扫描、导入并匹配基础贴图 |
 
+Player 的 `109` 个资源变体、当前已输出的 `14` 项、尚未输出的 `95` 项，以及
+FModel 中逐项手动保存 Model/Material/Texture 的步骤见
+[`docs/ff7rebirth-player-export-inventory.md`](../../docs/ff7rebirth-player-export-inventory.md)。
+
 ## 2026-07-26 已验证配置
 
 | 项目 | 值 |

@@ -17,4 +17,16 @@ Blender 插件也彼此独立：
 
 FFVII Rebirth 不能调用 AssetStudio：它的模型先由 FModel 从 Unreal IoStore 导出，再由
 Blender 插件从导出目录导入。完整步骤见
-[`docs/final-fantasy-vii-rebirth-extraction.md`](../docs/final-fantasy-vii-rebirth-extraction.md)。
+[`docs/final-fantasy-vii-rebirth-extraction.md`](../docs/final-fantasy-vii-rebirth-extraction.md)；
+Player 的已导出/待导出差集与逐项手动操作见
+[`docs/ff7rebirth-player-export-inventory.md`](../docs/ff7rebirth-player-export-inventory.md)。
+
+## 开发辅助
+
+需要对已经打开且启动了 MCP 服务的 Blender 做本地诊断时，使用
+[`dev/blender_mcp/execute_code.ps1`](dev/blender_mcp/execute_code.ps1)。其用途和安全
+边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
+
+`scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
+`riseoferos/`、`final/`，可复用开发工具放入 `dev/`，一次性 probe/渲染/热重载脚本
+不提交到仓库。

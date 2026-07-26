@@ -14,6 +14,260 @@
 
 ---
 
+## 2026-07-26 — ROE XPS Tools v1.1.7 / g07 身体贴图与手动材质修复
+
+### 新增与修复
+
+- 修复 g07 身体三个材质槽找不到颜色贴图的问题。原始槽名为
+  `pc_g07_hd_skin`、`pc_g07_hd_body1`、`pc_g07_hd_body2`，实际 PNG 却命名为
+  `pc_g07_body1_rgbx_Albedo.png` 和 `pc_g07_body2_rgbx_Albedo.png`，省略了
+  `_hd_`；旧版只按完整前缀查找，因此三个身体槽都生成了无图片材质。
+- 插件和独立材质脚本新增 `_hd_/_ld_` 省略命名兼容。仍先尝试原始槽名精确匹配，
+  只有未命中时才去掉一次 LOD 标记重试。
+- “当前槽用途”新增 **透明罩/隐藏**。人工指定后生成纯 `Transparent BSDF`，
+  ROE XPS 导出也会跳过该槽，便于手工处理 tear、泪膜或眼镜状透明卡片。
+- 新增 [ROE 材质手动修复指南](roe-manual-material-repair.md)，统一记录身体槽贴图
+  覆盖、透明罩隐藏、头部逐面分类、撤销与保存方法。
+
+### 用户如何操作
+
+1. 安装或覆盖 `scripts\riseoferos\roe_xps_addon.py`，重启 Blender，版本应为
+   `1.1.7`。本次当前 Blender 已热加载新版本。
+2. g07 已打开的场景无需重新导入；保持模型来源与
+   `D:\roe_exports\g07\_textures\`，点击一次“检查并准备材质”。
+3. 自动结果仍有局部偏差时，按
+   [手动修复指南](roe-manual-material-repair.md) 使用高级材质调整：
+   当前槽保存用途/贴图覆盖，或在 Edit Mode 标记头部所选面。
+4. 检查无误后保存 `.blend`。
+
+### 原理与兼容性
+
+- g07 正确映射为：`skin → body1`、`body1 → body1`、`body2 → body2`。修复只扩展
+  文件名解析，不修改 UV、顶点、面、骨架、权重或原始材质槽。
+- 精确文件名前缀的优先级不变，因此 a06/a07/a08、g08 和标准命名角色不会被宽松
+  回退抢走贴图；g02 的 `Abedo` 拼写兼容也继续保留。
+- 透明槽采用持久化槽覆盖，不需要删除几何；清除当前槽覆盖即可恢复自动判断。
+  头部逐面人工分类仍存储在网格属性中，二者都会随 `.blend` 保存。
+
+### 验证
+
+- 当前 g07 Blender 3.6 场景应用返回 `FINISHED`：3 个网格，缺贴图 `0`。
+- 身体三个槽保持原面数 `14312 / 7034 / 24219`；前两个连接
+  `pc_g07_body1_rgbx_Albedo.png`，第三个连接
+  `pc_g07_body2_rgbx_Albedo.png`。
+- Blender 合成回归同时覆盖插件与独立脚本的 g07 LOD 省略命名；b02 头部语义和
+  非 head tear 透明槽、g02 `Albedo/Abedo` 回归继续通过。
+
+## 2026-07-26 — ROE XPS Tools v1.1.6 / b02 下睫毛与左眼透明片
+
+### 新增与修复
+
+- 修复 b02 下睫毛被分到脸材质的问题。两侧下睫毛共 `300` 面，原始材质属于
+  `pc_b_nk_eyebrow`，但 Eyelid 权重低于 other，旧规则把它们留在 face 槽。
+- 修复左眼附近像“眼镜片”的错误几何。它不是独立眼镜模型，而是
+  `pc_b_nk_tears` 的透明眼部罩层。head 内旧规则把其中 `60` 面当成脸、`56` 面
+  当成睫毛；此外身体网格 `pc_b02_hd.002` 还有一个同名 `32` 面材质槽。
+- v1.1.5 已修复 head 内的分区，但没有处理身体网格里的同名 tear 槽；v1.1.6 将
+  所有非 head 网格的 `tear/tears` 原始槽也改为纯透明材质，完成左眼“眼镜片”修复。
+- 插件和独立脚本现在都保留骨骼权重的优先判定，并增加原始材质名兜底：
+  `tear/tears` 直接进入透明罩层；`brow/eyebrow/lash` 只在权重无法判定时，按相对
+  眼球高度拆分眉毛和睫毛。
+
+### 用户如何操作
+
+1. 安装或覆盖 `scripts\riseoferos\roe_xps_addon.py`，版本应为 `1.1.6`。
+2. 已经打开的 b02 场景不需要重新导入；确认模型来源与贴图目录仍指向 b02 后，
+   点击一次“检查并准备材质”。
+3. 本次当前 Blender 已热加载并执行完成；以后重启 Blender 会直接使用磁盘上的
+   v1.1.6。
+4. 检查无误后保存 `.blend`，否则本次场景内的逐面材质索引不会持久化。
+
+### 原理与兼容性
+
+- b02 的 `pc_b_nk_eyebrow` 同时装有眉毛、上睫毛和下睫毛，不能把整个原始材质槽
+  直接映射为单一目标槽；新规则仍优先使用历史 Eyebrow/Eyelid 骨骼权重，仅处理
+  权重不明确的连通块。
+- `pc_b_nk_tears` 是运行时眼部效果使用的透明卡片，Blender 基础预览应统一映射到
+  `Transparent BSDF` 的 `eye_overlay`，而不是赋予脸色或眉睫贴图。该规则同时应用
+  于 head 的逐面分类和其他网格的原始材质槽。
+- 没有修改贴图、UV、顶点、骨架或权重。g02 的 `Abedo` 回退、a08 眼球材质名兜底
+  以及 a06/a07 的历史骨骼权重分类继续保留。
+
+### 验证
+
+- b02 当前 Blender 3.6 场景应用返回 `FINISHED`，3 个网格，缺贴图 `0`。
+- b02 头部分槽：face `13920`、eye `864`、lash `804`、brow `228`、
+  eye_overlay `116`。
+- b02 身体网格 `pc_b02_hd.002` 的 `pc_b_nk_tears` 槽共 `32` 面，已连接到只含
+  `Transparent BSDF` 与 Material Output 的透明材质。
+- 真实 FBX 回归覆盖 a06、a07、a08、g02、g03：眼球均保持 `864` 面，各角色既有
+  骨骼优先分类继续生效。
+- 新增 Blender 合成网格测试，同时验证插件与独立脚本的脸、眼球、上下睫毛、眉毛、
+  tear 罩层语义；与 g02 `Albedo/Abedo` 回归测试均通过。
+
+## 2026-07-26 — ROE g03 白脸 / 旧导出贴图补全
+
+### 问题与修复
+
+- `D:\roe_exports\g03\_textures\` 是早期的不完整导出，只包含 g03 的 HD/LD
+  身体 Albedo、MGAC、Normal，没有 g 体型共用的
+  `pc_g_nk_face`、`pc_g_nk_eye_iris`、`pc_g_nk_eyebrow`、`pc_g_nk_hair`
+  贴图。
+- Blender 中身体的 Albedo 已正确连接，但头部没有材质槽；插件因缺少
+  face、eye_iris、eyebrow 三项必需贴图而中止头部材质准备，所以脸显示为白色。
+- 使用当前 `extract_character.ps1` 在隔离目录重新提取 g03，确认能够导出
+  31 张贴图；将其中缺失的 6 张 g 体型共用贴图补入原 `_textures` 后，重新执行
+  “检查并准备材质”，当前 Blender 场景已恢复。
+
+### 用户如何操作
+
+若旧角色出现身体有贴图、脸或头发为白色，推荐重新提取：
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+.\extract_character.ps1 g03 -ExportTextures
+```
+
+重提取会清空并重建 `D:\roe_exports\g03\`，请先把自己生成的 `.blend`、`.mesh`
+或烘焙贴图移到该目录之外。随后在 Blender 的 ROE 面板重新选择：
+
+1. 模型来源：完整的 g03 HD FBX；
+2. ROE 贴图目录：`D:\roe_exports\g03\_textures\`；
+3. 点击“检查模型”以及“检查并准备材质”。
+
+### 原理与兼容性
+
+- g02、g03、g08 的 `pc_g_nk_*` 文件 SHA256 完全一致，证明它们是 g 体型公共资源，
+  不是角色专属贴图。
+- 当前提取脚本会合并角色包、`chara_armor_common*` 和
+  `chara_*_pc_<体型>_common*`，因此新提取能补齐公共头部贴图。
+- 本次没有修改 FBX、UV、骨架、权重或 Blender 材质分类算法，也没有改变 g02
+  的 `Abedo` 兼容及 g08 的标准 `Albedo` 优先级。
+
+### 验证
+
+- 隔离重提取 g03：`28` 个 AssetBundle、`10` 个 FBX、`31` 张 PNG。
+- 共用脸、虹膜、眉毛、头发及脸部 MGAC/Normal 与 g02、g08 对应文件哈希一致。
+- Blender 3.6 当前场景材质准备返回 `FINISHED`：3 个网格，恢复 1 个头部原始分区，
+  未恢复 0，缺贴图 0；头部恢复为 face、eye、lash、brow、eye_overlay 五个材质槽。
+
+## 2026-07-26 — `scripts` 根目录清理与开发工具归档
+
+### 整理内容
+
+- 删除 `scripts` 根目录下 `19` 个未跟踪、未被仓库引用的一次性 Blender 诊断文件，
+  包括 a07/a08 热重载、临时渲染、会话保存、材质对比和依赖本机旧路径的手工测试。
+- 保留可复用的 Blender MCP TCP 客户端，并从
+  `scripts\_blender_mcp_client.ps1` 移到
+  `scripts\dev\blender_mcp\execute_code.ps1`。
+- 新增 `scripts\dev\blender_mcp\README.md`，记录启动条件、命令、端口参数和任意代码
+  执行的安全边界。
+- 正式目录 `scripts\riseoferos`、`scripts\final`、两者的测试目录，以及旧命令兼容
+  入口 `scripts\extract_character.ps1` 均保留。
+
+### 用户如何操作
+
+- ROE 与 FF7 Rebirth 的正常操作不变，继续从 `scripts\riseoferos` 和
+  `scripts\final` 进入。
+- 只有开发诊断时才使用：
+
+  ```powershell
+  .\scripts\dev\blender_mcp\execute_code.ps1 -CodeFile .\path\to\probe.py
+  ```
+
+### 原理与兼容性
+
+- 删除项全部未被 Git 跟踪且全仓库无引用；其中多个测试仍硬编码已经迁移前的
+  `scripts\roe_xps_addon.py`，继续保留会造成误用。
+- 通用 MCP 客户端本身不含角色或版本逻辑，因此归档到 `dev/blender_mcp`；正式用户
+  入口路径没有改变。
+
+### 验证
+
+- 清理后 `scripts` 根目录只剩 `README.md` 和兼容入口 `extract_character.ps1`。
+- 重新检查仓库引用与 Markdown 相对链接，确认没有指向已删除的一次性脚本。
+- ROE `Abedo` 回归测试与 FF7 Rebirth helper 测试仍位于各自游戏目录。
+
+## 2026-07-26 — ROE XPS Tools v1.1.4 / g02 `Abedo` 材质兼容
+
+### 新增与修正
+
+- 修复 `D:\roe_exports\g02` 导入后身体材质缺失。g02 原始 HD/LD 身体颜色贴图把
+  `Albedo` 拼成了 `Abedo`，而旧版只搜索 `*Albedo*.png`，导致身体网格生成无图片
+  节点的平面材质。
+- `roe_xps_addon.py` 与独立的 `blender_face_materials.py` 现在都先匹配标准
+  `Albedo`，未命中时再匹配 g02 的 `Abedo`；若两个文件同时存在，标准拼写优先。
+
+### 用户如何操作
+
+1. 在 Blender 3.6 中覆盖安装 `scripts\riseoferos\roe_xps_addon.py`，然后重启
+   Blender，确认插件版本为 `1.1.4`。
+2. “模型来源”选择 g02 的有效 HD FBX，“ROE 贴图目录”选择
+   `D:\roe_exports\g02\_textures\`。
+3. 点击“导入 FBX”→“检查模型”→“检查并准备材质”。旧场景也可重新指定上述路径后，
+   直接再次点击“检查并准备材质”。
+4. 身体材质的 Image Texture 应连接
+   `pc_g02_hd_body_rgbx_Abedo.png`，脸、眼睛、眉毛和头发继续使用共享的标准
+   `Albedo` 贴图。
+
+### 原理与兼容性
+
+- 修复只扩展颜色贴图的文件名解析，不重命名或改写 PNG，不改变 g08 等标准
+  `Albedo` 角色的优先匹配结果。
+- MGAC、Normal、UV、骨架、权重、材质槽恢复和眼睛分类逻辑均未改动。
+
+### 验证
+
+- 对比本机 `g02` 与正确的 `g08`：g02 的 HD/LD 身体贴图均为 `Abedo`，g08 为标准
+  `Albedo`，其他共享脸/眼/眉/发贴图命名一致。
+- Blender 3.6 回归脚本覆盖插件和独立材质脚本：只有 `Abedo` 时能够回退命中；同时
+  存在 `Albedo` 与 `Abedo` 时仍选择标准 `Albedo`。
+
+## 2026-07-26 — FF7 Rebirth Player 待导出清单与手动流程
+
+### 新增内容
+
+- 新增
+  [`ff7rebirth-player-export-inventory.md`](ff7rebirth-player-export-inventory.md)，
+  记录 FModel 虚拟 `Player` 目录 `109` 项、本机已经写入的 `14` 项和待核查/待导出的
+  `95` 项完整差集。
+- 已有 14 项进一步区分为：`9` 个有效 ActorX 模型、`2` 个 Tifa 纯材质效果、
+  `1` 个尚未转换的 PC7002 原始模型资源，以及 `2` 个仅含共享贴图的 Cloud 依赖目录。
+- 95 项按角色建立可维护的 Markdown 复选框；`Wet/Tear/Hologram/Dirty/Blood`
+  等疑似效果变体标记为先核查，避免把资源目录数误写成独立模型数。
+
+### 用户如何操作
+
+1. 在 FModel 中进入 `End > Content > Character > Player`，搜索清单中的完整变体名。
+2. 先判断是否存在 `Model`，并打开资产确认 3D Viewer/Outliner 中是否为
+   `SkeletalMesh`。
+3. 模型使用 **Save Model**；整目录可使用
+   **Save Folder's Packages Models**。
+4. `Material` 使用 **Save Folder's Packages Properties (.json)**，
+   `Texture` 使用 **Save Folder's Packages Textures**。
+5. 导出后检查日志、PNG/JSON 和 PSK/PSKX；ActorX 文件头必须为 `ACTRHEAD`，再更新
+   清单复选框和输出文件名。
+
+### 原理与兼容性
+
+- FModel 输出目录设为 `D:\ff7rebirth_exports\fmodel_exports` 并启用
+  `Keep Directory Structure` 后，会把 Unreal 虚拟包路径映射为磁盘上的
+  `End\Content\...` 层级；因此该目录是 FModel 导出结果，不是 Blender 创建的。
+- 一级资源变体可能只有材质/贴图。只有存在 `Model` 且确认是 `SkeletalMesh` 时才执行
+  Save Model；没有 Model 的效果项导出 JSON/PNG 后记录为“无独立网格”。
+- 当前 FF7 Rebirth 的 glTF tangent 路径仍可能失败，骨骼模型继续使用 ActorX 和
+  `First Level Only`。PC7002 当前只保留原始 UASSET，不标记为 Blender 可用。
+
+### 验证
+
+- 直接读取当前 FModel Folders 视图，确认 `Player` 为 `109 folders`，并取得全部一级
+  目录名。
+- 递归盘点本机 Player 输出：`14` 个一级目录、`266` 个文件；其中 `.pskx 8`、
+  `.psk 1`、`.uasset 5`、`.json 99`、`.png 152`、`.hdr 1`。
+- 对 109 项与磁盘 14 项取差集得到 95 项，分组复算
+  `20+8+17+7+8+3+3+4+4+3+3+9+6=95`。
+- 9 个 PSK/PSKX 均验证以 `ACTRHEAD` 开始。
+
 ## 2026-07-26 — FF7 Rebirth Tools v0.3.0 / 材质、法线与同骨架配件
 
 ### 新增与修正
