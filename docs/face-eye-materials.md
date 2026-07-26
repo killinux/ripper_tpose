@@ -1,7 +1,7 @@
 # 面部材质修复：眼球 / 睫毛 / 眉毛（Rise of Eros）
 
 以 g11（SWEETIE FOX 服装）为例，记录从 FBX 导入后"眼球全白、睫毛/眉毛是肤色色块"
-到与游戏内效果基本一致的完整修复过程。可复用脚本: `scripts/blender_face_materials.py`。
+到与游戏内效果基本一致的完整修复过程。可复用脚本: `scripts/riseoferos/blender_face_materials.py`。
 
 ---
 
@@ -69,7 +69,7 @@ FBX 导入 Blender 后给 head 网格整体挂脸部贴图，结果：
 | 3 眉毛 | brow | 眉毛贴图 Color / Alpha 直连；BLEND + shadow NONE |
 | 4 罩层 | overlay | **纯 Transparent BSDF**；BLEND + shadow NONE |
 
-调参入口（`scripts/blender_face_materials.py` 顶部常量）：
+调参入口（`scripts/riseoferos/blender_face_materials.py` 顶部常量）：
 
 - `IRIS_R_IN/OUT`：虹膜大小（0.235/0.285 与游戏截图对齐；改小→眼白更多）
 - `LASH_ALPHA_GAIN / LASH_DARKEN`：睫毛浓密度/深浅
@@ -90,7 +90,7 @@ FBX 导入 Blender 后给 head 网格整体挂脸部贴图，结果：
 ```powershell
 # 无头一键（导入 FBX + 挂全部材质 + 存 .blend）
 & 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' --background --python `
-  scripts\blender_face_materials.py -- `
+  scripts\riseoferos\blender_face_materials.py -- `
   'D:\roe_exports\g11\pc_g11_hd (1)\FBX_GameObjects\pc_g11_hd\pc_g11_hd.fbx' `
   'D:\roe_exports\g11\xps' `
   'D:\roe_exports\g11\g11.blend'

@@ -1,6 +1,6 @@
 # ROE XPS Tools 插件（一步步转 XPS）
 
-`scripts/roe_xps_addon.py` —— Blender 插件，把"FBX 导入 → 修脸材质 → 导出 XPS
+`scripts/riseoferos/roe_xps_addon.py` —— Blender 插件，把"FBX 导入 → 修脸材质 → 导出 XPS
 → (导回后)修骨架方向"做成侧边栏四个按钮。远程机器(haoni)的 Blender 3.6 已安装启用。
 
 ## 安装

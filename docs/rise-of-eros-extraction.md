@@ -9,7 +9,7 @@
 
 **放弃用 Ninja Ripper 抓静态网格 + 手搓 `NR_Rig`;改用 Unity 资产提取工具从游戏自带的 AssetBundle 里直接导出「带骨架 + bind pose + 蒙皮权重 + 表情 blendshape」的原始模型,并可顺带导出游戏原生动画。** 你现在手工建骨架、刷权重的活儿基本全省——拿到的就是美术做好的绑定角色。
 
-> **本项目最终落地的是 AssetStudio(命令行版 AssetStudioModCLI)。** 整条流水线(`scripts/extract_character.ps1`、v1.0x 基线、a01/g11 等验证)全部基于它。
+> **本项目最终落地的是 AssetStudio(命令行版 AssetStudioModCLI)。** 整条流水线(`scripts/riseoferos/extract_character.ps1`、v1.0x 基线、a01/g11 等验证)全部基于它。
 > **AssetRipper 只是当时评估过的备选,没有进入流程**——下的是跑不起来的源码仓库(见 §2.1),定位仅是"某角色 FBX 炸开时导 GLB 交叉验证"。两者名字相近,别记混:干活的是 **AssetStudio**。
 
 三条独立证据(经对抗性复核未被推翻):

@@ -213,10 +213,10 @@ File > Import > FBX
 - 每个 mesh 有 Armature 修改器 + 按骨骼命名的顶点组(权重已在)
 - Shape Keys(若用 GUI 导出)
 
-贴材质(含眼球/睫毛/眉毛修复)用 `scripts/blender_face_materials.py` 一键完成,
+贴材质(含眼球/睫毛/眉毛修复)用 `scripts/riseoferos/blender_face_materials.py` 一键完成,
 原理和调参见 [face-eye-materials.md](face-eye-materials.md)。
 
-也可以装 `scripts/roe_xps_addon.py` 插件,侧边栏 ROE 页签里三步完成
+也可以装 `scripts/riseoferos/roe_xps_addon.py` 插件,侧边栏 ROE 页签里三步完成
 "导入 FBX → 修材质 → 导出 XPS",见 [xps-addon.md](xps-addon.md)。
 
 ---
