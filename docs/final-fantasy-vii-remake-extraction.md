@@ -53,7 +53,92 @@ D:\ff7remake_exports\umodel_original\Tifa_Remake_validation.json
 
 Blender 导入器报告 384 个顶点的顶点色存在歧义；网格、骨架、权重、法线和 UV 均正常导入。模型是游戏 bind pose，接近 A-pose。Remake 的 Renderer 复杂材质不能由 UE Viewer 完整重建，因此验证 `.blend` 只按 `.mat` 中的 `Diffuse`、`Normal` 和可识别 Alpha 引用建立了基础材质。
 
-验证渲染中手腕处仍有可见间隙。模型包同时带有 Square Enix 的 KineDriver/Bonamik 用户数据，而 ActorX 不会烘焙这类辅助变形；因此结构验证通过不等于最终美术资产已经完全清理。若目标是直接用于动画或发布，还需要在 Blender 中校正手腕/手部的 rest pose，或另行实现 KineDriver 数据处理。
+原验证渲染中手腕处的断口并不是 KineDriver/Bonamik 或主体权重错误。Remake 标准服装把
+完整手掌、护腕和拳套放在独立 Weapon SkeletalMesh 中；`PC0002_00.pskx` 只是主体，单独
+导入必然缺少这部分。
+
+## Tifa 默认皮手套
+
+已确认的原版资源目录是：
+
+```text
+End/Content/GameContents/Character/Weapon/WE0002_00_Tifa_LeatherGlove/
+├── Model/WE0002_00.uasset
+├── Material/
+└── Texture/
+```
+
+### 从 FModel 原始包转成 ActorX
+
+如果专用 UE Viewer 不能直接从加密 `.pak` 定位该网格，可以使用已经验证过的两步法：
+
+1. 在 FModel 搜索 `WE0002_00_Tifa_LeatherGlove`；
+2. 保持上述 Unreal 相对目录，保存 `Model`、`Material` 和 `Texture` 中目标包的原始
+   `.uasset/.uexp`；
+3. 把保存根目录作为 UE Viewer 的 loose-package `-path`，只导出主网格包。
+
+PowerShell 示例（`$rawRoot` 改成 FModel 实际保存根目录）：
+
+```powershell
+$rawRoot = 'D:\ff7remake_exports\fmodel_raw'
+$umodelArgs = @(
+  '-export',
+  '-png',
+  '-game=ue4.18',
+  '-noanim',
+  "-path=$rawRoot",
+  '-out=D:\ff7remake_exports\umodel_glove_raw',
+  'End/Content/GameContents/Character/Weapon/WE0002_00_Tifa_LeatherGlove/Model/WE0002_00.uasset'
+)
+& 'E:\tools\umodel_ff7remake\umodel_FFVII_intergrade_v8.exe' @umodelArgs
+```
+
+不要把 `-game=ue4.18` 直接拼成未经数组保护的动态命令字符串；本机 PowerShell 验证中，
+参数数组可避免版本值被错误拆分。成功结果包括：
+
+```text
+D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Model\WE0002_00.psk
+D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Texture\WE0002_00_Body_C.png
+D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Texture\WE0002_00_Body_N.png
+```
+
+### 在 Blender 3.6 中绑定主体
+
+使用仓库中的 `scripts/final/fix_ff7remake_tifa_gloves.py`：
+
+```powershell
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' --background `
+  'D:\ff7remake_exports\umodel_original\Tifa_Remake_validation.blend' `
+  --python 'E:\code\othercode\ripper_tpose\scripts\final\fix_ff7remake_tifa_gloves.py' -- `
+  --glove 'D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Model\WE0002_00.psk' `
+  --textures 'D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Texture' `
+  --output 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.blend' `
+  --render 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.png' `
+  --closeup 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed_gloves.png' `
+  --report 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.json'
+```
+
+脚本复用手套 PSK 自带权重，不会重新计算自动权重。它会检查所有权重骨名和 local
+rest/bind 矩阵，改绑 `PC0002_00` 主体骨架，删除重复手套骨架，再临时旋转权重骨骼验证
+Armature modifier 确实产生形变并复位。本机验证结果：
+
+| 检查项 | 结果 |
+|---|---:|
+| 手套网格 | 1 |
+| 顶点 | 13,110 |
+| 多边形 | 19,634 |
+| 实际权重骨骼 | 30 |
+| 主体缺失权重骨骼 | 0 |
+| 最坏 local rest 矩阵差 | `6.56e-7` |
+
+最终文件：
+
+```text
+D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.blend
+D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.png
+D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed_gloves.png
+D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.json
+```
 
 ## 导出 Tifa 或其他角色
 
@@ -101,7 +186,46 @@ Barret : PC0001_00_Barret_Standard/Model/PC0001_00.uasset
 Tifa   : PC0002_00_Tifa_Standard/Model/PC0002_00.uasset
 ```
 
-服装变体也是同样规律，例如 Tifa 的 `PC0002_01_Tifa_PurpleDress`、`PC0002_02_Tifa_ChinaDress` 和 `PC0002_03_Tifa_WallMarketDress`。先在 FModel/UE Viewer 树中确认具体文件名，再把完整包路径传给脚本；不要对整个 `Player` 目录一次性导出。
+服装变体也是同样规律，例如 Tifa 的 `PC0002_01_Tifa_PurpleDress`、
+`PC0002_02_Tifa_ChinaDress` 和 `PC0002_03_Tifa_WutaiDress`。先在 FModel/UE Viewer
+树中确认具体文件名，再把完整包路径传给脚本；不要对整个 `Player` 目录一次性导出。
+本机原版 pak 实际枚举出的 `36` 个 Player 主模型见
+[`ff7remake-player-model-inventory.md`](ff7remake-player-model-inventory.md)。
+
+## Tifa PurpleDress 验证结果
+
+已使用同一专用 UE Viewer 和 Blender 3.6 流程验证：
+
+```text
+End/Content/GameContents/Character/Player/
+└── PC0002_01_Tifa_PurpleDress/Model/PC0002_01.uasset
+```
+
+导出目录和 Blender 产物：
+
+```text
+D:\ff7remake_exports\tifa_purple_dress\GameContents\Character\Player\PC0002_01_Tifa_PurpleDress\Model\PC0002_01.pskx
+D:\ff7remake_exports\tifa_purple_dress\Tifa_PurpleDress.blend
+D:\ff7remake_exports\tifa_purple_dress\Tifa_PurpleDress.png
+D:\ff7remake_exports\tifa_purple_dress\Tifa_PurpleDress.json
+```
+
+| 检查项 | 结果 |
+|---|---:|
+| ActorX 文件头 | `ACTRHEAD` |
+| 网格 | 1 |
+| 顶点 | 82,509 |
+| 多边形 | 108,907 |
+| 骨架 / 骨骼 | 1 / 410 |
+| 实际权重顶点组 | 276 |
+| 材质槽 | 9 |
+| UV 层 | 3 |
+| 缺失基础预览贴图 | 0 |
+
+PurpleDress 主网格包含完整手掌和手指，不需要绑定标准服装使用的独立皮手套。基础材质由
+`validate_ff7remake_model.py` 根据 UE Viewer `.mat` 中的 Diffuse/Normal 引用连接；脚本会
+把 DirectX 法线的绿色通道转换为 Blender/OpenGL 方向，但不会猜测 Renderer 专用打包
+遮罩的完整 Shader 语义。
 
 多个包可以一次传入：
 

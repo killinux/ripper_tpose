@@ -26,6 +26,8 @@ INTERGRADE》的最终导出工具。两款游戏都使用 Unreal，但封包和
 | `prepare_fmodel.ps1` | 检查 Rebirth IoStore 文件并建立隔离的输出目录，可选启动 FModel |
 | `ff7rebirth_tools.py` | Blender 3.6 插件：扫描 Rebirth 导出、导入 PSK、匹配基础贴图和绑定同骨架配件 |
 | `ff7remake_export.ps1` | 使用专用 UE Viewer 安全导出 Remake 的一个或多个资源包 |
+| `fix_ff7remake_tifa_gloves.py` | Blender 3.6 后台脚本：校验并把 Remake Tifa 独立手套绑定到主体骨架 |
+| `validate_ff7remake_model.py` | Blender 3.6 后台脚本：导入 Remake PSK、连接基础材质并生成 blend、预览和报告 |
 | `tests/test_ff7rebirth_helpers.py` | Rebirth Blender 插件的纯 Python 辅助逻辑测试 |
 
 ## 2. 公共准备
@@ -394,13 +396,16 @@ Tifa 的常见服装目录包括：
 ```text
 PC0002_01_Tifa_PurpleDress
 PC0002_02_Tifa_ChinaDress
-PC0002_03_Tifa_WallMarketDress
+PC0002_03_Tifa_WutaiDress
 PC0002_04_Tifa_NoGlove
 ```
 
 服装主网格通常与目录前面的编号同名，但仍应先在 FModel/UE Viewer 目录树中确认实际
 `.uasset` 名称，再把完整包路径交给脚本。不要一次导出整个 `Player` 根目录：它会带入
 大量动画和共享依赖，产物难以核对且可能占用几十 GB。
+
+本机原版 pak 实际枚举出的 `36` 个 Player 主模型见
+[`docs/ff7remake-player-model-inventory.md`](../../docs/ff7remake-player-model-inventory.md)。
 
 ## B5. Remake 包装脚本参数
 
@@ -452,10 +457,44 @@ D:\ff7remake_exports\umodel_original\Tifa_Remake_validation.png
 D:\ff7remake_exports\umodel_original\Tifa_Remake_validation.json
 ```
 
-验证模型是接近 A-pose 的游戏 bind pose。手腕处存在可见间隙，是 KineDriver/Bonamik
-辅助变形没有被 ActorX 烘焙到 bind pose 的结果，不代表 PSK 骨架或权重导入失败。要作为
-最终动画资产使用，还需要在 Blender 中校正手腕/手部 rest pose，或实现相应辅助变形。
-UE Viewer 也不能完整重建 Remake 的 Renderer 复杂 Shader，因此基础材质只是预览近似。
+验证模型是接近 A-pose 的游戏 bind pose。原验证图中的“手腕断开”并不是
+KineDriver/Bonamik 或主体权重错误，而是标准服装把完整手掌和护臂放在独立 Weapon
+SkeletalMesh 中；只导入 `PC0002_00.pskx` 会缺少这层网格。默认皮手套的准确路径是：
+
+```text
+End/Content/GameContents/Character/Weapon/WE0002_00_Tifa_LeatherGlove/
+```
+
+其中主网格为 `Model/WE0002_00.uasset`，还需要保留同目录的 Material 和 Texture。UE Viewer
+不能完整重建 Remake 的 Renderer 复杂 Shader，因此基础材质仍只是预览近似。
+
+### B6.1 用 Blender 3.6 合并默认手套
+
+已导出的手套 ActorX 和贴图位于：
+
+```text
+D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Model\WE0002_00.psk
+D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Texture\
+```
+
+运行自动校验和绑定脚本：
+
+```powershell
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' --background `
+  'D:\ff7remake_exports\umodel_original\Tifa_Remake_validation.blend' `
+  --python 'E:\code\othercode\ripper_tpose\scripts\final\fix_ff7remake_tifa_gloves.py' -- `
+  --glove 'D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Model\WE0002_00.psk' `
+  --textures 'D:\ff7remake_exports\umodel_glove_raw\GameContents\Character\Weapon\WE0002_00_Tifa_LeatherGlove\Texture' `
+  --output 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.blend' `
+  --render 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.png' `
+  --closeup 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed_gloves.png' `
+  --report 'D:\ff7remake_exports\umodel_original\Tifa_Remake_fixed.json'
+```
+
+脚本不会重新计算自动权重。它会校验手套的实际权重骨名与主体 local rest/bind 矩阵，
+复用 PSK 自带权重改绑主体骨架，删除重复骨架，并临时旋转一根权重骨骼验证实际形变后复位。
+本机结果为 `13,110` 个手套顶点、`19,634` 个多边形、`30` 根权重骨骼，缺失骨骼为
+`0`，最坏 rest 矩阵差为 `6.56e-7`。
 
 ---
 
@@ -498,7 +537,7 @@ ACTRHEAD
 | Remake FModel 能浏览但模型打开失败 | 缺少匹配未版本化属性布局 | 使用专用 `umodel_FFVII_intergrade_v8.exe` 导出 |
 | Remake 导出的是 Mod 模型 | 使用了 `-IncludeMods` 或 Mod 未隔离 | 默认不加 `-IncludeMods`，检查 `~mods` 后重新导出到新目录 |
 | Remake 脚本提示缺少 AES key | 当前会话未设置环境变量 | 用 `Read-Host` 设置 `FF7REMAKE_AES_KEY`，结束后清除 |
-| Remake 手腕有缝 | KineDriver/Bonamik 未烘焙进 ActorX bind pose | Blender 中校正 rest pose；不要误判为网格丢失 |
+| Remake Tifa 手腕断开或手掌缺件 | 默认皮手套是独立 Weapon 网格，只导出了主体 | 导出 `WE0002_00_Tifa_LeatherGlove`，运行 `fix_ff7remake_tifa_gloves.py` |
 | 模型有材质槽但全白 | 只导出了网格，或贴图路径被打平 | 补导 JSON/`.mat` 和贴图，恢复完整目录层级 |
 | PSK 菜单不存在 | `io_scene_psk_psa` 未安装或版本不兼容 | Blender 3.6 安装并启用 5.0.6 |
 
