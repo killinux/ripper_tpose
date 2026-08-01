@@ -28,6 +28,8 @@ INTERGRADE》的最终导出工具。两款游戏都使用 Unreal，但封包和
 | `ff7remake_export.ps1` | 使用专用 UE Viewer 安全导出 Remake 的一个或多个资源包 |
 | `fix_ff7remake_tifa_gloves.py` | Blender 3.6 后台脚本：校验并把 Remake Tifa 独立手套绑定到主体骨架 |
 | `validate_ff7remake_model.py` | Blender 3.6 后台脚本：导入 Remake PSK、连接基础材质并生成 blend、预览和报告 |
+| [`docs/ff7remake-mod-manual-export.md`](../../docs/ff7remake-mod-manual-export.md) | Remake Mod 手动导出：Mod-only 挂载、原始包转 32 位 glTF、Blender 3.6 材质和手套合并 |
+| `ff7r_mesh_importer_large_mesh_cm.patch` | FF7R-mesh-importer v0.2.1 补丁：大网格 32 位索引和厘米坐标 |
 | `tests/test_ff7rebirth_helpers.py` | Rebirth Blender 插件的纯 Python 辅助逻辑测试 |
 
 ## 2. 公共准备

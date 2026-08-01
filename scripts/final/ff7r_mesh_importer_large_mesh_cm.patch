@@ -1,0 +1,48 @@
+diff --git a/src/asset/buffer.py b/src/asset/buffer.py
+--- a/src/asset/buffer.py
++++ b/src/asset/buffer.py
+@@ -65,6 +65,5 @@ class PositionVertexBuffer(VertexBuffer):
+     def parse(self):
+         parsed = struct.unpack('<'+'f'*3*self.size, self.buf)
+         position = [parsed[i*3:i*3+3] for i in range(self.size)]
+-        position = [[p/100 for p in pos] for pos in position]
+         position = [[pos[0], pos[2], pos[1]] for pos in position]
+         return position
+@@ -170,7 +169,6 @@ class SkeletalMeshVertexBuffer(VertexBuffer):
+         tangent = [n[:4] for n in normals]
+         tangent = [[n[0], n[2], n[1], n[3]] for n in tangent]
+         position = [parsed[i*stride+8:i*stride+11] for i in range(self.size)]
+-        position = [[p/100 for p in pos] for pos in position]
+         position = [[pos[0], pos[2], pos[1]] for pos in position]
+         texcoords = []
+         for j in range(self.uv_num):
+diff --git a/src/asset/skeleton.py b/src/asset/skeleton.py
+--- a/src/asset/skeleton.py
++++ b/src/asset/skeleton.py
+@@ -85,6 +85,6 @@ class Bone:
+         ary = list(struct.unpack('<'+'f'*10, self.pos))
+         children = [c+1 for c in self.children]
+         pos = ary[4:7]
+-        pos = [pos[0]/100, pos[2]/100, pos[1]/100]
++        pos = [pos[0], pos[2], pos[1]]
+         return gltfBone(self.name, children, [ary[0], ary[2], ary[1], ary[3]], pos, [ary[7], ary[9], ary[8]])
+         #return gltfBone(self.name, children, [ary[0], ary[1], ary[2], ary[3]], pos, [ary[7], ary[8], ary[9]])
+diff --git a/src/gltf/gltf.py b/src/gltf/gltf.py
+--- a/src/gltf/gltf.py
++++ b/src/gltf/gltf.py
+@@ -153,6 +153,6 @@ class glTF:
+         for j in range(len(self.positions)):
+             vert_ids = self.indices[j]
+-            accessors.append(glTF.get_accessor(i, 5123, len(vert_ids), 'SCALAR'))
++            accessors.append(glTF.get_accessor(i, 5125, len(vert_ids), 'SCALAR'))
+             position = self.positions[j]
+             vert_num = len(position)
+             min_pos, max_pos = glTF.get_position_range(position)
+@@ -222,6 +222,6 @@ class glTF:
+             for j in range(len(self.positions)):
+                 vert_ids = self.indices[j]
+-                buffer_views.append(glTF.write_buffer(f, vert_ids, 'H'))
++                buffer_views.append(glTF.write_buffer(f, vert_ids, 'I'))
+                 buffer_views.append(glTF.write_buffer(f, self.positions[j], 'f', flatten=True))
+                 buffer_views.append(glTF.write_buffer(f, self.normals[j], 'f', flatten=True))
+                 buffer_views.append(glTF.write_buffer(f, self.tangents[j], 'f', flatten=True))

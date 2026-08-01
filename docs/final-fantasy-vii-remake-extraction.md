@@ -17,6 +17,10 @@ Steam 版 `FINAL FANTASY VII REMAKE` 使用传统 UE4 `.pak`，但 Intergrade �
 
 专用构建来自 UE Viewer 官方论坛的 [Remake 兼容帖](https://www.gildor.org/smf/index.php?topic=6925.120)。官方说明确认：Intergrade 总体仍是 UE4.18，但使用未版本化属性和修改过的 bulk data，必须使用专用构建；v8 构建可以处理网格、贴图和动画。UE Viewer 的通用命令行和导出格式见[官方项目页](https://www.gildor.org/en/projects/umodel)。
 
+> 本文后续内容主要针对原版 Pak。覆盖角色 SkeletalMesh 的 Mod 可能需要 Mod-only 挂载、
+> `-save` 原始包和 32 位索引 glTF 转换；完整实操见
+> [`ff7remake-mod-manual-export.md`](ff7remake-mod-manual-export.md)。
+
 ## Tifa 验证结果
 
 验证使用的是原版资源，不是 `End\Content\Paks\~mods` 中的替换包：
