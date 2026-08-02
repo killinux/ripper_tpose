@@ -14,6 +14,41 @@
 
 ---
 
+## 2026-08-02 — Throne of Desire X-Legend NFS/Gamebryo 调研与样本验证
+
+### 新增与修正
+
+- 确认 Steam App `4496710` 不使用 Unreal/Unity，而是 HyenaPC 包装层、X-Legend NFS
+  封包和 Gamebryo NIF/KFM 模型动画格式。
+- 新增 [`scripts/throneofdesire`](../scripts/throneofdesire/) 独立流程和
+  [提取调研文档](throne-of-desire-extraction.md)，不复用 FFVII/Stellar Blade 的
+  FModel、mapping 或 Unreal profile。
+- `extract_nfs.py` 支持 `0x20190503` packageindex、低 32 位 XOR 偏移/大小、
+  `FileListPC.txt` 映射、zlib 解压、格式扫描、按哈希提取和按编号模型组提取。
+
+### 用户如何操作
+
+1. 用 `scan` 建立完整 JSON 清单；
+2. 用 `extract-model --model h001` 一次提取匹配 KFM 和紧随其后的基础 NIF；
+3. 先在 X-Legend/Aura Kingdom 专用 NIF 查看器中验证，再尝试 Noesis 转 FBX/DAE 后
+   导入 Blender 3.6；解析失败时才退回 Ninja Ripper。
+
+### 原理与兼容性
+
+- 当前模型/KFM 均为带 16 字节容器头的 zlib 流；部分非模型资源为自定义 LZMA 或未知
+  纹理编码，脚本会分类但不会错误地套用标准 LZMA 解码。
+- NIF 版本为 `20.3.3.2`。通用 NifTools/Noesis 对 X-Legend 自定义块的兼容性尚未在
+  当前机器验证，因此本次不声明已生成 Blender 文件。
+
+### 验证
+
+- 全量扫描 32,780 条当前索引：5,957 个 NIF、323 个 KFM、295 个 XML；其中
+  15,377 条为 zlib、1,877 条为 X-Legend LZMA、15,526 条压缩/编码尚未识别。
+- 成功提取 `m001` 基础样本和 `h001` 角色候选组；`h001.nif` 906,860 字节、
+  `h001.kfm` 62,650 字节，输出大小与 FileList 清单一致，SHA-256 已写入 manifest。
+- Python 语法检查、完整索引扫描和两个 `extract-model` 回归命令均通过；游戏目录保持
+  只读，未改动原始 NFS 或索引。
+
 ## 2026-08-01 — Stellar Blade PC 导出分析与 Eve Blender 3.6 验证
 
 ### 新增与修正

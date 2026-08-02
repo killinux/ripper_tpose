@@ -7,6 +7,7 @@
 | Rise of Eros | Unity AssetBundle | [`riseoferos/`](riseoferos/) | `riseoferos\extract_character.ps1` |
 | FINAL FANTASY VII REBIRTH | Unreal IoStore (`.utoc/.ucas`) | [`final/`](final/) | `final\prepare_fmodel.ps1` |
 | Stellar Blade | Unreal IoStore (`.utoc/.ucas`) | [`stellarblade/`](stellarblade/) | `stellarblade\validate_eve.py` |
+| Throne of Desire | X-Legend NFS + Gamebryo NIF/KFM | [`throneofdesire/`](throneofdesire/) | `throneofdesire\extract_nfs.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -28,6 +29,11 @@ Stellar Blade 使用精确的 `GAME_StellarBlade` profile 和独立 mapping；Ev
 Viewer 导出与 Blender 3.6 骨骼锚点组合方法见
 [`docs/stellar-blade-extraction.md`](../docs/stellar-blade-extraction.md)。
 
+Throne of Desire 不使用 Unreal/Unity。先用 `extract_nfs.py` 读取
+`packageindex` 和 `FileListPC.txt`，得到 Gamebryo NIF/KFM，再交给兼容的
+X-Legend 查看器或 NIF 转换器。当前索引结构、资产统计和 Blender 3.6 限制见
+[`docs/throne-of-desire-extraction.md`](../docs/throne-of-desire-extraction.md)。
+
 ## 开发辅助
 
 需要对已经打开且启动了 MCP 服务的 Blender 做本地诊断时，使用
@@ -35,5 +41,5 @@ Viewer 导出与 Blender 3.6 骨骼锚点组合方法见
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。
