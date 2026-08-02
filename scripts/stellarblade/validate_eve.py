@@ -1,0 +1,883 @@
+"""Build a Blender 3.6 validation scene from modular Stellar Blade Eve assets.
+
+The verified PC workflow uses FModel UEFormat for Face_003 so all 53 morph
+targets survive, FModel ActorX for the outfit/body, and the Stellar Blade-
+specific UE Viewer build for hair pieces. This script keeps every imported
+skeleton intact and reconnects the important preview textures in Blender.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
+from dataclasses import dataclass
+
+import bpy
+from mathutils import Matrix, Vector
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+
+
+@dataclass
+class Component:
+    label: str
+    source: str
+    meshes: list
+    armatures: list
+
+
+def parse_args() -> argparse.Namespace:
+    argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--body", required=True)
+    parser.add_argument(
+        "--head",
+        default="",
+        help="deprecated Face PSK argument retained for command compatibility",
+    )
+    parser.add_argument(
+        "--head-uemodel",
+        default=(
+            r"D:\stellarblade_exports\fmodel_exports\SB\Content\Art\Character\PC"
+            r"\CH_P_EVE_Head\CH_P_EVE_Face_003.uemodel"
+        ),
+    )
+    parser.add_argument(
+        "--ueformat-source",
+        default=os.environ.get(
+            "UEFORMAT_BLENDER_SOURCE",
+            os.path.abspath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    ".tmp",
+                    "ueformat-main-src",
+                    "UEFormat-main",
+                    "plugins",
+                    "blender",
+                    "io_scene_ueformat",
+                )
+            ),
+        ),
+    )
+    parser.add_argument("--hair", required=True)
+    parser.add_argument("--tail", required=True)
+    parser.add_argument("--face-assets", required=True)
+    parser.add_argument("--body-diffuse", required=True)
+    parser.add_argument("--hair-alpha", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--render", required=True)
+    parser.add_argument("--report", required=True)
+    return parser.parse_args(argv)
+
+
+def operator_exists(module_name: str, operator_name: str) -> bool:
+    try:
+        operator = getattr(getattr(bpy.ops, module_name), operator_name)
+        operator.get_rna_type()
+        return True
+    except (AttributeError, KeyError, RuntimeError):
+        return False
+
+
+def import_psk(path: str):
+    if operator_exists("psk", "import_file"):
+        return bpy.ops.psk.import_file(filepath=path)
+    if operator_exists("import_scene", "psk"):
+        return bpy.ops.import_scene.psk(filepath=path)
+    raise RuntimeError(
+        "No PSK importer is registered; enable io_scene_psk_psa 5.0.6 in Blender 3.6"
+    )
+
+
+def actorx_valid(path: str) -> bool:
+    if not os.path.isfile(path) or os.path.getsize(path) < 32:
+        return False
+    with open(path, "rb") as handle:
+        return handle.read(8) == b"ACTRHEAD"
+
+
+def sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest().upper()
+
+
+def clear_scene() -> None:
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete(use_global=False)
+
+
+def imported_component(label: str, path: str) -> Component:
+    path = os.path.abspath(path)
+    if not actorx_valid(path):
+        raise RuntimeError(f"Invalid or truncated ActorX file: {path}")
+    before = set(bpy.data.objects)
+    result = import_psk(path)
+    if "FINISHED" not in result:
+        raise RuntimeError(f"PSK import did not finish for {path}: {result}")
+    created = [obj for obj in bpy.data.objects if obj not in before]
+    meshes = [obj for obj in created if obj.type == "MESH"]
+    armatures = [obj for obj in created if obj.type == "ARMATURE"]
+    if not meshes or not armatures:
+        raise RuntimeError(f"PSK did not create both mesh and armature: {path}")
+    for index, obj in enumerate(meshes, start=1):
+        obj.name = f"Eve_{label}_Mesh_{index:02d}"
+        obj["stellarblade_component"] = label
+        obj["stellarblade_source"] = path
+        for polygon in obj.data.polygons:
+            polygon.use_smooth = True
+        if hasattr(obj.data, "use_auto_smooth"):
+            obj.data.use_auto_smooth = False
+        obj.data.update()
+    for index, obj in enumerate(armatures, start=1):
+        obj.name = f"Eve_{label}_Armature_{index:02d}"
+        obj.show_in_front = False
+        obj.hide_render = True
+        obj["stellarblade_component"] = label
+        obj["stellarblade_source"] = path
+    return Component(label, path, meshes, armatures)
+
+
+def imported_uemodel_component(label: str, path: str, source: str):
+    from import_uemodel36 import load_importer
+
+    path = os.path.abspath(path)
+    with open(path, "rb") as handle:
+        if handle.read(8) != b"UEFORMAT":
+            raise RuntimeError(f"Invalid UEFormat file: {path}")
+    before = set(bpy.data.objects)
+    importer_type, options_type = load_importer(source)
+    options = options_type(
+        link=True,
+        # io_scene_psk_psa keeps these game exports in centimetre-sized
+        # Blender units. Match that convention so the UEFormat head aligns.
+        scale_factor=1.0,
+        bone_length=4.0,
+        reorient_bones=False,
+        import_collision=False,
+        import_sockets=False,
+        import_morph_targets=True,
+        import_virtual_bones=False,
+        target_lod=0,
+    )
+    _imported_object, model = importer_type(options).import_file(path)
+    created = [obj for obj in bpy.data.objects if obj not in before]
+    meshes = [obj for obj in created if obj.type == "MESH"]
+    armatures = [obj for obj in created if obj.type == "ARMATURE"]
+    if not meshes or not armatures:
+        raise RuntimeError(f"UEFormat did not create mesh and armature: {path}")
+    for index, obj in enumerate(meshes, start=1):
+        obj.name = f"Eve_{label}_Mesh_{index:02d}"
+        obj["stellarblade_component"] = label
+        obj["stellarblade_source"] = path
+    for index, obj in enumerate(armatures, start=1):
+        obj.name = f"Eve_{label}_Armature_{index:02d}"
+        obj.show_in_front = False
+        obj.hide_render = True
+        obj["stellarblade_component"] = label
+        obj["stellarblade_source"] = path
+    component = Component(label, path, meshes, armatures)
+    source_morphs = [morph.name for morph in model.lods[0].morphs]
+    shape_keys = [
+        key.name
+        for mesh in meshes
+        if mesh.data.shape_keys
+        for key in mesh.data.shape_keys.key_blocks
+    ]
+    if len(source_morphs) != 53 or len(shape_keys) != 54:
+        raise RuntimeError(
+            f"Face_003 morph validation failed: source={len(source_morphs)}, "
+            f"Blender={len(shape_keys)}"
+        )
+    return component, source_morphs, shape_keys
+
+
+def reset_nodes(material):
+    material.use_nodes = True
+    material.diffuse_color = (0.4, 0.4, 0.4, 1.0)
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    nodes.clear()
+    output = nodes.new("ShaderNodeOutputMaterial")
+    shader = nodes.new("ShaderNodeBsdfPrincipled")
+    links.new(shader.outputs["BSDF"], output.inputs["Surface"])
+    return nodes, links, shader
+
+
+def material_base_name(name: str) -> str:
+    """Strip Blender's duplicate suffix without altering Unreal asset names."""
+    return re.sub(r"\.\d{3}$", "", name)
+
+
+def face_asset(root: str, relative_path: str) -> str:
+    path = os.path.abspath(os.path.join(root, *relative_path.split("/")))
+    if not os.path.isfile(path):
+        raise FileNotFoundError(path)
+    return path
+
+
+def load_image(path: str, non_color: bool = False):
+    image = bpy.data.images.load(path, check_existing=True)
+    if non_color:
+        try:
+            image.colorspace_settings.name = "Non-Color"
+        except TypeError:
+            pass
+    return image
+
+
+def link_color_texture(nodes, links, shader, path: str, *, alpha=False):
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = load_image(path)
+    texture.name = os.path.basename(path)
+    links.new(texture.outputs["Color"], shader.inputs["Base Color"])
+    if alpha:
+        links.new(texture.outputs["Color"], shader.inputs["Alpha"])
+    return texture
+
+
+def link_directx_normal(nodes, links, shader, path: str):
+    """Convert Unreal's DirectX green channel before feeding Blender normals."""
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = load_image(path, non_color=True)
+    texture.name = os.path.basename(path)
+    split = nodes.new("ShaderNodeSeparateRGB")
+    invert = nodes.new("ShaderNodeMath")
+    invert.operation = "SUBTRACT"
+    invert.inputs[0].default_value = 1.0
+    combine = nodes.new("ShaderNodeCombineRGB")
+    normal = nodes.new("ShaderNodeNormalMap")
+    normal.inputs["Strength"].default_value = 0.7
+    links.new(texture.outputs["Color"], split.inputs["Image"])
+    links.new(split.outputs["R"], combine.inputs["R"])
+    links.new(split.outputs["G"], invert.inputs[1])
+    links.new(invert.outputs[0], combine.inputs["G"])
+    links.new(split.outputs["B"], combine.inputs["B"])
+    links.new(combine.outputs["Image"], normal.inputs["Color"])
+    links.new(normal.outputs["Normal"], shader.inputs["Normal"])
+    return texture
+
+
+def link_eye_color(nodes, links, shader, sclera_path: str, iris_path: str):
+    """Approximate UE's parallax eye using a Blender-visible UV iris."""
+    texcoord = nodes.new("ShaderNodeTexCoord")
+    sclera = nodes.new("ShaderNodeTexImage")
+    sclera.image = load_image(sclera_path)
+    sclera.name = os.path.basename(sclera_path)
+    links.new(texcoord.outputs["UV"], sclera.inputs["Vector"])
+
+    center = (0.5, 0.5, 0.0)
+    # UE's source value is 0.145, but it is evaluated after the game's
+    # parallax/refraction mapping.  Direct UV evaluation in Eevee needs the
+    # smaller visible radius below or the pupil covers the entire eye opening.
+    iris_radius = 0.055
+    subtract = nodes.new("ShaderNodeVectorMath")
+    subtract.operation = "SUBTRACT"
+    subtract.inputs[1].default_value = center
+    scale = nodes.new("ShaderNodeVectorMath")
+    scale.operation = "SCALE"
+    scale.inputs["Scale"].default_value = 1.0 / (2.0 * iris_radius)
+    add = nodes.new("ShaderNodeVectorMath")
+    add.operation = "ADD"
+    add.inputs[1].default_value = center
+    links.new(texcoord.outputs["UV"], subtract.inputs[0])
+    links.new(subtract.outputs["Vector"], scale.inputs[0])
+    links.new(scale.outputs["Vector"], add.inputs[0])
+
+    iris = nodes.new("ShaderNodeTexImage")
+    iris.image = load_image(iris_path)
+    iris.name = os.path.basename(iris_path)
+    links.new(add.outputs["Vector"], iris.inputs["Vector"])
+
+    distance = nodes.new("ShaderNodeVectorMath")
+    distance.operation = "DISTANCE"
+    distance.inputs[1].default_value = center
+    links.new(texcoord.outputs["UV"], distance.inputs[0])
+    mask = nodes.new("ShaderNodeMath")
+    mask.operation = "LESS_THAN"
+    mask.inputs[1].default_value = iris_radius
+    links.new(distance.outputs["Value"], mask.inputs[0])
+
+    mix = nodes.new("ShaderNodeMixRGB")
+    mix.blend_type = "MIX"
+    links.new(mask.outputs[0], mix.inputs[0])
+    links.new(sclera.outputs["Color"], mix.inputs[1])
+    links.new(iris.outputs["Color"], mix.inputs[2])
+    links.new(mix.outputs["Color"], shader.inputs["Base Color"])
+
+
+def set_principled_color(shader, color, roughness=0.48, metallic=0.0):
+    shader.inputs["Base Color"].default_value = color
+    shader.inputs["Roughness"].default_value = roughness
+    shader.inputs["Metallic"].default_value = metallic
+
+
+def prepare_body_materials(component: Component, diffuse_path: str) -> None:
+    image = bpy.data.images.load(diffuse_path, check_existing=True)
+    handled = set()
+    for mesh in component.meshes:
+        for slot in mesh.material_slots:
+            material = slot.material
+            if material is None or material in handled:
+                continue
+            handled.add(material)
+            nodes, links, shader = reset_nodes(material)
+            shader.inputs["Roughness"].default_value = 0.48
+            texture = nodes.new("ShaderNodeTexImage")
+            texture.name = "Verified body/outfit diffuse"
+            texture.image = image
+            links.new(texture.outputs["Color"], shader.inputs["Base Color"])
+            material["stellarblade_preview_texture"] = diffuse_path
+
+
+def prepare_head_materials(component: Component, assets_root: str) -> dict:
+    textures = {
+        "skin_color": face_asset(
+            assets_root,
+            "Art/Character/PC/CH_P_EVE_Head/Textures/Tex_P_EVE_Head_A.png",
+        ),
+        "skin_normal": face_asset(
+            assets_root,
+            "Art/Character/PC/CH_P_EVE_Head/Textures/Tex_P_EVE_Head_N.png",
+        ),
+        "iris_color": face_asset(
+            assets_root,
+            "Art/Character/PC/CH_P_EVE_Head/Textures/S_EyeIrisBaseColor.png",
+        ),
+        "sclera_color": face_asset(
+            assets_root,
+            "Art/Character/Generic/GlobalMasterMaterials/Eye/T_EyeScleraBaseColor.png",
+        ),
+        "eye_normal": face_asset(
+            assets_root,
+            "Art/Character/Generic/GlobalMasterMaterials/Eye/T_EYE_NORMALS.png",
+        ),
+        "eye_light": face_asset(
+            assets_root,
+            "Art/Character/Generic/GlobalMasterMaterials/Eye/EyeLight.png",
+        ),
+        "brow_opacity": face_asset(
+            assets_root,
+            "Art/Character/PC/CH_P_EVE_Head/Textures/Tex_P_EVE_eyebrow_O.png",
+        ),
+        "teeth_color": face_asset(
+            assets_root,
+            "Art/Character/PC/CH_P_EVE_Head/Textures/Tex_P_EVE_Teeth_A.png",
+        ),
+        "teeth_normal": face_asset(
+            assets_root,
+            "Art/Character/PC/CH_P_EVE_Head/Textures/Tex_P_EVE_Teeth_N.png",
+        ),
+    }
+    handled = set()
+    assignments = {}
+    for mesh in component.meshes:
+        for slot in mesh.material_slots:
+            material = slot.material
+            if material is None or material in handled:
+                continue
+            handled.add(material)
+            nodes, links, shader = reset_nodes(material)
+            base_name = material_base_name(material.name)
+            name = base_name.lower()
+            assignment = "procedural fallback"
+            if base_name == "MI_EVE_Head_V02":
+                set_principled_color(shader, (0.62, 0.27, 0.21, 1.0), 0.42)
+                link_color_texture(nodes, links, shader, textures["skin_color"])
+                link_directx_normal(nodes, links, shader, textures["skin_normal"])
+                if "Subsurface" in shader.inputs:
+                    shader.inputs["Subsurface"].default_value = 0.055
+                assignment = "skin color + DirectX-converted normal"
+            elif base_name == "MI_EyeRefractive1":
+                set_principled_color(shader, (0.12, 0.19, 0.18, 1.0), 0.12)
+                link_eye_color(
+                    nodes,
+                    links,
+                    shader,
+                    textures["sclera_color"],
+                    textures["iris_color"],
+                )
+                link_directx_normal(nodes, links, shader, textures["eye_normal"])
+                shader.inputs["Specular"].default_value = 0.65
+                assignment = "Eevee-calibrated iris/sclera blend + eye normal"
+            elif base_name == "M_MikeEyeBlend_Inst":
+                set_principled_color(shader, (0.035, 0.012, 0.009, 1.0), 0.34)
+                assignment = "eye-corner blend preview"
+            elif base_name == "MI_EyeBrow1":
+                set_principled_color(shader, (0.012, 0.009, 0.008, 1.0), 0.4)
+                link_color_texture(
+                    nodes, links, shader, textures["brow_opacity"], alpha=True
+                )
+                material.blend_method = "HASHED"
+                material.show_transparent_back = True
+                assignment = "brow opacity"
+            elif base_name == "MI_Teeth":
+                set_principled_color(shader, (0.75, 0.71, 0.64, 1.0), 0.3)
+                link_color_texture(nodes, links, shader, textures["teeth_color"])
+                link_directx_normal(nodes, links, shader, textures["teeth_normal"])
+                assignment = "teeth color + DirectX-converted normal"
+            elif "mouthinner" in name:
+                set_principled_color(shader, (0.12, 0.012, 0.018, 1.0), 0.48)
+                assignment = "mouth-inner preview"
+            elif "lacrimal" in name:
+                set_principled_color(shader, (0.22, 0.12, 0.10, 0.28), 0.08)
+                shader.inputs["Alpha"].default_value = 0.28
+                material.blend_method = "HASHED"
+                assignment = "tear-fluid translucent preview"
+            elif "eyeshadow_occlusion" in name or "teethocculusion" in name:
+                set_principled_color(shader, (0.008, 0.004, 0.004, 0.55), 0.65)
+                shader.inputs["Alpha"].default_value = 0.55
+                material.blend_method = "HASHED"
+                assignment = "occlusion preview"
+            elif "eyelight" in name:
+                set_principled_color(shader, (0.8, 0.95, 1.0, 1.0), 0.05)
+                link_color_texture(
+                    nodes, links, shader, textures["eye_light"], alpha=True
+                )
+                material.blend_method = "HASHED"
+                if "Emission" in shader.inputs:
+                    shader.inputs["Emission"].default_value = (0.3, 0.45, 0.6, 1.0)
+                    shader.inputs["Emission Strength"].default_value = 0.15
+                assignment = "eye-light texture + opacity"
+            elif base_name == "NewMaterial":
+                set_principled_color(shader, (0.0, 0.0, 0.0, 0.0), 0.42)
+                shader.inputs["Alpha"].default_value = 0.0
+                material.blend_method = "HASHED"
+                material.show_transparent_back = True
+                assignment = "transparent unresolved eye shell"
+            else:
+                set_principled_color(shader, (0.62, 0.27, 0.21, 1.0), 0.5)
+            material["stellarblade_preview_note"] = assignment
+            assignments[material.name] = assignment
+    return {"textures": textures, "assignments": assignments}
+
+
+def prepare_hair_materials(components: list[Component], alpha_path: str) -> None:
+    alpha = bpy.data.images.load(alpha_path, check_existing=True)
+    try:
+        alpha.colorspace_settings.name = "Non-Color"
+    except TypeError:
+        pass
+    handled = set()
+    for component in components:
+        for mesh in component.meshes:
+            for slot in mesh.material_slots:
+                material = slot.material
+                if material is None or material in handled:
+                    continue
+                handled.add(material)
+                nodes, links, shader = reset_nodes(material)
+                set_principled_color(shader, (0.006, 0.009, 0.015, 1.0), 0.28)
+                if "Anisotropic" in shader.inputs:
+                    shader.inputs["Anisotropic"].default_value = 0.55
+                texture = nodes.new("ShaderNodeTexImage")
+                texture.name = "Verified hair opacity"
+                texture.image = alpha
+                links.new(texture.outputs["Color"], shader.inputs["Alpha"])
+                material.blend_method = "HASHED"
+                material.show_transparent_back = True
+                material.use_screen_refraction = False
+                material["stellarblade_preview_texture"] = alpha_path
+
+
+def apply_component_transform(component: Component, transform: Matrix) -> None:
+    """Move a modular component without baking or changing its skin weights."""
+    objects = [*component.meshes, *component.armatures]
+    object_set = set(objects)
+    # io_scene_psk_psa parents each mesh to its imported armature.  Transform
+    # only hierarchy roots or the same matrix would be applied twice.
+    roots = [obj for obj in objects if obj.parent not in object_set]
+    for obj in roots:
+        obj.matrix_world = transform @ obj.matrix_world
+    bpy.context.view_layer.update()
+
+
+def align_hair_components(
+    body: Component, hair: Component, tail: Component
+) -> dict:
+    """Attach local-space hair exports to the body's verified rest skeleton."""
+    body_armature = body.armatures[0]
+    hair_armature = hair.armatures[0]
+    tail_armature = tail.armatures[0]
+
+    # The cap/bob skeleton is authored around a local origin.  SC_Hair is the
+    # explicit attachment socket on Eve's body skeleton.
+    socket = body_armature.data.bones.get("SC_Hair")
+    hair_root = hair_armature.data.bones.get("Root")
+    if socket is None or hair_root is None:
+        raise RuntimeError("Cannot align main hair: SC_Hair/Root anchor is missing")
+    socket_world = body_armature.matrix_world @ socket.matrix_local
+    hair_root_world = hair_armature.matrix_world @ hair_root.matrix_local
+    hair_transform = Matrix.Translation(socket_world.translation - hair_root_world.translation)
+    apply_component_transform(hair, hair_transform)
+
+    # The ponytail shares the Ab-TL-HairB01 chain with Eve's body.  Aligning
+    # the complete rest-bone matrices recovers both the attachment point and
+    # the 180-degree local-axis rotation in the standalone tail PSK.
+    anchor_name = "Ab-TL-HairB01"
+    body_anchor = body_armature.data.bones.get(anchor_name)
+    tail_anchor = tail_armature.data.bones.get(anchor_name)
+    if body_anchor is None or tail_anchor is None:
+        raise RuntimeError(f"Cannot align hair tail: {anchor_name} is missing")
+    body_anchor_world = body_armature.matrix_world @ body_anchor.matrix_local
+    tail_anchor_world = tail_armature.matrix_world @ tail_anchor.matrix_local
+    tail_transform = body_anchor_world @ tail_anchor_world.inverted()
+    apply_component_transform(tail, tail_transform)
+
+    hair_error = (
+        (hair.armatures[0].matrix_world @ hair_root.matrix_local).translation
+        - socket_world.translation
+    ).length
+    tail_error = (
+        (tail.armatures[0].matrix_world @ tail_anchor.matrix_local).translation
+        - body_anchor_world.translation
+    ).length
+    if hair_error > 1.0e-4 or tail_error > 1.0e-4:
+        raise RuntimeError(
+            f"Hair alignment exceeded tolerance: cap={hair_error}, tail={tail_error}"
+        )
+    return {
+        "hair_socket": "SC_Hair",
+        "hair_anchor_error": hair_error,
+        "tail_anchor": anchor_name,
+        "tail_anchor_error": tail_error,
+        "hair_transform": [list(row) for row in hair_transform],
+        "tail_transform": [list(row) for row in tail_transform],
+    }
+
+
+def scene_bounds(meshes: list):
+    points = [
+        mesh.matrix_world @ vertex.co
+        for mesh in meshes
+        for vertex in mesh.data.vertices
+    ]
+    if not points:
+        raise RuntimeError("Imported Eve components contain no mesh vertices")
+    minimum = Vector(tuple(min(point[index] for point in points) for index in range(3)))
+    maximum = Vector(tuple(max(point[index] for point in points) for index in range(3)))
+    return minimum, maximum
+
+
+def look_at(obj, target: Vector) -> None:
+    obj.rotation_euler = (target - obj.location).to_track_quat("-Z", "Y").to_euler()
+
+
+def create_preview(meshes: list, render_path: str):
+    minimum, maximum = scene_bounds(meshes)
+    center = (minimum + maximum) * 0.5
+    extent = maximum - minimum
+    scene = bpy.context.scene
+    scene.render.engine = "BLENDER_EEVEE"
+    scene.eevee.use_gtao = True
+    scene.eevee.gtao_distance = max(extent.z * 0.025, 0.1)
+    scene.eevee.gtao_factor = 1.15
+    scene.render.resolution_x = 900
+    scene.render.resolution_y = 1200
+    scene.render.resolution_percentage = 100
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.film_transparent = False
+    scene.world.use_nodes = True
+    background = scene.world.node_tree.nodes.get("Background")
+    if background is not None:
+        background.inputs["Color"].default_value = (0.035, 0.055, 0.095, 1.0)
+        background.inputs["Strength"].default_value = 0.5
+    scene.view_settings.view_transform = "Filmic"
+    scene.view_settings.look = "Medium High Contrast"
+    scene.view_settings.exposure = 1.35
+
+    camera_data = bpy.data.cameras.new("EveValidationCamera")
+    camera = bpy.data.objects.new("EveValidationCamera", camera_data)
+    scene.collection.objects.link(camera)
+    scene.camera = camera
+    camera_data.type = "ORTHO"
+    camera_data.lens = 60
+    camera_data.ortho_scale = max(extent.z * 1.08, extent.y * 1.38)
+    distance = max(extent.z, extent.y, extent.x, 100.0) * 2.3
+    # Unreal X-forward becomes the depth axis with io_scene_psk_psa.  Viewing
+    # from +X gives the front of these Eve assets; Y spans left/right.
+    camera.location = Vector((center.x + distance, center.y, center.z + extent.z * 0.015))
+    look_at(camera, center)
+
+    light_specs = [
+        ("Key", (center.x + distance * 0.45, center.y - distance * 0.25, center.z + extent.z * 0.45), 5200.0, extent.z * 0.7),
+        ("Fill", (center.x + distance * 0.25, center.y + distance * 0.3, center.z + extent.z * 0.12), 3000.0, extent.z * 0.8),
+        ("Rim", (center.x - distance * 0.35, center.y, center.z + extent.z * 0.42), 4300.0, extent.z * 0.55),
+    ]
+    for name, location, energy, size in light_specs:
+        light_data = bpy.data.lights.new(name, "AREA")
+        light_data.energy = energy
+        light_data.size = max(size, 1.0)
+        light = bpy.data.objects.new(name, light_data)
+        scene.collection.objects.link(light)
+        light.location = location
+        look_at(light, center)
+
+    os.makedirs(os.path.dirname(render_path), exist_ok=True)
+    scene.render.filepath = render_path
+    bpy.ops.render.render(write_still=True)
+    return minimum, maximum
+
+
+def create_face_preview(meshes: list, render_path: str) -> str:
+    minimum, maximum = scene_bounds(meshes)
+    center = (minimum + maximum) * 0.5
+    extent = maximum - minimum
+    scene = bpy.context.scene
+    camera = scene.camera
+    stored = {
+        "location": camera.location.copy(),
+        "rotation": camera.rotation_euler.copy(),
+        "ortho_scale": camera.data.ortho_scale,
+        "resolution_x": scene.render.resolution_x,
+        "resolution_y": scene.render.resolution_y,
+        "filepath": scene.render.filepath,
+        "exposure": scene.view_settings.exposure,
+    }
+    distance = max(extent.x, extent.y, extent.z, 20.0) * 3.0
+    camera.location = Vector((center.x + distance, center.y, center.z))
+    look_at(camera, center)
+    camera.data.ortho_scale = max(extent.z * 1.32, extent.y * 1.7)
+    scene.render.resolution_x = 1024
+    scene.render.resolution_y = 1024
+    scene.view_settings.exposure = 2.25
+    root, extension = os.path.splitext(render_path)
+    face_path = root + "_face" + extension
+    scene.render.filepath = face_path
+    bpy.ops.render.render(write_still=True)
+
+    camera.location = stored["location"]
+    camera.rotation_euler = stored["rotation"]
+    camera.data.ortho_scale = stored["ortho_scale"]
+    scene.render.resolution_x = stored["resolution_x"]
+    scene.render.resolution_y = stored["resolution_y"]
+    scene.render.filepath = stored["filepath"]
+    scene.view_settings.exposure = stored["exposure"]
+    return face_path
+
+
+def object_bounds(meshes: list) -> dict:
+    minimum, maximum = scene_bounds(meshes)
+    return {"min": list(minimum), "max": list(maximum)}
+
+
+def component_report(component: Component) -> dict:
+    armature_bones = [len(obj.data.bones) for obj in component.armatures]
+    material_names = sorted(
+        {
+            slot.material.name
+            for mesh in component.meshes
+            for slot in mesh.material_slots
+            if slot.material is not None
+        }
+    )
+    material_geometry = {}
+    for mesh in component.meshes:
+        uv_layer = mesh.data.uv_layers.active
+        for material_index, slot in enumerate(mesh.material_slots):
+            if slot.material is None:
+                continue
+            polygons = [
+                polygon
+                for polygon in mesh.data.polygons
+                if polygon.material_index == material_index
+            ]
+            vertex_indices = {
+                vertex_index
+                for polygon in polygons
+                for vertex_index in polygon.vertices
+            }
+            loop_indices = [
+                loop_index
+                for polygon in polygons
+                for loop_index in polygon.loop_indices
+            ]
+            entry = {"polygons": len(polygons), "vertices": len(vertex_indices)}
+            if vertex_indices:
+                points = [mesh.data.vertices[index].co for index in vertex_indices]
+                entry["bounds"] = {
+                    "min": [
+                        min(point[axis] for point in points) for axis in range(3)
+                    ],
+                    "max": [
+                        max(point[axis] for point in points) for axis in range(3)
+                    ],
+                }
+            if uv_layer is not None and loop_indices:
+                uvs = [uv_layer.data[index].uv for index in loop_indices]
+                entry["uv_bounds"] = {
+                    "min": [min(uv.x for uv in uvs), min(uv.y for uv in uvs)],
+                    "max": [max(uv.x for uv in uvs), max(uv.y for uv in uvs)],
+                }
+            material_geometry[slot.material.name] = entry
+    is_uemodel = component.source.lower().endswith(".uemodel")
+    return {
+        "label": component.label,
+        "source": component.source,
+        "bytes": os.path.getsize(component.source),
+        "sha256": sha256(component.source),
+        "source_format": "UEFormat" if is_uemodel else "ActorX PSK",
+        "header": "UEFORMAT" if is_uemodel else "ACTRHEAD",
+        "meshes": [mesh.name for mesh in component.meshes],
+        "vertices": sum(len(mesh.data.vertices) for mesh in component.meshes),
+        "polygons": sum(len(mesh.data.polygons) for mesh in component.meshes),
+        "uv_layers": sum(len(mesh.data.uv_layers) for mesh in component.meshes),
+        "material_slots": sum(len(mesh.material_slots) for mesh in component.meshes),
+        "materials": material_names,
+        "material_geometry": material_geometry,
+        "shape_keys": {
+            mesh.name: (
+                len(mesh.data.shape_keys.key_blocks)
+                if mesh.data.shape_keys is not None
+                else 0
+            )
+            for mesh in component.meshes
+        },
+        "armatures": [obj.name for obj in component.armatures],
+        "bones_per_armature": armature_bones,
+        "bounds": object_bounds(component.meshes),
+    }
+
+
+def front_material_uv_samples(component: Component, material_name: str) -> list:
+    """Report UV centroids for the material faces nearest the +X camera."""
+    samples = []
+    for mesh in component.meshes:
+        uv_layer = mesh.data.uv_layers.active
+        if uv_layer is None:
+            continue
+        target_indices = {
+            index
+            for index, slot in enumerate(mesh.material_slots)
+            if slot.material is not None
+            and material_base_name(slot.material.name) == material_name
+        }
+        for polygon in mesh.data.polygons:
+            if polygon.material_index not in target_indices:
+                continue
+            center_x = sum(mesh.data.vertices[i].co.x for i in polygon.vertices) / len(
+                polygon.vertices
+            )
+            uvs = [uv_layer.data[i].uv for i in polygon.loop_indices]
+            samples.append(
+                {
+                    "x": center_x,
+                    "u": sum(uv.x for uv in uvs) / len(uvs),
+                    "v": sum(uv.y for uv in uvs) / len(uvs),
+                }
+            )
+    return sorted(samples, key=lambda item: item["x"], reverse=True)[:24]
+
+
+def main() -> None:
+    args = parse_args()
+    paths = {
+        "Body": args.body,
+        "Hair": args.hair,
+        "HairTail": args.tail,
+    }
+    for path in [*paths.values(), args.head_uemodel, args.body_diffuse, args.hair_alpha]:
+        if not os.path.isfile(path):
+            raise FileNotFoundError(path)
+    if not os.path.isdir(args.face_assets):
+        raise NotADirectoryError(args.face_assets)
+    if not os.path.isdir(args.ueformat_source):
+        raise NotADirectoryError(args.ueformat_source)
+
+    clear_scene()
+    components = [imported_component(label, path) for label, path in paths.items()]
+    head, source_morphs, shape_keys = imported_uemodel_component(
+        "Head", args.head_uemodel, args.ueformat_source
+    )
+    components.insert(1, head)
+    by_label = {component.label: component for component in components}
+    alignment = align_hair_components(
+        by_label["Body"], by_label["Hair"], by_label["HairTail"]
+    )
+    prepare_body_materials(by_label["Body"], os.path.abspath(args.body_diffuse))
+    head_materials = prepare_head_materials(
+        by_label["Head"], os.path.abspath(args.face_assets)
+    )
+    prepare_hair_materials(
+        [by_label["Hair"], by_label["HairTail"]], os.path.abspath(args.hair_alpha)
+    )
+
+    meshes = [mesh for component in components for mesh in component.meshes]
+    minimum, maximum = create_preview(meshes, os.path.abspath(args.render))
+    face_render = create_face_preview(
+        by_label["Head"].meshes, os.path.abspath(args.render)
+    )
+    output_path = os.path.abspath(args.output)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    bpy.ops.wm.save_as_mainfile(filepath=output_path)
+
+    report = {
+        "validation": "Stellar Blade Eve standard modular model",
+        "blender_version": bpy.app.version_string,
+        "output_blend": output_path,
+        "render": os.path.abspath(args.render),
+        "face_render": face_render,
+        "components": [component_report(component) for component in components],
+        "alignment": alignment,
+        "totals": {
+            "components": len(components),
+            "meshes": len(meshes),
+            "armatures": sum(len(component.armatures) for component in components),
+            "vertices": sum(len(mesh.data.vertices) for mesh in meshes),
+            "polygons": sum(len(mesh.data.polygons) for mesh in meshes),
+            "bones": sum(
+                len(armature.data.bones)
+                for component in components
+                for armature in component.armatures
+            ),
+            "bounds": {"min": list(minimum), "max": list(maximum)},
+        },
+        "preview_materials": {
+            "body_diffuse": os.path.abspath(args.body_diffuse),
+            "hair_alpha": os.path.abspath(args.hair_alpha),
+            "head": head_materials,
+        },
+        "eye_front_uv_samples": front_material_uv_samples(
+            by_label["Head"], "MI_EyeRefractive1"
+        ),
+        "source_morph_targets": {
+            "component": "Head",
+            "source_count": len(source_morphs),
+            "source_names": source_morphs,
+            "blender_shape_key_count": len(shape_keys),
+            "blender_shape_keys": shape_keys,
+            "proof": face_asset(
+                os.path.abspath(args.face_assets),
+                "Art/Character/PC/CH_P_EVE_Head/CH_P_EVE_Face_003.props.txt",
+            ),
+            "blender_import_note": "UEFormat preserved all 53 source morph targets as Blender shape keys.",
+        },
+        "notes": [
+            "The three PSKs passed ACTRHEAD checks and Face_003 passed the UEFORMAT header check.",
+            "Components keep their own original armatures, including standalone hair simulation chains.",
+            "Body and complete Face_003 came from FModel; hair and hair tail came from the Stellar Blade-specific UE Viewer build.",
+            "Face_003 was imported through UEFormat in Blender 3.6 and retains all 53 source morph targets.",
+            "Face_003 includes the normal head material stack and teeth material; the separately exported Teeth_001 is retained as an alternate source asset, not overlaid in this scene.",
+        ],
+    }
+    report_path = os.path.abspath(args.report)
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as handle:
+        json.dump(report, handle, ensure_ascii=False, indent=2)
+    print("STELLARBLADE_EVE_REPORT=" + json.dumps(report, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

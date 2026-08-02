@@ -1,6 +1,7 @@
 # FF7 Rebirth Player 待导出资源与手动导出流程
 
-> 盘点日期：2026-07-26（Asia/Shanghai）
+> 初次盘点：2026-07-26（Asia/Shanghai）
+> 主模型包复核：2026-08-01（本机 51 个 `.utoc` 目录索引，只读枚举）
 > FModel：`4.4.4.0`，commit `b2708293f64ffc858b4901ff785a9078b99c67f4`
 > 游戏虚拟目录：`End/Content/Character/Player`
 > 本机输出目录：`D:\ff7rebirth_exports\fmodel_exports\End\Content\Character\Player`
@@ -13,6 +14,11 @@
 FModel 的 `Player` 虚拟目录当前有 `109` 个一级资源变体；本机输出目录已有 `14`
 个一级目录，因此还有 `95` 个一级资源变体尚未写入磁盘。
 
+复核全部 IoStore 目录索引后，其中 `85` 个一级资源变体包含符合
+`Model/PC????_??.uasset` 约定的 Player 主模型包，另外 `24` 个是没有该主模型包的
+材质/贴图等资源变体。完整的一行一路径清单见
+[`ff7rebirth-player-model-files.txt`](ff7rebirth-player-model-files.txt)。
+
 需要注意：
 
 - 一级资源变体目录不等于独立网格模型；
@@ -24,9 +30,12 @@ FModel 的 `Player` 虚拟目录当前有 `109` 个一级资源变体；本机�
 | 项目 | 当前数量 |
 |---|---:|
 | FModel 虚拟 `Player` 一级目录 | `109` |
+| Player 主模型包 | `85` |
+| 无主模型包的材质/贴图等变体 | `24` |
 | 已写入本机输出目录 | `14` |
 | 尚未写入本机输出目录 | `95` |
 | 已验证可供 Blender 导入的 ActorX 模型 | `9` |
+| 尚未形成已验证 ActorX 的主模型包 | `76` |
 | Tifa 一级目录 | `12 / 12` 已写入 |
 
 ## 2. 当前已经导出的内容

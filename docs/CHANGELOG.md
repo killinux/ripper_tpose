@@ -14,6 +14,80 @@
 
 ---
 
+## 2026-08-01 — Stellar Blade PC 导出分析与 Eve Blender 3.6 验证
+
+### 新增与修正
+
+- 新增独立的 [`scripts/stellarblade`](../scripts/stellarblade/) 流程和
+  [Stellar Blade 导出文档](stellar-blade-extraction.md)，不复用 FFVII 的 profile、
+  mapping 或包路径。
+- 确认 Steam build `19963153` 为 UE4 IoStore、无 AES，FModel 精确 profile 为
+  `GAME_StellarBlade`；社区 `StellarBlade_1.1.0.usmap` 已能解析并导出当前身体和脸。
+- FModel 成功导出 Eve 标准身体 PSK 和完整 Face_003 UEFormat；其 4.4.4 版本在头发/牙齿 Extract 发生
+  `NullReferenceException`，改用社区指南链接的 Stellar Blade 专用 UE Viewer v6
+  补导默认主发型与长马尾。
+- 新增 `import_uemodel36.py`、UEFormat Blender 3.6 兼容补丁和 `validate_eve.py`：检查
+  ActorX/UEFormat 文件头，用 `SC_Hair` 和 `Ab-TL-HairB01` 静置骨矩阵组合模块，保留
+  Face_003 全部 53 个 Morph，再生成 Blender 3.6 `.blend`、全身/脸部 PNG 和 JSON。
+- 新增 [Eve 验证资产路径清单](stellar-blade-eve-assets.txt)。游戏资产、mapping 和
+  第三方程序仍只保存在本机，不提交仓库。
+
+### 用户如何操作
+
+1. 按文档配置 FModel 的 `GAME_StellarBlade` 和 local mapping，临时禁用 `~mods`。
+2. FModel 导出身体 PSK 和 Face_003 UEFormat；单个组件复现异常时，使用专用 UE Viewer v6 补导。
+3. Blender 3.6 安装 `io_scene_psk_psa 5.0.6`，并给官方 UEFormat 源码应用本仓库兼容补丁，按
+   [`scripts/stellarblade/README.md`](../scripts/stellarblade/README.md) 运行验证命令。
+4. 输出位于 `D:\stellarblade_exports`；完成导出后恢复 Mod，保持游戏包原始名称。
+
+### 原理与兼容性
+
+- Eve 是模块化角色。主发型以局部原点导出，按身体 `SC_Hair` 插槽移动；长马尾以双方
+  共有的 `Ab-TL-HairB01` 完整静置骨矩阵对齐，不能把所有 PSK 直接堆在世界原点。
+- PSK 导入器将 Mesh parent 到 Armature；脚本只变换对象层级根，避免父子都移动造成
+  双倍位移。组件骨架、权重和对象层级保持不变。
+- 手动重导 PSK 时应选 **Don't Export Bone Sockets**。完整角色生产仍优先统一使用
+  FModel `.uemodel`，避免不同提取器之间潜在的颈缝。
+
+### 验证
+
+- 专用 UE Viewer 扫描到 `228,867` 个游戏文件，并实际输出两个头发 PSK；三个验证
+  PSK 都非空且以 `ACTRHEAD` 开始，Face_003 以 `UEFORMAT` 开始。
+- Blender `3.6.15` 实际生成 4 个网格、4 套原始 Armature、107,123 顶点、133,874 个面；
+  Face_003 为 24,350 顶点、35,992 个面、11 个材质槽，并保留 54 个 Shape Keys（含 Basis）；
+  主发型插槽误差为 `0`，马尾骨锚点误差约 `0.000002`。
+- 输出 `Eve_Standard_validation.blend`、全身/脸部 PNG 和 JSON 均已生成并视觉检查；游戏
+  `.pak/.utoc/.ucas` 名称未改动。已安装 Eve Mod 当前仍在隔离目录，启动游戏前恢复。
+
+## 2026-08-01 — FF7 Remake / Rebirth Player 主模型清单复核
+
+### 新增与修正
+
+- 新增 Remake 与 Rebirth 两份一行一个 Unreal 包路径的 Player 主模型清单。
+- Remake 原版 pak 的主模型包总数保持为 `36`；安装到 `~mods`、覆盖已有包路径的
+  Mod 不重复计数。
+- Rebirth 的统计口径由 `109` 个一级资源目录细分为 `85` 个主模型包和 `24` 个
+  纯材质、贴图等资源变体，避免把效果目录误算成模型。
+
+### 用户如何操作
+
+- 按 [Remake 主模型文件列表](ff7remake-player-model-files.txt) 或
+  [Rebirth 主模型文件列表](ff7rebirth-player-model-files.txt) 中的完整路径，在
+  UModel/FModel 中定位对应的 `SkeletalMesh` 主资产并导出。
+
+### 原理与兼容性
+
+- 主模型采用 `Player/<变体>/Model/PC????_??.uasset` 路径约定识别；Skeleton、
+  PhysicsAsset、BNM、Condition、材质和贴图不计入主模型数。
+- Rebirth 使用本机安装目录下全部 `51` 个 `.utoc` 的目录索引只读枚举，不修改、
+  解包或回写游戏文件。
+
+### 验证
+
+- Remake 清单 `36` 行、`36` 个唯一值，与现有详细清单逐项一致。
+- Rebirth 清单 `85` 行、`85` 个唯一值，与全部 IoStore 目录索引逐项比较差异为 `0`。
+- 两份清单均通过完整路径格式检查，`git diff --check` 无错误。
+
 ## 2026-07-26 — ROE XPS Tools v1.1.7 / g07 身体贴图与手动材质修复
 
 ### 新增与修复

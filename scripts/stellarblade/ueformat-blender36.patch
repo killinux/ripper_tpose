@@ -1,0 +1,26 @@
+diff --git a/plugins/blender/io_scene_ueformat/importer/logic.py b/plugins/blender/io_scene_ueformat/importer/logic.py
+index 5020309..ebcb781 100644
+--- a/plugins/blender/io_scene_ueformat/importer/logic.py
++++ b/plugins/blender/io_scene_ueformat/importer/logic.py
+@@ -352 +352 @@ class UEFormatImport:
+-                    if not bone.children or len(bone.children) == 0:
++                    if bpy.app.version >= (4, 0, 0) and (not bone.children or len(bone.children) == 0):
+@@ -358 +358 @@ class UEFormatImport:
+-                    if socket_bone is not None:
++                    if bpy.app.version >= (4, 0, 0) and socket_bone is not None:
+@@ -366 +366 @@ class UEFormatImport:
+-                    if virtual_bone is not None:
++                    if bpy.app.version >= (4, 0, 0) and virtual_bone is not None:
+@@ -402 +402,2 @@ class UEFormatImport:
+-                        bone.color.palette = "THEME14"
++                        if bpy.app.version >= (4, 0, 0):
++                            bone.color.palette = "THEME14"
+@@ -405 +406 @@ class UEFormatImport:
+-                    if not bone.children or len(bone.children) == 0:
++                    if bpy.app.version >= (4, 0, 0) and (not bone.children or len(bone.children) == 0):
+@@ -411 +412 @@ class UEFormatImport:
+-                    if socket_bone is not None:
++                    if bpy.app.version >= (4, 0, 0) and socket_bone is not None:
+@@ -417 +418 @@ class UEFormatImport:
+-                    if virtual_bone is not None:
++                    if bpy.app.version >= (4, 0, 0) and virtual_bone is not None:

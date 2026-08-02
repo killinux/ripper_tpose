@@ -4,6 +4,9 @@
 原版 pak 的只读枚举，不包含 `End\Content\Paks\~mods`。共确认 `36` 个符合
 `PC????_??.uasset` 命名的 Player 主模型包。
 
+完整的一行一路径清单见 [`ff7remake-player-model-files.txt`](ff7remake-player-model-files.txt)。
+已安装 Mod 若覆盖既有包路径（例如 `PC0002_00`），不会额外增加主模型包数量。
+
 统一根目录：
 
 ```text

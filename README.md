@@ -14,7 +14,10 @@
 > [导出文档](docs/final-fantasy-vii-rebirth-extraction.md)；Player 的
 > [待导出清单与手动流程](docs/ff7rebirth-player-export-inventory.md)
 > 单独维护，不会改动 ROE 流程。
-> 两套脚本总入口见 [scripts/README.md](scripts/README.md)，
+> Stellar Blade PC 版同样是 Unreal IoStore，但使用独立 profile、mapping 和模块化 Eve
+> 组合流程；见 [scripts/stellarblade/](scripts/stellarblade/) 与
+> [Stellar Blade 导出文档](docs/stellar-blade-extraction.md)。
+> 各套脚本总入口见 [scripts/README.md](scripts/README.md)，
 > 功能更新和操作变化统一记录在 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 > （评估过 AssetRipper 但**没采用**;名字相近,别和 AssetStudio 记混。）本页是背后的通用调研笔记。
 

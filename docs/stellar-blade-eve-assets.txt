@@ -1,0 +1,11 @@
+# Stellar Blade PC — Eve standard validation asset paths
+# Verified against Steam build 19963153 on 2026-08-02.
+# These are Unreal package paths, not loose files in the install directory.
+
+SB/Content/Art/Character/PC/CH_P_EVE_01/CH_P_EVE_01_Body.uasset
+SB/Content/Art/Character/PC/CH_P_EVE_01/CH_P_EVE_01_Skeleton.uasset
+SB/Content/Art/Character/PC/CH_P_EVE_Head/CH_P_EVE_Face_003.uasset
+SB/Content/Art/Character/PC/CH_P_EVE_Head/CH_P_EVE_Teeth_001.uasset
+SB/Content/Art/Character/PC/00_HR/EVE_HR_01/EVE_HR_01.uasset
+SB/Content/Art/Character/PC/00_HR/EVE_HR_01/EVE_HR_01_Tail.uasset
+SB/Content/Art/Character/PC/00_HR/EVE_HR_01/EVE_HR_01_ShortTail.uasset
