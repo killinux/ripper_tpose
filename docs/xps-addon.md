@@ -1,7 +1,8 @@
 # ROE XPS Tools 插件（一步步转 XPS）
 
-`scripts/riseoferos/roe_xps_addon.py` —— Blender 插件，把"FBX 导入 → 修脸材质 → 导出 XPS
-→ (导回后)修骨架方向"做成侧边栏四个按钮。远程机器(haoni)的 Blender 3.6 已安装启用。
+`scripts/riseoferos/roe_xps_addon.py` —— Blender 插件，把"FBX 导入 → 分区或一键修材质
+→ 导出 XPS → (导回后)修骨架方向"放进同一个侧边栏。远程机器(haoni)的 Blender 3.6
+已安装启用。
 
 ## 安装
 
@@ -20,6 +21,9 @@ Edit > Preferences > Add-ons > Install... 选 `roe_xps_addon.py`，勾选启用�
 | 贴图目录 | 含 `*_Albedo.png` 的目录（如 `D:\roe_exports\g11\xps`） |
 | **1. 导入 FBX** | 自动骨骼朝向；旧版 cm 级模型自动 ×100 |
 | **2. 检查并准备材质** | body/hair 挂 Albedo；head 分 5 槽修眼球/睫毛/眉毛（原理见 [face-eye-materials.md](face-eye-materials.md)）。EEVEE 编译 shader 需几秒 |
+| **修复脸部** | 只重建 head 的 face/eye/lash/brow/overlay 五槽；不修改身体、衣装、头发或翅膀材质 |
+| **修复身体** | 只处理非 head、非 wing 的身体/衣装/头发槽；即使翅膀与身体共用同一个 mesh，也保留翅膀槽 |
+| **修复翅膀** | 只处理原始槽名或对象名明确含 `wing/wings[数字]` 的槽；不修改 body/skin，没识别到翅膀时零修改 |
 | **修复眼睛** | 眼球仍为纯白或脸色时单独点击；按骨骼权重、眼球几何和原始 `eye/eyes/iris` 材质名重新识别眼球面，只重置眼球材质和误分到眼球槽的面 |
 | XPS 输出 | 留空则自动输出到贴图目录 `<角色>_fixed.mesh` |
 | **3. 导出 XPS(.mesh)** | 见下。场景本身不受影响 |
@@ -29,7 +33,8 @@ Edit > Preferences > Add-ons > Install... 选 `roe_xps_addon.py`，勾选启用�
 
 自动准备后若只有某个身体槽、透明片或一小块头部材质仍不正确，请使用
 [ROE 材质手动修复指南](roe-manual-material-repair.md) 中的高级材质覆盖，不要直接
-删除几何或修改 UV/权重。
+删除几何或修改 UV/权重。历史问题的根因、禁止做法和回归基线集中记录在
+[ROE Blender 材质兼容避坑手册](roe-material-pitfalls.md)。
 
 ## 第 3 步做了什么
 
@@ -64,12 +69,16 @@ Edit > Preferences > Add-ons > Install... 选 `roe_xps_addon.py`，勾选启用�
 | 导入 .mesh 报 `KeyError: 'Alpha'` | 场景里有残缺的 'XPS Shader' 节点组（旧版插件导出时创建的），XNALaraMesh 导入按名字复用了它 | 升级到新版插件后**重启 Blender** 再导入即可；新版导出会自动把残缺组改名让位，且优先用 XNALaraMesh 自己的 `xps_shader_group()` 创建完整组 |
 | 导回模型**全黑**（贴图都能加载） | 'XPS Shader' 组是半成品：内部 Principled 没连到组输出（建组函数中途异常），组输出为空 | 新版插件导出时自动校验并补上缺失的输出连接 |
 | 导回模型全黑 + 贴图 missing | .mesh 旁边的贴图文件没了——**输出目录设在了 `D:\roe_exports\<角色>\` 里面**，重新提取该角色时会被脚本清空 | 输出放外面的目录（如 `D:\roe_exports\xps_export\`），插件会自动把贴图复制过去 |
-| 导回后**夹克/大件衣服半透明**像消失 | body 网格用了 RG7（alpha 混合），EEVEE 对大网格透明排序错乱 | 新版已改：body 用 RG5（不透明），仅头发/睫毛/眉毛用 RG7 |
+| 导回后**夹克/大件衣服半透明**像消失 | body 网格用了 RG7（alpha 混合），EEVEE 对大网格透明排序错乱 | 新版已改：普通 body 槽用 RG5（不透明），仅头发/睫毛/眉毛及 g09 的透明翅膀槽用 RG7；其他旧角色不改变 |
 | 导回的**骨架和身体差 90 度**（骨骼摊在地上） | XPS 格式是 Y-up 坐标系，XNALaraMesh 导入只把网格转了 Z-up，骨架保留 Y-up 原样 | 点面板的 **「4. 修正XPS骨架方向」**（+90°X 烘进骨架数据，网格不动）；绑定/权重本来就正确，XPS 软件里显示也正常 |
+| e06 导入报 `KeyError: Root`，随后显示 4 网格/1 骨架且全部没有材质 | e06 的 `wp_e_06` 蒙皮簇缺少 Blender 3.6 预期的绑定矩阵；报错后场景里的是未完成导入的半成品 | 更新到 v1.1.10 并重启 Blender，删除半成品；选择 `pc_e06_hd (1)\FBX_GameObjects\pc_e06_hd\pc_e06_hd.fbx` 重新导入。插件只为武器补缺失绑定，body/head/hair 的原绑定保持不变 |
+| F10 身体正常但脸部消失/透明 | F10 的 face 与 tears 在同一连通块跨材质边界，v1.1.10 及更早版本把大部分 face 误判为透明罩层 | 更新到 v1.1.11 并重启 Blender，保留 F10 原 FBX 与 `_textures` 路径，直接点 **“修复脸部”**；正确五槽面数为 `15354/864/900/228/390` |
+| i03/i04 没有脸部贴图，日志同时提示缺 eye_iris/eyebrow | i 体型没有独立的高清 iris/eyebrow Albedo；i04 还需要优先使用角色专属 `pc_i04_hd_face`，旧版在设置 face 前因附属图缺失而取消 | 更新到 v1.1.12 并重启 Blender，确认角色 HD FBX 与 `_textures` 后点 **“修复脸部”**；i03 使用 `pc_i_nk_face`，i04 使用 `pc_i04_hd_face`，眼球回退 `pc_i_ld_eyes` |
 | face 选到 LD 低清 / hair 选到别的体型贴图 | 贴图目录含多体型共享贴图，模糊匹配选错 | 新版按 `pc_<体型>_nk_*` 精确匹配 |
 | a08 眼球纯白、没有虹膜 | a08 有 `Eyeball` 顶点组，但眼球顶点没有足够的 Eyeball 权重；旧版因此关闭了几何兜底，把 864 个眼球面判成脸 | 更新到 v1.1.3，重新点 **「2. 检查并准备材质」**；旧场景可直接点 **「修复眼睛」** |
 | b02 下睫毛是肤色色块，左眼上像多了一块眼镜片 | 下睫毛的 Eyelid 权重不足；`pc_b_nk_tears` 透明卡片既存在于 head，也存在于身体网格的独立槽，旧规则把它们分进了可见材质 | 更新到 v1.1.6，保持 b02 的 FBX 与 `_textures` 路径，重新点 **「2. 检查并准备材质」**；不需要删除几何或重新导入 |
 | g07 身体为白色或缺少图案 | 原始槽名含 `_hd_`，实际 body1/body2 Albedo 文件名省略 `_hd_`，旧版精确前缀无法命中 | 更新到 v1.1.7 后重新点 **「2. 检查并准备材质」**；正确映射是 `skin/body1 → body1`、`body2 → body2` |
+| g09 翅膀贴图错位，或出现黑底、硬边、黑色散点/实心羽毛片 | 宽泛的 `wings*` 匹配误把主翼也挂成 `wings2` 图集；旧版 XPS 丢失 alpha，且 Blender 3.6 的 Alpha Hashed 会在重叠羽毛片上产生噪点 | 更新到 v1.1.9 后重新准备材质并导出 XPS；`wings/wings2` 分别使用自己的图集，Blender 视口用 Alpha Clip，XPS 用 RG7；身体/皮肤及其他角色保持原行为 |
 
 ## 局限
 

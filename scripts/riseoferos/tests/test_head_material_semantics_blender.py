@@ -71,8 +71,44 @@ def build_head_fixture():
             source_indices.append(1)
         return range(first_face, first_face + polygon_count)
 
+    def add_f10_mixed_face_fan(polygon_count=120, tear_count=8):
+        """Reproduce F10's connected face/tear material boundary."""
+        center = len(vertices)
+        component_vertices = [center]
+        vertices.append((2.0, 0.0, 0.0))
+        uv_by_vertex.append((1.55, 0.60))
+        ring = []
+        for index in range(polygon_count):
+            angle = 2.0 * math.pi * index / polygon_count
+            vertex_index = len(vertices)
+            ring.append(vertex_index)
+            component_vertices.append(vertex_index)
+            vertices.append((
+                2.0 + 0.2 * math.cos(angle),
+                0.2 * math.sin(angle),
+                0.02 * math.sin(angle),
+            ))
+            uv_by_vertex.append((
+                1.55 + 0.05 * math.cos(angle),
+                0.60 + 0.05 * math.sin(angle),
+            ))
+        first_face = len(faces)
+        split = polygon_count - tear_count
+        for index in range(polygon_count):
+            faces.append((center, ring[index], ring[(index + 1) % polygon_count]))
+            source_indices.append(0 if index < split else 3)
+        return (
+            range(first_face, first_face + split),
+            range(first_face + split, first_face + polygon_count),
+            component_vertices,
+        )
+
+    f10_face, f10_tear, f10_vertices = add_f10_mixed_face_fan()
+
     regions = {
         "face": add_quad(-2.0, 0.0, 0),
+        "f10_face": f10_face,
+        "f10_tear": f10_tear,
         "eye": add_eye_fan(),
         "lower_lash": add_quad(-1.0, -0.04, 2),
         "upper_lash": add_quad(-0.6, 0.01, 2),
@@ -91,7 +127,8 @@ def build_head_fixture():
     bpy.context.collection.objects.link(obj)
     # The presence of a semantic group reproduces b02's code path even though
     # its lower-lash and brow cards do not have decisive weights.
-    obj.vertex_groups.new(name="Eyelid")
+    eyelid = obj.vertex_groups.new(name="Eyelid")
+    eyelid.add(f10_vertices, 1.0, 'REPLACE')
     return obj, source_indices, regions
 
 
@@ -111,6 +148,8 @@ for index, module_path in enumerate(MODULE_PATHS):
 
     expected_slots = {
         "face": 0,
+        "f10_face": 0,
+        "f10_tear": 4,
         "eye": 1,
         "lower_lash": 2,
         "upper_lash": 2,

@@ -15,7 +15,10 @@ import bpy
 import os
 import sys
 import glob
+import json
 import re
+
+SOURCE_TEXTURE_HINTS_KEY = 'roe_source_texture_hints'
 
 # GUI 方式运行时改这里（无头方式用命令行参数覆盖）
 TEX_DIR = 'D:/roe_exports/g11/xps'
@@ -35,13 +38,21 @@ def find_tex(tex_dir, pattern):
     patterns = [pattern]
     if 'Albedo' in pattern:
         patterns.append(pattern.replace('Albedo', 'Abedo'))
-    for candidate in patterns:
-        hits = sorted(glob.glob(os.path.join(tex_dir, candidate)))
-        if not hits:
-            hits = sorted(glob.glob(
-                os.path.join(tex_dir, '**', candidate), recursive=True))
-        if hits:
-            return hits[0]
+    roots = [tex_dir]
+    normalized = os.path.normpath(tex_dir)
+    if os.path.basename(normalized).lower().startswith('_textures'):
+        parent = os.path.dirname(normalized)
+        roots.extend(path for path in sorted(glob.glob(
+            os.path.join(parent, '_textures*')))
+                     if os.path.isdir(path) and path not in roots)
+    for root in roots:
+        for candidate in patterns:
+            hits = sorted(glob.glob(os.path.join(root, candidate)))
+            if not hits:
+                hits = sorted(glob.glob(
+                    os.path.join(root, '**', candidate), recursive=True))
+            if hits:
+                return hits[0]
     return None
 
 
@@ -112,17 +123,104 @@ def source_material_names(obj):
     return names
 
 
-def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
+def current_material_texture_hints(obj):
+    hints = []
+    for slot in obj.material_slots:
+        candidates = []
+        material = slot.material
+        if material and material.use_nodes and material.node_tree:
+            for node in material.node_tree.nodes:
+                if node.type != 'TEX_IMAGE' or not node.image:
+                    continue
+                filename = (os.path.basename(bpy.path.abspath(
+                    node.image.filepath or '')) or node.image.name)
+                lowered = filename.lower()
+                priority = (0 if 'albedo' in lowered or 'abedo' in lowered
+                            else 1 if 'normal' in lowered
+                            else 2 if 'mgac' in lowered or 'mga' in lowered
+                            else 3)
+                candidates.append((priority, filename.lower(), filename))
+        hints.append(min(candidates)[2] if candidates else '')
+    return hints
+
+
+def source_texture_hints(obj):
+    try:
+        hints = json.loads(obj.get(SOURCE_TEXTURE_HINTS_KEY, '[]'))
+    except (TypeError, ValueError):
+        hints = []
+    if not isinstance(hints, list) or not hints:
+        hints = current_material_texture_hints(obj)
+        obj[SOURCE_TEXTURE_HINTS_KEY] = json.dumps(hints)
+    return hints
+
+
+def source_role_texture_patterns(obj, role):
+    if obj is None:
+        return ()
+    feature_tokens = {
+        'eye', 'eyes', 'iris', 'eyeball', 'brow', 'eyebrow',
+        'eyelid', 'lash', 'tear', 'tears',
+    }
+    patterns = []
+    for source_name in source_material_names(obj):
+        clean = re.sub(r'\.\d{3}$', '', source_name).strip()
+        tokens = set(re.split(r'[_\W]+', clean.lower()))
+        if role == 'face':
+            matches = 'face' in tokens and not bool(tokens & feature_tokens)
+        elif role == 'eye':
+            matches = bool(tokens & {'eye', 'eyes', 'iris', 'eyeball'}) \
+                and not bool(tokens & {'brow', 'eyebrow', 'tear', 'tears', 'lash'})
+        elif role == 'brow':
+            matches = bool(tokens & {'brow', 'eyebrow'})
+        else:
+            matches = False
+        if clean and matches:
+            patterns.extend((clean + '_rgbx_Albedo*.png',
+                             clean + '_Albedo*.png',
+                             clean + '*Albedo*.png'))
+    return tuple(patterns)
+
+
+def is_g09_wing_slot(obj, slot_index, source_name=None):
+    """Return True only for the observed G09 HD/LD wing material slots."""
+    object_name = re.sub(r'\.\d{3}$', '', obj.name).lower()
+    if not re.fullmatch(r'pc_g09_(?:hd|ld)_body', object_name):
+        return False
+    if source_name is None:
+        names = source_material_names(obj)
+        source_name = names[slot_index] if slot_index < len(names) else ''
+    source_name = re.sub(r'\.\d{3}$', '', source_name.lower())
+    return bool(re.fullmatch(r'pc_g09_(?:hd|ld)_wings?\d*', source_name))
+
+
+def is_wing_slot(obj, slot_index, source_name=None):
+    """Identify wing slots without changing historical alpha export rules."""
+    if source_name is None:
+        names = source_material_names(obj)
+        source_name = names[slot_index] if slot_index < len(names) else ''
+
+    def has_wing_token(name):
+        return any(re.fullmatch(r'wings?\d*', token)
+                   for token in re.split(r'[_\W]+', name.lower()))
+
+    object_name = re.sub(r'\.\d{3}$', '', obj.name)
+    return has_wing_token(source_name) or has_wing_token(object_name)
+
+
+def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex, slot_filter=None):
     """Replace materials without destroying the FBX body/skin/face slot split."""
     me = obj.data
     material_indices = [poly.material_index for poly in me.polygons]
     source_names = source_material_names(obj)
+    source_hints = source_texture_hints(obj)
     slot_count = max(
         len(source_names),
         max((poly.material_index for poly in me.polygons), default=0) + 1,
         1,
     )
     source_names.extend([''] * (slot_count - len(source_names)))
+    source_hints.extend([''] * (slot_count - len(source_hints)))
 
     is_hair = 'hair' in obj.name.lower()
     body_tex = None if is_hair else find_tex(
@@ -138,13 +236,38 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
 
     def named_albedo(name):
         for candidate in name_variants(name):
-            texture = find_tex(tex_dir, candidate + '*Albedo*.png')
-            if texture:
-                return texture
+            # Prefer the complete exported texture stem before the historical
+            # broad prefix fallback.  Without this, ``..._wings*Albedo`` also
+            # matches ``..._wings2_rgbx_Albedo`` and lexicographic ordering
+            # gives the main G09 wing slot the individual-feather atlas.
+            for pattern in (candidate + '_rgbx_Albedo*.png',
+                            candidate + '_Albedo*.png',
+                            candidate + '*Albedo*.png'):
+                texture = find_tex(tex_dir, pattern)
+                if texture:
+                    return texture
         return None
 
-    def slot_albedo(source_name):
+    def hinted_albedo(slot_index):
+        hint = source_hints[slot_index] if slot_index < len(source_hints) else ''
+        stem = os.path.splitext(os.path.basename(hint))[0]
+        if re.search(r'_(?:Albedo|Abedo)$', stem, re.IGNORECASE):
+            albedo_stem = stem
+        elif re.search(
+                r'_(?:Normal|MGAC|MGA|Emission|Emmision)$', stem,
+                re.IGNORECASE):
+            albedo_stem = re.sub(
+                r'_(?:Normal|MGAC|MGA|Emission|Emmision)$', '_Albedo', stem,
+                flags=re.IGNORECASE)
+        else:
+            return None
+        return find_tex(tex_dir, albedo_stem + '*.png')
+
+    def slot_albedo(source_name, slot_index):
         """Resolve multi-atlas meshes such as a07 body1/body2 by source slot."""
+        hinted = hinted_albedo(slot_index)
+        if hinted:
+            return hinted
         compact = re.sub(r'\s+', '', re.sub(r'\.\d{3}$', '', source_name))
         if compact:
             direct = named_albedo(compact)
@@ -165,6 +288,10 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
     missing = []
     materials = []
     for index, source_name in enumerate(source_names):
+        if slot_filter is not None and not slot_filter(
+                obj, index, source_name):
+            materials.append(None)
+            continue
         tokens = re.split(r'[_\W]+', source_name.lower())
         is_skin = any(token == 'skin' or re.fullmatch(r'skin\d+', token)
                       for token in tokens)
@@ -179,12 +306,17 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
         elif 'face' in tokens:
             role, tex, desat, hashed = 'face', face_tex, True, True
         elif is_skin:
-            role, tex, desat, hashed = 'skin', slot_albedo(source_name), True, True
+            role, tex, desat, hashed = (
+                'skin', slot_albedo(source_name, index), True, True)
         else:
             role = 'body'
-            tex = slot_albedo(source_name)
+            tex = slot_albedo(source_name, index)
             desat = 'body1' in obj.name.lower()
             hashed = True
+        if is_g09_wing_slot(obj, index, source_name):
+            # Binary wing cutouts are stable with CLIP in Blender 3.6; HASHED
+            # shows noisy black cards where the G09 layers overlap.
+            hashed = False
         if not tex:
             missing.append('%s[%d:%s]' % (obj.name, index, source_name or role))
         materials.append(albedo_mat(
@@ -194,9 +326,18 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex):
             hashed=hashed,
         ))
 
-    me.materials.clear()
-    for material in materials:
-        me.materials.append(material)
+    if slot_filter is None:
+        me.materials.clear()
+        for material in materials:
+            me.materials.append(material)
+    else:
+        while len(me.materials) < slot_count:
+            placeholder = bpy.data.materials.new(
+                '%s_%02d_preserved_mat' % (obj.name, len(me.materials)))
+            me.materials.append(placeholder)
+        for index, material in enumerate(materials):
+            if material is not None:
+                me.materials[index] = material
     for poly, material_index in zip(me.polygons, material_indices):
         poly.material_index = min(material_index, len(materials) - 1)
     me.update()
@@ -364,6 +505,14 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
     def source_is_tear(component):
         return bool(source_tokens(component) & {'tear', 'tears'})
 
+    def source_is_face(component):
+        tokens = source_tokens(component)
+        excluded = {
+            'eye', 'eyes', 'iris', 'eyeball', 'brow', 'eyebrow',
+            'eyelid', 'lash', 'tear', 'tears',
+        }
+        return 'face' in tokens and not bool(tokens & excluded)
+
     def source_is_brow_or_lash(component):
         return bool(source_tokens(component) & {
             'brow', 'eyebrow', 'brows', 'eyebrows',
@@ -408,6 +557,10 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
             cls[r] = 1
         elif source_is_tear(c):
             cls[r] = 4
+        elif source_is_face(c):
+            # F10's face atlas has a narrow UV island with eyelid influence;
+            # explicit source semantics must win over the overlay fallback.
+            cls[r] = 0
         elif has_semantic_groups and c['umax'] <= 1.01 and c['polys'] < 400 \
                 and w['brow'] > w['other'] and w['brow'] > w['lid']:
             cls[r] = 3
@@ -442,10 +595,41 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
                 and 100 <= c['polys'] <= 600 and near_eye:
             cls[r] = 4
 
-    return {p.index: cls.get(find(p.vertices[0]), 0) for p in me.polygons}
+    source_slot_tokens = [
+        set(re.split(r'[_\W]+', name.lower()))
+        for name in source_material_names
+    ]
+    feature_tokens = {
+        'eye', 'eyes', 'iris', 'eyeball', 'brow', 'eyebrow',
+        'eyelid', 'lash', 'tear', 'tears',
+    }
+    explicit_face_slots = {
+        index for index, tokens in enumerate(source_slot_tokens)
+        if 'face' in tokens and not bool(tokens & feature_tokens)
+    }
+    explicit_tear_slots = {
+        index for index, tokens in enumerate(source_slot_tokens)
+        if bool(tokens & {'tear', 'tears'})
+    }
+    has_separate_head_features = bool(explicit_face_slots) and any(
+        tokens & feature_tokens for tokens in source_slot_tokens)
+
+    classifications = {}
+    for polygon in me.polygons:
+        slot = cls.get(find(polygon.vertices[0]), 0)
+        source_index = (source_material_indices[polygon.index]
+                        if polygon.index < len(source_material_indices)
+                        else -1)
+        if source_index in explicit_tear_slots:
+            slot = 4
+        elif has_separate_head_features \
+                and source_index in explicit_face_slots:
+            slot = 0
+        classifications[polygon.index] = slot
+    return classifications
 
 
-def apply_all(tex_dir):
+def apply_all(tex_dir, source_fbx=''):
     meshes = [o for o in bpy.data.objects if o.type == 'MESH']
     head = find_head(meshes)
 
@@ -460,6 +644,12 @@ def apply_all(tex_dir):
             character_prefix = prefix_match.group(1)
         if bt and character_prefix:
             break
+    if not (bt and character_prefix):
+        path_match = re.search(
+            r'(pc_([a-z])\d+_(?:hd|ld))', source_fbx.lower())
+        if path_match:
+            character_prefix = character_prefix or path_match.group(1)
+            bt = bt or path_match.group(2)
 
     def pick(*patterns):
         for pattern in patterns:
@@ -469,17 +659,27 @@ def apply_all(tex_dir):
                     return hit
         return None
 
-    face_tex = pick('pc_%s_nk_face*Albedo*.png' % bt if bt else None,
+    face_tex = pick(*source_role_texture_patterns(head, 'face'),
+                    character_prefix + '_face*Albedo*.png'
+                    if character_prefix else None,
+                    'pc_%s_nk_face*Albedo*.png' % bt if bt else None,
                     'pc_*_nk_face*Albedo*.png', '*face*Albedo*.png')
-    iris_tex = pick(character_prefix + '_eye_iris*Albedo*.png'
+    iris_tex = pick(*source_role_texture_patterns(head, 'eye'),
+                    character_prefix + '_eye_iris*Albedo*.png'
                     if character_prefix else None,
                     'pc_%s_nk_eye_iris*Albedo*.png' % bt if bt else None,
-                    '*eye_iris*Albedo*.png')
-    brow_tex = pick('pc_%s_nk_eyebrow*Albedo*.png' % bt if bt else None,
+                    '*eye_iris*Albedo*.png',
+                    'pc_%s_nk_eyes*Albedo*.png' % bt if bt else None,
+                    'pc_%s_ld_eyes*Albedo*.png' % bt if bt else None)
+    brow_tex = pick(*source_role_texture_patterns(head, 'brow'),
+                    'pc_%s_nk_eyebrow*Albedo*.png' % bt if bt else None,
                     '*eyebrow*Albedo*.png')
-    hair_tex = pick('pc_%s_nk_hair*Albedo*.png' % bt if bt else None,
+    hair_tex = pick(character_prefix + '_hair*Albedo*.png'
+                    if character_prefix else None,
+                    'pc_%s_nk_hair*Albedo*.png' % bt if bt else None,
                     'pc_%s_*hair*Albedo*.png' % bt if bt else None,
                     '*hair*Albedo*.png')
+    baked_face_strokes = bt in {'i', 'j'} and not brow_tex
     print('[mat] textures: face=%s iris=%s brow=%s hair=%s' %
           (face_tex, iris_tex, brow_tex, hair_tex))
 
@@ -496,7 +696,8 @@ def apply_all(tex_dir):
         print('[mat] WARNING: 没找到 head 网格（名称或 Eyeball 顶点组均未匹配）')
         return
     missing = [name for name, path in (('face', face_tex), ('eye_iris', iris_tex),
-                                       ('eyebrow', brow_tex)) if not path]
+                                       ('eyebrow', brow_tex))
+               if not path and not (name == 'eyebrow' and baked_face_strokes)]
     if missing:
         print('[mat] ERROR: 缺少贴图: %s；可选择 _textures 或角色导出根目录' % ', '.join(missing))
         return
@@ -507,8 +708,13 @@ def apply_all(tex_dir):
     me.materials.clear()
     me.materials.append(albedo_mat('face', face_tex, desat=True))          # slot0
     me.materials.append(eye_mat('eye', iris_tex))                          # slot1
-    me.materials.append(stroke_mat('lash', brow_tex, LASH_ALPHA_GAIN, LASH_DARKEN))  # slot2
-    me.materials.append(stroke_mat('brow', brow_tex))                      # slot3
+    if brow_tex:
+        me.materials.append(stroke_mat(
+            'lash', brow_tex, LASH_ALPHA_GAIN, LASH_DARKEN))               # slot2
+        me.materials.append(stroke_mat('brow', brow_tex))                  # slot3
+    else:
+        me.materials.append(transparent_mat('lash'))                       # slot2
+        me.materials.append(transparent_mat('brow'))                       # slot3
     me.materials.append(transparent_mat('eye_overlay'))                    # slot4
     cls = classify_head(head, source_head_names, source_head_indices)
     counts = {}
@@ -529,7 +735,7 @@ def main():
         bpy.ops.wm.read_homefile(use_empty=True)
         bpy.ops.import_scene.fbx(filepath=fbx, automatic_bone_orientation=True,
                                  use_image_search=False)
-        apply_all(TEX_DIR)
+        apply_all(TEX_DIR, fbx)
         if len(args) > 2:
             bpy.ops.wm.save_as_mainfile(filepath=args[2])
             print('[mat] saved: %s' % args[2])

@@ -24,7 +24,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 bl_info = {
     "name": "ROE XPS Tools",
     "author": "ripper_tpose",
-    "version": (1, 1, 7),
+    "version": (1, 1, 13),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > ROE",
     "description": "Rise of Eros 角色: 导入 FBX / 修脸材质 / 导出 XPS",
@@ -41,6 +41,7 @@ LASH_ALPHA_GAIN = 1.5
 LASH_DARKEN = 0.55
 SOURCE_INDEX_ATTRIBUTE = 'roe_source_material_index'
 SOURCE_MATERIALS_KEY = 'roe_source_materials'
+SOURCE_TEXTURE_HINTS_KEY = 'roe_source_texture_hints'
 SOURCE_FBX_KEY = 'roe_source_fbx'
 IMPORT_BATCH_KEY = 'roe_import_batch'
 ACTIVE_IMPORT_BATCH_KEY = 'roe_active_import_batch'
@@ -57,14 +58,26 @@ def find_tex(tex_dir, pattern):
     patterns = [pattern]
     if 'Albedo' in pattern:
         patterns.append(pattern.replace('Albedo', 'Abedo'))
-    # Accept either the exported _textures directory or the character export root.
-    for candidate in patterns:
-        hits = sorted(glob.glob(os.path.join(tex_dir, candidate)))
-        if not hits:
-            hits = sorted(glob.glob(
-                os.path.join(tex_dir, '**', candidate), recursive=True))
-        if hits:
-            return hits[0]
+    # Some exports (notably k06) split the body and shared head resources into
+    # sibling ``_textures`` and ``_textures_head`` folders.  Keep the selected
+    # directory first, then search only companion folders under the same
+    # character root; never cross into a different character export.
+    roots = [tex_dir]
+    normalized = os.path.normpath(tex_dir)
+    if os.path.basename(normalized).lower().startswith('_textures'):
+        parent = os.path.dirname(normalized)
+        roots.extend(path for path in sorted(glob.glob(
+            os.path.join(parent, '_textures*')))
+                     if os.path.isdir(path) and path not in roots)
+    # Accept either an exported texture directory or the character export root.
+    for root in roots:
+        for candidate in patterns:
+            hits = sorted(glob.glob(os.path.join(root, candidate)))
+            if not hits:
+                hits = sorted(glob.glob(
+                    os.path.join(root, '**', candidate), recursive=True))
+            if hits:
+                return hits[0]
     return None
 
 
@@ -134,6 +147,46 @@ def current_material_names(obj):
             for slot in obj.material_slots]
 
 
+def current_material_texture_hints(obj):
+    """Keep one imported image name per FBX slot as an atlas identity hint.
+
+    AssetStudio FBX files often connect Normal or MGAC instead of Albedo in
+    Blender 3.6.  The image stem is still valuable: i03's ``body`` and ``skin``
+    slots both point at body02 Normal, while its ``body01`` slot points at
+    body01 Normal.  Preserving that identity avoids guessing by slot name.
+    """
+    hints = []
+    for slot in obj.material_slots:
+        material = slot.material
+        candidates = []
+        if material and material.use_nodes and material.node_tree:
+            for node in material.node_tree.nodes:
+                if node.type != 'TEX_IMAGE' or not node.image:
+                    continue
+                path = bpy.path.abspath(node.image.filepath or '')
+                filename = os.path.basename(path) or node.image.name
+                lowered = filename.lower()
+                if 'albedo' in lowered or 'abedo' in lowered:
+                    priority = 0
+                elif 'normal' in lowered:
+                    priority = 1
+                elif 'mgac' in lowered or 'mga' in lowered:
+                    priority = 2
+                else:
+                    priority = 3
+                candidates.append((priority, filename.lower(), filename))
+        hints.append(min(candidates)[2] if candidates else '')
+    return hints
+
+
+def source_texture_hints(obj):
+    try:
+        hints = json.loads(obj.get(SOURCE_TEXTURE_HINTS_KEY, '[]'))
+    except (TypeError, ValueError):
+        return None
+    return hints if isinstance(hints, list) else None
+
+
 def source_layout_is_cached(obj):
     stored = obj.get(SOURCE_MATERIALS_KEY, '')
     attr = obj.data.attributes.get(SOURCE_INDEX_ATTRIBUTE)
@@ -143,9 +196,14 @@ def source_layout_is_cached(obj):
             and len(attr.data) == len(obj.data.polygons))
 
 
-def store_source_layout(obj, names=None, indices=None, fbx_path=None):
+def store_source_layout(obj, names=None, indices=None, fbx_path=None,
+                        texture_hints=None):
     """Persist the FBX slot names and per-face assignments on the mesh."""
     names = list(names if names is not None else current_material_names(obj))
+    texture_hints = list(
+        texture_hints if texture_hints is not None
+        else current_material_texture_hints(obj))
+    texture_hints = (texture_hints + [''] * len(names))[:len(names)]
     indices = list(indices if indices is not None else
                    (poly.material_index for poly in obj.data.polygons))
     if len(indices) != len(obj.data.polygons):
@@ -160,6 +218,7 @@ def store_source_layout(obj, names=None, indices=None, fbx_path=None):
             SOURCE_INDEX_ATTRIBUTE, type='INT', domain='FACE')
     attr.data.foreach_set('value', indices)
     obj[SOURCE_MATERIALS_KEY] = '\n'.join(names)
+    obj[SOURCE_TEXTURE_HINTS_KEY] = json.dumps(texture_hints)
     if fbx_path:
         obj[SOURCE_FBX_KEY] = fbx_path
     obj.data.update()
@@ -224,6 +283,80 @@ def topology_matches(first, second):
                for a, b in zip(first.data.polygons, second.data.polygons))
 
 
+def fill_missing_fbx_bind_setups(helper_node, fallback_bindings):
+    """Supply bind matrices omitted by some AssetStudio FBX exports.
+
+    Blender 3.6 collects every mesh below an armature, then assumes each one
+    has an ``armature_setup`` entry created from an FBX skin cluster.  E06's
+    ``wp_e_06`` is weighted to ``ball_scale`` but its exported cluster omits
+    that bind setup.  The stock importer consequently raises ``KeyError:
+    Root`` before it links materials or finishes vertex weights.
+
+    Use the same world/bind matrices the importer uses when cluster matrices
+    are present.  Existing setups are deliberately left untouched so ordinary
+    FBX files and previously working ROE characters retain Blender's original
+    import path.
+    """
+    if not getattr(helper_node, 'is_armature', False):
+        return
+    meshes = getattr(helper_node, 'meshes', None)
+    if not meshes:
+        return
+
+    for mesh_node in tuple(meshes):
+        setups = getattr(mesh_node, 'armature_setup', None)
+        if setups is None or helper_node in setups:
+            continue
+        setups[helper_node] = (
+            mesh_node.get_world_matrix(),
+            getattr(helper_node, 'bind_matrix', None),
+        )
+        fallback_bindings.append((
+            getattr(helper_node, 'fbx_name', '<armature>'),
+            getattr(mesh_node, 'fbx_name', '<mesh>'),
+        ))
+
+
+def import_fbx_compat(**kwargs):
+    """Run Blender's FBX importer with a scoped missing-bind compatibility fix.
+
+    ``FbxImportHelperNode`` is an implementation detail of Blender's bundled
+    3.6 importer, so feature-detect it and fall back to the untouched operator
+    on Blender versions that do not expose it.  The temporary method wrapper is
+    always restored, including when the import itself raises an exception.
+    """
+    fallback_bindings = []
+    try:
+        from io_scene_fbx import import_fbx as import_fbx_module
+    except ImportError:
+        return bpy.ops.import_scene.fbx(**kwargs), fallback_bindings
+
+    helper_type = getattr(import_fbx_module, 'FbxImportHelperNode', None)
+    original_collect = getattr(helper_type, 'collect_armature_meshes', None)
+    if helper_type is None or not callable(original_collect):
+        return bpy.ops.import_scene.fbx(**kwargs), fallback_bindings
+
+    def collect_armature_meshes_compat(helper_node):
+        result = original_collect(helper_node)
+        fill_missing_fbx_bind_setups(helper_node, fallback_bindings)
+        return result
+
+    helper_type.collect_armature_meshes = collect_armature_meshes_compat
+    try:
+        result = bpy.ops.import_scene.fbx(**kwargs)
+    finally:
+        # Avoid leaving a global Blender importer monkey-patch behind after this
+        # operator call. Blender runs operators on the main thread, so the
+        # scoped replacement cannot race another UI import.
+        if helper_type.collect_armature_meshes is collect_armature_meshes_compat:
+            helper_type.collect_armature_meshes = original_collect
+
+    if fallback_bindings:
+        print('[fbx] supplied missing bind setups: %s' % ', '.join(
+            '%s -> %s' % binding for binding in fallback_bindings))
+    return result, fallback_bindings
+
+
 def recover_source_layouts_from_fbx(targets, fbx_path):
     """Recover old scenes by importing the FBX only long enough to copy slots."""
     before_objects = set(bpy.data.objects)
@@ -234,9 +367,9 @@ def recover_source_layouts_from_fbx(targets, fbx_path):
     active = bpy.context.view_layer.objects.active
     recovered = []
     try:
-        bpy.ops.import_scene.fbx(filepath=fbx_path,
-                                 automatic_bone_orientation=True,
-                                 use_image_search=False)
+        import_fbx_compat(filepath=fbx_path,
+                          automatic_bone_orientation=True,
+                          use_image_search=False)
         imported = [obj for obj in bpy.data.objects if obj not in before_objects]
         imported_meshes = [obj for obj in imported if obj.type == 'MESH']
         for target in targets:
@@ -252,7 +385,8 @@ def recover_source_layouts_from_fbx(targets, fbx_path):
             names = [re.sub(r'\.\d{3}$', '', name)
                      for name in current_material_names(source)]
             indices = [poly.material_index for poly in source.data.polygons]
-            store_source_layout(target, names, indices, fbx_path)
+            hints = current_material_texture_hints(source)
+            store_source_layout(target, names, indices, fbx_path, hints)
             restore_source_layout(target)
             recovered.append(target.name)
     finally:
@@ -280,11 +414,16 @@ def recover_source_layouts_from_fbx(targets, fbx_path):
 def prepare_source_layouts(meshes, fbx_path):
     """Restore cached layouts or reconstruct missing ones from the source FBX."""
     pending = []
+    hint_pending = []
     captured = []
     for obj in meshes:
         if (source_layout_is_cached(obj)
                 and not cached_source_layout_is_suspicious(obj)):
             restore_source_layout(obj)
+            hints = source_texture_hints(obj)
+            names = obj.get(SOURCE_MATERIALS_KEY, '').split('\n')
+            if hints is None or len(hints) < len(names):
+                hint_pending.append(obj)
         elif not generated_material_layout(obj):
             store_source_layout(obj, fbx_path=fbx_path)
             captured.append(obj.name)
@@ -292,8 +431,10 @@ def prepare_source_layouts(meshes, fbx_path):
             pending.append(obj)
 
     recovered = []
-    if pending and fbx_path and os.path.isfile(fbx_path):
-        recovered = recover_source_layouts_from_fbx(pending, fbx_path)
+    recovery_targets = pending + [obj for obj in hint_pending
+                                  if obj not in pending]
+    if recovery_targets and fbx_path and os.path.isfile(fbx_path):
+        recovered = recover_source_layouts_from_fbx(recovery_targets, fbx_path)
     unresolved = [obj.name for obj in pending if obj.name not in recovered]
     return captured, recovered, unresolved
 
@@ -394,6 +535,50 @@ def material_is_transparent_only(material):
     )
 
 
+def is_g09_wing_slot(obj, slot_index, source_name=None):
+    """Return True only for the observed G09 HD/LD wing material slots."""
+    object_name = canonical_object_name(obj.name).lower()
+    if not re.fullmatch(r'pc_g09_(?:hd|ld)_body', object_name):
+        return False
+    if source_name is None:
+        names = source_material_names(obj)
+        source_name = names[slot_index] if slot_index < len(names) else ''
+    source_name = re.sub(r'\.\d{3}$', '', source_name.lower())
+    return bool(re.fullmatch(r'pc_g09_(?:hd|ld)_wings?\d*', source_name))
+
+
+def is_wing_slot(obj, slot_index, source_name=None):
+    """Identify wing slots without opting other alpha materials into wing rules."""
+    if source_name is None:
+        names = source_material_names(obj)
+        source_name = names[slot_index] if slot_index < len(names) else ''
+
+    def has_wing_token(name):
+        return any(re.fullmatch(r'wings?\d*', token)
+                   for token in re.split(r'[_\W]+', name.lower()))
+
+    return has_wing_token(source_name) or has_wing_token(
+        canonical_object_name(obj.name))
+
+
+def roe_xps_render_group(obj, slot_index, material):
+    """Keep normal ROE body slots opaque, except G09's alpha wing atlases.
+
+    The G09 body mesh contains both the opaque body/skin and two wing slots.
+    Treating every slot on a ROE body as RG5 discards the wing Albedo alpha and
+    turns the feather cards into solid polygons. Source material names survive
+    material preparation in ``roe_source_materials``, so they are the narrowest
+    reliable way to opt only G09 wing slots into RG7.  The character guard is
+    intentional: older characters keep their historical render-group behavior.
+    """
+    if 'hair' in canonical_object_name(obj.name).lower():
+        return '7'
+    if not material_uses_alpha(material):
+        return '5'
+
+    return '7' if is_g09_wing_slot(obj, slot_index) else '5'
+
+
 def albedo_mat(name, tex_path, desat=False, hashed=False,
                saturation=SKIN_DESAT):
     m, nt, b = _new_mat(name)
@@ -424,6 +609,34 @@ def source_material_names(obj):
     return names
 
 
+def source_role_texture_patterns(obj, role):
+    """Return exact Albedo patterns implied by the original FBX slot names."""
+    if obj is None:
+        return ()
+    feature_tokens = {
+        'eye', 'eyes', 'iris', 'eyeball', 'brow', 'eyebrow',
+        'eyelid', 'lash', 'tear', 'tears',
+    }
+    patterns = []
+    for source_name in source_material_names(obj):
+        clean = re.sub(r'\.\d{3}$', '', source_name).strip()
+        tokens = set(re.split(r'[_\W]+', clean.lower()))
+        matches = False
+        if role == 'face':
+            matches = 'face' in tokens and not bool(tokens & feature_tokens)
+        elif role == 'eye':
+            matches = bool(tokens & {'eye', 'eyes', 'iris', 'eyeball'}) \
+                and not bool(tokens & {'brow', 'eyebrow', 'tear', 'tears', 'lash'})
+        elif role == 'brow':
+            matches = bool(tokens & {'brow', 'eyebrow'})
+        if not clean or not matches:
+            continue
+        patterns.extend((clean + '_rgbx_Albedo*.png',
+                         clean + '_Albedo*.png',
+                         clean + '*Albedo*.png'))
+    return tuple(patterns)
+
+
 def slot_overrides(obj):
     try:
         data = json.loads(obj.get(SLOT_OVERRIDES_KEY, '{}'))
@@ -433,17 +646,19 @@ def slot_overrides(obj):
 
 
 def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
-                         skin_saturation=SKIN_DESAT):
+                         skin_saturation=SKIN_DESAT, slot_filter=None):
     """Replace materials without destroying the FBX body/skin/face slot split."""
     me = obj.data
     material_indices = [poly.material_index for poly in me.polygons]
     source_names = source_material_names(obj)
+    source_hints = source_texture_hints(obj) or []
     slot_count = max(
         len(source_names),
         max((poly.material_index for poly in me.polygons), default=0) + 1,
         1,
     )
     source_names.extend([''] * (slot_count - len(source_names)))
+    source_hints.extend([''] * (slot_count - len(source_hints)))
 
     is_hair = 'hair' in obj.name.lower()
     body_tex = None if is_hair else find_tex(
@@ -459,13 +674,40 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
 
     def named_albedo(name):
         for candidate in name_variants(name):
-            texture = find_tex(tex_dir, candidate + '*Albedo*.png')
-            if texture:
-                return texture
+            # Prefer the complete exported texture stem before the historical
+            # broad prefix fallback.  Without this, ``..._wings*Albedo`` also
+            # matches ``..._wings2_rgbx_Albedo`` and lexicographic ordering
+            # gives the main G09 wing slot the individual-feather atlas.
+            for pattern in (candidate + '_rgbx_Albedo*.png',
+                            candidate + '_Albedo*.png',
+                            candidate + '*Albedo*.png'):
+                texture = find_tex(tex_dir, pattern)
+                if texture:
+                    return texture
         return None
 
-    def slot_albedo(source_name):
+    def hinted_albedo(slot_index):
+        hint = source_hints[slot_index] if slot_index < len(source_hints) else ''
+        stem = os.path.splitext(os.path.basename(hint))[0]
+        if not stem:
+            return None
+        if re.search(r'_(?:Albedo|Abedo)$', stem, re.IGNORECASE):
+            albedo_stem = stem
+        elif re.search(
+                r'_(?:Normal|MGAC|MGA|Emission|Emmision)$', stem,
+                re.IGNORECASE):
+            albedo_stem = re.sub(
+                r'_(?:Normal|MGAC|MGA|Emission|Emmision)$', '_Albedo', stem,
+                flags=re.IGNORECASE)
+        else:
+            return None
+        return find_tex(tex_dir, albedo_stem + '*.png')
+
+    def slot_albedo(source_name, slot_index):
         """Resolve multi-atlas meshes such as a07 body1/body2 by source slot."""
+        hinted = hinted_albedo(slot_index)
+        if hinted:
+            return hinted
         compact = re.sub(r'\s+', '', re.sub(r'\.\d{3}$', '', source_name))
         if compact:
             direct = named_albedo(compact)
@@ -487,6 +729,10 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
     materials = []
     overrides = slot_overrides(obj)
     for index, source_name in enumerate(source_names):
+        if slot_filter is not None and not slot_filter(
+                obj, index, source_name):
+            materials.append(None)
+            continue
         tokens = re.split(r'[_\W]+', source_name.lower())
         is_skin = any(token == 'skin' or re.fullmatch(r'skin\d+', token)
                       for token in tokens)
@@ -506,12 +752,19 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
             # Some outfits keep the neck seam in a dedicated face-texture slot.
             role, tex, desat, hashed = 'face', face_tex, True, True
         elif override_role == 'SKIN' or (override_role == 'AUTO' and is_skin):
-            role, tex, desat, hashed = 'skin', slot_albedo(source_name), True, True
+            role, tex, desat, hashed = (
+                'skin', slot_albedo(source_name, index), True, True)
         else:
             role = 'body'
-            tex = slot_albedo(source_name)
+            tex = slot_albedo(source_name, index)
             desat = 'body1' in obj.name.lower()
             hashed = True
+        if is_g09_wing_slot(obj, index, source_name):
+            # G09's wing atlases use mostly binary cutout alpha.  Alpha Hashed
+            # produces the noisy black feather-card pattern seen in Blender 3.6
+            # Material Preview, especially where the wing layers overlap.
+            # CLIP is deterministic in the viewport; XPS export still uses RG7.
+            hashed = False
         if override_tex and os.path.isfile(override_tex):
             tex = override_tex
         if not tex:
@@ -524,9 +777,18 @@ def apply_mesh_materials(obj, tex_dir, face_tex, hair_tex,
             saturation=skin_saturation,
         ))
 
-    me.materials.clear()
-    for material in materials:
-        me.materials.append(material)
+    if slot_filter is None:
+        me.materials.clear()
+        for material in materials:
+            me.materials.append(material)
+    else:
+        while len(me.materials) < slot_count:
+            placeholder = bpy.data.materials.new(
+                '%s_%02d_preserved_mat' % (obj.name, len(me.materials)))
+            me.materials.append(placeholder)
+        for index, material in enumerate(materials):
+            if material is not None:
+                me.materials[index] = material
     for poly, material_index in zip(me.polygons, material_indices):
         poly.material_index = min(material_index, len(materials) - 1)
     me.update()
@@ -695,6 +957,14 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
     def source_is_tear(component):
         return bool(source_tokens(component) & {'tear', 'tears'})
 
+    def source_is_face(component):
+        tokens = source_tokens(component)
+        excluded = {
+            'eye', 'eyes', 'iris', 'eyeball', 'brow', 'eyebrow',
+            'eyelid', 'lash', 'tear', 'tears',
+        }
+        return 'face' in tokens and not bool(tokens & excluded)
+
     def source_is_brow_or_lash(component):
         return bool(source_tokens(component) & {
             'brow', 'eyebrow', 'brows', 'eyebrows',
@@ -749,6 +1019,13 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
             # part of the layer opaque face and part dark lash ("one-eye
             # glasses").  The original material name is unambiguous.
             cls[r] = 4
+        elif source_is_face(c):
+            # F10's face atlas contains a large, narrow UV island influenced by
+            # eyelid bones.  The historical geometry fallback interpreted that
+            # island as an eye overlay and made most of the face transparent.
+            # An explicit source ``..._face`` slot is stronger evidence and is
+            # safe to honor before the legacy bone/UV fallbacks below.
+            cls[r] = 0
         elif has_semantic_groups and c['umax'] <= 1.01 and c['polys'] < 400 \
                 and w['brow'] > w['other'] and w['brow'] > w['lid']:
             cls[r] = 3
@@ -787,7 +1064,43 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
                 and u_span < 0.2 and v_span < 0.2 \
                 and 100 <= c['polys'] <= 600 and near_eye:
             cls[r] = 4
-    return {p.index: cls.get(find(p.vertices[0]), 0) for p in me.polygons}
+    source_slot_tokens = [
+        set(re.split(r'[_\W]+', name.lower()))
+        for name in source_material_names
+    ]
+    feature_tokens = {
+        'eye', 'eyes', 'iris', 'eyeball', 'brow', 'eyebrow',
+        'eyelid', 'lash', 'tear', 'tears',
+    }
+    explicit_face_slots = {
+        index for index, tokens in enumerate(source_slot_tokens)
+        if 'face' in tokens and not bool(tokens & feature_tokens)
+    }
+    explicit_tear_slots = {
+        index for index, tokens in enumerate(source_slot_tokens)
+        if bool(tokens & {'tear', 'tears'})
+    }
+    has_separate_head_features = bool(explicit_face_slots) and any(
+        tokens & feature_tokens for tokens in source_slot_tokens)
+
+    classifications = {}
+    for polygon in me.polygons:
+        slot = cls.get(find(polygon.vertices[0]), 0)
+        source_index = (source_material_indices[polygon.index]
+                        if polygon.index < len(source_material_indices)
+                        else -1)
+        if source_index in explicit_tear_slots:
+            slot = 4
+        elif has_separate_head_features \
+                and source_index in explicit_face_slots:
+            # F10 shares vertices across source material boundaries, so one
+            # connected component can contain both face and tear polygons.
+            # Preserve the explicit per-face FBX assignment before applying
+            # component-level geometry fallbacks. Heads with only one vague
+            # source slot still use the historical classifier unchanged.
+            slot = 0
+        classifications[polygon.index] = slot
+    return classifications
 
 
 def apply_head_region_overrides(head, classifications):
@@ -946,8 +1259,10 @@ class ROE_OT_import_fbx(Operator):
             self.report({'ERROR'}, "FBX 路径无效: %s" % fbx)
             return {'CANCELLED'}
         before = set(bpy.context.scene.objects)
-        bpy.ops.import_scene.fbx(filepath=fbx, automatic_bone_orientation=True,
-                                 use_image_search=p.workflow_mode == 'GENERIC')
+        _, fallback_bindings = import_fbx_compat(
+            filepath=fbx,
+            automatic_bone_orientation=True,
+            use_image_search=p.workflow_mode == 'GENERIC')
         new = [o for o in bpy.context.scene.objects if o not in before]
         meshes = [o for o in new if o.type == 'MESH']
         batch = str(time.time_ns())
@@ -987,6 +1302,8 @@ class ROE_OT_import_fbx(Operator):
                     if space.type == 'VIEW_3D':
                         space.shading.type = 'MATERIAL'
         detail = "，已自动 x100" if scaled else ""
+        if fallback_bindings:
+            detail += "，兼容修复 %d 个缺失骨架绑定" % len(fallback_bindings)
         if hidden:
             detail += "，隐藏 %d 个同名旧网格" % len(hidden)
         self.report({'INFO'}, "导入完成: %d 个物体%s" % (len(new), detail))
@@ -998,9 +1315,21 @@ class ROE_OT_apply_materials(Operator):
     bl_label = "2. 检查并准备材质"
     bl_description = "通用模型保留原材质；ROE 模型额外修复脸、眼睛和多图集材质"
     bl_options = {'REGISTER', 'UNDO'}
+    repair_scope: EnumProperty(
+        name="修复范围",
+        items=(
+            ('ALL', "全部", "保持旧版的一键材质准备行为"),
+            ('FACE', "脸部", "只修复脸、眼球、睫毛、眉毛和眼部透明层"),
+            ('BODY', "身体", "只修复非头部、非翅膀的身体/衣装/头发材质槽"),
+            ('WING', "翅膀", "只修复名称明确为 wing/wings 的材质槽"),
+        ),
+        default='ALL',
+        options={'HIDDEN'},
+    )
 
     def execute(self, context):
         p = context.scene.roe
+        repair_scope = self.repair_scope
         meshes = [o for o in scene_meshes() if not re.match(r'^\d+_', o.name)]
         if not meshes:
             self.report({'ERROR'}, "处理范围内没有网格")
@@ -1008,6 +1337,9 @@ class ROE_OT_apply_materials(Operator):
 
         workflow = effective_workflow(p, meshes)
         if workflow == 'GENERIC':
+            if repair_scope != 'ALL':
+                self.report({'ERROR'}, "分区材质修复只适用于 ROE 增强工作流")
+                return {'CANCELLED'}
             created = []
             for obj in meshes:
                 if not obj.material_slots:
@@ -1041,7 +1373,18 @@ class ROE_OT_apply_materials(Operator):
                         for obj in meshes
                         if os.path.isfile(bpy.path.abspath(
                             obj.get(SOURCE_FBX_KEY, '')))), '')
-        captured, recovered, unresolved = prepare_source_layouts(meshes, fbx)
+        head = find_head(meshes)
+        if repair_scope == 'FACE' and head is None:
+            self.report({'ERROR'}, "没有找到 head 网格")
+            return {'CANCELLED'}
+        if repair_scope == 'ALL':
+            layout_targets = meshes
+        elif repair_scope == 'FACE':
+            layout_targets = [head]
+        else:
+            layout_targets = [obj for obj in meshes if obj is not head]
+        captured, recovered, unresolved = prepare_source_layouts(
+            layout_targets, fbx)
         head = find_head(meshes)
 
         # 体型字母(pc_g11_... -> g)：贴图目录里有多体型/LD 共享贴图，必须精确匹配
@@ -1056,6 +1399,12 @@ class ROE_OT_apply_materials(Operator):
                 character_prefix = cm.group(1)
             if bt and character_prefix:
                 break
+        if not (bt and character_prefix):
+            path_match = re.search(
+                r'(pc_([a-z])\d+_(?:hd|ld))', fbx.lower())
+            if path_match:
+                character_prefix = character_prefix or path_match.group(1)
+                bt = bt or path_match.group(2)
 
         def pick(*patterns):
             for pat in patterns:
@@ -1065,34 +1414,93 @@ class ROE_OT_apply_materials(Operator):
                         return hit
             return None
 
-        face_tex = pick('pc_%s_nk_face*Albedo*.png' % bt if bt else None,
+        face_tex = pick(*source_role_texture_patterns(head, 'face'),
+                        character_prefix + '_face*Albedo*.png'
+                        if character_prefix else None,
+                        'pc_%s_nk_face*Albedo*.png' % bt if bt else None,
                         'pc_*_nk_face*Albedo*.png', '*face*Albedo*.png')
-        iris_tex = pick(character_prefix + '_eye_iris*Albedo*.png'
+        iris_tex = pick(*source_role_texture_patterns(head, 'eye'),
+                        character_prefix + '_eye_iris*Albedo*.png'
                         if character_prefix else None,
                         'pc_%s_nk_eye_iris*Albedo*.png' % bt if bt else None,
-                        '*eye_iris*Albedo*.png')
-        brow_tex = pick('pc_%s_nk_eyebrow*Albedo*.png' % bt if bt else None,
+                        '*eye_iris*Albedo*.png',
+                        'pc_%s_nk_eyes*Albedo*.png' % bt if bt else None,
+                        'pc_%s_ld_eyes*Albedo*.png' % bt if bt else None)
+        brow_tex = pick(*source_role_texture_patterns(head, 'brow'),
+                        'pc_%s_nk_eyebrow*Albedo*.png' % bt if bt else None,
                         '*eyebrow*Albedo*.png')
-        hair_tex = pick('pc_%s_nk_hair*Albedo*.png' % bt if bt else None,
+        hair_tex = pick(character_prefix + '_hair*Albedo*.png'
+                        if character_prefix else None,
+                        'pc_%s_nk_hair*Albedo*.png' % bt if bt else None,
                         'pc_%s_*hair*Albedo*.png' % bt if bt else None,
                         '*hair*Albedo*.png')
+        baked_face_strokes = bt in {'i', 'j'} and not brow_tex
         print('[mat] textures: face=%s iris=%s brow=%s hair=%s' %
               (face_tex, iris_tex, brow_tex, hair_tex))
+        if baked_face_strokes:
+            print('[mat] i/j-family eyebrows/eyeliner are baked into face Albedo; '
+                  'untextured stroke geometry will stay transparent')
 
         no_tex = []
-        for o in meshes:
-            if o is head:
-                continue
-            no_tex.extend(apply_mesh_materials(
-                o, tex_dir, face_tex, hair_tex,
-                skin_saturation=p.skin_saturation))
+        processed_slots = 0
+        if repair_scope in {'ALL', 'BODY', 'WING'}:
+            for o in meshes:
+                if o is head:
+                    continue
+                slot_filter = None
+                if repair_scope == 'BODY':
+                    slot_filter = (
+                        lambda obj, index, name: not is_wing_slot(
+                            obj, index, name))
+                elif repair_scope == 'WING':
+                    slot_filter = is_wing_slot
+
+                source_names = source_material_names(o)
+                slot_count = max(
+                    len(source_names),
+                    max((poly.material_index for poly in o.data.polygons),
+                        default=0) + 1,
+                    1,
+                )
+                padded_names = source_names + [''] * (
+                    slot_count - len(source_names))
+                selected_slots = sum(
+                    1 for index, source_name in enumerate(padded_names)
+                    if slot_filter is None
+                    or slot_filter(o, index, source_name))
+                if not selected_slots:
+                    continue
+                processed_slots += selected_slots
+                no_tex.extend(apply_mesh_materials(
+                    o, tex_dir, face_tex, hair_tex,
+                    skin_saturation=p.skin_saturation,
+                    slot_filter=slot_filter))
+
+        if repair_scope in {'BODY', 'WING'}:
+            label = "身体/衣装" if repair_scope == 'BODY' else "翅膀"
+            p.diagnostic_report = (
+                "%s修复: %d 个材质槽，恢复 %d，未恢复 %d，缺贴图 %d"
+                % (label, processed_slots, len(recovered), len(unresolved),
+                   len(no_tex)))
+            if repair_scope == 'WING' and not processed_slots:
+                self.report({'INFO'}, "没有识别到 wing/wings 翅膀材质槽，未修改模型")
+            elif no_tex:
+                self.report({'WARNING'},
+                            "%s修复完成，但这些槽没找到贴图: %s"
+                            % (label, ', '.join(no_tex)))
+            else:
+                self.report({'INFO'}, "%s修复完成: %d 个材质槽"
+                            % (label, processed_slots))
+            return {'FINISHED'}
 
         if head is None:
             self.report({'WARNING'}, "没找到 head 网格(名称或 Eyeball 顶点组均未匹配)，只处理了 body/hair")
             return {'FINISHED'}
-        if not (face_tex and iris_tex and brow_tex):
+        if not (face_tex and iris_tex and (brow_tex or baked_face_strokes)):
             missing = [name for name, path in (('face', face_tex), ('eye_iris', iris_tex),
-                                               ('eyebrow', brow_tex)) if not path]
+                                               ('eyebrow', brow_tex))
+                       if not path and not (name == 'eyebrow'
+                                            and baked_face_strokes)]
             self.report({'ERROR'}, "缺少贴图: %s；可选择 _textures 或角色导出根目录" % ', '.join(missing))
             return {'CANCELLED'}
 
@@ -1108,9 +1516,13 @@ class ROE_OT_apply_materials(Operator):
             center=(p.iris_center_u, p.iris_center_v),
             radius_inner=p.iris_radius_inner,
             radius_outer=p.iris_radius_outer))
-        me.materials.append(stroke_mat(
-            'lash', brow_tex, p.lash_alpha_gain, p.lash_darken))
-        me.materials.append(stroke_mat('brow', brow_tex))
+        if brow_tex:
+            me.materials.append(stroke_mat(
+                'lash', brow_tex, p.lash_alpha_gain, p.lash_darken))
+            me.materials.append(stroke_mat('brow', brow_tex))
+        else:
+            me.materials.append(transparent_mat('lash'))
+            me.materials.append(transparent_mat('brow'))
         me.materials.append(transparent_mat('eye_overlay'))
         cls = apply_head_region_overrides(
             head, classify_head(head, source_head_names, source_head_indices))
@@ -1121,14 +1533,17 @@ class ROE_OT_apply_materials(Operator):
         me.update()
         print('[mat] head=%s slots=%s' % (head.name, counts))
         p.diagnostic_report = (
-            "ROE: %d 网格，恢复 %d，未恢复 %d，缺贴图 %d"
-            % (len(meshes), len(recovered), len(unresolved), len(no_tex)))
+            "%s: %d 网格，恢复 %d，未恢复 %d，缺贴图 %d"
+            % ("脸部修复" if repair_scope == 'FACE' else "ROE",
+               len(meshes), len(recovered), len(unresolved), len(no_tex)))
         if no_tex:
             self.report({'WARNING'},
                         "完成，但这些网格没找到贴图(导出会是 missing.png): %s" % ', '.join(no_tex))
         else:
             detail = "；自动恢复 %d 个旧网格" % len(recovered) if recovered else ""
-            self.report({'INFO'}, "材质完成(head 已分 5 槽)%s" % detail)
+            message = ("脸部修复完成(head 已分 5 槽)" if repair_scope == 'FACE'
+                       else "材质完成(head 已分 5 槽)")
+            self.report({'INFO'}, "%s%s" % (message, detail))
         return {'FINISHED'}
 
 
@@ -1206,14 +1621,28 @@ class ROE_OT_repair_eyes(Operator):
                 body_type = prefix_match.group(2)
                 if 'head' in re.split(r'[_\W]+', name):
                     break
+        if not (body_type and character_prefix):
+            identity_source = bpy.path.abspath(p.fbx_path) if p.fbx_path else ''
+            if not identity_source:
+                identity_source = bpy.path.abspath(
+                    head.get(SOURCE_FBX_KEY, ''))
+            path_match = re.search(
+                r'(pc_([a-z])\d+_(?:hd|ld))', identity_source.lower())
+            if path_match:
+                character_prefix = character_prefix or path_match.group(1)
+                body_type = body_type or path_match.group(2)
 
         iris_tex = None
-        patterns = (
+        patterns = source_role_texture_patterns(head, 'eye') + (
             character_prefix + '_eye_iris*Albedo*.png'
             if character_prefix else None,
             'pc_%s_nk_eye_iris*Albedo*.png' % body_type
             if body_type else None,
             '*eye_iris*Albedo*.png',
+            'pc_%s_nk_eyes*Albedo*.png' % body_type
+            if body_type else None,
+            'pc_%s_ld_eyes*Albedo*.png' % body_type
+            if body_type else None,
         )
         for pattern in patterns:
             if pattern:
@@ -1648,7 +2077,7 @@ class ROE_OT_export_xps(Operator):
                     for q in part.data.polygons:
                         q.material_index = 0
                     if is_roe:
-                        rg = '7' if 'hair' in o.name.lower() else '5'
+                        rg = roe_xps_render_group(o, slot_index, pm)
                     else:
                         rg = '7' if material_uses_alpha(pm) else '5'
                     suffix = '-slot%d' % slot_index if len(used_slots) > 1 else ''
@@ -1663,6 +2092,9 @@ class ROE_OT_export_xps(Operator):
                     for idx, (xname, rg) in self.HEAD_SLOTS.items():
                         if idx not in used_slots:
                             continue
+                        pm = head.material_slots[idx].material
+                        if material_is_transparent_only(pm):
+                            continue
                         part = head.copy(); part.data = head.data.copy()
                         context.collection.objects.link(part)
                         bm = bmesh.new()
@@ -1673,7 +2105,6 @@ class ROE_OT_export_xps(Operator):
                         bm.to_mesh(part.data)
                         bm.free()
                         part.data.update()
-                        pm = head.material_slots[idx].material
                         img = baked if idx == 1 else diffuse_image(pm)
                         m = simple_export_mat(xname, img, pm)
                         part.data.materials.clear()
@@ -1826,6 +2257,13 @@ class ROE_PT_panel(Panel):
         row = layout.row(align=True)
         row.operator('roe.diagnose_model', icon='VIEWZOOM')
         row.operator('roe.apply_materials', icon='MATERIAL')
+        repair = layout.row(align=True)
+        operator = repair.operator('roe.apply_materials', text="修复脸部")
+        operator.repair_scope = 'FACE'
+        operator = repair.operator('roe.apply_materials', text="修复身体")
+        operator.repair_scope = 'BODY'
+        operator = repair.operator('roe.apply_materials', text="修复翅膀")
+        operator.repair_scope = 'WING'
         layout.operator('roe.repair_eyes', icon='HIDE_OFF')
         report = layout.box()
         report.label(text="最近检查")

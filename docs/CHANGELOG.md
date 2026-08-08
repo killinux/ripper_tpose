@@ -14,6 +14,143 @@
 
 ---
 
+## 2026-08-02 — ROE XPS Tools v1.1.12 / i03、i04 脸部贴图兼容
+
+### 修复与兼容性
+
+- 修复 i03/i04 点击材质准备或“修复脸部”后仍没有脸部贴图的问题。i 体型资源没有
+  `pc_i_nk_eye_iris_rgbx_Albedo.png` 和 `pc_i_nk_eyebrow_rgbx_Albedo.png`；旧逻辑把三张
+  head 贴图全部视为必需项，因此在真正设置 face 材质之前取消整个操作。
+- i 体型现在只在独立虹膜图缺失时回退到实际存在的
+  `pc_i_ld_eyes_rgbx_Albedo.png`。该回退排在标准 `eye_iris` 之后，f/g 等已有高清虹膜
+  资源的旧角色不会改变。
+- face 与 hair 增加角色专属前缀优先级：i04 使用 `pc_i04_hd_face/hair`，i03 因没有
+  角色专属 face/hair 而继续使用 `pc_i_nk_face/hair`。共享图仍是精确角色图未命中后的
+  兼容回退。
+- i03/i04 的眉毛与眼线已经烘进 face Albedo，而独立 `pc_i_nk_eyebrow` 几何没有对应
+  Albedo。仅 i 体型允许该贴图缺失，相关 stroke 材质保持透明；XPS 导出同时跳过任何
+  纯透明 head 槽，不再生成 `lash_diffuse.png` 占位片。其他体型缺 eyebrow 时仍报错。
+
+### 使用与验证
+
+1. 覆盖安装插件并彻底重启 Blender 3.6，确认版本为 `1.1.12`。
+2. 已打开的 i03/i04 场景无需重新导入；确认对应 HD FBX 和 `_textures` 后点击
+   **“修复脸部”**。首次导入仍可使用完整的“检查并准备材质”。
+3. Blender 3.6.15 实测 i03 face `11616` 面，使用
+   `pc_i_nk_face_rgbx_Albedo.png`；i04 face `12172` 面，使用角色专属
+   `pc_i04_hd_face_rgbx_Albedo.png`；两者 eye 均为 `864` 面并烘焙为
+   `roe_eye_baked.png`。
+4. 两个角色均通过“单独修脸不改身体”、旧的一键流程、XPS 导出和全新场景重导入。
+   新增 `test_i_family_materials_blender.py`；F10、G09、e06、b02、g07、g02 既有回归
+   同时通过。
+
+## 2026-08-02 — ROE XPS Tools v1.1.11 / F10 脸部材质与分区修复按钮
+
+### 修复与新增
+
+- 修复 F10 的脸部材质消失。F10 的 head 在同一连通块内跨越 `pc_f_nk_face` 与
+  `pc_f_nk_tears` 原始材质边界；旧版按连通块判断时把 11,596 个脸部面误归为透明
+  `eye_overlay`。现在只要 FBX 同时提供明确的 face 与眼部附属槽，就优先按每个面的
+  原始材质索引保留 face/tears 语义，再对没有明确语义的面使用既有骨骼、UV 和几何兜底。
+- 在“检查并准备材质”下新增 **修复脸部 / 修复身体 / 修复翅膀** 三个按钮：脸部只重建
+  head 五槽；身体只处理非 head、非 wing 的身体/衣装/头发槽；翅膀只处理原始槽名或
+  对象名含独立 `wing/wings[数字]` 词元的槽。F10 没有翅膀时按钮提示未识别并零修改。
+- 原有 **“2. 检查并准备材质”** 完整保留，默认仍一次处理全部材质；“修复眼睛”也保留，
+  用于只重建眼球的更窄场景。分区按钮共用相同贴图匹配和原始槽缓存，不另造角色特例。
+- 新增 [ROE Blender 材质兼容避坑手册](roe-material-pitfalls.md)，集中记录 F10、G09、
+  e06、b02、g07、g02、插件重启、重复 FBX、输出目录清理、原始槽缓存和 XPS 重导验证
+  等已确认问题，并固定以后修改材质逻辑时必须执行的最低回归矩阵。
+
+### 兼容性与验证
+
+- Blender 3.6.15 实测 F10：face/eye/lash/brow/overlay 从错误的
+  `4148/864/900/228/11596` 恢复为 `15354/864/900/228/390`；face 使用
+  `pc_f_nk_face_rgbx_Albedo.png`。单独修脸时身体材质和面索引不变，单独修身体时头部
+  不变，单独修翅膀为零修改。
+- F10 通过旧的一键流程导出并重新导入 XPS：`5_face` 为 15,354 面并加载正确脸贴图，
+  `5_eye` 为 864 面并加载 `roe_eye_baked.png`。
+- G09 实机回归通过：脸部分槽仍为 `13626/864/660/228/548`，身体按钮不改两组翅膀，
+  翅膀按钮不改 body/skin，最终 XPS render group 仍为 `5/5/7/7`。
+- e06 缺失绑定集成测试、g07 多图集、g02 Albedo/Abedo、b02 眼部语义和全部现有 Blender
+  回归测试通过；v1.1.10 的临时 FBX bind 修复未改动。
+
+### 使用
+
+1. 覆盖安装插件并彻底重启 Blender 3.6，确认版本为 `1.1.11`。
+2. F10 已导入场景只需确认原 FBX 与 `f10\_textures` 路径，点击 **“修复脸部”**；无需
+   重新修身体。新导入角色仍可继续使用原来的“一键准备材质”。
+3. 以后只有单一区域异常时优先点对应按钮；不确定或首次导入时仍点完整准备按钮。
+
+## 2026-08-02 — ROE XPS Tools v1.1.10 / e06 FBX 缺失绑定兼容
+
+### 修复与兼容性
+
+- 修复 e06 HD FBX 在 Blender 3.6 导入时因 `wp_e_06` 缺少骨架绑定矩阵而触发
+  `KeyError: Root` 的问题。旧流程会在异常后留下 4 个无材质网格和 1 个未完成骨架；
+  这些对象只是导入半成品，不能继续准备材质或导出。
+- 插件仅在 Blender FBX 导入器已把网格归入骨架、但该网格没有 `armature_setup` 时，
+  使用网格世界矩阵和骨架 bind matrix 补齐缺项。已有绑定绝不覆盖；补丁只在本次
+  `bpy.ops.import_scene.fbx` 调用期间生效，完成或异常后都会恢复 Blender 原方法。
+- 主“1. 导入 FBX”和旧场景从源 FBX 恢复材质分区两条路径共用同一兼容入口；不依赖
+  修改 Blender 安装目录。若新版 Blender 不暴露 3.6 的内部辅助类，插件会退回其原生
+  FBX 操作，不施加版本相关补丁。
+
+### 使用与验证
+
+1. 覆盖安装插件并彻底重启 Blender 3.6，确认版本为 `1.1.10`；删除异常导入留下的
+   e06 半成品。
+2. e06 选择带 `(1)` 的完整文件
+   `pc_e06_hd (1)\FBX_GameObjects\pc_e06_hd\pc_e06_hd.fbx`，贴图目录选择
+   `e06\_textures`，再按正常三步流程操作。无 `(1)` 的同名副本本身缺少材质分区。
+3. Blender 3.6.15 实机验证得到 169 根骨骼；body 2 个原始槽、head 4 个原始槽、
+   hair/weapon 各 1 槽，武器保留 `ball_scale` 权重和 Armature 修改器；材质准备后 head
+   正常重建为 5 槽。
+4. 新增 `test_fbx_missing_bind_compat_blender.py`，覆盖缺项补齐、正常绑定不覆盖、重复
+   调用幂等、临时补丁恢复和 e06 完整导入/材质准备。既有 G07、B02、G02、G09 四组
+   Blender 回归测试同时通过。
+
+## 2026-08-02 — ROE XPS Tools v1.1.9 / g09 Blender 3.6 翅膀视口修复
+
+### 修复与兼容性
+
+- 根据 Blender 3.6 实际截图补充修复：g09 的两组翅膀材质在准备阶段改用 Alpha Clip，
+  避免 Alpha Hashed 在重叠羽毛片上显示黑色散点和卡片状噪声；XPS 导出仍使用 RG7。
+- 复用严格的 g09 槽识别函数，同时限定 `pc_g09_hd/ld_body` 对象名与
+  `pc_g09_hd/ld_wing(s)[数字]` 原始槽名。非 g09 角色、普通 body/skin、头发和手工
+  覆盖的历史分支不改变。
+- 回归测试额外固定 Blender 材质模式：g09 `body/skin=HASHED`、
+  `wings/wings2=CLIP`，并继续验证非 g09 wing 不进入特例；测试还会模拟旧场景中主翼
+  错挂 `wings2 + HASHED`，确认再次准备材质能够原地修复。
+
+### 使用
+
+1. 覆盖安装插件并彻底重启 Blender 3.6，确认版本为 `1.1.9`。
+2. 对已经打开的旧 g09 场景重新执行“2. 检查并准备材质”；旧材质数据不会仅靠导入
+   插件文件自动刷新。之后再执行“3. 导出 XPS(.mesh)”。
+
+## 2026-08-02 — ROE XPS Tools v1.1.8 / g09 翅膀透明材质
+
+### 修复
+
+- 修复 g09 的 `pc_g09_hd_wings` 与 `pc_g09_hd_wings2` 在 XPS 导出后出现黑底、
+  硬边或实心羽毛片的问题。两槽与 body/skin 共用 `pc_g09_hd_body` 网格，旧逻辑把
+  所有 ROE body 槽统一导为不透明 RG5，因而丢失翅膀 Albedo 的 alpha。
+- 修复贴图前缀歧义：`pc_g09_hd_wings*Albedo*.png` 会同时命中 `wings` 与
+  `wings2`，且旧排序优先选择 `wings2`。现在先按完整的 `_rgbx_Albedo` 文件干精确
+  查找，主翼和独立羽毛片分别使用自己的图集。
+- 新增按原始材质槽名选择 XPS render group：普通 body/skin 保持 RG5；仅 g09 HD/LD
+  的 `wing`、`wings`、`wings2` 等槽在材质确实使用 alpha 时导为 RG7；头发仍为 RG7。
+  角色 ID 与 body 对象名采用双重限定，其他旧角色即使有同名 wing 槽也维持原来的 RG5。
+- 新增 Blender 回归测试 `test_xps_alpha_slots_blender.py`，固定 g09 的四槽期望为
+  `body=5`、`skin=5`、`wings2=7`、`wings=7`，并验证非 g09 的 alpha wing 槽仍为
+  RG5、没有 alpha 的 g09 wing 也不改变。
+
+### 使用
+
+1. 覆盖安装 `scripts/riseoferos/roe_xps_addon.py` 并重启 Blender，版本应为 `1.1.8`。
+2. 现有 g09 场景无需重新导入；重新执行“2. 检查并准备材质”，再执行
+   “3. 导出 XPS(.mesh)”。
+
 ## 2026-08-02 — Throne of Desire X-Legend NFS/Gamebryo 调研与样本验证
 
 ### 新增与修正
