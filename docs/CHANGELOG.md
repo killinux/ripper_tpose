@@ -14,6 +14,26 @@
 
 ---
 
+## 2026-08-08 — Venus Vacation PRISM 原始 RDB/FDATA 解包
+
+### 新增
+
+- 新增 `scripts/venusvacationprism/prism_rdb.py`，只读扫描 KTGL FDATA，并解码该游戏
+  `0x00400000` 标志对应的 16 KiB 分块 Zlib 数据；块边界、Zlib 流和最终尺寸均严格校验。
+- 新增 `list_models.py`，输出 JSON、CSV、Markdown 三种清单；`--probe` 会补充 G1M
+  版本、区块、骨骼数以及角色候选分类。
+- 新增 `export_model.py`，可按清单一基索引或十六进制 KTID 导出原生 G1M 和来源
+  manifest；可选调用 `eArmada8/gust_stuff` 输出 glTF/BIN。第三方转换失败不会删除已还原 G1M。
+
+### 使用与验证
+
+- Steam 安装实扫 1,527 个 G1M/1,527 个唯一 ID，分布在 69 个 FDATA 包；全部深度探测
+  成功，零解包错误。压缩内容共 1,247,942,069 字节，解压后共 2,242,373,324 字节。
+- 按骨骼数筛出 71 个角色组件候选；该数字包含身体、脸、服装和共用件，不代表角色人数。
+- 实际导出索引 836、KTID `0x7ce546e8`：G1M 5,252,712 字节、924 个骨骼节点、
+  17 个网格。glTF 转换及 Blender 3.6.15 后台导入/渲染通过，几何为完整女性基础身体。
+- 新增 6 项单元测试，覆盖多块解压、尾部/尺寸损坏、G1M 元数据和 FDATA 实际读取。
+
 ## 2026-08-02 — ROE XPS Tools v1.1.12 / i03、i04 脸部贴图兼容
 
 ### 修复与兼容性
