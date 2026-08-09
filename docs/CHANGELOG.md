@@ -14,6 +14,28 @@
 
 ---
 
+## 2026-08-09 — Venus Vacation PRISM 角色名称对应表
+
+### 新增
+
+- 新增 `scripts/venusvacationprism/map_characters.py`，输出 JSON、CSV、Markdown 三种
+  “角色—模型”对应表；支持用中文名、英文名或内部代码筛选角色。
+- 在 `prism_rdb.py` 实现 KTGL RDB 名称哈希，并确认六名角色的内部代码为
+  `MIS/FON/ELS/TAM/NNM/HON`。只有 G1M 与至少两个 MTL/GRP/OID 同名伴随资源均实际存在时，
+  才接受该名称，避免把单个 32 位哈希碰撞误报为角色模型。
+- `export_model.py` 新增 `--name`，可直接使用对应表中的 `FACE_FON_000` 等内部基名导出，
+  原有 `--index` 和 `--id` 行为不变。
+
+### 结果与验证
+
+- 本机 Steam 安装确认 35 个具备完整哈希证据链的角色 G1M：海咲 8、菲欧娜 6、
+  伊莉丝 6、环 5、七海 5、穗香 5。它们包含脸部、头发，以及海咲/七海的
+  `COS_*_001` 服装/身体分件；未命名的共用基础身体不作无证据归属。
+- 纠正仅凭轮廓作出的候选推测：索引 837 / `0xbcea6c57` 是海咲
+  `COS_MIS_001`，索引 839 / `0x16a61601` 是七海 `COS_NNM_001`。
+- 实际按 `--name FACE_FON_000` 成功导出索引 860 / `0xa359e61c`，并通过 9 项单元测试；
+  名称哈希测试同时覆盖公开的 `HON_HAIR_033.GRP` 向量和 PRISM 的 `COS_MIS_001.G1M`。
+
 ## 2026-08-08 — Venus Vacation PRISM 原始 RDB/FDATA 解包
 
 ### 新增

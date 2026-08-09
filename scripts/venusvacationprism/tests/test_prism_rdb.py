@@ -20,7 +20,10 @@ from prism_rdb import (  # noqa: E402
     iter_fdata_entries,
     parse_g1m_metadata,
     read_asset,
+    rdb_name_hash,
 )
+
+from map_characters import candidate_basenames, selected_characters  # noqa: E402
 
 
 def encode_prism_blocks(data: bytes) -> bytes:
@@ -57,6 +60,21 @@ class PrismBlockTests(unittest.TestCase):
         encoded = encode_prism_blocks(b"test") + b"x"
         with self.assertRaisesRegex(PrismArchiveError, "non-zero bytes"):
             decompress_prism_blocks(encoded)
+
+
+class RdbNameHashTests(unittest.TestCase):
+    def test_matches_known_koei_tecmo_resource(self) -> None:
+        self.assertEqual(rdb_name_hash("HON_HAIR_033", "grp"), 0x0F055C71)
+
+    def test_matches_prism_character_resource(self) -> None:
+        self.assertEqual(rdb_name_hash("COS_MIS_001", ".g1m"), 0xBCEA6C57)
+
+    def test_character_filter_and_candidates(self) -> None:
+        selected = selected_characters(["菲欧娜", "NNM"])
+        self.assertEqual([item["code"] for item in selected], ["FON", "NNM"])
+        names = {name for _, _, name in candidate_basenames("FON")}
+        self.assertIn("FACE_FON_000", names)
+        self.assertIn("HAIR_FON_101", names)
 
 
 class G1MMetadataTests(unittest.TestCase):

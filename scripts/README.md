@@ -8,7 +8,7 @@
 | FINAL FANTASY VII REBIRTH | Unreal IoStore (`.utoc/.ucas`) | [`final/`](final/) | `final\prepare_fmodel.ps1` |
 | Stellar Blade | Unreal IoStore (`.utoc/.ucas`) | [`stellarblade/`](stellarblade/) | `stellarblade\validate_eve.py` |
 | Throne of Desire | X-Legend NFS + Gamebryo NIF/KFM | [`throneofdesire/`](throneofdesire/) | `throneofdesire\extract_nfs.py` |
-| Venus Vacation PRISM | KTGL RDB/FDATA + G1M | [`venusvacationprism/`](venusvacationprism/) | `venusvacationprism\list_models.py` |
+| Venus Vacation PRISM | KTGL RDB/FDATA + G1M | [`venusvacationprism/`](venusvacationprism/) | `venusvacationprism\map_characters.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -35,8 +35,9 @@ Throne of Desire 不使用 Unreal/Unity。先用 `extract_nfs.py` 读取
 X-Legend 查看器或 NIF 转换器。当前索引结构、资产统计和 Blender 3.6 限制见
 [`docs/throne-of-desire-extraction.md`](../docs/throne-of-desire-extraction.md)。
 
-Venus Vacation PRISM 使用 KTGL RDB/FDATA。`list_models.py` 会生成 G1M 清单，
-`export_model.py` 按一基索引或 KTID 还原单个原生 G1M；格式说明与可选 glTF 转换见
+Venus Vacation PRISM 使用 KTGL RDB/FDATA。`list_models.py` 会生成全量 G1M 清单，
+`map_characters.py` 通过名称哈希生成六名角色的已确认分件对应表，`export_model.py` 可按
+一基索引、KTID 或恢复的内部名称还原单个原生 G1M；格式说明与可选 glTF 转换见
 [`venusvacationprism/README.md`](venusvacationprism/README.md)。
 
 ## 开发辅助

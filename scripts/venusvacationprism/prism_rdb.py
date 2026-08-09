@@ -13,6 +13,7 @@ RDB_MAGIC = 0x4B52445F  # bytes: _DRK
 RDB_ENTRY_MAGIC = 0x4B524449  # bytes: IDRK
 FDATA_MAGIC = 0x4B524450  # bytes: PDRK
 PRISM_BLOCK_ZLIB = 0x00400000
+RDB_HASH_KEY = 0x1F
 
 G1M_TYPE = 0x563BDEF1
 G1T_TYPE = 0xAFBEC60C
@@ -33,6 +34,31 @@ _RDB_ENTRY = struct.Struct("<IIqqqIIII")
 
 class PrismArchiveError(RuntimeError):
     """Raised when a PRISM archive is missing or structurally invalid."""
+
+
+def rdb_name_hash(name: str, extension: str, prefix: str = "R_") -> int:
+    """Return the KTGL RDB KTID for one internal resource basename.
+
+    ``name`` does not include an extension. The extension is normalized to the
+    uppercase form used by Koei Tecmo's archive hasher.
+    """
+    extension = extension.removeprefix(".").upper()
+    formatted = (
+        (prefix + extension).encode("utf-8")
+        + b"\xef\xbc\xbb"
+        + name.encode("utf-8")
+        + b"\xef\xbc\xbd"
+    )
+    if not formatted:
+        raise ValueError("RDB hash input cannot be empty")
+    value = formatted[0] * RDB_HASH_KEY
+    key = RDB_HASH_KEY
+    for byte in formatted[1:]:
+        signed_byte = byte if byte < 0x80 else byte - 0x100
+        state = key
+        key = (key * RDB_HASH_KEY) & 0xFFFFFFFF
+        value = (value + RDB_HASH_KEY * state * signed_byte) & 0xFFFFFFFF
+    return value
 
 
 @dataclasses.dataclass(frozen=True)
