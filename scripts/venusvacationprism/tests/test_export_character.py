@@ -99,6 +99,79 @@ class CharacterExportEntryTests(unittest.TestCase):
         self.assertTrue(result["passed"])
         self.assertTrue((directory / "character_profile_regression.json").is_file())
 
+    def test_body_skin_link_count_is_a_checked_regression(self) -> None:
+        profile = get_character_profile("Fiona")
+        directory = self.fixture_directory(
+            "_export_character_body_skin_fixture",
+            ("report.json", "character_profile_regression.json", "model.blend"),
+        )
+        report_path = directory / "report.json"
+        model = directory / "model.blend"
+        model.write_bytes(b"BLENDER")
+        expected = profile.expected
+        report = {
+            "formats_requested": ["blend"],
+            "identity_alignment": True,
+            "assembly_stats": {
+                "mesh_objects": expected.mesh_objects,
+                "armatures": expected.armatures,
+                "vertices": expected.vertices,
+                "polygons": expected.polygons,
+                "materials": expected.materials,
+            },
+            "head_fit": {"face_hair_bounds_intersect": True},
+            "neck_fit": {"face_body_vertical_bounds_overlap": 1.0},
+            "components": {
+                role: {
+                    "source": {
+                        "root_nodes_identity": True,
+                        "position_accessors_all_vec3": True,
+                        "images": count,
+                        "external_image_files_present": count,
+                    },
+                    **(
+                        {
+                            "mesh_names": [
+                                f"BODY_Mesh_{index}"
+                                for index in range(expected.body_mesh_objects or 0)
+                            ],
+                            "rig_namespace": {
+                                "armatures": [{
+                                    "linked_meshes": expected.body_skin_linked_meshes
+                                }]
+                            },
+                        }
+                        if role == "BODY"
+                        else {}
+                    ),
+                }
+                for role, count in (("BODY", 54), ("FACE", 69), ("HAIR", 14))
+            },
+            "outputs": {"blend": str(model)},
+            "blend_pack_audit": {
+                "images_used": expected.blend_used_images,
+                "used_images_packed": expected.blend_packed_images,
+                "used_images_unpacked": [],
+            },
+            "previews_skipped": True,
+        }
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+        self.assertTrue(validate_baseline(profile, report_path)["passed"])
+
+        report["components"]["BODY"]["rig_namespace"]["armatures"][0][
+            "linked_meshes"
+        ] = 31
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaisesRegex(Exception, "verified Fiona baseline"):
+            validate_baseline(profile, report_path)
+        result = json.loads(
+            (directory / "character_profile_regression.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["checks"]["body_skin_linked_meshes"]["passed"])
+
     def test_nonempty_output_requires_resume(self) -> None:
         directory = self.fixture_directory(
             "_export_character_output_fixture", ("keep.txt",)

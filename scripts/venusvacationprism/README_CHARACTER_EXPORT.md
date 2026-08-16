@@ -36,6 +36,8 @@ G1M 和全部纹理，再通过 Blender 生成绑定的 Blend、FBX 与 GLB。�
 |---|---:|---|
 | `Honoka` / `穗香` / `HON` | index 1479 | 可自动导出 |
 | `Nanami` / `七海` / `NNM` | index 722 | 可自动导出 |
+| `Fiona` / `菲欧娜` / `FON` | index 857 | 可自动导出 |
+| `Tamaki` / `环` / `TAM` | index 842 | 可自动导出 |
 | `Misaki` / `海咲` / `MIS` | index 837 | 已登记，暂未开放 |
 | `Elise` / `伊莉丝` / `ELS` | index 834 | 需要兼容处理，暂未开放 |
 
@@ -56,6 +58,24 @@ G1M 和全部纹理，再通过 Blender 生成绑定的 Blend、FBX 与 GLB。�
 .\scripts\venusvacationprism\export_character.ps1 `
   --name 穗香 `
   --output "D:\venusvacationprism_exports\honoka\complete_auto" `
+  --formats blend,fbx,glb
+```
+
+导出菲欧娜：
+
+```powershell
+.\scripts\venusvacationprism\export_character.ps1 `
+  --name 菲欧娜 `
+  --output "D:\venusvacationprism_exports\fiona\complete_auto" `
+  --formats blend,fbx,glb
+```
+
+导出环：
+
+```powershell
+.\scripts\venusvacationprism\export_character.ps1 `
+  --name 环 `
+  --output "D:\venusvacationprism_exports\tamaki\complete_auto" `
   --formats blend,fbx,glb
 ```
 
@@ -133,11 +153,18 @@ python -m pip install -r scripts\venusvacationprism\requirements-character-expor
 
 - BODY、FACE、HAIR 均保持原始 identity 对齐；
 - POSITION 为 glTF 合法的 VEC3，且所有使用中图片存在；
-- 头发与脸部包围盒相交，颈部距离符合角色基线；
+- 头发与脸部包围盒相交；有数值颈部基线的角色会严格比较距离，Fiona 的高领隐藏接口则按
+  已记录的四视图视觉基线验证；
 - Blend 图片全部打包；
 - FBX 回读几何、骨架、边界、材质和纹理完整；
 - GLB 回读网格、面数、骨架、材质和边界完整；
 - 最终目录中每个交付文件的 SHA-256 可复验。
 
 Nanami BODY722 使用已经验证的 dry/static 便携材质近似；原始湿润/DT2 条件 pass 仍保留在
-原始资源和 `FULL_SOURCE` glTF 中。Misaki 与 Elise 当前不会由一键入口输出不完整成品。
+原始资源和 `FULL_SOURCE` glTF 中。Fiona BODY857 的高领遮住未焊接的颈部接口；40 个 BODY
+网格中有 32 个连接骨架，另 8 个 NUN 布料网格（12,813 顶点）保留为完整静态 bind pose，
+游戏内布料模拟没有被还原。Tamaki BODY842 的纹理槽 26/27/32 在当前安装中没有物理 G1T，
+但它们没有可见材质引用，脚本只会在
+核对精确槽位、句柄和 G1T ID 后剪除。左裤腿 NUN 面板以完整静态几何保留，并且是该回退新增
+解绑的唯一网格；转换后 32 个 BODY 网格中有 25 个连接身体骨架，mesh 19–24 原本就是静态
+转换输出。Misaki 与 Elise 当前不会由一键入口输出不完整成品。

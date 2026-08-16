@@ -99,6 +99,8 @@ scripts\venusvacationprism\export_character.ps1 `
 
 - `Honoka` / `穗香` / `HON`
 - `Nanami` / `七海` / `NNM`
+- `Fiona` / `菲欧娜` / `FON`
+- `Tamaki` / `环` / `TAM`
 
 Misaki 与 Elise 的来源组合也已记录，但前者的旧材质流程尚待迁移，后者有 24 个游戏运行时
 纹理句柄无法从安装包的 OBJDB 静态恢复；脚本会明确拒绝，而不是输出一个看似成功但材质错误
@@ -126,6 +128,15 @@ python -m pip install -r scripts\venusvacationprism\requirements-character-expor
 
 Nanami 的默认衣装使用已验证的 dry/static 近似：布料 UV1、slot21/22 overlay、slot23
 局部法线，以及排除 wet/DT2 条件 pass。它只应用于 BODY722 profile，不会误套到其他模型。
+
+Fiona 使用 BODY857、FACE_FON_001 与 HAIR_FON_001；高领会遮住三套独立组件之间未焊接的
+颈部接口。BODY857 的 40 个网格中有 32 个连接骨架，另外 8 个 NUN 布料网格以完整静态
+bind pose 保留，游戏内布料模拟没有被还原。Tamaki 使用 BODY842、FACE_TAM_001 与
+HAIR_TAM_001。BODY842 当前安装缺少的
+纹理槽 26/27/32 未被任何可见 PBR 材质引用，因此会在严格验证后剪除；其左裤腿 NUN 面板
+保留完整静态几何，但因源物理 driver 索引不是骨骼权重，不会随之后的骨骼动画变形。它是
+该回退新增解绑的唯一网格；转换后 32 个 BODY 网格中有 25 个连接身体骨架，mesh 19–24
+原本就是静态转换输出。
 
 ## 4. 导出一个原生模型
 

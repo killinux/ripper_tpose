@@ -97,6 +97,8 @@ class RegressionBaseline:
     glb_readback_polygons: int | None = None
     neck_min_distance: float | None = None
     neck_vertices_within_0_001: int | None = None
+    body_mesh_objects: int | None = None
+    body_skin_linked_meshes: int | None = None
     visual_assertions: tuple[str, ...] = ()
 
 
@@ -480,6 +482,200 @@ CHARACTER_PROFILES: Mapping[str, CharacterProfile] = MappingProxyType({
                 "no black/white pull artifact",
                 "no triangle normal mosaic",
                 "no visible neck seam",
+            ),
+        ),
+    ),
+    "fiona": CharacterProfile(
+        key="fiona",
+        name_en="Fiona",
+        name_zh="菲欧娜",
+        code="FON",
+        aliases=("fiona", "fon", "菲欧娜"),
+        components=MappingProxyType({
+            "BODY": _component(
+                "BODY_FON_CLASSICAL_LOLITA_857", 857, 0xAB6B8248,
+                0x1257E927, 0x045222A0, 0x19477AA5,
+                0x862FCA34, 0x12930165, 54,
+                kind="curated_body"),
+            "FACE": _component(
+                "FACE_FON_001", 1125, 0xDD9A6ABE,
+                0xAFF2DB9D, 0xA1ED1516, 0xB6E26D1B,
+                0x9BF3267E, 0xB02DF3DB, 69),
+            "HAIR": _component(
+                "HAIR_FON_001", 828, 0x784DACC3,
+                0xE356F2A2, 0xD5512C1B, 0xEA468420,
+                0xD511F019, 0xE3920AE0, 14),
+        }),
+        alpha=AlphaProfile(
+            body=(0, 1, 2, 3, 6, 7, 8, 11),
+            face=(1, 4, 5, 6, 8, 9, 10),
+            hair=(0, 1),
+        ),
+        body_postprocess=_frozen({
+            "profile": "fiona_classical_lolita_native_pbr",
+            "resolved_texture_slots": 54,
+            "unresolved_texture_slots": 0,
+            "selection_evidence": (
+                "Fiona-exclusive Classical Lolita visual identity",
+                "FACE_FON_001 and HAIR_FON_001 zero-transform head fit",
+            ),
+            "rejected_face_indices": (860,),
+            "geometry_transform": "identity",
+            "skin_linked_meshes_after_conversion": 32,
+            "static_nun_mesh_indices": (5, 6, 8, 9, 10, 11, 17, 18),
+            "static_nun_vertex_count": 12_813,
+            "game_cloth_simulation_reproduced": False,
+        }),
+        face_postprocess=_frozen({
+            "profile": "derived_iris_overlay",
+            "iris_material_indices": (2, 3),
+        }),
+        support_level=FULL_SUPPORT,
+        automated_export_enabled=True,
+        limitations=(
+            "The high collar hides a non-welded FACE001/BODY857 interface; "
+            "the verified front, side, and back views show no visible gap.",
+            "FACE_FON_000 is deliberately rejected: despite its closer neck-ring "
+            "distance, it sits about 4.41 units too high for every Fiona hairstyle.",
+            "Eight BODY NUN cloth meshes (12,813 vertices) are complete in bind "
+            "pose but static/unbound converter output; 32 of 40 BODY meshes are "
+            "skin-linked, and game-time cloth simulation is not reproduced.",
+            "FBX needs the generated relink sidecar to restore alpha and normals.",
+        ),
+        verified=VerificationStatus(
+            source_assets=True,
+            material_reconstruction=True,
+            blend_roundtrip=True,
+            fbx_roundtrip=True,
+            glb_roundtrip=True,
+            visual_review=True,
+            evidence=(
+                "fiona/complete/SHA256SUMS.txt",
+                "fiona/complete/validation/Fiona_Complete_Rigged_report.json",
+                "fiona/complete/validation/Fiona_delivery_manifest.json",
+            ),
+        ),
+        expected=RegressionBaseline(
+            mesh_objects=78,
+            armatures=3,
+            vertices=281_364,
+            polygons=428_599,
+            materials=25,
+            blend_used_images=65,
+            blend_packed_images=65,
+            output_formats=("blend", "fbx", "glb"),
+            fbx_bounds_tolerance=0.002,
+            glb_readback_vertices=283_178,
+            glb_readback_polygons=428_599,
+            body_mesh_objects=40,
+            body_skin_linked_meshes=32,
+            visual_assertions=(
+                "FACE001 eyes and hairline align at identity",
+                "high collar hides the non-welded neck interface",
+                "clear pupils and transparent hair/eye layers",
+                "Blend and relinked FBX previews match",
+            ),
+        ),
+    ),
+    "tamaki": CharacterProfile(
+        key="tamaki",
+        name_en="Tamaki",
+        name_zh="环",
+        code="TAM",
+        aliases=("tamaki", "tam", "环", "たまき"),
+        components=MappingProxyType({
+            "BODY": _component(
+                "BODY_TAM_SKINNY_DENIM_842", 842, 0x8BAAA1CE,
+                0x50A25411, 0x429C8D8A, 0x5791E58F,
+                0x1132BC8A, 0x50DD6C4F, 33,
+                kind="curated_body"),
+            "FACE": _component(
+                "FACE_TAM_001", 850, 0xA00AAF19,
+                0xF34EAAF8, 0xE548E471, 0xFA3E3C76,
+                0xC4114283, 0xF389C336, 69),
+            "HAIR": _component(
+                "HAIR_TAM_001", 813, 0x3ABDF11E,
+                0x26B2C1FD, 0x18ACFB76, 0x2DA2537B,
+                0xFD300C1E, 0x26EDDA3B, 14),
+        }),
+        alpha=AlphaProfile(
+            body=(),
+            face=(1, 4, 5, 6, 8, 9, 10),
+            hair=(0, 1),
+        ),
+        body_postprocess=_frozen({
+            "profile": "tamaki_skinny_denim_static",
+            "resolved_texture_slots": 30,
+            "unresolved_texture_slots": 3,
+            "unresolved_texture_slot_indices": (26, 27, 32),
+            "unresolved_texture_handles": (
+                0xDFD76BBB, 0xA026470E, 0xFF848649),
+            "unresolved_texture_g1t_ids": (
+                0x3828E790, 0x73FA791D, 0xB8ABCFC2),
+            "unresolved_texture_policy": "prune_if_unreferenced",
+            "static_cloth_meshes": (11,),
+            "static_cloth_vertex_counts": (3_101,),
+            "static_cloth_materials": (1,),
+            "static_cloth_invalid_joint_slots": (6, 7),
+            "static_cloth_invalid_nonzero_lanes": 160,
+            "selection_evidence": (
+                "Tamaki-exclusive Skinny Denim visual identity",
+                "BODY842/FACE_TAM_001 skeleton and neck fit",
+            ),
+            "geometry_transform": "identity",
+        }),
+        face_postprocess=_frozen({
+            "profile": "derived_iris_overlay",
+            "iris_material_indices": (2, 3),
+        }),
+        support_level=FULL_SUPPORT,
+        automated_export_enabled=True,
+        limitations=(
+            "BODY texture slots 26, 27, and 32 map through OBJDB but their G1T "
+            "assets are absent from this installation; they are proven unused by "
+            "portable material semantics and are pruned without fabricated images.",
+            "The 3,101-vertex left trouser NUN panel is complete in bind pose but "
+            "remains static because its physics driver indices are not skeletal "
+            "joint weights. It is the only mesh newly detached by this fallback; "
+            "25 of 32 BODY meshes are skin-linked after conversion, while meshes "
+            "19 through 24 were already static/unbound converter output.",
+            "FBX needs the generated relink sidecar to restore alpha and normals.",
+        ),
+        verified=VerificationStatus(
+            source_assets=True,
+            material_reconstruction=True,
+            blend_roundtrip=True,
+            fbx_roundtrip=True,
+            glb_roundtrip=True,
+            visual_review=True,
+            evidence=(
+                "tamaki/complete/SHA256SUMS.txt",
+                "tamaki/complete/validation/Tamaki_Complete_Rigged_report.json",
+                "tamaki/complete/components/body/cloth_static_fallback_report.json",
+                "tamaki/complete/validation/Tamaki_delivery_manifest.json",
+            ),
+        ),
+        expected=RegressionBaseline(
+            mesh_objects=78,
+            armatures=3,
+            vertices=358_368,
+            polygons=468_659,
+            materials=22,
+            blend_used_images=60,
+            blend_packed_images=60,
+            output_formats=("blend", "fbx", "glb"),
+            fbx_bounds_tolerance=0.002,
+            glb_readback_vertices=362_419,
+            glb_readback_polygons=468_659,
+            neck_min_distance=1.95241373148747e-05,
+            neck_vertices_within_0_001=43,
+            body_mesh_objects=32,
+            body_skin_linked_meshes=25,
+            visual_assertions=(
+                "no visible neck seam",
+                "clear pupils and transparent hair/eye layers",
+                "skinny-denim cloth geometry is complete in bind pose",
+                "Blend and relinked FBX previews match",
             ),
         ),
     ),

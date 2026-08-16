@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Extract and prepare complete PRISM character component assets.
 
-This module is the reusable, non-Blender half of the verified Honoka/Nanami
+This module is the reusable, non-Blender half of the verified character
 pipeline.  A character profile supplies BODY/FACE/HAIR component identities;
 the exporter then recovers each native resource bundle, resolves every KTID
 texture handle through OBJDB, writes G1T/DDS/PNG, converts G1M to glTF, applies
 portable material rules, and performs static structural validation.
 
-The optional ``nanami_body722`` postprocessor is deliberately profile-scoped.
-In particular, clothID 4 is *not* treated as a universal hidden/helper flag.
+The optional body postprocessors are deliberately profile-scoped.  In
+particular, clothID 4 is *not* treated as a universal hidden/helper flag, and
+missing G1T resources are accepted only when a profile records the exact
+slot/handle/resource IDs and the converter proves they are not referenced by
+portable material semantics.
 """
 
 from __future__ import annotations
@@ -714,14 +717,15 @@ def _bake_face_v1_iris(
     Image = _pillow()
     texture_dir = component_dir / "textures"
     outputs: list[dict[str, Any]] = []
+    rows_by_slot = {int(row["slot"]): row for row in texture_rows}
     for material, base_slot, iris_slot in ((2, 25, 26), (3, 35, 36)):
-        if max(base_slot, iris_slot) >= len(texture_rows):
+        if base_slot not in rows_by_slot or iris_slot not in rows_by_slot:
             raise CharacterAssetError(
-                f"{label}: face_v1 needs texture slots 0..{iris_slot}, "
-                f"but KTID contains {len(texture_rows)} slots"
+                f"{label}: face_v1 needs resolved texture slots "
+                f"{base_slot} and {iris_slot}"
             )
-        base_path = component_dir / str(texture_rows[base_slot]["files"]["png"])
-        iris_path = component_dir / str(texture_rows[iris_slot]["files"]["png"])
+        base_path = component_dir / str(rows_by_slot[base_slot]["files"]["png"])
+        iris_path = component_dir / str(rows_by_slot[iris_slot]["files"]["png"])
         with Image.open(base_path) as source:
             base = source.convert("RGBA")
             base.load()
@@ -794,6 +798,156 @@ def _material_texture_semantics(material: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _material_texture_infos(
+    value: Any, path: str = "material"
+) -> Iterable[tuple[str, dict[str, Any]]]:
+    """Yield glTF texture-info dictionaries, including extension textures."""
+
+    if isinstance(value, dict):
+        for key, item in value.items():
+            item_path = f"{path}.{key}"
+            if (
+                isinstance(item, dict)
+                and isinstance(item.get("index"), int)
+                and "texture" in str(key).casefold()
+            ):
+                yield item_path, item
+            yield from _material_texture_infos(item, item_path)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _material_texture_infos(item, f"{path}[{index}]")
+
+
+def _expected_unresolved_textures(
+    policy: Mapping[str, Any], label: str
+) -> dict[int, tuple[int, int]]:
+    """Return exact profile-approved ``slot -> (handle, G1T)`` absences."""
+
+    raw_slots = policy.get("unresolved_texture_slot_indices", ())
+    raw_handles = policy.get("unresolved_texture_handles", ())
+    raw_g1t = policy.get("unresolved_texture_g1t_ids", ())
+    if not raw_slots and not raw_handles and not raw_g1t:
+        return {}
+    try:
+        slots = tuple(int(value) for value in raw_slots)
+        handles = tuple(int(value) for value in raw_handles)
+        g1t_ids = tuple(int(value) for value in raw_g1t)
+    except (TypeError, ValueError) as exc:
+        raise CharacterAssetError(
+            f"{label}: invalid unresolved texture policy"
+        ) from exc
+    if not (len(slots) == len(handles) == len(g1t_ids)):
+        raise CharacterAssetError(
+            f"{label}: unresolved texture slot/handle/G1T lists differ in length"
+        )
+    if len(set(slots)) != len(slots):
+        raise CharacterAssetError(
+            f"{label}: unresolved texture policy contains duplicate slots"
+        )
+    return dict(zip(slots, zip(handles, g1t_ids, strict=True), strict=True))
+
+
+def _prune_unreferenced_texture_slots(
+    component_dir: Path,
+    label: str,
+    unresolved_rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Remove physically absent images after proving no material references them."""
+
+    gltf_path = component_dir / f"{label}.gltf"
+    document = json.loads(gltf_path.read_text(encoding="utf-8"))
+    absent_slots = {int(row["slot"]) for row in unresolved_rows}
+    images = list(document.get("images", []))
+    textures = list(document.get("textures", []))
+    if not absent_slots:
+        return {
+            "absent_slots": [],
+            "fabricated_fallbacks": 0,
+            "passed": True,
+        }
+    if min(absent_slots) < 0 or max(absent_slots) >= len(images):
+        raise CharacterAssetError(
+            f"{label}: absent KTID slot exceeds converter image table"
+        )
+
+    material_uses: list[dict[str, Any]] = []
+    texture_infos: list[dict[str, Any]] = []
+    for material_index, material in enumerate(document.get("materials", [])):
+        for info_path, info in _material_texture_infos(material):
+            texture_index = int(info["index"])
+            if texture_index < 0 or texture_index >= len(textures):
+                raise CharacterAssetError(
+                    f"{label}: material {material_index} references invalid "
+                    f"texture {texture_index}"
+                )
+            source_index = textures[texture_index].get("source")
+            row = {
+                "material": material_index,
+                "path": info_path,
+                "info": info,
+                "texture": texture_index,
+                "slot": source_index,
+            }
+            texture_infos.append(row)
+            if source_index in absent_slots:
+                material_uses.append({key: value for key, value in row.items() if key != "info"})
+    if material_uses:
+        raise CharacterAssetError(
+            f"{label}: absent G1T slots are referenced by materials: {material_uses}"
+        )
+
+    image_remap: dict[int, int] = {}
+    kept_images: list[Any] = []
+    for old_index, image in enumerate(images):
+        if old_index in absent_slots:
+            continue
+        image_remap[old_index] = len(kept_images)
+        kept_images.append(image)
+
+    texture_remap: dict[int, int] = {}
+    kept_textures: list[Any] = []
+    pruned_textures: list[int] = []
+    for old_index, texture in enumerate(textures):
+        source_index = texture.get("source")
+        if source_index in absent_slots:
+            pruned_textures.append(old_index)
+            continue
+        replacement = copy.deepcopy(texture)
+        if isinstance(source_index, int):
+            if source_index not in image_remap:
+                raise CharacterAssetError(
+                    f"{label}: texture {old_index} has invalid image {source_index}"
+                )
+            replacement["source"] = image_remap[source_index]
+        texture_remap[old_index] = len(kept_textures)
+        kept_textures.append(replacement)
+
+    for row in texture_infos:
+        old_index = int(row["texture"])
+        if old_index not in texture_remap:
+            raise CharacterAssetError(
+                f"{label}: referenced texture {old_index} would be pruned"
+            )
+        row["info"]["index"] = texture_remap[old_index]
+
+    document["images"] = kept_images
+    document["textures"] = kept_textures
+    _json_write(gltf_path, document)
+    report = {
+        "absent_slots": sorted(absent_slots),
+        "material_uses": material_uses,
+        "pruned_texture_indices": pruned_textures,
+        "image_count_before": len(images),
+        "image_count_after": len(kept_images),
+        "texture_count_before": len(textures),
+        "texture_count_after": len(kept_textures),
+        "fabricated_fallbacks": 0,
+        "passed": True,
+    }
+    _json_write(component_dir / "absent_texture_prune_report.json", report)
+    return report
+
+
 def _patch_gltf_materials(
     component_dir: Path,
     label: str,
@@ -817,9 +971,10 @@ def _patch_gltf_materials(
         iris_mapping = {
             int(row["base_slot"]): str(row["baked"]) for row in iris["overlays"]
         }
-    for slot, (image, row) in enumerate(zip(images, texture_rows, strict=True)):
-        image["uri"] = iris_mapping.get(slot, str(row["files"]["png"]))
-        image["name"] = f"slot_{slot:03d}_{row['handle']}"
+    for image, row in zip(images, texture_rows, strict=True):
+        source_slot = int(row["slot"])
+        image["uri"] = iris_mapping.get(source_slot, str(row["files"]["png"]))
+        image["name"] = f"slot_{source_slot:03d}_{row['handle']}"
 
     mesh_materials: dict[int, list[int]] = defaultdict(list)
     for mesh_index, mesh in enumerate(document.get("meshes", [])):
@@ -865,7 +1020,7 @@ def _patch_gltf_materials(
             row = texture_rows[source]
             semantic_rows[semantic] = {
                 "texture": texture_index,
-                "slot": source,
+                "slot": int(row.get("slot", source)),
                 "texCoord": int(texture_info.get("texCoord", 0)),
                 "handle": row["handle"],
                 "g1t_id": row["g1t_id"],
@@ -1808,6 +1963,151 @@ def _finalize_joint_sentinels(component_dir: Path, label: str) -> dict[str, Any]
     return report
 
 
+def _apply_tamaki_body842_static_cloth(
+    component_dir: Path,
+    label: str,
+    policy: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Detach only the audited NUN panel whose driver IDs are not skin joints."""
+
+    gltf_path = component_dir / f"{label}.gltf"
+    document = json.loads(gltf_path.read_text(encoding="utf-8"))
+    if len(document.get("buffers", [])) != 1:
+        raise CharacterAssetError(f"{label}: expected one external buffer")
+    buffer_path = _local_uri(
+        component_dir, str(document["buffers"][0]["uri"]), "buffer"
+    )
+    payload = bytearray(buffer_path.read_bytes())
+    np = _numpy()
+
+    target_meshes = tuple(int(value) for value in policy.get("static_cloth_meshes", ()))
+    expected_vertices = tuple(
+        int(value) for value in policy.get("static_cloth_vertex_counts", ())
+    )
+    expected_materials = tuple(
+        int(value) for value in policy.get("static_cloth_materials", ())
+    )
+    expected_slots = tuple(
+        int(value) for value in policy.get("static_cloth_invalid_joint_slots", ())
+    )
+    expected_lanes = int(policy.get("static_cloth_invalid_nonzero_lanes", 0))
+    if not target_meshes or not (
+        len(target_meshes) == len(expected_vertices) == len(expected_materials)
+    ):
+        raise CharacterAssetError(f"{label}: incomplete Tamaki static cloth policy")
+
+    mesh_nodes: dict[int, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
+    for node_index, node in enumerate(document.get("nodes", [])):
+        if "mesh" in node:
+            mesh_nodes[int(node["mesh"])].append((node_index, node))
+
+    detached: list[dict[str, Any]] = []
+    conversion_log = component_dir / f"{label}.conversion.log"
+    log_text = (
+        conversion_log.read_text(encoding="utf-8").replace("\r\n", "\n")
+        if conversion_log.is_file()
+        else ""
+    )
+    for item_index, mesh_index in enumerate(target_meshes):
+        if mesh_index < 0 or mesh_index >= len(document.get("meshes", [])):
+            raise CharacterAssetError(f"{label}: missing audited mesh {mesh_index}")
+        nodes = [row for row in mesh_nodes.get(mesh_index, []) if "skin" in row[1]]
+        if len(nodes) != 1:
+            raise CharacterAssetError(
+                f"{label}: mesh {mesh_index} has {len(nodes)} skinned nodes"
+            )
+        node_index, node = nodes[0]
+        skin_index = int(node["skin"])
+        palette_size = len(document["skins"][skin_index].get("joints", []))
+        mesh = document["meshes"][mesh_index]
+        if len(mesh.get("primitives", [])) != 1:
+            raise CharacterAssetError(
+                f"{label}: mesh {mesh_index} primitive layout changed"
+            )
+        primitive = mesh["primitives"][0]
+        if int(primitive.get("material", -1)) != expected_materials[item_index]:
+            raise CharacterAssetError(
+                f"{label}: mesh {mesh_index} material changed"
+            )
+        attributes = primitive.get("attributes", {})
+        if not all(key in attributes for key in ("POSITION", "JOINTS_0", "WEIGHTS_0")):
+            raise CharacterAssetError(
+                f"{label}: mesh {mesh_index} lacks position/joint/weight accessors"
+            )
+        positions = _accessor_array(document, payload, int(attributes["POSITION"]))
+        joints = _accessor_array(document, payload, int(attributes["JOINTS_0"]))
+        weights = _accessor_array(
+            document, payload, int(attributes["WEIGHTS_0"])
+        ).astype("float64")
+        nonzero_mask = (joints >= palette_size) & (np.abs(weights) > 1e-8)
+        zero_mask = (joints >= palette_size) & (np.abs(weights) <= 1e-8)
+        invalid_lanes = int(nonzero_mask.sum())
+        invalid_slots = tuple(
+            int(value) for value in np.unique(joints[nonzero_mask])
+        )
+        if invalid_lanes == 0:
+            # A future converter may correctly replace physics driver indices.
+            continue
+        if (
+            len(positions) != expected_vertices[item_index]
+            or invalid_lanes != expected_lanes
+            or invalid_slots != expected_slots
+        ):
+            raise CharacterAssetError(
+                f"{label}: mesh {mesh_index} cloth overflow changed: "
+                f"vertices={len(positions)}, lanes={invalid_lanes}, "
+                f"slots={invalid_slots}"
+            )
+        marker = (
+            f"Processing submesh {mesh_index}...\n"
+            "Performing cloth mesh (4D) transformation..."
+        )
+        if marker not in log_text:
+            raise CharacterAssetError(
+                f"{label}: conversion log does not prove mesh {mesh_index} NUN baking"
+            )
+        del node["skin"]
+        detached.append(
+            {
+                "mesh": mesh_index,
+                "node": node_index,
+                "skin": skin_index,
+                "palette_size": palette_size,
+                "material": int(primitive["material"]),
+                "vertices": len(positions),
+                "invalid_nonzero_lanes": invalid_lanes,
+                "invalid_zero_weight_lanes": int(zero_mask.sum()),
+                "invalid_nonzero_joint_slots": list(invalid_slots),
+                "bounds": {
+                    "min": [float(value) for value in positions.min(axis=0)],
+                    "max": [float(value) for value in positions.max(axis=0)],
+                },
+            }
+        )
+
+    _json_write(gltf_path, document)
+    report = {
+        "policy": (
+            "Detach only audited, already-baked NUN panels whose physics driver "
+            "indices cannot be represented by the exported skeletal palette."
+        ),
+        "detached": detached,
+        "geometry_removed": 0,
+        "materials_removed": 0,
+        "limitations": (
+            [
+                "Detached panels remain complete in bind pose but do not deform "
+                "with later skeletal animation."
+            ]
+            if detached
+            else []
+        ),
+        "passed": True,
+    }
+    _json_write(component_dir / "cloth_static_fallback_report.json", report)
+    return report
+
+
 def extract_character_assets(
     game: Path,
     output: Path,
@@ -1898,6 +2198,17 @@ def extract_character_assets(
                 f"{spec.label}: expected {spec.texture_slots} KTID slots, got {len(pairs)}"
             )
         all_handles.update(handle for _slot, handle in pairs)
+        expected_unresolved = _expected_unresolved_textures(
+            spec.postprocess, spec.label
+        )
+        unknown_expected_slots = set(expected_unresolved).difference(
+            slot for slot, _handle in pairs
+        )
+        if unknown_expected_slots:
+            raise CharacterAssetError(
+                f"{spec.label}: unresolved texture policy names absent KTID slots "
+                f"{sorted(unknown_expected_slots)}"
+            )
         states.append(
             {
                 "spec": spec,
@@ -1905,6 +2216,7 @@ def extract_character_assets(
                 "resources": resource_rows,
                 "pairs": pairs,
                 "model_index": actual_index,
+                "expected_unresolved": expected_unresolved,
             }
         )
 
@@ -1922,10 +2234,28 @@ def extract_character_assets(
         texture_dir = component_dir / "textures"
         texture_dir.mkdir(exist_ok=True)
         texture_rows: list[dict[str, Any]] = []
+        unresolved_texture_rows: list[dict[str, Any]] = []
         texture_bytes = 0
         for slot, handle in state["pairs"]:
             g1t_id = handle_to_g1t[handle]
             matches = g1t_entries.get(g1t_id, [])
+            if not matches:
+                expected = state["expected_unresolved"].get(slot)
+                if expected != (handle, g1t_id):
+                    raise CharacterAssetError(
+                        f"{spec.label} slot {slot}: G1T {_hex(g1t_id)} is absent "
+                        "and is not exactly approved by the character profile"
+                    )
+                unresolved_texture_rows.append(
+                    {
+                        "slot": slot,
+                        "handle": _hex(handle),
+                        "g1t_id": _hex(g1t_id),
+                        "reason": "mapped G1T has no asset entry in this installation",
+                        "objdb_sources": handle_sources[handle],
+                    }
+                )
+                continue
             if len(matches) != 1:
                 raise CharacterAssetError(
                     f"{spec.label} slot {slot}: G1T {_hex(g1t_id)} has "
@@ -1953,7 +2283,18 @@ def extract_character_assets(
                     "conversion": conversion,
                 }
             )
+        actual_unresolved = {int(row["slot"]) for row in unresolved_texture_rows}
+        expected_unresolved = set(state["expected_unresolved"])
+        if actual_unresolved != expected_unresolved:
+            raise CharacterAssetError(
+                f"{spec.label}: unresolved texture set changed; expected "
+                f"{sorted(expected_unresolved)}, got {sorted(actual_unresolved)}"
+            )
         _json_write(component_dir / "texture_mapping.json", texture_rows)
+        _json_write(
+            component_dir / "unresolved_texture_slots.json",
+            unresolved_texture_rows,
+        )
 
         g1m_path = component_dir / f"{spec.label}.g1m"
         conversion_result = convert_g1m(
@@ -1964,6 +2305,18 @@ def extract_character_assets(
             oid_path=component_dir / f"{spec.label}.oid",
             fast_cloth=fast_cloth,
         )
+        absent_texture_report: dict[str, Any] | None = None
+        if unresolved_texture_rows:
+            policy = str(
+                spec.postprocess.get("unresolved_texture_policy") or ""
+            ).lower()
+            if policy != "prune_if_unreferenced":
+                raise CharacterAssetError(
+                    f"{spec.label}: unsupported unresolved texture policy {policy!r}"
+                )
+            absent_texture_report = _prune_unreferenced_texture_slots(
+                component_dir, spec.label, unresolved_texture_rows
+            )
         material_profile = _auto_material_profile(spec)
         material_report = _patch_gltf_materials(
             component_dir,
@@ -1972,11 +2325,15 @@ def extract_character_assets(
             material_profile,
             texture_rows,
         )
-        skin_report = _finalize_joint_sentinels(component_dir, spec.label)
         postprocess: dict[str, Any] | None = None
         post_kind = str(spec.postprocess.get("kind") or "").lower()
         if material_profile in ("nanami_body722", "nanami_trad_dry_static"):
             post_kind = "nanami_body722"
+        if post_kind == "tamaki_body842_static":
+            postprocess = _apply_tamaki_body842_static_cloth(
+                component_dir, spec.label, spec.postprocess
+            )
+        skin_report = _finalize_joint_sentinels(component_dir, spec.label)
         if post_kind == "nanami_body722":
             postprocess = _apply_nanami_body722(
                 component_dir,
@@ -1986,7 +2343,7 @@ def extract_character_assets(
                 all_dependency_paths,
                 spec.postprocess,
             )
-        elif post_kind:
+        elif post_kind not in ("", "tamaki_body842_static"):
             raise CharacterAssetError(
                 f"{spec.label}: unsupported postprocess kind {post_kind!r}"
             )
@@ -2002,7 +2359,11 @@ def extract_character_assets(
             "resources": state["resources"],
             "ktid_slot_count": len(state["pairs"]),
             "resolved_texture_count": len(texture_rows),
+            "unresolved_texture_count": len(unresolved_texture_rows),
+            "unresolved_texture_slots": "unresolved_texture_slots.json",
             "all_handles_resolved_uniquely": True,
+            "all_texture_assets_present": not unresolved_texture_rows,
+            "absent_texture_prune": absent_texture_report,
             "all_pngs_created": all(
                 (component_dir / row["files"]["png"]).is_file()
                 for row in texture_rows
@@ -2022,7 +2383,8 @@ def extract_character_assets(
             "passed": bool(
                 validation["passed"]
                 and skin_report["passed"]
-                and len(texture_rows) == len(state["pairs"])
+                and len(texture_rows) + len(unresolved_texture_rows)
+                == len(state["pairs"])
             ),
         }
         manifest_path = component_dir / "component_manifest.json"
@@ -2071,9 +2433,26 @@ def _plain_value(value: Any) -> Any:
 def _normalized_body_postprocess(value: Mapping[str, Any]) -> dict[str, Any]:
     raw = _plain_value(value)
     profile_name = str(raw.get("profile") or raw.get("kind") or "").lower()
+    if profile_name in ("tamaki_skinny_denim_static", "tamaki_body842_static"):
+        keys = (
+            "unresolved_texture_slot_indices",
+            "unresolved_texture_handles",
+            "unresolved_texture_g1t_ids",
+            "unresolved_texture_policy",
+            "static_cloth_meshes",
+            "static_cloth_vertex_counts",
+            "static_cloth_materials",
+            "static_cloth_invalid_joint_slots",
+            "static_cloth_invalid_nonzero_lanes",
+        )
+        result = {"kind": "tamaki_body842_static"}
+        for key in keys:
+            if key in raw:
+                result[key] = raw[key]
+        return result
     if profile_name not in ("nanami_trad_dry_static", "nanami_body722"):
         return {}
-    result: dict[str, Any] = {"kind": "nanami_body722"}
+    result = {"kind": "nanami_body722"}
     aliases = {
         "active_conditional_mesh_indices": "active_dry_meshes",
         "common_required_mesh_indices": "common_meshes",

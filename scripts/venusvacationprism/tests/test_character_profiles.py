@@ -53,6 +53,22 @@ EXPECTED_COMPONENTS = {
         "HAIR": (815, 0x49A89AEB, 0x7FF688CA, 0x71F0C243,
                  0x86E61A48, 0xCC651EF1, 0x8031A108, 21),
     },
+    "fiona": {
+        "BODY": (857, 0xAB6B8248, 0x1257E927, 0x045222A0,
+                 0x19477AA5, 0x862FCA34, 0x12930165, 54),
+        "FACE": (1125, 0xDD9A6ABE, 0xAFF2DB9D, 0xA1ED1516,
+                 0xB6E26D1B, 0x9BF3267E, 0xB02DF3DB, 69),
+        "HAIR": (828, 0x784DACC3, 0xE356F2A2, 0xD5512C1B,
+                 0xEA468420, 0xD511F019, 0xE3920AE0, 14),
+    },
+    "tamaki": {
+        "BODY": (842, 0x8BAAA1CE, 0x50A25411, 0x429C8D8A,
+                 0x5791E58F, 0x1132BC8A, 0x50DD6C4F, 33),
+        "FACE": (850, 0xA00AAF19, 0xF34EAAF8, 0xE548E471,
+                 0xFA3E3C76, 0xC4114283, 0xF389C336, 69),
+        "HAIR": (813, 0x3ABDF11E, 0x26B2C1FD, 0x18ACFB76,
+                 0x2DA2537B, 0xFD300C1E, 0x26EDDA3B, 14),
+    },
 }
 
 
@@ -61,13 +77,17 @@ EXPECTED_BASELINES = {
     "elise": (71, 3, 176_094, 260_140, 21, 34),
     "honoka": (71, 3, 297_544, 420_661, 24, 67),
     "nanami": (75, 4, 230_539, 352_425, 28, 72),
+    "fiona": (78, 3, 281_364, 428_599, 25, 65),
+    "tamaki": (78, 3, 358_368, 468_659, 22, 60),
 }
 
 
 class CharacterProfileTests(unittest.TestCase):
-    def test_has_the_four_formally_verified_profiles(self) -> None:
+    def test_has_the_six_formally_verified_profiles(self) -> None:
         self.assertEqual(
-            set(CHARACTER_PROFILES), {"misaki", "elise", "honoka", "nanami"})
+            set(CHARACTER_PROFILES),
+            {"misaki", "elise", "honoka", "nanami", "fiona", "tamaki"},
+        )
 
     def test_resolves_english_code_and_chinese_aliases(self) -> None:
         cases = {
@@ -83,6 +103,13 @@ class CharacterProfileTests(unittest.TestCase):
             "Nanami": "nanami",
             "N_N_M": "nanami",
             "七海": "nanami",
+            "Fiona": "fiona",
+            "FON": "fiona",
+            "菲欧娜": "fiona",
+            "Tamaki": "tamaki",
+            "TAM": "tamaki",
+            "环": "tamaki",
+            "たまき": "tamaki",
         }
         for alias, expected in cases.items():
             with self.subTest(alias=alias):
@@ -132,13 +159,15 @@ class CharacterProfileTests(unittest.TestCase):
     def test_full_automation_is_enabled_only_for_current_full_profiles(self) -> None:
         self.assertEqual(CHARACTER_PROFILES["honoka"].support_level, FULL_SUPPORT)
         self.assertEqual(CHARACTER_PROFILES["nanami"].support_level, FULL_SUPPORT)
+        self.assertEqual(CHARACTER_PROFILES["fiona"].support_level, FULL_SUPPORT)
+        self.assertEqual(CHARACTER_PROFILES["tamaki"].support_level, FULL_SUPPORT)
         self.assertEqual(
             CHARACTER_PROFILES["misaki"].support_level, LEGACY_VERIFIED_SUPPORT)
         self.assertEqual(
             CHARACTER_PROFILES["elise"].support_level, FALLBACK_REQUIRED_SUPPORT)
         self.assertEqual(
             {profile.key for profile in enabled_character_profiles()},
-            {"honoka", "nanami"},
+            {"honoka", "nanami", "fiona", "tamaki"},
         )
         for profile in CHARACTER_PROFILES.values():
             self.assertTrue(profile.limitations)
@@ -152,6 +181,11 @@ class CharacterProfileTests(unittest.TestCase):
         self.assertEqual(CHARACTER_PROFILES["nanami"].alpha.body, ())
         self.assertEqual(CHARACTER_PROFILES["misaki"].alpha.hair, (0, 1, 2, 3))
         self.assertEqual(CHARACTER_PROFILES["elise"].alpha.hair, (0, 1))
+        self.assertEqual(
+            CHARACTER_PROFILES["fiona"].alpha.body,
+            (0, 1, 2, 3, 6, 7, 8, 11),
+        )
+        self.assertEqual(CHARACTER_PROFILES["tamaki"].alpha.body, ())
         for profile in CHARACTER_PROFILES.values():
             self.assertEqual(profile.alpha.face, (1, 4, 5, 6, 8, 9, 10))
             self.assertEqual(profile.alpha.face_iris, (2, 3))
@@ -178,6 +212,24 @@ class CharacterProfileTests(unittest.TestCase):
         self.assertAlmostEqual(nanami["normal_strength"], 0.15)
         self.assertTrue(nanami["repair_cloth_normals_and_tangents"])
         self.assertEqual(nanami["rejected_body_indices"], (830,))
+
+        fiona = CHARACTER_PROFILES["fiona"].body_postprocess
+        self.assertEqual(fiona["resolved_texture_slots"], 54)
+        self.assertEqual(fiona["rejected_face_indices"], (860,))
+        self.assertEqual(fiona["skin_linked_meshes_after_conversion"], 32)
+        self.assertEqual(
+            fiona["static_nun_mesh_indices"],
+            (5, 6, 8, 9, 10, 11, 17, 18),
+        )
+        self.assertEqual(fiona["static_nun_vertex_count"], 12_813)
+        self.assertFalse(fiona["game_cloth_simulation_reproduced"])
+
+        tamaki = CHARACTER_PROFILES["tamaki"].body_postprocess
+        self.assertEqual(tamaki["resolved_texture_slots"], 30)
+        self.assertEqual(tamaki["unresolved_texture_slots"], 3)
+        self.assertEqual(tamaki["unresolved_texture_slot_indices"], (26, 27, 32))
+        self.assertEqual(tamaki["static_cloth_meshes"], (11,))
+        self.assertEqual(tamaki["static_cloth_invalid_joint_slots"], (6, 7))
 
     def test_regression_baselines_match_formal_readbacks(self) -> None:
         for key, expected in EXPECTED_BASELINES.items():
@@ -208,6 +260,27 @@ class CharacterProfileTests(unittest.TestCase):
         self.assertEqual(nanami.glb_readback_polygons, 352_425)
         self.assertEqual(nanami.neck_vertices_within_0_001, 43)
         self.assertTrue(CHARACTER_PROFILES["nanami"].verified.glb_roundtrip)
+
+        fiona = CHARACTER_PROFILES["fiona"].expected
+        tamaki = CHARACTER_PROFILES["tamaki"].expected
+        self.assertEqual(fiona.glb_readback_vertices, 283_178)
+        self.assertEqual(fiona.glb_readback_polygons, 428_599)
+        self.assertEqual(fiona.body_mesh_objects, 40)
+        self.assertEqual(fiona.body_skin_linked_meshes, 32)
+        self.assertEqual(tamaki.glb_readback_vertices, 362_419)
+        self.assertEqual(tamaki.glb_readback_polygons, 468_659)
+        self.assertEqual(tamaki.neck_vertices_within_0_001, 43)
+        self.assertEqual(tamaki.body_mesh_objects, 32)
+        self.assertEqual(tamaki.body_skin_linked_meshes, 25)
+
+        self.assertIn(
+            "fiona/complete/validation/Fiona_delivery_manifest.json",
+            CHARACTER_PROFILES["fiona"].verified.evidence,
+        )
+        self.assertIn(
+            "tamaki/complete/components/body/cloth_static_fallback_report.json",
+            CHARACTER_PROFILES["tamaki"].verified.evidence,
+        )
 
 
 if __name__ == "__main__":

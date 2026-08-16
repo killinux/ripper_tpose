@@ -428,6 +428,26 @@ def validate_baseline(profile: CharacterProfile, report_path: Path) -> dict[str,
     )
 
     components = report.get("components") or {}
+    body_component = components.get("BODY") or {}
+    if expected.body_mesh_objects is not None:
+        body_mesh_names = body_component.get("mesh_names") or []
+        add(
+            "body_mesh_objects",
+            expected.body_mesh_objects,
+            len(body_mesh_names),
+        )
+    if expected.body_skin_linked_meshes is not None:
+        rig_namespace = body_component.get("rig_namespace") or {}
+        armature_rows = rig_namespace.get("armatures") or []
+        try:
+            linked_meshes = sum(int(row["linked_meshes"]) for row in armature_rows)
+        except (KeyError, TypeError, ValueError):
+            linked_meshes = None
+        add(
+            "body_skin_linked_meshes",
+            expected.body_skin_linked_meshes,
+            linked_meshes,
+        )
     source_rows: dict[str, Any] = {}
     for role in ("BODY", "FACE", "HAIR"):
         source = (components.get(role) or {}).get("source") or {}
