@@ -54,7 +54,80 @@ python scripts\venusvacationprism\map_characters.py `
   --character 菲欧娜
 ```
 
-## 3. 导出一个原生模型
+## 3. 按角色名导出完整人物
+
+完整人物由 BODY、FACE、HAIR 三组资源组成。`export_character.py` 会从经过人工验证的
+角色 profile 中选择默认组合，解析全部纹理，修补人物材质，然后让 Blender 输出绑定模型。
+
+完整的查看名称、导出、断点续跑和输出说明见
+[`README_CHARACTER_EXPORT.md`](README_CHARACTER_EXPORT.md)。
+
+查看当前支持情况：
+
+```powershell
+scripts\venusvacationprism\list_character_names.ps1
+```
+
+加 `--exportable-only` 只显示当前能一键导出的名字；加 `--details` 显示默认
+BODY/FACE/HAIR 的清单索引和 G1M ID；加 `--json` 输出机器可读列表。统一导出入口原有的
+`python scripts\venusvacationprism\export_character.py --list-characters` 也继续保留。
+
+按英文名、中文名或内部角色代码导出，例如：
+
+```powershell
+python scripts\venusvacationprism\export_character.py `
+  --name Nanami `
+  --game "D:\Program Files (x86)\Steam\steamapps\common\Venus Vacation PRISM - DEAD OR ALIVE Xtreme -" `
+  --output "D:\venusvacationprism_exports\nanami\complete_auto" `
+  --formats blend,fbx,glb
+```
+
+`--name 七海`、`--name NNM` 与上例等价。
+
+也可以使用较短的 PowerShell 入口；其参数与 Python 命令完全相同：
+
+```powershell
+scripts\venusvacationprism\export_character.ps1 `
+  --name 穗香 `
+  --output "D:\venusvacationprism_exports\honoka\complete_auto" `
+  --formats blend,fbx,glb
+```
+
+若目标目录里已有阶段结果，加入 `--resume` 会先校验再复用；脚本不会默认覆盖非空目录。
+
+当前无人值守完整导出已开放：
+
+- `Honoka` / `穗香` / `HON`
+- `Nanami` / `七海` / `NNM`
+
+Misaki 与 Elise 的来源组合也已记录，但前者的旧材质流程尚待迁移，后者有 24 个游戏运行时
+纹理句柄无法从安装包的 OBJDB 静态恢复；脚本会明确拒绝，而不是输出一个看似成功但材质错误
+的模型。
+
+依赖：Python 3.10+、Pillow 12+、NumPy、pyquaternion、Blender 3.6 LTS，以及
+`eArmada8/gust_stuff`。可用 `--gust-dir`、`--blender`、`--python-deps` 和
+`--converter-deps` 指定位置。本仓库当前工作环境中的 `.tmp/gust_stuff`、`.tmp/pydeps`
+和 `.tmp/gust_deps` 会被自动发现。先加 `--plan` 可以只查看将使用的模型 ID、工具和输出路径。
+
+Python 依赖可按下列方式安装；如果只想解包三组件而暂不启动 Blender，可再加
+`--assets-only`：
+
+```powershell
+python -m pip install -r scripts\venusvacationprism\requirements-character-export.txt
+```
+
+输出包括：
+
+- `{Character}_Complete_Rigged.blend`（使用中贴图已打包）
+- `{Character}_Complete_Rigged.fbx`、FBX 材质映射与 Blender 重连脚本
+- `{Character}_Complete_Rigged.glb`
+- BODY/FACE/HAIR 的原始五件套、逐槽 G1T/DDS/PNG 和 patched glTF
+- 四视图、FBX/GLB 回读报告、来源清单和 SHA-256 清单
+
+Nanami 的默认衣装使用已验证的 dry/static 近似：布料 UV1、slot21/22 overlay、slot23
+局部法线，以及排除 wet/DT2 条件 pass。它只应用于 BODY722 profile，不会误套到其他模型。
+
+## 4. 导出一个原生模型
 
 按清单中的一基序号导出：
 
@@ -85,7 +158,7 @@ python scripts\venusvacationprism\export_model.py `
 
 输出 `.g1m` 原始模型和 `.json` 来源/结构清单。脚本索引是一基索引，和 `models.csv` 的 `index` 列一致。
 
-## 4. 可选转换为 glTF
+## 5. 可选转换为 glTF
 
 原始解包本身不依赖第三方库。若另行下载了 [eArmada8/gust_stuff](https://github.com/eArmada8/gust_stuff)，可把其转换脚本传给导出器：
 

@@ -1,0 +1,4 @@
+# Complete-character extraction stage (Blender has its own Python runtime).
+numpy>=1.24
+Pillow>=12.0
+pyquaternion>=0.9.9
