@@ -20,6 +20,10 @@
 > Throne of Desire 使用 X-Legend HyenaPC/Gamebryo NIF/KFM 与独立 NFS 封包；见
 > [scripts/throneofdesire/](scripts/throneofdesire/) 与
 > [Throne of Desire 提取调研](docs/throne-of-desire-extraction.md)。
+> Operation LOVECRAFT: Fallen Doll 是 UE4.26（AES 加密 pak），走 FModel 提取 +
+> 复用 FF7 Rebirth 材质管线；当前阻塞在 pak 的 AES key，见
+> [scripts/fallendoll/](scripts/fallendoll/) 与
+> [Fallen Doll 提取调研](docs/fallen-doll-extraction.md)。
 > 各套脚本总入口见 [scripts/README.md](scripts/README.md)，
 > 功能更新和操作变化统一记录在 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 > （评估过 AssetRipper 但**没采用**;名字相近,别和 AssetStudio 记混。）本页是背后的通用调研笔记。

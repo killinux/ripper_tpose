@@ -9,6 +9,7 @@
 | Stellar Blade | Unreal IoStore (`.utoc/.ucas`) | [`stellarblade/`](stellarblade/) | `stellarblade\validate_eve.py` |
 | Throne of Desire | X-Legend NFS + Gamebryo NIF/KFM | [`throneofdesire/`](throneofdesire/) | `throneofdesire\export_nude_models.ps1` |
 | Venus Vacation PRISM | KTGL RDB/FDATA + G1M | [`venusvacationprism/`](venusvacationprism/) | `venusvacationprism\map_characters.py` |
+| Operation LOVECRAFT: Fallen Doll | Unreal (UE4.26, AES 加密 pak) | [`fallendoll/`](fallendoll/) | `fallendoll\prepare_fmodel.ps1` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -42,6 +43,12 @@ Venus Vacation PRISM 使用 KTGL RDB/FDATA。`list_models.py` 会生成全量 G1
 一基索引、KTID 或恢复的内部名称还原单个原生 G1M；格式说明与可选 glTF 转换见
 [`venusvacationprism/README.md`](venusvacationprism/README.md)。
 
+Operation LOVECRAFT: Fallen Doll 是 UE4.26 游戏，单个 AES 加密 pak（pak v9，索引加密）。
+`fallendoll\probe_pak.py` 只读探测封包，`prepare_fmodel.ps1` 建工作区并打印 FModel
+配置指引，`export_models.ps1` 在拿到 key、从 FModel 导出后批量材质化（复用 FF7 Rebirth
+的 UE4.26 管线）。当前唯一阻塞是 pak 的 AES key（不在仓库保存）；详见
+[Fallen Doll 提取调研](../docs/fallen-doll-extraction.md)。
+
 ## 开发辅助
 
 需要对已经打开且启动了 MCP 服务的 Blender 做本地诊断时，使用
@@ -49,5 +56,5 @@ Venus Vacation PRISM 使用 KTGL RDB/FDATA。`list_models.py` 会生成全量 G1
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。

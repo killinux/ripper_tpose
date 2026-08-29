@@ -14,6 +14,41 @@
 
 ---
 
+## 2026-08-29 — Operation LOVECRAFT: Fallen Doll 提取调研与脚本骨架
+
+### 新增与修复
+
+- 新增 `scripts/fallendoll/`：`probe_pak.py`（只读探测 pak 版本/加密/索引，不接触
+  key）、`prepare_fmodel.ps1`（验证安装、建隔离工作区、打印 FModel 配置指引）、
+  `export_models.ps1`（扫描 FModel 已导出的 SkeletalMesh，批量材质化为 Blend/FBX/GLB，
+  接口/manifest 与 ROE/FF7RB/ToD 一致）。下游材质直接复用已验证的 FF7 Rebirth
+  worker `export_ff7rb_model_blender.py`（两者同为 UE4.26 FModel 导出）。
+- 调研结论（`docs/fallen-doll-extraction.md`）：引擎 UE4.26（ChaosCloth 存在、apex
+  缺失、pak v9 印证），项目名 Paralogue，Desktop/VR 各一个约 5.4 GiB 的 pak，pak
+  version 9 且**索引 AES 加密**。提取被 AES key 阻塞。
+- 实测排除本机取 key 途径：零 key、exe 内 64 位 hex 候选、shipping exe 全量滑窗爆破
+  （高熵 4 对齐 55 万窗口 0 命中；step-1 全覆盖 11 个候选经严格 mount-point 校验全为
+  误报，实为 x86 指令/字符串常量如 `ragePakList`）。**key 不以明文连续 32 字节存在于
+  exe 中**；合法获取途径（社区 UE key 库、运行时取 key）记入文档，key 不入仓库。
+
+### 操作与验证
+
+```powershell
+python scripts\fallendoll\probe_pak.py         # 探测（不需要 key）
+.\scripts\fallendoll\prepare_fmodel.ps1        # 工作区 + FModel 指引
+.\scripts\fallendoll\export_models.ps1 -List   # 拿到 key、FModel 导出后使用
+```
+
+- `probe_pak.py` 对 Desktop/VR 两个 pak 均正确报告 pak v9 + 索引加密。
+- `prepare_fmodel.ps1` 端到端跑通（探测 + 建工作区 + 打印三项 FModel 配置）。
+- `export_models.ps1` 两个 ps1 语法解析通过；`-List` 空树与非空（伪造 FModel 布局）
+  均正确；委派链用伪造模型端到端跑到真实 Blender worker，如实在「缺 Base Color 贴图」
+  处 FAIL 并写 validate 快照 manifest——证明扫描/委派/错误传播/manifest 全部工作，真实
+  带贴图导出时即 PASS。
+- 待办：AES key 到位后进行真实导出与裸模结构判定。
+
+---
+
 ## 2026-08-29 — Throne of Desire 裸模批量导出统一入口
 
 ### 新增与修复
