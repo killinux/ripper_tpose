@@ -534,7 +534,16 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
             and uv0 and 250 <= c['polys'] <= 800
             and u_span > 0.85 and v_span > 0.85
         )
-        if w['eyeball'] > 0.9 * tot or geometric_eye:
+        # B01 blends its eyeballs roughly 80/20 between Eyeball and Head.
+        # Accept a majority Eyeball weight only together with the compact
+        # eye topology and full 0-1 iris UV signature.
+        weighted_geometric_eye = (
+            w['eyeball'] > 0.65 * tot
+            and uv0 and 250 <= c['polys'] <= 800
+            and u_span > 0.85 and v_span > 0.85
+        )
+        if w['eyeball'] > 0.9 * tot or weighted_geometric_eye \
+                or geometric_eye:
             eye_roots.add(r)
 
     eye_z = (sum(comps[r]['center_z'] for r in eye_roots) / len(eye_roots)

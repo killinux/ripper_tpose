@@ -992,7 +992,18 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
             and uv0 and 250 <= c['polys'] <= 800
             and u_span > 0.85 and v_span > 0.85
         )
-        if w['eyeball'] > 0.9 * tot or geometric_eye:
+        # B01's two 432-polygon eyeballs are deliberately blended about
+        # 80/20 between Eyeball and Head.  Requiring 90% Eyeball weight leaves
+        # the generated eye material unused.  A majority Eyeball weight is
+        # safe here only when the component also has the characteristic
+        # compact eye topology and full 0-1 iris UV map.
+        weighted_geometric_eye = (
+            w['eyeball'] > 0.65 * tot
+            and uv0 and 250 <= c['polys'] <= 800
+            and u_span > 0.85 and v_span > 0.85
+        )
+        if w['eyeball'] > 0.9 * tot or weighted_geometric_eye \
+                or geometric_eye:
             eye_roots.add(r)
 
     eye_z = (sum(comps[r]['center_z'] for r in eye_roots) / len(eye_roots)
@@ -1118,14 +1129,15 @@ def apply_head_region_overrides(head, classifications):
 
 # ------------------------------------------------------------ eye texture bake
 
-def bake_eye_texture(head, iris_path, out_path):
+def bake_eye_texture(head, iris_path, out_path, eye_slot=1):
     """把"程序化眼白+虹膜圆盘"烘成一张 PNG（XPS 不支持节点，必须烘焙）。
     参数优先从 head 槽 1 的眼球材质节点里读（保持和视口一致）。"""
     import numpy as np
 
     center, r_in, r_out, sclera = IRIS_CENTER, IRIS_R_IN, IRIS_R_OUT, SCLERA
-    if len(head.material_slots) > 1 and head.material_slots[1].material:
-        nt = head.material_slots[1].material.node_tree
+    if len(head.material_slots) > eye_slot \
+            and head.material_slots[eye_slot].material:
+        nt = head.material_slots[eye_slot].material.node_tree
         if nt:
             for n in nt.nodes:
                 if n.type == 'MAP_RANGE':
@@ -1896,6 +1908,25 @@ class ROE_OT_export_xps(Operator):
         workflow = effective_workflow(p, meshes)
         is_roe = workflow == 'ROE'
         head = find_head(meshes) if is_roe else None
+        # 批量裸模 worker 会在对象上打 roe_nude_slots 标记；材质名嗅探只留给
+        # 没有标记的旧 .blend——便携眼球烘焙会换掉 eye 槽材质名，嗅探并不稳定。
+        combined_nude = bool(head and (
+            head.get('roe_nude_slots')
+            or (re.search(r'(?:^|_)nk_body(?:\.\d+)?$', head.name,
+                          re.IGNORECASE)
+                and len(head.material_slots) >= 6
+                and [re.sub(r'\.\d+$', '', slot.material.name.lower())
+                     if slot.material else ''
+                     for slot in head.material_slots[:3]] ==
+                    ['body', 'face', 'eye'])))
+        head_slots = ({
+            0: ('body', '5'),
+            1: ('face', '5'),
+            2: ('eye', '5'),
+            3: ('lash', '7'),
+            4: ('brow', '7'),
+        } if combined_nude else self.HEAD_SLOTS)
+        eye_slot = 2 if combined_nude else 1
         tex_dir = bpy.path.abspath(p.tex_dir) if p.tex_dir else ''
         if not os.path.isdir(tex_dir):
             fbx = bpy.path.abspath(p.fbx_path) if p.fbx_path else ''
@@ -2042,7 +2073,8 @@ class ROE_OT_export_xps(Operator):
                 iris = find_tex(tex_dir, '*eye_iris*Albedo*.png')
                 if iris or (len(head.material_slots) > 1):
                     baked = bake_eye_texture(head, iris,
-                                             os.path.join(out_dir, 'roe_eye_baked.png'))
+                                             os.path.join(out_dir, 'roe_eye_baked.png'),
+                                             eye_slot=eye_slot)
 
             # 复制 body/hair。多材质 body 必须按槽拆开，否则颈部 face 槽会被
             # 第一个 body 贴图覆盖，导出的 XPS 会重新出现黑色/粉色碎片。
@@ -2089,7 +2121,7 @@ class ROE_OT_export_xps(Operator):
                 if len(head.material_slots) >= 5:
                     used_slots = {polygon.material_index
                                   for polygon in head.data.polygons}
-                    for idx, (xname, rg) in self.HEAD_SLOTS.items():
+                    for idx, (xname, rg) in head_slots.items():
                         if idx not in used_slots:
                             continue
                         pm = head.material_slots[idx].material
@@ -2105,7 +2137,7 @@ class ROE_OT_export_xps(Operator):
                         bm.to_mesh(part.data)
                         bm.free()
                         part.data.update()
-                        img = baked if idx == 1 else diffuse_image(pm)
+                        img = baked if idx == eye_slot else diffuse_image(pm)
                         m = simple_export_mat(xname, img, pm)
                         part.data.materials.clear()
                         part.data.materials.append(m)

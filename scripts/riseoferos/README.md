@@ -1,14 +1,15 @@
 # Rise of Eros 脚本说明
 
-Rise of Eros 角色提取 → XPS 的四个脚本，整体链路：
+Rise of Eros 角色提取、材质整理与格式转换脚本。整体链路：
 
 ```
 游戏 AssetBundle
-   │  ① extract_character.ps1   （游戏机 PowerShell，调 AssetStudioModCLI）
-   │      └─ convert_fbx.py     （加 -Format 时被它自动调用）
+   │  ① extract_character.ps1      （游戏机 PowerShell，调 AssetStudioModCLI）
+   │      ├─ convert_fbx.py        （加 -Format 时被它自动调用，白模转换）
+   │      └─ export_nude_models.ps1（nude:<id> 时被它自动委派，带材质批量导出）
    ▼
 FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
-   │  ② roe_xps_addon.py       （Blender 插件：导入 → 挂材质 → 导出 XPS）
+   │  ② roe_xps_addon.py          （Blender 插件：导入 → 挂材质 → 导出 XPS）
    ▼
 .mesh + 贴图  （XNALara / XPS 直接打开）
 ```
@@ -19,48 +20,108 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 
 | 脚本 | 在哪运行 | 作用 | 详细文档 |
 |---|---|---|---|
-| `extract_character.ps1` | 游戏机 PowerShell | 从 AssetBundle 提取带骨架 FBX（+贴图/格式转换） | [usage.md](../../docs/usage.md) |
-| `convert_fbx.py` | 被 ps1 调用（Blender 无头） | FBX → XPS/PMX/GLB 白模转换 | 本页 |
-| `roe_xps_addon.py` | Blender 3.6 插件 | 一步步转带材质的 XPS（**主推**） | [xps-addon.md](../../docs/xps-addon.md) |
+| `extract_character.ps1` | 游戏机 PowerShell | 从 AssetBundle 提取带骨架 FBX（+贴图/格式转换/裸模入口） | [usage.md](../../docs/usage.md) |
+| `export_nude_models.ps1` | 游戏机 PowerShell | A–M 基础裸模批量生成带材质 Blend/FBX/XPS/PMX/GLB | 本页 §4 |
+| `export_nude_model_blender.py` | 被上一脚本调用（Blender 无头） | 裸模身体/脸六槽分区、材质校验、贴图打包 | 内部 worker |
+| `roe_xps_addon.py` | Blender 3.6 插件 | HD 角色一步步转带材质的 XPS（**主推**） | [xps-addon.md](../../docs/xps-addon.md) |
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
+| `convert_fbx.py` | 被 ps1 调用（Blender 无头） | FBX → XPS/PMX/GLB **白模**转换 | 本页 §7 |
 
 功能新增、操作变化和实现原理统一追加到 [更新日志](../../docs/CHANGELOG.md)。
-自动准备后仍有局部材质错误时，按
-[ROE 材质手动修复指南](../../docs/roe-manual-material-repair.md) 修复身体槽、透明罩
-或头部所选面。已经确认过的 F10、G09、e06、b02、g07、g02 等兼容坑与最低回归矩阵
-统一记录在 [ROE Blender 材质兼容避坑手册](../../docs/roe-material-pitfalls.md)。
 
 ---
 
-## extract_character.ps1 —— 提取角色
+## 1. 环境准备（一次性）
+
+依赖工具的路径写死为脚本参数默认值，环境不同用参数覆盖：
+
+| 依赖 | 默认路径 | 覆盖参数 | 用途 |
+|---|---|---|---|
+| 游戏本体 | `D:\Program Files (x86)\Steam\steamapps\common\Rise of Eros` | `-GameRoot` | AssetBundle 来源 |
+| 运行时资源缓存 | `%USERPROFILE%\AppData\LocalLow\Pinkcore\Rise of Eros\AssetBundles` | `-CacheRoot` | 运行时下载的新角色 |
+| AssetStudioModCLI | `E:\tools\AssetStudioModCLI_net472\AssetStudioModCLI_net472_win32_64\AssetStudioModCLI.exe` | `-CliExe` | FBX/贴图提取 |
+| Blender 3.6 | `D:\Program Files\blender-3.6.15-windows-x64\blender.exe` | `-BlenderExe` | 格式转换、裸模导出、插件宿主 |
+| Noesis | `E:\tools\noesisv\Noesis.exe` | `-NoesisExe` | 可选，XPS 快速通道 |
+| 输出根目录 | `D:\roe_exports` | `-OutputRoot` / `-SourceRoot` | 所有提取产物 |
+
+Blender 侧插件（装进 **被调用的那个** Blender 3.6）：
+
+| 插件 | 需要它的功能 |
+|---|---|
+| **roe_xps_addon.py**（本仓库） | HD 角色带材质 XPS（§5）；裸模 worker 也复用它的算子 |
+| **XNALaraMesh**（或 b2xps） | 一切 XPS 导出；addons 目录名 `XNALaraMesh` / `XNALaraMesh-master` 均可识别 |
+| **mmd_tools** | 仅 PMX 导出 |
+
+`roe_xps_addon.py` 安装：`Edit > Preferences > Add-ons > Install...` 选本文件并勾选启用
+（实际复制到 `%APPDATA%\Blender Foundation\Blender\3.6\scripts\addons\`）。
+
+> **⚠️ 更新插件后必须重启 Blender**——Install 覆盖的只是磁盘文件，内存里跑的还是
+> 旧代码。旧版遗留的残缺 'XPS Shader' 节点组会让导入 .mesh 报 `KeyError: 'Alpha'`
+> （新版会自愈，但前提是新代码真的加载了）。
+
+> **⚠️ 脚本放置：`extract_character.ps1` 必须和 `convert_fbx.py`、
+> `export_nude_models.ps1`、`export_nude_model_blender.py`、`roe_xps_addon.py`
+> 在同一目录。** 它按自身所在目录找同伴脚本，拆开搬运会报 `convert_fbx.py not found`
+> 等错误（目录整体放哪都行，文件要成组搬）。
+
+---
+
+## 2. 快速开始
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+
+# 列出全部可提取角色 ID + 17 套材质化裸模
+.\extract_character.ps1 -List
+
+# 场景 A：提取一个 HD 角色（FBX + 贴图，之后进 Blender 挂材质）
+.\extract_character.ps1 g11 -ExportTextures
+
+# 场景 B：导出一套带材质的基础裸模（缺源时自动先补常规提取）
+.\extract_character.ps1 nude:b01 -Format blend,fbx,xps,glb
+
+# 场景 C：HD 角色快速转白模 XPS（无材质，一般不如走插件）
+.\extract_character.ps1 g11 -Format xps
+```
+
+- 场景 A 之后 → 打开 Blender，按 §5 的插件三步得到带材质 XPS。
+- 场景 B 产物在 `D:\roe_exports\nude_materials\`，`.blend` 内嵌贴图开箱即用。
+- 场景 C 产物是**白模**；要材质必须走 §5。
+
+---
+
+## 3. extract_character.ps1 —— 提取角色
 
 在**游戏所在机器**上用 PowerShell 运行。
 
-> **⚠️ 放置位置：必须和 `convert_fbx.py` 在同一目录。**
-> 脚本按自身所在目录找 convert_fbx.py，分开放会报
-> `convert_fbx.py not found`（目录本身放哪都行，两个文件要成对搬）。
+### 参数
 
-依赖工具的路径写死为参数默认值，环境不同用参数覆盖：
-
-| 依赖 | 默认路径 | 覆盖参数 |
-|---|---|---|
-| 游戏本体 | `D:\Program Files (x86)\Steam\steamapps\common\Rise of Eros` | `-GameRoot` |
-| 运行时资源缓存 | `%USERPROFILE%\AppData\LocalLow\Pinkcore\Rise of Eros\AssetBundles` | `-CacheRoot` |
-| AssetStudioModCLI | `E:\tools\AssetStudioModCLI_net472\AssetStudioModCLI_net472_win32_64\AssetStudioModCLI.exe` | `-CliExe` |
-| Blender 3.6 | `D:\Program Files\blender-3.6.15-windows-x64\blender.exe` | `-BlenderExe`（仅 `-Format xps/pmx` 需要） |
-| Noesis | `E:\tools\noesisv\Noesis.exe` | `-NoesisExe`（可选，XPS 快速通道） |
-| 输出根目录 | `D:\roe_exports` | `-OutputRoot` |
+| 参数 | 说明 |
+|---|---|
+| `<ids>`（位置参数） | 角色 ID，逗号分隔（`a01,b02`）；`nude:<id>` 走裸模流程 |
+| `-Format` | 普通角色：`xps,pmx,glb`（FBX 之外追加转换）；裸模：`blend,fbx,xps,pmx,glb`，缺省 `blend` |
+| `-ExportTextures` | 同时导出全部贴图 PNG 到 `_textures\`（**推荐**，后面挂材质要用） |
+| `-IncludeShare` | 加载 `*share*` 公共包（慢，个别角色缺件时用） |
+| `-List` | 列出全部角色 ID 与 17 套 `nude:<id>` |
+| `-KeepStage` | 保留中间 stage 目录（排查用） |
+| `-Force` | **仅作用于 `nude:<id>`**：覆盖已有裸模产物；普通提取本来就总是重跑并覆盖 |
+| 路径参数 | 见 §1 依赖表 |
 
 常用命令：
 
 ```powershell
 .\extract_character.ps1 -List                    # 列出全部可提取角色 ID
-.\extract_character.ps1 g11 -ExportTextures     # FBX + 全部贴图（推荐，后面挂材质要用）
+.\extract_character.ps1 g11 -ExportTextures     # FBX + 全部贴图
+.\extract_character.ps1 nude:b01 -Format xps,fbx # 导出材质化 B01 裸模
 ```
 
 脚本会合并游戏安装目录与运行时下载缓存；同名 AssetBundle 优先使用更新时间更晚的
 版本，同时从安装目录补齐公共包。`-List` 同时识别 armor 和 bare 模型，因此新角色、
 活动角色和只有裸模的 NPC 不需要等待 Steam 安装目录更新。
+
+`nude:<id>` 会委派给 `export_nude_models.ps1`（§4），并在 `D:\roe_exports\<id>\`
+缺少 FBX 或 Albedo 贴图时**自动先补一次带 `-ExportTextures` 的常规提取**——新机器上
+直接 `nude:b01` 即可，无需手动预热。
 
 ### 提取结果中的关键目录（以 a07 为例）
 
@@ -100,100 +161,84 @@ pc_g_nk_hair_rgbx_Albedo.png
 
 ---
 
-## convert_fbx.py —— 格式转换助手（白模）
+## 4. export_nude_models.ps1 —— 批量导出带材质裸模
 
-一般不直接用：`extract_character.ps1 -Format xps/pmx/glb` 时被自动调用。手动调用：
+游戏的角色编号按字母共享基础裸体：`a02/a03/...` 使用 `a01` 基础体，B–M 同理。
+本脚本一次处理 17 套：
 
+- `a00`（独立通用体，两网格/两材质）；
+- `a01` 至 `m01` 的 13 套字母基础体；
+- `e01_fm`、`f01_fm`、`g01_fm` 三套额外变体。
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+.\export_nude_models.ps1                 # 全部 17 套，默认输出内嵌贴图的 .blend
 ```
-blender --background --python convert_fbx.py -- <输入.fbx> <输出目录> <xps|pmx|glb>
-```
 
-| 格式 | 依赖（装在被调用的那个 Blender 里） |
+本脚本读取 `-SourceRoot`（默认 `D:\roe_exports`）里各角色的常规提取产物。经
+`extract_character.ps1 nude:<id>` 入口调用时，缺失的角色会自动先补一次带
+`-ExportTextures` 的常规提取；**直接运行本脚本时请先自行提取对应角色**。
+
+### 参数
+
+| 参数 | 说明 |
 |---|---|
-| xps | XNALaraMesh（或 b2xps）插件已启用 |
-| pmx | mmd_tools 插件 |
-| glb | 无（Blender 内置） |
+| `-Only` | 只处理指定基础体（`a01,b01` 或 `nude:b01` 写法均可） |
+| `-Format` | `blend,fbx,xps,pmx,glb` 任意组合，缺省 `blend` |
+| `-ValidateOnly` | 只导入 + 校验材质，不写任何产物 |
+| `-Force` | 覆盖已有产物（缺省时全部产物已存在的模型会 SKIP） |
+| `-List` | 列出 17 套可选裸模 |
+| `-IncludeA00` / `-IncludeFm` | 布尔，缺省 `$true`；排除 a00 或 fm 变体 |
+| `-KeepTemp` | 保留贴图临时归集目录 |
+| `-OutputDir` | 输出目录，缺省 `D:\roe_exports\nude_materials` |
+| 其余路径参数 | 见 §1 依赖表 |
 
-> **注意：这条转换不处理材质/贴图，导出的是白模。**
-> 要带材质（含眼球/睫毛/眉毛修复）的 XPS，用下面的 roe_xps_addon.py。
+常用检查：
 
-FBX 里没有网格/骨架时会明确报错退出（有的角色的 `nk_bs` 是纯空节点层级，
-如 g02）；ps1 调用时会自动换下一个候选 FBX（一般是 `pc_<id>_hd`）重试。
-
-g02 的原始 HD/LD 身体颜色贴图文件名把 `Albedo` 拼成了 `Abedo`：
-
-```text
-pc_g02_hd_body_rgbx_Abedo.png
-pc_g02_ld_body_rgbx_Abedo.png
+```powershell
+.\export_nude_models.ps1 -ValidateOnly                            # 只验证
+.\export_nude_models.ps1 -Only a01,b01,l01                        # 只处理指定基础体
+.\export_nude_models.ps1 -List                                    # 查看 17 套清单
+.\export_nude_models.ps1 -Only b01 -Format blend,fbx,xps,pmx,glb -Force  # B01 全格式
 ```
 
-ROE XPS Tools `1.1.4` 和同步的 `blender_face_materials.py` 会先查标准
-`*Albedo*.png`，找不到时再兼容 `*Abedo*.png`。因此不要手工改贴图文件名；更新插件并
-重启 Blender 后，把贴图目录指向 `D:\roe_exports\g02\_textures\`，重新点击
-“检查并准备材质”即可。
+### 产物与 manifest
 
-b02 左眼上像“眼镜片”的物体实际来自 `pc_b_nk_tears` 透明眼部罩层，不是需要单独
-删除的眼镜模型。该槽同时存在于 head 与身体网格；v1.1.6 修复两处罩层和权重不足的
-下睫毛：更新插件后无需重新导入，
-对现有 b02 直接再点一次“检查并准备材质”。正确头部分槽应为 face `13920`、
-eye `864`、lash `804`、brow `228`、eye_overlay `116`；身体网格的 tear 槽 `32`
-面应使用纯 `Transparent BSDF`。
+输出的每个 `.blend` 都把用到的图片打包进文件，不依赖原 `_textures` 路径；FBX、XPS、
+PMX、GLB 分别进入同名子目录。便携格式会先把 Blender 程序化眼球烘成眼白+虹膜贴图；
+XPS/PMX 同目录保留所需 PNG，FBX 与 GLB 内嵌纹理。同目录另有
+`nude_models_manifest.json`，记录源 FBX、各格式路径、材质数、贴图名、身体/脸分区、
+便携眼球烘焙状态和失败原因（含 traceback）。`-ValidateOnly` 的结果单独写入快照
+`nude_models_manifest.validate.json`，不会触碰正式 manifest 里已记录的导出路径。
+`-Only` 补导单个模型/格式时按 17 套规范顺序**合并**进已有 manifest，不会把完整清单
+覆盖成一条。
 
-g07 的原始身体槽名包含 `_hd_`，但颜色贴图名省略了该段。v1.1.7 会在精确匹配失败
-后兼容这种命名，自动得到 `skin/body1 → pc_g07_body1_rgbx_Albedo.png`、
-`body2 → pc_g07_body2_rgbx_Albedo.png`。旧场景只需重新点击一次
-“检查并准备材质”；不需要修改 UV、权重或重命名 PNG。
+### 六槽分区原理与限制
 
-g09 的 `wings/wings2` 槽与身体共用一个 mesh，但两张翅膀 Albedo 都依赖 alpha。v1.1.9
-先按完整贴图文件干匹配，避免主翼的 `wings` 被宽泛前缀误挂为 `wings2`；XPS 导出时只把
-这两个名称明确的翅膀槽设为 RG7，并在 Blender 3.6 视口中使用稳定的 Alpha Clip，避免
-重叠羽毛片出现黑色散点/卡片。普通身体/皮肤槽继续使用 RG5，避免衣服透明排序回退。
-旧场景不需要重新导入；更新插件并重启 Blender 后，重新准备材质并导出 XPS 即可。
+裸模与 HD 服装不同：头、身体、眼睛和口腔部件在同一个 `*_nk_body` 网格中。普通 ROE
+材质操作会把未识别区域都当作 face；批处理 worker 因此额外建立六槽分区：
+`body / face / eye / lash / brow / overlay`，并在对象上写 `roe_nude_slots` 标记供 XPS
+导出识别（XPS 内部分件为 `5_body / 5_face / 5_eye / 7_lash / 7_brow`，overlay 不导出）。
+身体、脸和眼球必须同时有非零面数，否则该模型判定失败。B01 的眼球约为 80% `Eyeball`、
+20% `Head` 权重；脚本会同时检查球体拓扑和完整 0–1 虹膜 UV，不会再因旧版 90% 权重
+门槛把眼球误分到脸。贴图归集只接受同字母体型；缺少公共脸部贴图时从
+`chara_tex_bare_pc_<字母>_common*` 临时解码，不会错误回退到其他角色的脸。
 
-e06 的 `wp_e_06` 蒙皮簇缺少 Blender 3.6 预期的绑定矩阵，旧插件导入会报
-`KeyError: Root`，并留下 4 个没有材质的半成品网格。v1.1.10 会在本次 FBX 导入期间
-只补这一个缺失绑定，完成后恢复 Blender 原导入器；其他角色已有的绑定不会被覆盖。
-删除旧半成品后，使用
-`pc_e06_hd (1)\FBX_GameObjects\pc_e06_hd\pc_e06_hd.fbx` 重新导入；无 `(1)` 的副本
-本身没有完整材质分区。
-
-F10 的 face 与 tears 原始槽共享连通顶点，v1.1.10 及更早版本会把大部分脸误判为透明
-眼部罩层，表现为身体正常但脸部材质消失。v1.1.11 改为在存在明确独立槽时优先保留
-每个面的原始 `face/tears` 语义；正确头部分槽为 face `15354`、eye `864`、lash `900`、
-brow `228`、overlay `390`。旧场景无需重新导入，确认 F10 的 FBX 与 `_textures` 后点击
-**“修复脸部”** 即可。
-
-i03/i04 没有独立的 `pc_i_nk_eye_iris` 和 `pc_i_nk_eyebrow` Albedo，旧版因此在挂 face
-之前取消整个脸部流程。v1.1.12 会在 i 体型缺高清虹膜时回退 `pc_i_ld_eyes`，并识别
-眉毛/眼线已经烘进 face 图；i03 使用共享 `pc_i_nk_face`，i04 优先使用角色专属
-`pc_i04_hd_face`。更新并重启 Blender 后，旧场景直接点击 **“修复脸部”**。
+材质范围是当前仓库已验证的 Blender 近似：身体与脸 Albedo、皮肤饱和度、程序化眼球、
+睫毛/眉毛透明和头发 Alpha。Unity 原生 Toon/NPR Shader、MGAC 全通道和法线表现没有
+1:1 复刻；因此这里的“带材质”不等于游戏渲染器逐像素一致。
 
 ---
 
-## roe_xps_addon.py —— Blender 插件（主推）
+## 5. roe_xps_addon.py —— HD 角色带材质 XPS（主推）
 
-### 安装
+安装见 §1。3D 视口按 `N` → **ROE** 页签，按序点：
+**1 导入 FBX → 2 检查并准备材质 → 3 导出 XPS(.mesh)**。
 
-1. Blender **3.6** → `Edit > Preferences > Add-ons > Install...` → 选本文件 → 勾选启用。
-2. Install 实际是把文件复制到用户 addons 目录：
-   `%APPDATA%\Blender Foundation\Blender\3.6\scripts\addons\roe_xps_addon.py`
-   （更新 = 再 Install 一次覆盖，或直接替换这个文件后重启）。
-
-> **⚠️ 更新插件后必须重启 Blender**——Install 覆盖的只是磁盘文件，内存里
-> 跑的还是旧代码。旧版遗留的残缺 'XPS Shader' 节点组会让导入 .mesh 报
-> `KeyError: 'Alpha'`（新版会自愈，但前提是新代码真的加载了）。
-
-**依赖**：XNALaraMesh 插件已安装并启用（第 3/4 步用到），
-addons 目录名叫 `XNALaraMesh` 或 `XNALaraMesh-master` 都能识别。
-
-### 使用
-
-3D 视口按 `N` → **ROE** 页签，按序点：
-**1 导入 FBX → 2 检查并准备材质 → 3 导出 XPS(.mesh)**；
-首次导入或不确定问题范围时继续使用完整的“检查并准备材质”。只有某一区域异常时，
+首次导入或不确定问题范围时使用完整的“检查并准备材质”。只有某一区域异常时，
 可分别点击 **“修复脸部 / 修复身体 / 修复翅膀”**；三个按钮只替换各自识别到的材质槽，
 不会顺带重建另外两类。翅膀与身体共用 mesh（如 g09）也按原始槽名隔离。
-若眼球仍为纯白或脸色，点新增的 **「修复眼睛」**，它会兼容骨骼权重缺失但仍保留
+若眼球仍为纯白或脸色，点 **「修复眼睛」**，它会兼容骨骼权重缺失但仍保留
 原始 `eye/eyes/iris` 材质名的角色（如 a08），只重新识别和设置眼球面。
 **4 修正XPS骨架方向** 是导回 .mesh 后骨架躺地上时用的。
 字段说明和故障排查见 [xps-addon.md](../../docs/xps-addon.md)。
@@ -203,13 +248,17 @@ addons 目录名叫 `XNALaraMesh` 或 `XNALaraMesh-master` 都能识别。
 >   `D:\roe_exports\a07\pc_a07_hd (1)\FBX_GameObjects\pc_a07_hd\pc_a07_hd.fbx`；
 >   无后缀的 `pc_a07_hd` 缺少身体四槽材质分区。
 > - 「贴图目录」→ 提取时 `-ExportTextures` 生成的 `D:\roe_exports\<角色>\_textures\`。
-> - 「XPS 输出」→ **别放进 `D:\roe_exports\<角色>\`**（重提取会被清空，见上）。
+> - 「XPS 输出」→ **别放进 `D:\roe_exports\<角色>\`**（重提取会被清空，见 §3）。
 >   输出目录和贴图目录不同时，插件会把用到的贴图自动复制过去；
 >   之后手动挪 `.mesh` 的话同目录的 PNG 必须一起挪（XPS 按同目录文件名找贴图）。
 
+自动准备后仍有局部材质错误时，按
+[ROE 材质手动修复指南](../../docs/roe-manual-material-repair.md) 修复身体槽、透明罩
+或头部所选面，不要直接删除几何或修改 UV/权重。
+
 ---
 
-## blender_face_materials.py —— 挂材质独立脚本
+## 6. blender_face_materials.py —— 挂材质独立脚本
 
 插件第 2 步的独立版本，**用插件就不需要它**；适合无头批处理或单独调参。
 
@@ -223,12 +272,85 @@ addons 目录名叫 `XNALaraMesh` 或 `XNALaraMesh-master` 都能识别。
 
 ---
 
-## 当前部署速查（远程游戏机 haoni）
+## 7. convert_fbx.py —— 格式转换助手（白模）
+
+一般不直接用：`extract_character.ps1 <id> -Format xps/pmx/glb` 时被自动调用。手动调用：
+
+```
+blender --background --python convert_fbx.py -- <输入.fbx> <输出目录> <xps|pmx|glb>
+```
+
+| 格式 | 依赖（装在被调用的那个 Blender 里） |
+|---|---|
+| xps | XNALaraMesh（或 b2xps）插件已启用 |
+| pmx | mmd_tools 插件 |
+| glb | 无（Blender 内置） |
+
+> **注意：这条转换不处理材质/贴图，导出的是白模。**
+> 要带材质（含眼球/睫毛/眉毛修复）的 XPS，用 §5 的 roe_xps_addon.py；
+> 要带材质的裸模多格式，用 §4 的 export_nude_models.ps1。
+
+FBX 里没有网格/骨架时会明确报错退出（有的角色的 `nk_bs` 是纯空节点层级，
+如 g02）；ps1 调用时会自动换下一个候选 FBX（一般是 `pc_<id>_hd`）重试。
+
+---
+
+## 8. 已知兼容坑速查
+
+历史踩坑的根因、正确基线和禁止做法统一维护在
+[ROE Blender 材质兼容避坑手册](../../docs/roe-material-pitfalls.md)；这里只留
+「看到什么症状 → 做什么」的速查（自对应插件版本起自动处理，只需更新插件、重启
+Blender 后重做对应步骤，**不要**改贴图文件名/UV/权重）：
+
+| 角色 | 症状 | 自版本 | 操作 |
+|---|---|---|---|
+| g02 | body 贴图名把 `Albedo` 拼成 `Abedo`，身体白模 | v1.1.4 | 重新“检查并准备材质” |
+| b02 | 左眼“眼镜片”状物（实为 `pc_b_nk_tears` 罩层）、下睫毛肤色 | v1.1.6 | 重新“检查并准备材质”；正确头部分槽 face `13920` / eye `864` / lash `804` / brow `228` / overlay `116`，身体 tear 槽 `32` 面纯透明 |
+| g07 | 身体槽名含 `_hd_` 但 PNG 名省略，body1/body2 匹配失败 | v1.1.7 | 重新“检查并准备材质” |
+| g09 | 翅膀黑底/实心卡片/黑色散点 | v1.1.9 | 重新准备材质并导出；wing 槽 Alpha Clip + RG7，身体仍 RG5 |
+| e06 | 导入报 `KeyError: Root`，留下 4 个无材质半成品 | v1.1.10 | 删除半成品，用 `pc_e06_hd (1)` FBX 重新导入 |
+| F10 | 身体正常但脸大面积消失/透明 | v1.1.11 | 点“修复脸部”；正确五槽 `15354/864/900/228/390` |
+| i03/i04 | face 无贴图，日志报缺 `eye_iris`/`eyebrow` | v1.1.12 | 点“修复脸部”；i 体型回退 `pc_i_ld_eyes`，眉毛已烘进 face |
+| B01 裸模 | 眼球槽存在但无面（80/20 权重混合） | nude 流程 | `nude:b01` 自动处理，worker 有 `eye > 0` 硬校验 |
+
+---
+
+## 9. 测试
+
+`tests/` 下是 Blender 3.6 无头回归。**5 个合成 fixture 测试**无需任何素材：
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" --background --factory-startup --python tests\test_head_material_semantics_blender.py
+```
+
+同样方式可跑 `test_texture_aliases`、`test_body_texture_variants`、
+`test_xps_alpha_slots`、`test_fbx_missing_bind_compat`。每个测试成功时最后打印
+`*_TEST=PASS` 标记。
+
+> **⚠️ Blender 在 Python 异常后仍可能以退出码 0 结束**，判断通过与否必须看
+> `*_TEST=PASS` 标记，不能只看退出码。
+
+**3 个集成测试**需要 `--` 之后传真实素材路径与期望值（按各文件头部的 assert 提示）：
+
+| 测试 | 参数 |
+|---|---|
+| `test_face_family_matrix_blender.py` | `<fbx> <贴图目录> <face图> <eye图> <槽面数json> <transparent\|textured> [brow图]` |
+| `test_i_family_materials_blender.py` | `<i体型fbx> <贴图目录> <期望face图名> <期望face面数>` |
+| `test_source_texture_hint_body_blender.py` | `<pc_i03_hd.fbx> <i03贴图目录>` |
+
+`test_fbx_missing_bind_compat` 也接受可选 `<E06 FBX> <贴图目录>` 做真实导入集成。
+期望基线（面数矩阵）见[避坑手册](../../docs/roe-material-pitfalls.md)的回归矩阵表。
+
+---
+
+## 10. 当前部署速查（远程游戏机 haoni）
 
 | 内容 | 位置 |
 |---|---|
 | 仓库同步副本 | `E:\code\othercode\ripper_tpose`（脚本在 `scripts\riseoferos\` 下，成对齐全） |
-| 提取脚本副本 | `E:\tools\extract_character.ps1` + `convert_fbx.py`（从仓库复制，两处均可运行） |
+| 提取脚本副本 | `E:\tools\extract_character.ps1` + `convert_fbx.py`（从仓库复制；**只有这两个文件，`nude:<id>` 在这份副本上不可用**——裸模请在仓库目录运行，或把 §1 列出的脚本成组补齐） |
 | 插件（已装） | `C:\Users\haoni\AppData\Roaming\Blender Foundation\Blender\3.6\scripts\addons\roe_xps_addon.py` |
 | XNALaraMesh | 同上 addons 目录下 `XNALaraMesh-master\` |
 | 提取输出 | `D:\roe_exports\<角色>\` |
+| 裸模产物 | `D:\roe_exports\nude_materials\` |

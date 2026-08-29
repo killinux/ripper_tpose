@@ -132,6 +132,42 @@ def build_head_fixture():
     return obj, source_indices, regions
 
 
+def build_b01_weighted_eye_fixture(polygon_count=432):
+    """B01 eye: one vague source slot, 80% Eyeball + 20% Head weight."""
+    vertices = [(0.0, 0.0, 0.0)]
+    uv = [(0.5, 0.5)]
+    faces = []
+    for index in range(polygon_count):
+        angle = 2.0 * math.pi * index / polygon_count
+        vertices.append((
+            0.02 * math.cos(angle),
+            0.02 * math.sin(angle),
+            0.02 * math.sin(angle),
+        ))
+        uv.append((
+            0.5 + 0.5 * math.cos(angle),
+            0.5 + 0.5 * math.sin(angle),
+        ))
+    for index in range(polygon_count):
+        faces.append((0, index + 1, (index + 1) % polygon_count + 1))
+
+    mesh = bpy.data.meshes.new("b01_weighted_eye_mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    uv_layer = mesh.uv_layers.new(name="UVMap")
+    for loop in mesh.loops:
+        uv_layer.data[loop.index].uv = uv[loop.vertex_index]
+
+    obj = bpy.data.objects.new("pc_b01_nk_body_fixture", mesh)
+    bpy.context.collection.objects.link(obj)
+    all_vertices = list(range(len(vertices)))
+    eyeball = obj.vertex_groups.new(name="Bip001 Eyeball_L")
+    head = obj.vertex_groups.new(name="Bip001 Head")
+    eyeball.add(all_vertices, 0.8, 'REPLACE')
+    head.add(all_vertices, 0.2, 'REPLACE')
+    return obj
+
+
 SOURCE_MATERIALS = (
     "pc_b_nk_face",
     "pc_b_nk_eyes",
@@ -163,6 +199,14 @@ for index, module_path in enumerate(MODULE_PATHS):
             % (region, sorted(actual), expected_slot, module_path.name))
 
     bpy.data.objects.remove(head, do_unlink=True)
+
+    b01_eye = build_b01_weighted_eye_fixture()
+    b01_classified = module.classify_head(
+        b01_eye, ("pc_b01_nk_body",), [0] * len(b01_eye.data.polygons))
+    assert set(b01_classified.values()) == {1}, (
+        "B01 weighted eyeball was not classified as eye in %s"
+        % module_path.name)
+    bpy.data.objects.remove(b01_eye, do_unlink=True)
 
     tear_mesh = bpy.data.meshes.new("body_with_tear_slot_mesh")
     tear_mesh.from_pydata(

@@ -31,6 +31,25 @@ cd E:\tools   # 或脚本所在目录
 .\extract_character.ps1 -List
 ```
 
+输出分为两部分：普通角色 ID，以及 17 个已经建立材质规则的基础裸模
+`nude:a00`、`nude:a01` … `nude:m01`、`nude:e01_fm/f01_fm/g01_fm`。
+
+### 导出材质化基础裸模
+
+```powershell
+# 默认生成带内嵌贴图的 Blend
+.\extract_character.ps1 nude:b01
+
+# 同时生成全部支持格式
+.\extract_character.ps1 nude:b01 -Format blend,fbx,xps,pmx,glb -Force
+```
+
+产物进入 `D:\roe_exports\nude_materials\`；FBX、XPS、PMX、GLB 使用各自子目录。
+这条路径使用六槽裸模材质修复和烘焙眼球；不同于下文普通角色的白模快速转换。
+`nude:<id>` 基于该角色的常规提取产物（`D:\roe_exports\<角色>\` 的 FBX 与
+`_textures`）；缺失时会自动先补一次带贴图的常规提取，需要游戏本体与
+AssetStudioModCLI 在位。
+
 输出:
 ```
 Found <N> character IDs across 2 AssetBundle source(s):
@@ -60,7 +79,7 @@ a01, a02, a03, ... m10
 
 ## 格式转换(`-Format`)
 
-默认只输出 FBX。加 `-Format` 自动转换为其他格式(在 FBX 基础上,自动挑选主体 body 网格做转换):
+普通角色默认只输出 FBX。加 `-Format` 自动转换为其他格式(在 FBX 基础上,自动挑选主体 body 网格做转换):
 
 ### 转 XPS(XNALara)
 

@@ -14,6 +14,80 @@
 
 ---
 
+## 2026-08-09 — Rise of Eros 基础裸模带材质批量导出
+
+### 新增与修复
+
+- 新增 `scripts/riseoferos/export_nude_models.ps1` 与 Blender worker
+  `export_nude_model_blender.py`，批量处理 `a00`、A–M 十三套 `01` 基础体和 E/F/G
+  三套 `fm` 变体，默认集中输出到 `D:\roe_exports\nude_materials`。
+- 每个 `.blend` 打包实际引用的图片，并生成 `nude_models_manifest.json`；支持
+  `-ValidateOnly`、`-Only`、`-Force`、自定义源目录和输出目录。
+- `extract_character.ps1 -List` 新增 17 个 `nude:<id>` 独立条目，并可直接执行例如
+  `nude:b01 -Format blend,fbx,xps,pmx,glb`。`export_nude_models.ps1 -List` 提供相同清单；
+  原有普通角色 ID 与默认 FBX 提取行为不变。
+- 材质化裸模新增 Blend/FBX/XPS/PMX/GLB 多格式输出。非 Blender 格式先把程序化眼球
+  烘焙成便携虹膜贴图；FBX/GLB 内嵌纹理，XPS/PMX 输出配套 PNG。六槽 nude XPS 会按
+  `body / face / eye / lash / brow` 拆成正确 render group，透明 overlay 不导出。
+- `-Only` 现在合并更新已有 manifest，并按 17 套规范顺序保留未重导出的记录，不再因
+  单独补导一个格式而把完整清单覆盖成一条；manifest 同时记录每种格式的实际路径。
+  `-ValidateOnly` 的结果改写入独立快照 `nude_models_manifest.validate.json`：验证运行
+  没有输出路径，合并进正式 manifest 会把已记录的导出路径清成空记录。
+- `extract_character.ps1 nude:<id>` 在缺少该角色常规提取产物（FBX 或 Albedo 贴图）时，
+  先自动执行一次带 `-ExportTextures` 的常规提取再进入裸模流程；普通角色 ID 与
+  `blend` 格式混用的错误改为执行前报告；`-Force` 仅作用于 nude 导出（帮助里注明）。
+- 加固批量导出链路：裸模六槽在对象上打 `roe_nude_slots` 自定义属性标记，XPS 导出改
+  按标记识别（材质名嗅探不稳定——便携眼球烘焙会把 eye 槽换成 `eye_portable`，仅存
+  旧 .blend 兜底）；PMX 因 mmd_tools 原地改建骨架而固定最后导出；便携眼球烘焙状态
+  记入 manifest（a00 无组合裸模网格时记录 `skipped` 及原因，槽丢失则直接判失败）；
+  worker 失败时把 Python traceback 一并写入 manifest；XPS 导出算子已注册时不再要求
+  特定插件模块名。
+- 修复直接复用 HD 材质流程时的裸模错误：`*_nk_body` 同时含躯干和头部，旧逻辑会把
+  所有默认区域都指向 face Albedo。worker 保留既有眼球/睫毛/眉毛分类，再按连通块与
+  面部骨权重建立 `body / face / eye / lash / brow / overlay` 六槽。
+- 修复 B01 眼球材质槽存在但没有实际面的错误。B01 眼球约按 80% `Eyeball`、20% `Head`
+  混合权重，旧版 90% 门槛会把左右眼共 864 面留在 face；现在只有同时符合多数眼球权重、
+  250–800 面紧凑拓扑及完整 0–1 虹膜 UV 的连通块才按眼球处理。裸模 worker 也新增
+  `eye > 0` 硬校验，避免空眼球槽再次被当作成功。
+- Blender worker 的结果行改为 ASCII 转义 JSON，避免 Windows PowerShell 5.1 用 OEM 代码页
+  错误解码中文诊断并吞掉字符串结尾，从而生成无法被标准 JSON 解析器读取的 manifest。
+- 贴图临时目录只归集同字母体型资源；缺失公共头部贴图时直接读取游戏的
+  `chara_tex_bare_pc_<字母>_common*`，并拒绝把其他体型的脸当兜底。
+
+### 操作与验证
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+.\export_nude_models.ps1                 # 实际导出
+.\export_nude_models.ps1 -ValidateOnly   # 只检查
+.\extract_character.ps1 -List
+.\extract_character.ps1 nude:b01 -Format blend,fbx,xps,pmx,glb -Force
+```
+
+- Blender 3.6 无头验证 17/17 通过：标准裸模各为 2 网格、1 骨架和 7 个材质槽；I/J
+  体型眉线已烘进 face，使用 4 张 diffuse，其余使用 5 张；`a00` 是独立的两网格/两材质
+  通用体。
+- A01 六槽面数为 `36142 / 15042 / 864 / 804 / 228 / 294`；身体和脸分别命中
+  `pc_a01_nk_body` 与 `pc_a_nk_face`，没有再把躯干错误映射到脸图。
+- B01 修复后六槽面数为 `35414 / 15078 / 864 / 884 / 228 / 0`，眼球使用同体型的
+  `pc_b_nk_eye_iris_rgbx_Albedo.png`；合成回归同时覆盖插件与独立脚本的 80/20 权重眼球。
+- B01 五格式真实导出并重导入通过：FBX/GLB 均为 2 网格、1 骨架、61,624 面；XPS 为
+  body `35414`、face `15078`、eye `864`、lash `884`、brow `228`、hair `9156` 六个分件；
+  PMX 合并为 1 网格、1 骨架、6 材质、61,624 面，五张配套纹理均可重新加载。
+- 实际保存并重开 A01 `.blend`，确认图片均为 packed；EEVEE 正面渲染确认身体、脸、
+  眼睛和头发贴图连续。材质仍是 Blender PBR/程序化近似，不声称复刻 Unity Toon/NPR、
+  MGAC 与 Normal 的完整游戏内效果。
+- 2026-08-29 加固后复验：`-ValidateOnly` 全 17 套重新 PASS 并写入独立
+  `nude_models_manifest.validate.json`，对已有正式 manifest 的目录重复验证后其内容逐
+  字节不变；B01 五格式重新导出 PASS，manifest 含 `portableEye`（status/path）与
+  `nudeSplit.eye_slot`，XPS 内部分件为 `5_body / 5_face / 5_eye / 7_lash / 7_brow`；
+  保存的 `.blend` 重开后 `roe_nude_slots=1` 与 6 槽仍在；空 `-OutputRoot` 下
+  `extract_character.ps1 nude:b01` 自动先完成常规提取（34 个角色 FBX、165 张贴图）再
+  产出 blend；两个 PowerShell 脚本通过语法解析，对现有 17 套素材的缺源检测全部命中
+  「无需补提取」；4 个合成 fixture Blender 回归（head 语义、贴图别名、body 变体、XPS
+  alpha 槽）与 FBX bind 兼容测试共 5 项 PASS（3 个需真实 HD 素材参数的矩阵测试未随
+  本次运行）。
+
 ## 2026-08-09 — Venus Vacation PRISM 角色名称对应表
 
 ### 新增
