@@ -14,6 +14,90 @@
 
 ---
 
+## 2026-08-29 — Throne of Desire 裸模批量导出统一入口
+
+### 新增与修复
+
+- 新增 `scripts/throneofdesire/export_nude_models.ps1`：与 ROE 同名脚本约定一致的
+  PowerShell 入口（`-List` / `-Only` / `-Format` / `-ValidateOnly` / `-Force`，本机
+  默认路径零参数即跑），包装既有 `batch_export_female.py`。模型清单从 Python 模块的
+  `FEMALE_MODEL_IDS` 动态读取，保持单一事实源。ToD 女性 h 系模型本体即裸模（衣服为
+  默认隐藏的附件网格，FBX 只含基础身体+骨架），无需 mod。
+- `-ValidateOnly` 调用既有 `validate_female_exports36.py` 在 Blender 中重开已导出的
+  Blend/FBX 复检，报告写独立 `female_export_validation.json`，不触碰导出 manifest。
+- 修复 `batch_export_female.py` 的 manifest 覆盖问题（与 ROE `-Only` 同型）：
+  `--models` 子集运行改为合并更新 `female_export_manifest.json`，按 13 套规范顺序保
+  留未重导出的记录；损坏的旧 manifest 安全忽略。真实导出前预检两个贴图解码器并给出
+  `build_codecs.py` 构建提示。
+
+### 操作与验证
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
+.\export_nude_models.ps1 -List
+.\export_nude_models.ps1 -Only h005,h020 -Force
+.\export_nude_models.ps1 -ValidateOnly
+```
+
+- 真机 `-List` 正确显示 13 套全部 COMPLETE；`-Only h005` 断点续跑秒级 skip，且
+  manifest 保持 13 条完整记录（修复前会被覆盖成 1 条），`requested_models` 如实记录
+  本次子集。
+- `-ValidateOnly -Only h005,h020` 重开验证 2/2 ok 并写入独立报告。
+- 缺解码器时预检报错并给出构建指引；`build_codecs.py` 经 WSL g++ 重建两个解码器后
+  恢复正常。纯 Python 单测
+  `tests/test_batch_export_female_manifest.py` 5/5 通过（合并、幂等、规范排序、损坏
+  manifest 容错）。
+- 沿用限制不变：产物为静态网格 + 未蒙皮静止骨架（蒙皮/动画尚未恢复），XPS 不支持。
+
+---
+
+## 2026-08-29 — FF7 Rebirth 已导出变体批量材质化
+
+### 新增与修复
+
+- 新增 `scripts/final/export_ff7rb_models.ps1` 与 Blender worker
+  `export_ff7rb_model_blender.py`：扫描 FModel 已保存的 Player 变体
+  （`PC????_*`），无头导入 ActorX、修 PSK 三角反光、按 FModel 材质 JSON 匹配贴图
+  （复用 `ff7rebirth_tools.py` 的模块函数），输出内嵌贴图 `.blend`，可选 FBX/GLB。
+  默认输出 `D:\ff7rebirth_exports\materialized`。
+- 上游保持手动：FModel 无 CLI，未保存的变体不做自动补提取；无 `Model` 目录的材质
+  包（湿身/眼泪、`PC7002_00` 转换失败件）记为 `NO_MODEL` 并跳过，不算失败。
+- `.blend` 保留完整节点；FBX/GLB 前做便携简化：分层眼球按 ColorRamp 参数烘成单张
+  PNG（smoothstep 近似 EASE），DirectX 法线预翻转 G 通道生成 `*_gl.png` 直连
+  Normal Map，`simplified` 字段记录改动。XPS/PMX 未在 FF7RB 骨架上验证，暂不提供。
+- 修复跨目录贴图引用：材质 JSON 的引用是精确 Unreal 包路径，常指向本变体之外
+  （PC0002_11 换衣模型复用 PC0002_00 的皮肤/头发/服装 atlas；眼白/口腔在
+  `Character\Common`）。旧版只扫本变体目录，PC0002_11 的十个材质全部被按名兜底连到
+  唯一本地贴图 `Skin_O` 遮罩，整模呈灰白色。现在语义解析在整个已导出 `Character` 树
+  上按包路径精确匹配（`texture_reference_score` 按 `End/Content/<相对路径>` 后缀计
+  分），按名兜底仍限本变体 + Common；manifest 增记 `indexedTextures`。
+- manifest 机制对齐 ROE：`-ValidateOnly` 写独立快照、`-Only` 按扫描顺序合并、失败
+  记录 ASCII 转义的 traceback；worker 结果行同样规避 PowerShell 5.1 OEM 解码问题。
+
+### 操作与验证
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\final
+.\export_ff7rb_models.ps1 -List
+.\export_ff7rb_models.ps1                 # 全部有模型变体 -> .blend
+.\export_ff7rb_models.ps1 -Only PC0002_00 -Format blend,fbx,glb -Force
+```
+
+- 真机全量：9/9 个已保存变体 PASS（8 个 Tifa `.pskx` + Toad Tifa `.psk`），5 个
+  `NO_MODEL` 正确跳过；产物 13–141 MB `.blend` 落盘并生成 manifest。
+- PC0002_00 三格式导出 PASS：536 骨、188,921 顶点、226,086 面、12 材质，11 张法线
+  预翻转，`Common_Mouth_Light` 无 Base Color 如实记入 `missing_base`。
+- `-ValidateOnly -Only PC0099_03` 覆盖 `.psk` 旧格式分支并写入
+  `ff7rb_models_manifest.validate.json`，不触碰正式 manifest。
+- 纯 Python 单测 `tests/test_export_ff7rb_worker.py` 7/7 通过（眼球烘焙数学、最近邻
+  重采样、格式白名单与 marker 契约），mock bpy，无需 Blender。
+- 跨目录引用修复后全量 `-Force` 重导 9/9 PASS：PC0002_11 的 10/11 材质按 JSON 引用
+  连上 `PC0002_00_*_C` 共享 atlas（EEVEE 渲染确认服装/皮肤/头发正确），九个变体的眼
+  睛全部转为 sclera+iris 分层混合（此前仅 PC0002_00），`missingBase` 仅剩 PC0002_05
+  的发光材质（本就无 Base Color）。语义索引覆盖 179 张已导出贴图。
+
+---
+
 ## 2026-08-09 — Rise of Eros 基础裸模带材质批量导出
 
 ### 新增与修复

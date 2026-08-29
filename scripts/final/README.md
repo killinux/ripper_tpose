@@ -17,7 +17,7 @@ INTERGRADE》的最终导出工具。两款游戏都使用 Unreal，但封包和
 | 模型格式 | ActorX `.psk/.pskx` | ActorX `.pskx` |
 | 角色根路径 | `End/Content/Character/Player` | `End/Content/GameContents/Character/Player` |
 | 默认输出根目录 | `D:\ff7rebirth_exports\fmodel_exports` | `D:\ff7remake_exports\umodel_original` |
-| 自动化程度 | FModel 中手动保存，Blender 插件自动整理 | PowerShell 批量导出，Blender 手动导入/配材质 |
+| 自动化程度 | FModel 中手动保存；已保存的变体可用 `export_ff7rb_models.ps1` 批量材质化（A8） | PowerShell 批量导出，Blender 手动导入/配材质 |
 
 目录中的文件：
 
@@ -25,12 +25,15 @@ INTERGRADE》的最终导出工具。两款游戏都使用 Unreal，但封包和
 |---|---|
 | `prepare_fmodel.ps1` | 检查 Rebirth IoStore 文件并建立隔离的输出目录，可选启动 FModel |
 | `ff7rebirth_tools.py` | Blender 3.6 插件：扫描 Rebirth 导出、导入 PSK、匹配基础贴图和绑定同骨架配件 |
+| `export_ff7rb_models.ps1` | 批量把已保存的 Player 变体无头材质化为 Blend/FBX/GLB（A8） |
+| `export_ff7rb_model_blender.py` | 被上一脚本调用的 Blender worker：导入、修反光、挂材质、便携简化 |
 | `ff7remake_export.ps1` | 使用专用 UE Viewer 安全导出 Remake 的一个或多个资源包 |
 | `fix_ff7remake_tifa_gloves.py` | Blender 3.6 后台脚本：校验并把 Remake Tifa 独立手套绑定到主体骨架 |
 | `validate_ff7remake_model.py` | Blender 3.6 后台脚本：导入 Remake PSK、连接基础材质并生成 blend、预览和报告 |
 | [`docs/ff7remake-mod-manual-export.md`](../../docs/ff7remake-mod-manual-export.md) | Remake Mod 手动导出：Mod-only 挂载、原始包转 32 位 glTF、Blender 3.6 材质和手套合并 |
 | `ff7r_mesh_importer_large_mesh_cm.patch` | FF7R-mesh-importer v0.2.1 补丁：大网格 32 位索引和厘米坐标 |
 | `tests/test_ff7rebirth_helpers.py` | Rebirth Blender 插件的纯 Python 辅助逻辑测试 |
+| `tests/test_export_ff7rb_worker.py` | 批量 worker 的眼球烘焙/重采样数学与格式契约测试（无需 Blender） |
 
 ## 2. 公共准备
 
@@ -294,6 +297,48 @@ Opacity。Unreal 法线是 DirectX `Y-`，插件会把绿色通道转换为 `1-G
 5. 在主体骨架 Pose Mode 轻微旋转腕部/手指测试随动，撤销测试后保存 `.blend`。
 
 这里复用的是 PSK 自带权重，不要对手套重新计算自动权重。
+
+## A8. 批量材质化导出（export_ff7rb_models.ps1）
+
+对**已经用 FModel 保存到磁盘**的 Player 变体做无头批量处理：导入 ActorX、修 PSK
+三角反光、按 FModel 材质 JSON 匹配贴图（复用 A7 插件的同一套逻辑），输出内嵌贴图的
+`.blend`，可选 FBX/GLB。上游仍需在 FModel 里手动 Save Model——FModel 没有 CLI，
+未保存的变体无法在这里自动补提取；待导出差集见
+[`docs/ff7rebirth-player-export-inventory.md`](../../docs/ff7rebirth-player-export-inventory.md)。
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\final
+
+.\export_ff7rb_models.ps1 -List           # 磁盘上的变体与状态（MODEL / NO_MODEL）
+.\export_ff7rb_models.ps1                 # 全部有模型的变体 -> 内嵌贴图 .blend
+.\export_ff7rb_models.ps1 -ValidateOnly   # 只导入+校验，不写产物
+.\export_ff7rb_models.ps1 -Only PC0002_00 -Format blend,fbx,glb -Force
+```
+
+| 参数 | 说明 |
+|---|---|
+| `-Only` | 变体全名或 PC 编号前缀（`PC0002_00` 即可） |
+| `-Format` | `blend`（默认）/`fbx`/`glb`；XPS/PMX 在 FF7RB 尚未验证，不提供 |
+| `-ValidateOnly` | 校验结果写独立快照 `ff7rb_models_manifest.validate.json` |
+| `-Force` | 覆盖已有产物（否则产物齐全的变体 SKIP） |
+| `-SourceRoot` / `-OutputDir` / `-BlenderExe` | 路径覆盖；输出默认 `D:\ff7rebirth_exports\materialized` |
+
+产物与保真度：
+
+- `.blend` 保留完整生成节点（分层眼球、DirectX→OpenGL 法线重建、ORM 拆分），
+  贴图全部打包进文件；
+- FBX/GLB 导出器无法序列化上述节点链，导出前会做**便携简化**：分层眼球烘成单张
+  PNG 直连 Base Color，法线贴图预翻转 G 通道生成 `textures\*_gl.png` 直连 Normal
+  Map；ORM/透明通道按导出器自身能力保留，manifest 的 `simplified` 字段记录改动；
+- 材质 JSON 的贴图引用是精确 Unreal 包路径，常指向本变体目录之外：换衣等变体复用
+  `PC0002_00` 的皮肤/头发/服装 atlas，眼白与口腔在 `Character\Common`。语义解析因此
+  在整个已导出的 `Character` 树上按包路径精确匹配（manifest 记 `indexedTextures`）；
+  按文件名猜测的兜底仍只搜索本变体 + Common，不会借用其他服装的贴图；
+- `ff7rb_models_manifest.json` 记录每个变体的骨骼/顶点/面数、材质与贴图统计、无
+  Base Color 贴图的材质（如口腔光照辅助 `Common_Mouth_Light`）、便携简化内容和失败
+  traceback；`-Only` 补导会按扫描顺序合并进已有 manifest。
+- 无 `Model` 目录的变体（湿身/眼泪等材质包、`PC7002_00` ActorX 转换失败件）记为
+  `NO_MODEL`，全量运行时跳过而不算失败。
 
 ---
 

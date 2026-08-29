@@ -7,7 +7,7 @@
 | Rise of Eros | Unity AssetBundle | [`riseoferos/`](riseoferos/) | `riseoferos\extract_character.ps1` |
 | FINAL FANTASY VII REBIRTH | Unreal IoStore (`.utoc/.ucas`) | [`final/`](final/) | `final\prepare_fmodel.ps1` |
 | Stellar Blade | Unreal IoStore (`.utoc/.ucas`) | [`stellarblade/`](stellarblade/) | `stellarblade\validate_eve.py` |
-| Throne of Desire | X-Legend NFS + Gamebryo NIF/KFM | [`throneofdesire/`](throneofdesire/) | `throneofdesire\extract_nfs.py` |
+| Throne of Desire | X-Legend NFS + Gamebryo NIF/KFM | [`throneofdesire/`](throneofdesire/) | `throneofdesire\export_nude_models.ps1` |
 | Venus Vacation PRISM | KTGL RDB/FDATA + G1M | [`venusvacationprism/`](venusvacationprism/) | `venusvacationprism\map_characters.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
@@ -20,7 +20,8 @@ Blender 插件也彼此独立：
 - Stellar Blade：`scripts\stellarblade\validate_eve.py`，Blender 3.6 后台组合验证。
 
 FFVII Rebirth 不能调用 AssetStudio：它的模型先由 FModel 从 Unreal IoStore 导出，再由
-Blender 插件从导出目录导入。完整步骤见
+Blender 插件从导出目录导入；已保存的 Player 变体可用
+`final\export_ff7rb_models.ps1` 无头批量材质化为 Blend/FBX/GLB。完整步骤见
 [`docs/final-fantasy-vii-rebirth-extraction.md`](../docs/final-fantasy-vii-rebirth-extraction.md)；
 Player 的已导出/待导出差集与逐项手动操作见
 [`docs/ff7rebirth-player-export-inventory.md`](../docs/ff7rebirth-player-export-inventory.md)。
@@ -30,9 +31,10 @@ Stellar Blade 使用精确的 `GAME_StellarBlade` profile 和独立 mapping；Ev
 Viewer 导出与 Blender 3.6 骨骼锚点组合方法见
 [`docs/stellar-blade-extraction.md`](../docs/stellar-blade-extraction.md)。
 
-Throne of Desire 不使用 Unreal/Unity。先用 `extract_nfs.py` 读取
-`packageindex` 和 `FileListPC.txt`，得到 Gamebryo NIF/KFM，再交给兼容的
-X-Legend 查看器或 NIF 转换器。当前索引结构、资产统计和 Blender 3.6 限制见
+Throne of Desire 不使用 Unreal/Unity。批量出带材质裸模用
+`throneofdesire\export_nude_models.ps1`（女性 h 系模型本体即裸模，衣服是默认隐藏的
+附件）；底层由 `extract_nfs.py` 读取 `packageindex` 和 `FileListPC.txt` 得到
+Gamebryo NIF/KFM，再交给仓库的 Blender 导入器或兼容的 X-Legend 查看器。当前索引结构、资产统计和 Blender 3.6 限制见
 [`docs/throne-of-desire-extraction.md`](../docs/throne-of-desire-extraction.md)。
 
 Venus Vacation PRISM 使用 KTGL RDB/FDATA。`list_models.py` 会生成全量 G1M 清单，

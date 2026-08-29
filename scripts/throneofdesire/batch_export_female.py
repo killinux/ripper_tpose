@@ -89,9 +89,36 @@ def directory_size(path: Path) -> int:
     return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
-def write_manifest(output_root: Path, records: list[dict]) -> None:
-    complete = [item for item in records if item["status"] in {"complete", "skipped"}]
-    failed = [item for item in records if item["status"] == "failed"]
+def load_preserved_records(output_root: Path, requested: set[str]) -> list[dict]:
+    """Keep prior manifest entries for models not re-exported this run.
+
+    Without this, a ``--models`` subset would rewrite the manifest with only
+    the requested models and silently drop the other recorded exports.
+    """
+    manifest = output_root / "female_export_manifest.json"
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [item for item in payload.get("records", [])
+            if isinstance(item, dict) and item.get("model") not in requested]
+
+
+def write_manifest(
+    output_root: Path,
+    records: list[dict],
+    preserved: list[dict] | tuple = (),
+) -> None:
+    order = {model: index for index, model in enumerate(FEMALE_MODEL_IDS)}
+    merged = sorted(
+        list(preserved) + records,
+        key=lambda item: (
+            order.get(item.get("model"), len(order)),
+            item.get("model", ""),
+        ),
+    )
+    complete = [item for item in merged if item["status"] in {"complete", "skipped"}]
+    failed = [item for item in merged if item["status"] == "failed"]
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "classification": "render-verified female KFM model groups; hm scene groups excluded",
@@ -99,7 +126,7 @@ def write_manifest(output_root: Path, records: list[dict]) -> None:
         "complete_count": len(complete),
         "failed_count": len(failed),
         "total_bytes": sum(item.get("bytes", 0) for item in complete),
-        "records": records,
+        "records": merged,
     }
     output_root.mkdir(parents=True, exist_ok=True)
     manifest = output_root / "female_export_manifest.json"
@@ -116,6 +143,7 @@ def main() -> int:
     export_script = script_dir / "export_model.py"
     output_root = args.output.resolve()
     records: list[dict] = []
+    preserved = load_preserved_records(output_root, set(args.models))
     formats = list(dict.fromkeys(args.formats))
     render = not args.no_render
 
@@ -131,7 +159,7 @@ def main() -> int:
                 "artifacts": [str(item) for item in artifacts],
             }
             records.append(record)
-            write_manifest(output_root, records)
+            write_manifest(output_root, records, preserved)
             print(f"[{position}/{len(args.models)}] {model_id}: already complete", flush=True)
             continue
 
@@ -173,7 +201,7 @@ def main() -> int:
             "missing_artifacts": missing,
         }
         records.append(record)
-        write_manifest(output_root, records)
+        write_manifest(output_root, records, preserved)
         print(
             f"[{position}/{len(args.models)}] {model_id}: {status} "
             f"({record['duration_seconds']}s)",

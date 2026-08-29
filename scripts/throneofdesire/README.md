@@ -15,7 +15,31 @@ python scripts\throneofdesire\build_codecs.py
 - `.tmp\lzham_v1_decode_raw`
 - `.tmp\etc_dds_decode`
 
-## 一键导出
+## 批量导出裸模（export_nude_models.ps1，推荐入口）
+
+与 ROE 的同名脚本约定一致的 PowerShell 入口，包装 `batch_export_female.py`：
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
+
+.\export_nude_models.ps1 -List           # 13 套女性基础体与产物状态
+.\export_nude_models.ps1                 # 全部 13 套 -> blend + fbx + 预览
+.\export_nude_models.ps1 -Only h005,h020 -Force
+.\export_nude_models.ps1 -ValidateOnly   # 用 Blender 重开已导出的 Blend/FBX 复检
+```
+
+Throne of Desire 的女性 h 系模型**本体就是裸模**：衣服是附件网格，导入时进入默认
+隐藏的 `*_Attachments` 集合，FBX 只导出基础身体和骨架——不需要 mod，也没有额外
+剥离步骤。`-Format blend,fbx`、`-NoRender`、`-IncludeHelpers` 透传给 Python 批处理；
+路径参数（`-GameRoot`/`-BlenderExe`/`-OutputDir`，默认
+`D:\throneofdesire_exports\female_all`）覆盖本机默认值。真实导出前会检查两个贴图
+解码器是否已构建（缺失时提示先运行 `build_codecs.py`）。
+
+`--models`/`-Only` 子集重导现在**合并更新** `female_export_manifest.json`，按 13 套
+规范顺序保留未重导出的记录，不再把完整清单覆盖成一条；`-ValidateOnly` 的结果写入
+独立报告 `female_export_validation.json`，不改动导出 manifest。
+
+## 一键导出（单模型底层命令）
 
 ```powershell
 python scripts\throneofdesire\export_model.py `

@@ -40,6 +40,10 @@ FModel 的 `Player` 虚拟目录当前有 `109` 个一级资源变体；本机�
 
 ## 2. 当前已经导出的内容
 
+> 已写入磁盘且带主模型的变体，可用
+> [`scripts/final/export_ff7rb_models.ps1`](../scripts/final/export_ff7rb_models.ps1)
+> 批量材质化为 Blend/FBX/GLB（`-List` 会显示磁盘上每个变体的 MODEL/NO_MODEL 状态）。
+
 ### 2.1 Blender 可直接导入的 9 个 ActorX 模型
 
 以下文件均已验证以 `ACTRHEAD` 开始：
