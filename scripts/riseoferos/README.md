@@ -36,6 +36,9 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
 | `convert_fbx.py` | 被 ps1 调用（Blender 无头） | FBX → XPS/PMX/GLB **白模**转换 | 本页 §8 |
 
+产物用的是 `a01`/`g11` 这类代号——字母是角色、数字是服装变体，
+字母与角色名的对照见 [character-roster.md](character-roster.md)。
+
 功能新增、操作变化和实现原理统一追加到 [更新日志](../../docs/CHANGELOG.md)。
 
 ---
