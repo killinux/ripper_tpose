@@ -1,0 +1,2326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rise of Eros 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --fix: #1d7a52; --fix-bg: #e4f5ec; --shot: #d9dbe2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --fix: #6fd3a4; --fix-bg: #1b3a2c; --shot: #2a2d34;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header {
+  padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid {
+  display: grid; gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* An author `display` beats the UA rule for [hidden], so filtering needs this. */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg {
+  padding: 46px 0; text-align: center; color: var(--muted);
+  font-size: 12px; line-height: 1.5;
+}
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.titlerow h3 { margin: 0; font-size: 15px; font-family: Consolas, monospace; }
+.badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help;
+}
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-fix { color: var(--fix); background: var(--fix-bg); }
+dl { margin: 0; display: grid; grid-template-columns: 58px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd {
+  margin: 0; font-size: 12px; font-family: Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code { font-family: Consolas, monospace; }
+.nomesh { list-style: none; padding: 0; margin: 8px 0 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 4px; }
+.nomesh li { display: flex; gap: 10px; font-size: 12.5px; }
+.nomesh span { color: var(--muted); }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Rise of Eros 模型导出总览</h1>
+  <div class="sub">生成于 2026-08-30 21:17:27 · 导出根目录 <code>D:\roe_exports</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>120</b><span>已转模型</span></div>
+    <div class="stat"><b>111</b><span>覆盖角色</span></div>
+    <div class="stat"><b>7.0 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>3</b><span>有缺图告警</span></div>
+    <div class="stat"><b>17</b><span>无独立网格</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索模型名、源 FBX 或路径…（按 / 聚焦）">
+  <button class="chip on" data-family="">全部</button>
+  <button class="chip" data-family="A">A</button><button class="chip" data-family="B">B</button><button class="chip" data-family="C">C</button><button class="chip" data-family="D">D</button><button class="chip" data-family="E">E</button><button class="chip" data-family="F">F</button><button class="chip" data-family="G">G</button><button class="chip" data-family="H">H</button><button class="chip" data-family="I">I</button><button class="chip" data-family="J">J</button><button class="chip" data-family="K">K</button><button class="chip" data-family="L">L</button><button class="chip" data-family="M">M</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="a00 pc_a00_nk.fbx d:\roe_exports\a00\blend\pc_a00_nk.blend" data-family="A" data-warn="1">
+        <a class="shot" href="file:///D:/roe_exports/a00/blend/pc_a00_nk_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a00.jpg" alt="a00"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a00</h3><span class="badge badge-warn" title="缺贴图: liquid[0] liquid_00_body_mat">缺图 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a00_nk.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a00/blend/pc_a00_nk.blend" title="D:\roe_exports\a00\blend\pc_a00_nk.blend">D:\roe_exports\a00\blend\pc_a00_nk.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a00\blend\pc_a00_nk.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>2 网格 · 3 材质槽 · 2 贴图 · 8.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a01 pc_a01_hd.fbx d:\roe_exports\a01\blend\pc_a01_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a01/blend/pc_a01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a01.jpg" alt="a01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a01/blend/pc_a01_hd.blend" title="D:\roe_exports\a01\blend\pc_a01_hd.blend">D:\roe_exports\a01\blend\pc_a01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a01\blend\pc_a01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 22.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a02 pc_a02_hd.fbx d:\roe_exports\a02\blend\pc_a02_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a02/blend/pc_a02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a02.jpg" alt="a02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a02/blend/pc_a02_hd.blend" title="D:\roe_exports\a02\blend\pc_a02_hd.blend">D:\roe_exports\a02\blend\pc_a02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a02\blend\pc_a02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 24.9 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a03 pc_a03_hd.fbx d:\roe_exports\a03\blend\pc_a03_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a03/blend/pc_a03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a03.jpg" alt="a03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a03/blend/pc_a03_hd.blend" title="D:\roe_exports\a03\blend\pc_a03_hd.blend">D:\roe_exports\a03\blend\pc_a03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a03\blend\pc_a03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 25.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a04 pc_a04_hd.fbx d:\roe_exports\a04\blend\pc_a04_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a04/blend/pc_a04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a04.jpg" alt="a04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a04/blend/pc_a04_hd.blend" title="D:\roe_exports\a04\blend\pc_a04_hd.blend">D:\roe_exports\a04\blend\pc_a04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a04\blend\pc_a04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 40.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a05 pc_a05_hd.fbx d:\roe_exports\a05\blend\pc_a05_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a05/blend/pc_a05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a05.jpg" alt="a05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a05/blend/pc_a05_hd.blend" title="D:\roe_exports\a05\blend\pc_a05_hd.blend">D:\roe_exports\a05\blend\pc_a05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a05\blend\pc_a05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 54.3 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a06 pc_a06_hd.fbx d:\roe_exports\a06\blend\pc_a06_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a06/blend/pc_a06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a06.jpg" alt="a06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a06/blend/pc_a06_hd.blend" title="D:\roe_exports\a06\blend\pc_a06_hd.blend">D:\roe_exports\a06\blend\pc_a06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a06\blend\pc_a06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 44.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a07 pc_a07_hd.fbx d:\roe_exports\a07\blend\pc_a07_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a07/blend/pc_a07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a07.jpg" alt="a07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a07/blend/pc_a07_hd.blend" title="D:\roe_exports\a07\blend\pc_a07_hd.blend">D:\roe_exports\a07\blend\pc_a07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a07\blend\pc_a07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 6 贴图 · 94.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a08 pc_a08_hd.fbx d:\roe_exports\a08\blend\pc_a08_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a08/blend/pc_a08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a08.jpg" alt="a08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a08/blend/pc_a08_hd.blend" title="D:\roe_exports\a08\blend\pc_a08_hd.blend">D:\roe_exports\a08\blend\pc_a08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a08\blend\pc_a08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 11 材质槽 · 6 贴图 · 71.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a08_outfit1 pc_a08_outfit1_hd.fbx d:\roe_exports\a08\blend\pc_a08_outfit1_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a08/blend/pc_a08_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a08_outfit1.jpg" alt="a08_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a08_outfit1</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a08_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a08/blend/pc_a08_outfit1_hd.blend" title="D:\roe_exports\a08\blend\pc_a08_outfit1_hd.blend">D:\roe_exports\a08\blend\pc_a08_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a08\blend\pc_a08_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 11 材质槽 · 6 贴图 · 69.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a09 pc_a09_hd.fbx d:\roe_exports\a09\blend\pc_a09_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a09/blend/pc_a09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a09.jpg" alt="a09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a09/blend/pc_a09_hd.blend" title="D:\roe_exports\a09\blend\pc_a09_hd.blend">D:\roe_exports\a09\blend\pc_a09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a09\blend\pc_a09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 43.9 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a10 pc_a10_hd.fbx d:\roe_exports\a10\blend\pc_a10_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a10/blend/pc_a10_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a10.jpg" alt="a10"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a10</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a10_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a10/blend/pc_a10_hd.blend" title="D:\roe_exports\a10\blend\pc_a10_hd.blend">D:\roe_exports\a10\blend\pc_a10_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a10\blend\pc_a10_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 78.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a11 pc_a11_hd.fbx d:\roe_exports\a11\blend\pc_a11_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a11/blend/pc_a11_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a11.jpg" alt="a11"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a11</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a11_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a11/blend/pc_a11_hd.blend" title="D:\roe_exports\a11\blend\pc_a11_hd.blend">D:\roe_exports\a11\blend\pc_a11_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a11\blend\pc_a11_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 6 贴图 · 54.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="a12 pc_a12_hd.fbx d:\roe_exports\a12\blend\pc_a12_hd.blend" data-family="A" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/a12/blend/pc_a12_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（A 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/a12.jpg" alt="a12"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>a12</h3><span class="badge badge-fix" title="wp_a_R[0] &lt;- wp_a_12_rgbx_Albedo_hd.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_a12_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/a12/blend/pc_a12_hd.blend" title="D:\roe_exports\a12\blend\pc_a12_hd.blend">D:\roe_exports\a12\blend\pc_a12_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\a12\blend\pc_a12_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 10 材质槽 · 7 贴图 · 87.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b01 pc_b01_hd.fbx d:\roe_exports\b01\blend\pc_b01_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b01/blend/pc_b01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b01.jpg" alt="b01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b01/blend/pc_b01_hd.blend" title="D:\roe_exports\b01\blend\pc_b01_hd.blend">D:\roe_exports\b01\blend\pc_b01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b01\blend\pc_b01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 22.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b02 pc_b02_hd.fbx d:\roe_exports\b02\blend\pc_b02_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b02/blend/pc_b02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b02.jpg" alt="b02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b02/blend/pc_b02_hd.blend" title="D:\roe_exports\b02\blend\pc_b02_hd.blend">D:\roe_exports\b02\blend\pc_b02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b02\blend\pc_b02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 5 贴图 · 22.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b03 pc_b03_hd.fbx d:\roe_exports\b03\blend\pc_b03_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b03/blend/pc_b03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b03.jpg" alt="b03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b03/blend/pc_b03_hd.blend" title="D:\roe_exports\b03\blend\pc_b03_hd.blend">D:\roe_exports\b03\blend\pc_b03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b03\blend\pc_b03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 20.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b04 pc_b04_hd.fbx d:\roe_exports\b04\blend\pc_b04_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b04/blend/pc_b04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b04.jpg" alt="b04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b04/blend/pc_b04_hd.blend" title="D:\roe_exports\b04\blend\pc_b04_hd.blend">D:\roe_exports\b04\blend\pc_b04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b04\blend\pc_b04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 5 贴图 · 42.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b05 pc_b05_hd.fbx d:\roe_exports\b05\blend\pc_b05_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b05/blend/pc_b05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b05.jpg" alt="b05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b05/blend/pc_b05_hd.blend" title="D:\roe_exports\b05\blend\pc_b05_hd.blend">D:\roe_exports\b05\blend\pc_b05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b05\blend\pc_b05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 43.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b06 pc_b06_hd.fbx d:\roe_exports\b06\blend\pc_b06_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b06/blend/pc_b06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b06.jpg" alt="b06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b06/blend/pc_b06_hd.blend" title="D:\roe_exports\b06\blend\pc_b06_hd.blend">D:\roe_exports\b06\blend\pc_b06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b06\blend\pc_b06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 32.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b07 pc_b07_hd.fbx d:\roe_exports\b07\blend\pc_b07_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b07/blend/pc_b07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b07.jpg" alt="b07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b07/blend/pc_b07_hd.blend" title="D:\roe_exports\b07\blend\pc_b07_hd.blend">D:\roe_exports\b07\blend\pc_b07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b07\blend\pc_b07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 10 材质槽 · 7 贴图 · 77.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b08 pc_b08_hd.fbx d:\roe_exports\b08\blend\pc_b08_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b08/blend/pc_b08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b08.jpg" alt="b08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b08/blend/pc_b08_hd.blend" title="D:\roe_exports\b08\blend\pc_b08_hd.blend">D:\roe_exports\b08\blend\pc_b08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b08\blend\pc_b08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 6 贴图 · 66.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b08_outfit1 pc_b08_outfit1_hd.fbx d:\roe_exports\b08\blend\pc_b08_outfit1_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b08/blend/pc_b08_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b08_outfit1.jpg" alt="b08_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b08_outfit1</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b08_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b08/blend/pc_b08_outfit1_hd.blend" title="D:\roe_exports\b08\blend\pc_b08_outfit1_hd.blend">D:\roe_exports\b08\blend\pc_b08_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b08\blend\pc_b08_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 6 贴图 · 89.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b09 pc_b09_hd.fbx d:\roe_exports\b09\blend\pc_b09_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b09/blend/pc_b09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b09.jpg" alt="b09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b09/blend/pc_b09_hd.blend" title="D:\roe_exports\b09\blend\pc_b09_hd.blend">D:\roe_exports\b09\blend\pc_b09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b09\blend\pc_b09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 7 贴图 · 65.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b10 pc_b10_hd.fbx d:\roe_exports\b10\blend\pc_b10_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b10/blend/pc_b10_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b10.jpg" alt="b10"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b10</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b10_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b10/blend/pc_b10_hd.blend" title="D:\roe_exports\b10\blend\pc_b10_hd.blend">D:\roe_exports\b10\blend\pc_b10_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b10\blend\pc_b10_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>6 网格 · 10 材质槽 · 6 贴图 · 55.9 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b11 pc_b11_hd.fbx d:\roe_exports\b11\blend\pc_b11_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b11/blend/pc_b11_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b11.jpg" alt="b11"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b11</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b11_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b11/blend/pc_b11_hd.blend" title="D:\roe_exports\b11\blend\pc_b11_hd.blend">D:\roe_exports\b11\blend\pc_b11_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b11\blend\pc_b11_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 73.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b12 pc_b12_hd.fbx d:\roe_exports\b12\blend\pc_b12_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b12/blend/pc_b12_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b12.jpg" alt="b12"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b12</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b12_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b12/blend/pc_b12_hd.blend" title="D:\roe_exports\b12\blend\pc_b12_hd.blend">D:\roe_exports\b12\blend\pc_b12_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b12\blend\pc_b12_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 39.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="b13 pc_b13_hd.fbx d:\roe_exports\b13\blend\pc_b13_hd.blend" data-family="B" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/b13/blend/pc_b13_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（B 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/b13.jpg" alt="b13"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>b13</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_b13_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/b13/blend/pc_b13_hd.blend" title="D:\roe_exports\b13\blend\pc_b13_hd.blend">D:\roe_exports\b13\blend\pc_b13_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\b13\blend\pc_b13_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 11 材质槽 · 6 贴图 · 101.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c01 pc_c01_hd.fbx d:\roe_exports\c01\blend\pc_c01_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c01/blend/pc_c01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c01.jpg" alt="c01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c01/blend/pc_c01_hd.blend" title="D:\roe_exports\c01\blend\pc_c01_hd.blend">D:\roe_exports\c01\blend\pc_c01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c01\blend\pc_c01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 11 材质槽 · 6 贴图 · 28.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c02 pc_c02_hd.fbx d:\roe_exports\c02\blend\pc_c02_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c02/blend/pc_c02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c02.jpg" alt="c02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c02/blend/pc_c02_hd.blend" title="D:\roe_exports\c02\blend\pc_c02_hd.blend">D:\roe_exports\c02\blend\pc_c02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c02\blend\pc_c02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 19.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c03 pc_c03_hd.fbx d:\roe_exports\c03\blend\pc_c03_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c03/blend/pc_c03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c03.jpg" alt="c03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c03/blend/pc_c03_hd.blend" title="D:\roe_exports\c03\blend\pc_c03_hd.blend">D:\roe_exports\c03\blend\pc_c03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c03\blend\pc_c03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 19.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c04 pc_c04_hd.fbx d:\roe_exports\c04\blend\pc_c04_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c04/blend/pc_c04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c04.jpg" alt="c04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c04/blend/pc_c04_hd.blend" title="D:\roe_exports\c04\blend\pc_c04_hd.blend">D:\roe_exports\c04\blend\pc_c04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c04\blend\pc_c04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 45.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c05 pc_c05_hd.fbx d:\roe_exports\c05\blend\pc_c05_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c05/blend/pc_c05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c05.jpg" alt="c05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c05/blend/pc_c05_hd.blend" title="D:\roe_exports\c05\blend\pc_c05_hd.blend">D:\roe_exports\c05\blend\pc_c05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c05\blend\pc_c05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 5 贴图 · 49.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c06 pc_c06_hd.fbx d:\roe_exports\c06\blend\pc_c06_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c06/blend/pc_c06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c06.jpg" alt="c06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c06/blend/pc_c06_hd.blend" title="D:\roe_exports\c06\blend\pc_c06_hd.blend">D:\roe_exports\c06\blend\pc_c06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c06\blend\pc_c06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 7 贴图 · 80.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c07 pc_c07_hd.fbx d:\roe_exports\c07\blend\pc_c07_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c07/blend/pc_c07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c07.jpg" alt="c07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c07/blend/pc_c07_hd.blend" title="D:\roe_exports\c07\blend\pc_c07_hd.blend">D:\roe_exports\c07\blend\pc_c07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c07\blend\pc_c07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 96.3 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c08 pc_c08_hd.fbx d:\roe_exports\c08\blend\pc_c08_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c08/blend/pc_c08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c08.jpg" alt="c08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c08/blend/pc_c08_hd.blend" title="D:\roe_exports\c08\blend\pc_c08_hd.blend">D:\roe_exports\c08\blend\pc_c08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c08\blend\pc_c08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 69.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c09 pc_c09_hd.fbx d:\roe_exports\c09\blend\pc_c09_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c09/blend/pc_c09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c09.jpg" alt="c09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c09</h3><span class="badge badge-fix" title="wp_c_09_hd[0] &lt;- wp_c_09_rgbx_Albedo_hd.png; wp_c_09_hd[1] &lt;- wp_c_09_rgbx_Albedo_hd.png">补挂 2</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c09/blend/pc_c09_hd.blend" title="D:\roe_exports\c09\blend\pc_c09_hd.blend">D:\roe_exports\c09\blend\pc_c09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c09\blend\pc_c09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 12 材质槽 · 7 贴图 · 93.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="c10 pc_c10_hd.fbx d:\roe_exports\c10\blend\pc_c10_hd.blend" data-family="C" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/c10/blend/pc_c10_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（C 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/c10.jpg" alt="c10"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>c10</h3><span class="badge badge-fix" title="wp_c_10_01[0] &lt;- wp_c_10_rgbx_Albedo_hd.png; wp_c_10_02[0] &lt;- wp_c_10_rgbx_Albedo_hd.png; wp_c_10_03[0] &lt;- wp_c_10_rgbx_Albedo_hd.png; wp_c_10_04[0] &lt;- wp_c_10_rgbx_Albedo_hd.png">补挂 4</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_c10_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/c10/blend/pc_c10_hd.blend" title="D:\roe_exports\c10\blend\pc_c10_hd.blend">D:\roe_exports\c10\blend\pc_c10_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\c10\blend\pc_c10_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>7 网格 · 13 材质槽 · 7 贴图 · 86.3 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d01 pc_d01_hd.fbx d:\roe_exports\d01\blend\pc_d01_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d01/blend/pc_d01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d01.jpg" alt="d01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d01/blend/pc_d01_hd.blend" title="D:\roe_exports\d01\blend\pc_d01_hd.blend">D:\roe_exports\d01\blend\pc_d01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d01\blend\pc_d01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 23.9 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d02 pc_d02_hd.fbx d:\roe_exports\d02\blend\pc_d02_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d02/blend/pc_d02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d02.jpg" alt="d02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d02/blend/pc_d02_hd.blend" title="D:\roe_exports\d02\blend\pc_d02_hd.blend">D:\roe_exports\d02\blend\pc_d02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d02\blend\pc_d02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 24.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d03 pc_d03_hd.fbx d:\roe_exports\d03\blend\pc_d03_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d03/blend/pc_d03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d03.jpg" alt="d03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d03/blend/pc_d03_hd.blend" title="D:\roe_exports\d03\blend\pc_d03_hd.blend">D:\roe_exports\d03\blend\pc_d03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d03\blend\pc_d03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 23.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d04 pc_d04_hd.fbx d:\roe_exports\d04\blend\pc_d04_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d04/blend/pc_d04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d04.jpg" alt="d04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d04</h3><span class="badge badge-fix" title="wp_d_hd_sphere[0] &lt;- wp_d_04_rgbx_Albedo.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d04/blend/pc_d04_hd.blend" title="D:\roe_exports\d04\blend\pc_d04_hd.blend">D:\roe_exports\d04\blend\pc_d04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d04\blend\pc_d04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 7 贴图 · 103.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d05 pc_d05_hd.fbx d:\roe_exports\d05\blend\pc_d05_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d05/blend/pc_d05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d05.jpg" alt="d05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d05/blend/pc_d05_hd.blend" title="D:\roe_exports\d05\blend\pc_d05_hd.blend">D:\roe_exports\d05\blend\pc_d05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d05\blend\pc_d05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 108.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d06 pc_d06_hd.fbx d:\roe_exports\d06\blend\pc_d06_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d06/blend/pc_d06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d06.jpg" alt="d06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d06/blend/pc_d06_hd.blend" title="D:\roe_exports\d06\blend\pc_d06_hd.blend">D:\roe_exports\d06\blend\pc_d06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d06\blend\pc_d06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 82.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d07 pc_d07_hd.fbx d:\roe_exports\d07\blend\pc_d07_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d07/blend/pc_d07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d07.jpg" alt="d07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d07/blend/pc_d07_hd.blend" title="D:\roe_exports\d07\blend\pc_d07_hd.blend">D:\roe_exports\d07\blend\pc_d07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d07\blend\pc_d07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>6 网格 · 12 材质槽 · 8 贴图 · 78.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d08 pc_d08_hd.fbx d:\roe_exports\d08\blend\pc_d08_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d08/blend/pc_d08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d08.jpg" alt="d08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d08/blend/pc_d08_hd.blend" title="D:\roe_exports\d08\blend\pc_d08_hd.blend">D:\roe_exports\d08\blend\pc_d08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d08\blend\pc_d08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 75.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="d09 pc_d09_hd.fbx d:\roe_exports\d09\blend\pc_d09_hd.blend" data-family="D" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/d09/blend/pc_d09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（D 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/d09.jpg" alt="d09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>d09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_d09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/d09/blend/pc_d09_hd.blend" title="D:\roe_exports\d09\blend\pc_d09_hd.blend">D:\roe_exports\d09\blend\pc_d09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\d09\blend\pc_d09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 75.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e01 pc_e01_hd.fbx d:\roe_exports\e01\blend\pc_e01_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e01/blend/pc_e01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e01.jpg" alt="e01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e01/blend/pc_e01_hd.blend" title="D:\roe_exports\e01\blend\pc_e01_hd.blend">D:\roe_exports\e01\blend\pc_e01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e01\blend\pc_e01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 23.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e02 pc_e02_hd.fbx d:\roe_exports\e02\blend\pc_e02_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e02/blend/pc_e02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e02.jpg" alt="e02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e02/blend/pc_e02_hd.blend" title="D:\roe_exports\e02\blend\pc_e02_hd.blend">D:\roe_exports\e02\blend\pc_e02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e02\blend\pc_e02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 24.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e03 pc_e03_hd.fbx d:\roe_exports\e03\blend\pc_e03_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e03/blend/pc_e03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e03.jpg" alt="e03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e03/blend/pc_e03_hd.blend" title="D:\roe_exports\e03\blend\pc_e03_hd.blend">D:\roe_exports\e03\blend\pc_e03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e03\blend\pc_e03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 50.3 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e04 pc_e04_hd.fbx d:\roe_exports\e04\blend\pc_e04_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e04/blend/pc_e04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e04.jpg" alt="e04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e04/blend/pc_e04_hd.blend" title="D:\roe_exports\e04\blend\pc_e04_hd.blend">D:\roe_exports\e04\blend\pc_e04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e04\blend\pc_e04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 48.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e05 pc_e05_hd.fbx d:\roe_exports\e05\blend\pc_e05_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e05/blend/pc_e05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e05.jpg" alt="e05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e05/blend/pc_e05_hd.blend" title="D:\roe_exports\e05\blend\pc_e05_hd.blend">D:\roe_exports\e05\blend\pc_e05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e05\blend\pc_e05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 13 材质槽 · 8 贴图 · 80.3 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e06 pc_e06_hd.fbx d:\roe_exports\e06\blend\pc_e06_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e06/blend/pc_e06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e06.jpg" alt="e06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e06/blend/pc_e06_hd.blend" title="D:\roe_exports\e06\blend\pc_e06_hd.blend">D:\roe_exports\e06\blend\pc_e06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e06\blend\pc_e06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 39.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e07 pc_e07_hd.fbx d:\roe_exports\e07\blend\pc_e07_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e07/blend/pc_e07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e07.jpg" alt="e07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e07/blend/pc_e07_hd.blend" title="D:\roe_exports\e07\blend\pc_e07_hd.blend">D:\roe_exports\e07\blend\pc_e07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e07\blend\pc_e07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>6 网格 · 12 材质槽 · 7 贴图 · 84.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e08 pc_e08_hd.fbx d:\roe_exports\e08\blend\pc_e08_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e08/blend/pc_e08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e08.jpg" alt="e08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e08/blend/pc_e08_hd.blend" title="D:\roe_exports\e08\blend\pc_e08_hd.blend">D:\roe_exports\e08\blend\pc_e08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e08\blend\pc_e08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 12 材质槽 · 6 贴图 · 72.3 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e09 pc_e09_hd.fbx d:\roe_exports\e09\blend\pc_e09_hd.blend" data-family="E" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/e09/blend/pc_e09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e09.jpg" alt="e09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e09/blend/pc_e09_hd.blend" title="D:\roe_exports\e09\blend\pc_e09_hd.blend">D:\roe_exports\e09\blend\pc_e09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e09\blend\pc_e09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 11 材质槽 · 6 贴图 · 34.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="e10 pc_e10_hd.fbx d:\roe_exports\e10\blend\pc_e10_hd.blend" data-family="E" data-warn="1">
+        <a class="shot" href="file:///D:/roe_exports/e10/blend/pc_e10_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（E 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/e10.jpg" alt="e10"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>e10</h3><span class="badge badge-warn" title="缺贴图: pc_e10_hd_Body01[2] pc_e10_hd_Body01_02_body_mat">缺图 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_e10_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/e10/blend/pc_e10_hd.blend" title="D:\roe_exports\e10\blend\pc_e10_hd.blend">D:\roe_exports\e10\blend\pc_e10_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\e10\blend\pc_e10_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 6 贴图 · 86.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f01 pc_f01_hd.fbx d:\roe_exports\f01\blend\pc_f01_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f01/blend/pc_f01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f01.jpg" alt="f01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f01/blend/pc_f01_hd.blend" title="D:\roe_exports\f01\blend\pc_f01_hd.blend">D:\roe_exports\f01\blend\pc_f01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f01\blend\pc_f01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 5 贴图 · 22.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f02 pc_f02_hd.fbx d:\roe_exports\f02\blend\pc_f02_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f02/blend/pc_f02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f02.jpg" alt="f02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f02/blend/pc_f02_hd.blend" title="D:\roe_exports\f02\blend\pc_f02_hd.blend">D:\roe_exports\f02\blend\pc_f02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f02\blend\pc_f02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 21.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f03 pc_f03_hd.fbx d:\roe_exports\f03\blend\pc_f03_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f03/blend/pc_f03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f03.jpg" alt="f03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f03/blend/pc_f03_hd.blend" title="D:\roe_exports\f03\blend\pc_f03_hd.blend">D:\roe_exports\f03\blend\pc_f03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f03\blend\pc_f03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 39.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f04 pc_f04_hd.fbx d:\roe_exports\f04\blend\pc_f04_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f04/blend/pc_f04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f04.jpg" alt="f04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f04/blend/pc_f04_hd.blend" title="D:\roe_exports\f04\blend\pc_f04_hd.blend">D:\roe_exports\f04\blend\pc_f04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f04\blend\pc_f04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 52.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f05 pc_f05_hd.fbx d:\roe_exports\f05\blend\pc_f05_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f05/blend/pc_f05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f05.jpg" alt="f05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f05/blend/pc_f05_hd.blend" title="D:\roe_exports\f05\blend\pc_f05_hd.blend">D:\roe_exports\f05\blend\pc_f05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f05\blend\pc_f05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 55.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f05_outfit1 pc_f05_outfit1_hd.fbx d:\roe_exports\f05\blend\pc_f05_outfit1_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f05/blend/pc_f05_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f05_outfit1.jpg" alt="f05_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f05_outfit1</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f05_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f05/blend/pc_f05_outfit1_hd.blend" title="D:\roe_exports\f05\blend\pc_f05_outfit1_hd.blend">D:\roe_exports\f05\blend\pc_f05_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f05\blend\pc_f05_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 93.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f06 pc_f06_hd.fbx d:\roe_exports\f06\blend\pc_f06_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f06/blend/pc_f06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f06.jpg" alt="f06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f06/blend/pc_f06_hd.blend" title="D:\roe_exports\f06\blend\pc_f06_hd.blend">D:\roe_exports\f06\blend\pc_f06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f06\blend\pc_f06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 7 材质槽 · 5 贴图 · 48.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f07 pc_f07_hd.fbx d:\roe_exports\f07\blend\pc_f07_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f07/blend/pc_f07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f07.jpg" alt="f07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f07/blend/pc_f07_hd.blend" title="D:\roe_exports\f07\blend\pc_f07_hd.blend">D:\roe_exports\f07\blend\pc_f07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f07\blend\pc_f07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 47.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f08 pc_f08_hd.fbx d:\roe_exports\f08\blend\pc_f08_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f08/blend/pc_f08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f08.jpg" alt="f08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f08/blend/pc_f08_hd.blend" title="D:\roe_exports\f08\blend\pc_f08_hd.blend">D:\roe_exports\f08\blend\pc_f08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f08\blend\pc_f08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 26.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f09 pc_f09_hd.fbx d:\roe_exports\f09\blend\pc_f09_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f09/blend/pc_f09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f09.jpg" alt="f09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f09/blend/pc_f09_hd.blend" title="D:\roe_exports\f09\blend\pc_f09_hd.blend">D:\roe_exports\f09\blend\pc_f09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f09\blend\pc_f09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 12 材质槽 · 7 贴图 · 75.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f10 pc_f10_hd.fbx d:\roe_exports\f10\blend\pc_f10_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f10/blend/pc_f10_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f10.jpg" alt="f10"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f10</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f10_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f10/blend/pc_f10_hd.blend" title="D:\roe_exports\f10\blend\pc_f10_hd.blend">D:\roe_exports\f10\blend\pc_f10_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f10\blend\pc_f10_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 52.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="f11 pc_f11_hd.fbx d:\roe_exports\f11\blend\pc_f11_hd.blend" data-family="F" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/f11/blend/pc_f11_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（F 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/f11.jpg" alt="f11"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>f11</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_f11_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/f11/blend/pc_f11_hd.blend" title="D:\roe_exports\f11\blend\pc_f11_hd.blend">D:\roe_exports\f11\blend\pc_f11_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\f11\blend\pc_f11_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 11 材质槽 · 6 贴图 · 85.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g01 pc_g01_hd.fbx d:\roe_exports\g01\blend\pc_g01_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g01/blend/pc_g01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g01.jpg" alt="g01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g01/blend/pc_g01_hd.blend" title="D:\roe_exports\g01\blend\pc_g01_hd.blend">D:\roe_exports\g01\blend\pc_g01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g01\blend\pc_g01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 23.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g02 pc_g02_hd.fbx d:\roe_exports\g02\blend\pc_g02_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g02/blend/pc_g02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g02.jpg" alt="g02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g02/blend/pc_g02_hd.blend" title="D:\roe_exports\g02\blend\pc_g02_hd.blend">D:\roe_exports\g02\blend\pc_g02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g02\blend\pc_g02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 24.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g03 pc_g03_hd.fbx d:\roe_exports\g03\blend\pc_g03_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g03/blend/pc_g03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g03.jpg" alt="g03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g03/blend/pc_g03_hd.blend" title="D:\roe_exports\g03\blend\pc_g03_hd.blend">D:\roe_exports\g03\blend\pc_g03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g03\blend\pc_g03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 5 贴图 · 24.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g04 pc_g04_hd.fbx d:\roe_exports\g04\blend\pc_g04_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g04/blend/pc_g04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g04.jpg" alt="g04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g04/blend/pc_g04_hd.blend" title="D:\roe_exports\g04\blend\pc_g04_hd.blend">D:\roe_exports\g04\blend\pc_g04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g04\blend\pc_g04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 6 贴图 · 66.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g04_outfit1 pc_g04_outfit1_hd.fbx d:\roe_exports\g04\blend\pc_g04_outfit1_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g04/blend/pc_g04_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g04_outfit1.jpg" alt="g04_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g04_outfit1</h3><span class="badge badge-fix" title="wp_g_04[0] &lt;- wp_g04_rgbx_Albedo.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g04_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g04/blend/pc_g04_outfit1_hd.blend" title="D:\roe_exports\g04\blend\pc_g04_outfit1_hd.blend">D:\roe_exports\g04\blend\pc_g04_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g04\blend\pc_g04_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 7 贴图 · 93.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g05 pc_g05_hd.fbx d:\roe_exports\g05\blend\pc_g05_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g05/blend/pc_g05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g05.jpg" alt="g05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g05/blend/pc_g05_hd.blend" title="D:\roe_exports\g05\blend\pc_g05_hd.blend">D:\roe_exports\g05\blend\pc_g05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g05\blend\pc_g05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 6 贴图 · 69.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g06 pc_g06_hd.fbx d:\roe_exports\g06\blend\pc_g06_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g06/blend/pc_g06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g06.jpg" alt="g06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g06/blend/pc_g06_hd.blend" title="D:\roe_exports\g06\blend\pc_g06_hd.blend">D:\roe_exports\g06\blend\pc_g06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g06\blend\pc_g06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 10 材质槽 · 6 贴图 · 31.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g07 pc_g07_hd.fbx d:\roe_exports\g07\blend\pc_g07_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g07/blend/pc_g07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g07.jpg" alt="g07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g07/blend/pc_g07_hd.blend" title="D:\roe_exports\g07\blend\pc_g07_hd.blend">D:\roe_exports\g07\blend\pc_g07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g07\blend\pc_g07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 68.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g08 pc_g08_hd.fbx d:\roe_exports\g08\blend\pc_g08_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g08/blend/pc_g08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g08.jpg" alt="g08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g08/blend/pc_g08_hd.blend" title="D:\roe_exports\g08\blend\pc_g08_hd.blend">D:\roe_exports\g08\blend\pc_g08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g08\blend\pc_g08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 7 材质槽 · 5 贴图 · 43.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g09 pc_g09_hd.fbx d:\roe_exports\g09\blend\pc_g09_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g09/blend/pc_g09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g09.jpg" alt="g09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g09/blend/pc_g09_hd.blend" title="D:\roe_exports\g09\blend\pc_g09_hd.blend">D:\roe_exports\g09\blend\pc_g09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g09\blend\pc_g09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 7 贴图 · 64.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g10 pc_g10_hd.fbx d:\roe_exports\g10\blend\pc_g10_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g10/blend/pc_g10_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g10.jpg" alt="g10"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g10</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g10_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g10/blend/pc_g10_hd.blend" title="D:\roe_exports\g10\blend\pc_g10_hd.blend">D:\roe_exports\g10\blend\pc_g10_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g10\blend\pc_g10_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 11 材质槽 · 6 贴图 · 67.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g11 pc_g11_hd.fbx d:\roe_exports\g11\blend\pc_g11_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g11/blend/pc_g11_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g11.jpg" alt="g11"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g11</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g11_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g11/blend/pc_g11_hd.blend" title="D:\roe_exports\g11\blend\pc_g11_hd.blend">D:\roe_exports\g11\blend\pc_g11_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g11\blend\pc_g11_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 66.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g12 pc_g12_hd.fbx d:\roe_exports\g12\blend\pc_g12_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g12/blend/pc_g12_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g12.jpg" alt="g12"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g12</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g12_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g12/blend/pc_g12_hd.blend" title="D:\roe_exports\g12\blend\pc_g12_hd.blend">D:\roe_exports\g12\blend\pc_g12_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g12\blend\pc_g12_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 90.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g12_outfit1 pc_g12_outfit1_hd.fbx d:\roe_exports\g12\blend\pc_g12_outfit1_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g12/blend/pc_g12_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g12_outfit1.jpg" alt="g12_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g12_outfit1</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g12_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g12/blend/pc_g12_outfit1_hd.blend" title="D:\roe_exports\g12\blend\pc_g12_outfit1_hd.blend">D:\roe_exports\g12\blend\pc_g12_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g12\blend\pc_g12_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 7 贴图 · 114.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="g13 pc_g13_hd.fbx d:\roe_exports\g13\blend\pc_g13_hd.blend" data-family="G" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/g13/blend/pc_g13_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（G 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/g13.jpg" alt="g13"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>g13</h3><span class="badge badge-fix" title="wp_g_13_hd[0] &lt;- wp_g_13_rgbx_Albedo_hd.png; wp_g_13_hd[1] &lt;- wp_g_13_rgbx_Albedo_hd.png">补挂 2</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_g13_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/g13/blend/pc_g13_hd.blend" title="D:\roe_exports\g13\blend\pc_g13_hd.blend">D:\roe_exports\g13\blend\pc_g13_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\g13\blend\pc_g13_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 12 材质槽 · 7 贴图 · 86.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h01 pc_h01_hd.fbx d:\roe_exports\h01\blend\pc_h01_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h01/blend/pc_h01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h01.jpg" alt="h01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h01/blend/pc_h01_hd.blend" title="D:\roe_exports\h01\blend\pc_h01_hd.blend">D:\roe_exports\h01\blend\pc_h01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h01\blend\pc_h01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 22.6 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h02 pc_h02_hd.fbx d:\roe_exports\h02\blend\pc_h02_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h02/blend/pc_h02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h02.jpg" alt="h02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h02/blend/pc_h02_hd.blend" title="D:\roe_exports\h02\blend\pc_h02_hd.blend">D:\roe_exports\h02\blend\pc_h02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h02\blend\pc_h02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 5 贴图 · 23.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h03 pc_h03_hd.fbx d:\roe_exports\h03\blend\pc_h03_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h03/blend/pc_h03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h03.jpg" alt="h03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h03/blend/pc_h03_hd.blend" title="D:\roe_exports\h03\blend\pc_h03_hd.blend">D:\roe_exports\h03\blend\pc_h03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h03\blend\pc_h03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 5 贴图 · 47.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h04 pc_h04_hd.fbx d:\roe_exports\h04\blend\pc_h04_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h04/blend/pc_h04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h04.jpg" alt="h04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h04/blend/pc_h04_hd.blend" title="D:\roe_exports\h04\blend\pc_h04_hd.blend">D:\roe_exports\h04\blend\pc_h04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h04\blend\pc_h04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 11 材质槽 · 7 贴图 · 33.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h05 pc_h05_hd.fbx d:\roe_exports\h05\blend\pc_h05_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h05/blend/pc_h05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h05.jpg" alt="h05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h05/blend/pc_h05_hd.blend" title="D:\roe_exports\h05\blend\pc_h05_hd.blend">D:\roe_exports\h05\blend\pc_h05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h05\blend\pc_h05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 29.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h06 pc_h06_hd.fbx d:\roe_exports\h06\blend\pc_h06_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h06/blend/pc_h06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h06.jpg" alt="h06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h06/blend/pc_h06_hd.blend" title="D:\roe_exports\h06\blend\pc_h06_hd.blend">D:\roe_exports\h06\blend\pc_h06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h06\blend\pc_h06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 24.9 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h07 pc_h07_hd.fbx d:\roe_exports\h07\blend\pc_h07_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h07/blend/pc_h07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h07.jpg" alt="h07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h07</h3><span class="badge badge-fix" title="pc_h07_hd_body2[0] &lt;- pc_h07_hd_body_rgbx_Albedo.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h07/blend/pc_h07_hd.blend" title="D:\roe_exports\h07\blend\pc_h07_hd.blend">D:\roe_exports\h07\blend\pc_h07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h07\blend\pc_h07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 11 材质槽 · 6 贴图 · 52.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h08 pc_h08_hd.fbx d:\roe_exports\h08\blend\pc_h08_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h08/blend/pc_h08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h08.jpg" alt="h08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h08</h3><span class="badge badge-fix" title="pc_h08_hd_armor01[1] &lt;- pc_h08_hd_armor_rgbx_Albedo.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h08/blend/pc_h08_hd.blend" title="D:\roe_exports\h08\blend\pc_h08_hd.blend">D:\roe_exports\h08\blend\pc_h08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h08\blend\pc_h08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 6 贴图 · 66.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h08_outfit1 pc_h08_outfit1_hd.fbx d:\roe_exports\h08\blend\pc_h08_outfit1_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h08/blend/pc_h08_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h08_outfit1.jpg" alt="h08_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h08_outfit1</h3><span class="badge badge-fix" title="pc_h08_hd_armor01[1] &lt;- pc_h08_hd_armor_rgbx_Albedo.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h08_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h08/blend/pc_h08_outfit1_hd.blend" title="D:\roe_exports\h08\blend\pc_h08_outfit1_hd.blend">D:\roe_exports\h08\blend\pc_h08_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h08\blend\pc_h08_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 7 贴图 · 72.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h09 pc_h09_hd.fbx d:\roe_exports\h09\blend\pc_h09_hd.blend" data-family="H" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/h09/blend/pc_h09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（H 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/h09.jpg" alt="h09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_h09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/h09/blend/pc_h09_hd.blend" title="D:\roe_exports\h09\blend\pc_h09_hd.blend">D:\roe_exports\h09\blend\pc_h09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\h09\blend\pc_h09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 6 贴图 · 62.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="i01 pc_i01_hd.fbx d:\roe_exports\i01\blend\pc_i01_hd.blend" data-family="I" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/i01/blend/pc_i01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（I 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/i01.jpg" alt="i01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>i01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_i01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/i01/blend/pc_i01_hd.blend" title="D:\roe_exports\i01\blend\pc_i01_hd.blend">D:\roe_exports\i01\blend\pc_i01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\i01\blend\pc_i01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 5 贴图 · 64.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="i02 pc_i02_hd.fbx d:\roe_exports\i02\blend\pc_i02_hd.blend" data-family="I" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/i02/blend/pc_i02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（I 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/i02.jpg" alt="i02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>i02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_i02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/i02/blend/pc_i02_hd.blend" title="D:\roe_exports\i02\blend\pc_i02_hd.blend">D:\roe_exports\i02\blend\pc_i02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\i02\blend\pc_i02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 8 材质槽 · 4 贴图 · 40.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="i03 pc_i03_hd.fbx d:\roe_exports\i03\blend\pc_i03_hd.blend" data-family="I" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/i03/blend/pc_i03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（I 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/i03.jpg" alt="i03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>i03</h3><span class="badge badge-fix" title="wp_i_03[0] &lt;- wp_i03_rgbx_Albedo.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_i03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/i03/blend/pc_i03_hd.blend" title="D:\roe_exports\i03\blend\pc_i03_hd.blend">D:\roe_exports\i03\blend\pc_i03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\i03\blend\pc_i03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 11 材质槽 · 6 贴图 · 62.2 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="i04 pc_i04_hd.fbx d:\roe_exports\i04\blend\pc_i04_hd.blend" data-family="I" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/i04/blend/pc_i04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（I 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/i04.jpg" alt="i04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>i04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_i04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/i04/blend/pc_i04_hd.blend" title="D:\roe_exports\i04\blend\pc_i04_hd.blend">D:\roe_exports\i04\blend\pc_i04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\i04\blend\pc_i04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 5 贴图 · 64.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j01 pc_j01_hd.fbx d:\roe_exports\j01\blend\pc_j01_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j01/blend/pc_j01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j01.jpg" alt="j01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j01/blend/pc_j01_hd.blend" title="D:\roe_exports\j01\blend\pc_j01_hd.blend">D:\roe_exports\j01\blend\pc_j01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j01\blend\pc_j01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 10 材质槽 · 6 贴图 · 62.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j02 pc_j02_hd.fbx d:\roe_exports\j02\blend\pc_j02_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j02/blend/pc_j02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j02.jpg" alt="j02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j02/blend/pc_j02_hd.blend" title="D:\roe_exports\j02\blend\pc_j02_hd.blend">D:\roe_exports\j02\blend\pc_j02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j02\blend\pc_j02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 5 贴图 · 81.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j03 pc_j03_hd.fbx d:\roe_exports\j03\blend\pc_j03_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j03/blend/pc_j03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j03.jpg" alt="j03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j03/blend/pc_j03_hd.blend" title="D:\roe_exports\j03\blend\pc_j03_hd.blend">D:\roe_exports\j03\blend\pc_j03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j03\blend\pc_j03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 11 材质槽 · 6 贴图 · 68.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j04 pc_j04_hd.fbx d:\roe_exports\j04\blend\pc_j04_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j04/blend/pc_j04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j04.jpg" alt="j04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j04/blend/pc_j04_hd.blend" title="D:\roe_exports\j04\blend\pc_j04_hd.blend">D:\roe_exports\j04\blend\pc_j04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j04\blend\pc_j04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 5 贴图 · 72.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j05 pc_j05_hd.fbx d:\roe_exports\j05\blend\pc_j05_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j05/blend/pc_j05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j05.jpg" alt="j05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j05</h3><span class="badge badge-fix" title="wp_j_05_hd[0] &lt;- wp_j_05_rgbx_Albedo_hd.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j05/blend/pc_j05_hd.blend" title="D:\roe_exports\j05\blend\pc_j05_hd.blend">D:\roe_exports\j05\blend\pc_j05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j05\blend\pc_j05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 11 材质槽 · 6 贴图 · 106.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j06 pc_j06_hd.fbx d:\roe_exports\j06\blend\pc_j06_hd.blend" data-family="J" data-warn="1">
+        <a class="shot" href="file:///D:/roe_exports/j06/blend/pc_j06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j06.jpg" alt="j06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j06</h3><span class="badge badge-warn" title="缺贴图: wp_j_06_hd[0] wp_j_06_hd_00_body_mat">缺图 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j06/blend/pc_j06_hd.blend" title="D:\roe_exports\j06\blend\pc_j06_hd.blend">D:\roe_exports\j06\blend\pc_j06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j06\blend\pc_j06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 4 贴图 · 35.9 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j07 pc_j07_hd.fbx d:\roe_exports\j07\blend\pc_j07_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j07/blend/pc_j07_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j07.jpg" alt="j07"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j07</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j07_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j07/blend/pc_j07_hd.blend" title="D:\roe_exports\j07\blend\pc_j07_hd.blend">D:\roe_exports\j07\blend\pc_j07_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j07\blend\pc_j07_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>6 网格 · 11 材质槽 · 5 贴图 · 65.3 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j07_outfit1 pc_j07_outfit1_hd.fbx d:\roe_exports\j07\blend\pc_j07_outfit1_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j07/blend/pc_j07_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j07_outfit1.jpg" alt="j07_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j07_outfit1</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j07_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j07/blend/pc_j07_outfit1_hd.blend" title="D:\roe_exports\j07\blend\pc_j07_outfit1_hd.blend">D:\roe_exports\j07\blend\pc_j07_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j07\blend\pc_j07_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>6 网格 · 11 材质槽 · 6 贴图 · 92.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j08 pc_j08_hd.fbx d:\roe_exports\j08\blend\pc_j08_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j08/blend/pc_j08_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j08.jpg" alt="j08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j08</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j08_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j08/blend/pc_j08_hd.blend" title="D:\roe_exports\j08\blend\pc_j08_hd.blend">D:\roe_exports\j08\blend\pc_j08_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j08\blend\pc_j08_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 11 材质槽 · 5 贴图 · 92.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j09 pc_j09_hd.fbx d:\roe_exports\j09\blend\pc_j09_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j09/blend/pc_j09_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j09.jpg" alt="j09"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j09</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j09_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j09/blend/pc_j09_hd.blend" title="D:\roe_exports\j09\blend\pc_j09_hd.blend">D:\roe_exports\j09\blend\pc_j09_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j09\blend\pc_j09_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 5 贴图 · 81.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="j10 pc_j10_hd.fbx d:\roe_exports\j10\blend\pc_j10_hd.blend" data-family="J" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/j10/blend/pc_j10_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（J 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/j10.jpg" alt="j10"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>j10</h3><span class="badge badge-fix" title="wp_j10_black_glow[0] &lt;- wp_j10_rgbx_Albedo_hd.png; wp_j10_black[0] &lt;- wp_j10_rgbx_Albedo_hd.png">补挂 2</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_j10_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/j10/blend/pc_j10_hd.blend" title="D:\roe_exports\j10\blend\pc_j10_hd.blend">D:\roe_exports\j10\blend\pc_j10_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\j10\blend\pc_j10_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>8 网格 · 13 材质槽 · 8 贴图 · 138.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="k01 pc_k01_hd.fbx d:\roe_exports\k01\blend\pc_k01_hd.blend" data-family="K" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/k01/blend/pc_k01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（K 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/k01.jpg" alt="k01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>k01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_k01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/k01/blend/pc_k01_hd.blend" title="D:\roe_exports\k01\blend\pc_k01_hd.blend">D:\roe_exports\k01\blend\pc_k01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\k01\blend\pc_k01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 78.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="k02 pc_k02_hd.fbx d:\roe_exports\k02\blend\pc_k02_hd.blend" data-family="K" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/k02/blend/pc_k02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（K 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/k02.jpg" alt="k02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>k02</h3><span class="badge badge-fix" title="wp_k_02_hd[0] &lt;- wp_k_02_rgbx_Albedo_hd.png">补挂 1</span>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_k02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/k02/blend/pc_k02_hd.blend" title="D:\roe_exports\k02\blend\pc_k02_hd.blend">D:\roe_exports\k02\blend\pc_k02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\k02\blend\pc_k02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 9 材质槽 · 6 贴图 · 48.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="k03 pc_k03_hd.fbx d:\roe_exports\k03\blend\pc_k03_hd.blend" data-family="K" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/k03/blend/pc_k03_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（K 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/k03.jpg" alt="k03"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>k03</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_k03_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/k03/blend/pc_k03_hd.blend" title="D:\roe_exports\k03\blend\pc_k03_hd.blend">D:\roe_exports\k03\blend\pc_k03_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\k03\blend\pc_k03_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 6 贴图 · 37.8 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="k04 pc_k04_hd.fbx d:\roe_exports\k04\blend\pc_k04_hd.blend" data-family="K" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/k04/blend/pc_k04_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（K 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/k04.jpg" alt="k04"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>k04</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_k04_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/k04/blend/pc_k04_hd.blend" title="D:\roe_exports\k04\blend\pc_k04_hd.blend">D:\roe_exports\k04\blend\pc_k04_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\k04\blend\pc_k04_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 12 材质槽 · 6 贴图 · 81.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="k04_outfit1 pc_k04_outfit1_hd.fbx d:\roe_exports\k04\blend\pc_k04_outfit1_hd.blend" data-family="K" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/k04/blend/pc_k04_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（K 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/k04_outfit1.jpg" alt="k04_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>k04_outfit1</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_k04_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/k04/blend/pc_k04_outfit1_hd.blend" title="D:\roe_exports\k04\blend\pc_k04_outfit1_hd.blend">D:\roe_exports\k04\blend\pc_k04_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\k04\blend\pc_k04_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 12 材质槽 · 6 贴图 · 78.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="k05 pc_k05_hd.fbx d:\roe_exports\k05\blend\pc_k05_hd.blend" data-family="K" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/k05/blend/pc_k05_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（K 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/k05.jpg" alt="k05"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>k05</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_k05_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/k05/blend/pc_k05_hd.blend" title="D:\roe_exports\k05\blend\pc_k05_hd.blend">D:\roe_exports\k05\blend\pc_k05_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\k05\blend\pc_k05_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 6 贴图 · 82.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="k06 pc_k06_hd.fbx d:\roe_exports\k06\blend\pc_k06_hd.blend" data-family="K" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/k06/blend/pc_k06_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（K 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/k06.jpg" alt="k06"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>k06</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_k06_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/k06/blend/pc_k06_hd.blend" title="D:\roe_exports\k06\blend\pc_k06_hd.blend">D:\roe_exports\k06\blend\pc_k06_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\k06\blend\pc_k06_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 96.5 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="l01 pc_l01_hd.fbx d:\roe_exports\l01\blend\pc_l01_hd.blend" data-family="L" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/l01/blend/pc_l01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（L 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/l01.jpg" alt="l01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>l01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_l01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/l01/blend/pc_l01_hd.blend" title="D:\roe_exports\l01\blend\pc_l01_hd.blend">D:\roe_exports\l01\blend\pc_l01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\l01\blend\pc_l01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>4 网格 · 10 材质槽 · 6 贴图 · 81.7 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="m01 pc_m01_hd.fbx d:\roe_exports\m01\blend\pc_m01_hd.blend" data-family="M" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/m01/blend/pc_m01_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（M 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/m01.jpg" alt="m01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>m01</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_m01_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/m01/blend/pc_m01_hd.blend" title="D:\roe_exports\m01\blend\pc_m01_hd.blend">D:\roe_exports\m01\blend\pc_m01_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\m01\blend\pc_m01_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 109.4 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="m01_outfit1 pc_m01_outfit1_hd.fbx d:\roe_exports\m01\blend\pc_m01_outfit1_hd.blend" data-family="M" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/m01/blend/pc_m01_outfit1_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（M 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/m01_outfit1.jpg" alt="m01_outfit1"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>m01_outfit1</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_m01_outfit1_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/m01/blend/pc_m01_outfit1_hd.blend" title="D:\roe_exports\m01\blend\pc_m01_outfit1_hd.blend">D:\roe_exports\m01\blend\pc_m01_outfit1_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\m01\blend\pc_m01_outfit1_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 9 材质槽 · 6 贴图 · 110.0 MB</dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="m02 pc_m02_hd.fbx d:\roe_exports\m02\blend\pc_m02_hd.blend" data-family="M" data-warn="0">
+        <a class="shot" href="file:///D:/roe_exports/m02/blend/pc_m02_hd_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图（M 家族）"><img loading="lazy" src="file:///D:/roe_exports/_gallery/thumbs/m02.jpg" alt="m02"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>m02</h3>
+          </div>
+          <dl>
+            <dt>源 FBX</dt><dd>pc_m02_hd.fbx</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/roe_exports/m02/blend/pc_m02_hd.blend" title="D:\roe_exports\m02\blend\pc_m02_hd.blend">D:\roe_exports\m02\blend\pc_m02_hd.blend</a>
+                <button class="copy" data-copy="D:\roe_exports\m02\blend\pc_m02_hd.blend">复制</button></dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 10 材质槽 · 7 贴图 · 89.1 MB</dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+  <section class="appendix">
+    <h2>附录 · 导出脚本用法</h2>
+    <p>脚本都在 <code>scripts\riseoferos\</code>，需在装有游戏的机器上运行。整个流程分两步：
+      先从 AssetBundle 提取白模，再无头重建材质。</p>
+
+    <h3>第一步 · 提取（extract_character.ps1）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+
+.\extract_character.ps1 -List                        # 列出全部角色 ID
+.\extract_character.ps1 m02 -ExportTextures          # 提取单个角色
+.\extract_character.ps1 j10,k02,m01 -ExportTextures  # 逗号分隔批量</pre>
+    <p><code>-ExportTextures</code> 必须加，否则不导贴图，第二步会因缺少共享头部贴图而失败。
+      产物在 <code>D:\roe_exports\&lt;id&gt;\</code>。</p>
+
+    <h3>第二步 · 材质化（export_character_models.ps1）</h3>
+    <pre>.\export_character_models.ps1 -List            # 看可转清单和各自用哪份 FBX
+.\export_character_models.ps1                  # 全部，已有产物自动跳过
+.\export_character_models.ps1 -Only m02        # 只转一个
+.\export_character_models.ps1 -Only m02 -Force # 重做，覆盖已有产物</pre>
+    <p>产出 <code>&lt;id&gt;\blend\&lt;模型名&gt;.blend</code>（贴图已打包进文件）
+      与同名 <code>_preview.png</code>。</p>
+
+    <table>
+      <tr><th>参数</th><th>作用</th></tr>
+      <tr><td><code>-Only &lt;ids&gt;</code></td><td>写 <code>m01</code> 连 outfit 变体一起转；写 <code>m01_outfit1</code> 只转那一套</td></tr>
+      <tr><td><code>-Force</code></td><td>覆盖重做；不加时 blend 与预览图都在的会 SKIP</td></tr>
+      <tr><td><code>-Format blend,glb</code></td><td>额外导 GLB 到 <code>blend\glb\</code>，缺省只有 blend</td></tr>
+      <tr><td><code>-NoPreview</code></td><td>不渲预览图（实测只快约 9%，一般没必要关）</td></tr>
+      <tr><td><code>-ValidateOnly</code></td><td>只检查材质不写文件，排查用</td></tr>
+      <tr><td><code>-ManifestPath</code></td><td>自定义清单路径；<b>多进程分片并行时每个分片必须各给一个</b></td></tr>
+    </table>
+
+    <h3>两个容易踩的坑</h3>
+    <div class="note"><b>重新提取会删掉 blend 目录。</b>
+      <code>extract_character.ps1 &lt;id&gt;</code> 会把 <code>D:\roe_exports\&lt;id&gt;\</code>
+      整个删掉重建，第二步生成的 <code>blend\</code> 也一起没。顺序永远是先提取后转换；
+      要重提某个角色，先把 blend 挪出去。</div>
+    <p>报 <code>缺少贴图: face, eye_iris, eyebrow</code> 说明该角色目录是旧流程导的、
+      缺同字母体型的公共头部贴图。补跑一次
+      <code>.\extract_character.ps1 &lt;id&gt; -ExportTextures</code> 再转即可。</p>
+
+    <h3>并行加速</h3>
+    <pre>.\export_character_models.ps1 -Only a01,a02,a03 -ManifestPath D:\tmp\shard0.json -Force</pre>
+    <p>默认那一个清单文件不支持并发写，分片时必须各给一个，跑完再合并。
+      全量 123 个条目用 6 分片并行，24 核机器约 25 分钟。</p>
+
+    <h3>重新生成本页</h3>
+    <pre>python scripts\riseoferos\html\make_gallery.py</pre>
+    <p>读 <code>character_models_manifest.json</code>，把预览图缩成 JPEG 缩略图放进
+      <code>D:\roe_exports\_gallery\thumbs\</code>，再重写本页。
+      <b>缩略图刻意不放进仓库</b>——和其它脚本一样，仓库不收任何游戏素材。</p>
+
+    <h3>没有 blend 的 17 个 ID</h3>
+    <p>不是导出失败，是资源本身没有独立网格：只有 <code>chara_bare_pc_&lt;id&gt;_nk.ab</code>
+      的活动 NPC，或全部候选都是纯骨架壳。它们的本体复用同字母基础体。</p>
+    <ul class="nomesh">
+        <li><code>a14</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>c12</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>c13</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>d10</code><span>no candidate FBX contains geometry (rig-only prefabs)</span></li>
+        <li><code>d11</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>e11</code><span>no candidate FBX contains geometry (rig-only prefabs)</span></li>
+        <li><code>g14</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>h13</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>i06</code><span>no candidate FBX contains geometry (rig-only prefabs)</span></li>
+        <li><code>i10</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>j11</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>j12</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>k10</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>k11</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>m03</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>m04</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+        <li><code>m10</code><span>no standalone character mesh in this character&#x27;s bundles</span></li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var family = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!family || card.dataset.family === family)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      family = chip.dataset.family || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard needs a secure context, which file:// is not.
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

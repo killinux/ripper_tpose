@@ -880,6 +880,24 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
             slot.material.name if slot.material else '' for slot in o.material_slots]
     if source_material_indices is None:
         source_material_indices = [poly.material_index for poly in me.polygons]
+
+    # Some bundles ship a partial head dump: f05 keeps only ``pc_f_nk_eyebrow``
+    # and ``pc_f_nk_tears`` while the face and eye slots are gone, and every
+    # face polygon carries one of the two surviving indices.  Trusting that list
+    # sends the whole face into brow/lash/overlay and leaves slot 0 with zero
+    # polygons — a head with no face.  An incomplete list is worse than none, so
+    # drop it and let the geometry/bone fallbacks classify the head.
+    _slot_tokens = [set(re.split(r'[_\W]+', name.lower()))
+                    for name in source_material_names]
+    _feature_tokens = {'eye', 'eyes', 'iris', 'eyeball', 'brow', 'eyebrow',
+                       'eyelid', 'lash', 'tear', 'tears'}
+    _has_face_slot = any('face' in tokens and not (tokens & _feature_tokens)
+                         for tokens in _slot_tokens)
+    _has_feature_slot = any(tokens & _feature_tokens for tokens in _slot_tokens)
+    if _has_feature_slot and not _has_face_slot:
+        source_material_names = []
+        source_material_indices = []
+
     parent = list(range(len(me.vertices)))
 
     def find(x):
@@ -1103,12 +1121,19 @@ def classify_head(o, source_material_names=None, source_material_indices=None):
         if source_index in explicit_tear_slots:
             slot = 4
         elif has_separate_head_features \
-                and source_index in explicit_face_slots:
+                and source_index in explicit_face_slots \
+                and slot != 1:
             # F10 shares vertices across source material boundaries, so one
             # connected component can contain both face and tear polygons.
             # Preserve the explicit per-face FBX assignment before applying
             # component-level geometry fallbacks. Heads with only one vague
             # source slot still use the historical classifier unchanged.
+            #
+            # Eyeballs are exempt: g05 ships no separate ``pc_g_nk_eyes`` slot,
+            # so its eyeballs live inside the face material and this override
+            # dragged them back out of the eye slot, leaving blank white eyes.
+            # A component that is ~100% Eyeball-weighted with a full 0-1 iris UV
+            # is stronger evidence than a shared source material index.
             slot = 0
         classifications[polygon.index] = slot
     return classifications
