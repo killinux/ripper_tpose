@@ -6,10 +6,12 @@
 |---|---|---|---|
 | Rise of Eros | Unity AssetBundle | [`riseoferos/`](riseoferos/) | `riseoferos\extract_character.ps1` |
 | FINAL FANTASY VII REBIRTH | Unreal IoStore (`.utoc/.ucas`) | [`final/`](final/) | `final\prepare_fmodel.ps1` |
-| Stellar Blade | Unreal IoStore (`.utoc/.ucas`) | [`stellarblade/`](stellarblade/) | `stellarblade\validate_eve.py` |
+| Stellar Blade | Unreal IoStore (`.utoc/.ucas`) | [`stellarblade/`](stellarblade/) | `stellarblade\export_eve.ps1` |
 | Throne of Desire | X-Legend NFS + Gamebryo NIF/KFM | [`throneofdesire/`](throneofdesire/) | `throneofdesire\export_nude_models.ps1` |
-| Venus Vacation PRISM | KTGL RDB/FDATA + G1M | [`venusvacationprism/`](venusvacationprism/) | `venusvacationprism\map_characters.py` |
+| Venus Vacation PRISM | KTGL RDB/FDATA + G1M | [`venusvacationprism/`](venusvacationprism/) | `venusvacationprism\export_character.ps1` |
 | Operation LOVECRAFT: Fallen Doll | Unreal (UE4.26, AES 加密 pak) | [`fallendoll/`](fallendoll/) | `fallendoll\prepare_fmodel.ps1` |
+| Dead or Alive 5 Last Round | Team Ninja .bin/.lnk + TMC/TMCL | [`doa5lr/`](doa5lr/) | `doa5lr\export_full.ps1` |
+| Dead or Alive 6 | KTGL v2 RDB + G1M/G1T | [`doa6/`](doa6/) | `doa6\export_full.ps1` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -28,7 +30,9 @@ Player 的已导出/待导出差集与逐项手动操作见
 [`docs/ff7rebirth-player-export-inventory.md`](../docs/ff7rebirth-player-export-inventory.md)。
 
 Stellar Blade 使用精确的 `GAME_StellarBlade` profile 和独立 mapping；Eve 又由身体、脸、
-主发型和马尾等 SkeletalMesh 组成，不能直接复用 FFVII 的资源路径。FModel/专用 UE
+主发型和马尾等 SkeletalMesh 组成，不能直接复用 FFVII 的资源路径。一键组装与验证用
+`stellarblade\export_eve.ps1`（检查 FModel 手动导出、自动补导 UE Viewer 头发组件、
+自动准备补丁版 UEFormat、无头运行 `validate_eve.py`）。FModel/专用 UE
 Viewer 导出与 Blender 3.6 骨骼锚点组合方法见
 [`docs/stellar-blade-extraction.md`](../docs/stellar-blade-extraction.md)。
 
@@ -48,6 +52,20 @@ Operation LOVECRAFT: Fallen Doll 是 UE4.26 游戏，单个 AES 加密 pak（pak
 配置指引，`export_models.ps1` 在拿到 key、从 FModel 导出后批量材质化（复用 FF7 Rebirth
 的 UE4.26 管线）。当前唯一阻塞是 pak 的 AES key（不在仓库保存）；详见
 [Fallen Doll 提取调研](../docs/fallen-doll-extraction.md)。
+
+DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
++ XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
+Archive Tool 源码），TMC/TMCL 经 Noesis（32 位 + doa5pc 插件）转 FBX+DDS；DOA6 用
+KTGL v2 RDB，`doa6\extract_rdb.py` 为自研解包器（修复了 Cethleann 的 zlib 截断
+bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键出**带材质 .blend + 预览图**（`export_full.ps1`），也都支持直接
+喂社区 mod：DOA5LR 用 `-TmcFile <mod.TMC>`，DOA6 用 `export_nude_mod.ps1 <mod.zip>`
+（两作官方内容都不含 nude，已逐条目核实）。角色组成不同——DOA5LR 是「服装 TMC
+（含身体+脸）+ 头发 TMC」，DOA6 是「COS + HAIR + FACE」三部件。
+
+操作指南（官方与 nude/mod 两条路线）见
+[`doa5lr/EXPORT_GUIDE.md`](doa5lr/EXPORT_GUIDE.md)、[`doa6/EXPORT_GUIDE.md`](doa6/EXPORT_GUIDE.md)；
+格式与实现细节见各自 [`doa5lr/README.md`](doa5lr/README.md)、[`doa6/README.md`](doa6/README.md)；
+产物索引见导出目录下的 `README.md`（`D:\doa5lr_exports\`、`D:\doa6_exports\`）。
 
 ## 开发辅助
 
