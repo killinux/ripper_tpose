@@ -67,8 +67,35 @@ def parse_args() -> argparse.Namespace:
             ),
         ),
     )
+    parser.add_argument(
+        "--alignment-reference",
+        default="",
+        help=(
+            "previous validation report JSON; its recorded hair/tail root "
+            "transforms fill in when the body skeleton lacks the SC_Hair "
+            "socket (UE Viewer PSKs drop sockets; rest poses must match)"
+        ),
+    )
     parser.add_argument("--hair", required=True)
     parser.add_argument("--tail", required=True)
+    parser.add_argument(
+        "--tail-short",
+        default="",
+        help=(
+            "optional EVE_HR_Tail_Short PSK; the nape hair strands anchored "
+            "to Bip001-Head that complete the default hairstyle"
+        ),
+    )
+    parser.add_argument(
+        "--merge-armatures",
+        action="store_true",
+        help=(
+            "merge every component skeleton into the body armature so the "
+            "character is poseable as one rig: duplicate bones are removed "
+            "(weights fall through to the body's copies) and loose hair "
+            "chains are re-parented to SC_Hair/Bip001-Head"
+        ),
+    )
     parser.add_argument("--face-assets", required=True)
     parser.add_argument("--body-diffuse", required=True)
     parser.add_argument("--hair-alpha", required=True)
@@ -280,9 +307,11 @@ def link_eye_color(nodes, links, shader, sclera_path: str, iris_path: str):
 
     center = (0.5, 0.5, 0.0)
     # UE's source value is 0.145, but it is evaluated after the game's
-    # parallax/refraction mapping.  Direct UV evaluation in Eevee needs the
-    # smaller visible radius below or the pupil covers the entire eye opening.
-    iris_radius = 0.055
+    # parallax/refraction mapping.  Direct UV evaluation in Eevee needs a
+    # smaller visible radius or the pupil covers the entire eye opening;
+    # 0.07 matches the in-game apparent iris size once the shells around the
+    # eye are translucent.
+    iris_radius = 0.07
     subtract = nodes.new("ShaderNodeVectorMath")
     subtract.operation = "SUBTRACT"
     subtract.inputs[1].default_value = center
@@ -300,6 +329,12 @@ def link_eye_color(nodes, links, shader, sclera_path: str, iris_path: str):
     iris.image = load_image(iris_path)
     iris.name = os.path.basename(iris_path)
     links.new(add.outputs["Vector"], iris.inputs["Vector"])
+    # The source iris texture is authored dark for UE's lit refraction stack;
+    # brighten it for the flat Eevee preview or it reads as an all-pupil hole.
+    iris_boost = nodes.new("ShaderNodeHueSaturation")
+    iris_boost.inputs["Value"].default_value = 2.6
+    iris_boost.inputs["Saturation"].default_value = 0.95
+    links.new(iris.outputs["Color"], iris_boost.inputs["Color"])
 
     distance = nodes.new("ShaderNodeVectorMath")
     distance.operation = "DISTANCE"
@@ -314,7 +349,7 @@ def link_eye_color(nodes, links, shader, sclera_path: str, iris_path: str):
     mix.blend_type = "MIX"
     links.new(mask.outputs[0], mix.inputs[0])
     links.new(sclera.outputs["Color"], mix.inputs[1])
-    links.new(iris.outputs["Color"], mix.inputs[2])
+    links.new(iris_boost.outputs["Color"], mix.inputs[2])
     links.new(mix.outputs["Color"], shader.inputs["Base Color"])
 
 
@@ -324,8 +359,46 @@ def set_principled_color(shader, color, roughness=0.48, metallic=0.0):
     shader.inputs["Metallic"].default_value = metallic
 
 
-def prepare_body_materials(component: Component, diffuse_path: str) -> None:
-    image = bpy.data.images.load(diffuse_path, check_existing=True)
+def find_material_albedo(directory: str, material_name: str) -> str | None:
+    """Match a UE material instance name to an exported *_A albedo PNG.
+
+    MI_CH_P_EVE_Nikke_06_UV2 -> CH_P_EVE_Nikke_06_UV2_A.png, falling back to
+    the albedo sharing the most name tokens, then to the largest albedo.
+    """
+    albedos = []
+    for root, _dirs, files in os.walk(directory):
+        for name in files:
+            if name.lower().endswith(".png") and re.search(
+                r"_a(_type_[a-z0-9]+)?(_\d+)?\.png$", name.lower()
+            ):
+                albedos.append(os.path.join(root, name))
+    if not albedos:
+        return None
+    base = re.sub(r"^(MI_|MA_|ML_|MT_|M_)", "", material_base_name(material_name))
+    exact = [
+        path for path in albedos
+        if os.path.basename(path).lower() == (base + "_A.png").lower()
+    ]
+    if exact:
+        return exact[0]
+    tokens = {token for token in base.lower().split("_") if token}
+
+    def score(path: str) -> tuple:
+        stem_tokens = set(os.path.splitext(os.path.basename(path))[0].lower().split("_"))
+        return (len(tokens & stem_tokens), os.path.getsize(path))
+
+    return max(albedos, key=score)
+
+
+def prepare_body_materials(component: Component, diffuse_path: str) -> dict:
+    """Connect preview diffuse textures.
+
+    ``diffuse_path`` may be one PNG (applied to every slot) or a directory of
+    exported textures, in which case each material gets the albedo whose name
+    matches it best.
+    """
+    is_directory = os.path.isdir(diffuse_path)
+    assignments = {}
     handled = set()
     for mesh in component.meshes:
         for slot in mesh.material_slots:
@@ -333,13 +406,23 @@ def prepare_body_materials(component: Component, diffuse_path: str) -> None:
             if material is None or material in handled:
                 continue
             handled.add(material)
+            if is_directory:
+                texture_path = find_material_albedo(diffuse_path, material.name)
+            else:
+                texture_path = diffuse_path
             nodes, links, shader = reset_nodes(material)
             shader.inputs["Roughness"].default_value = 0.48
+            if texture_path is None:
+                set_principled_color(shader, (0.4, 0.4, 0.4, 1.0), 0.48)
+                assignments[material.name] = None
+                continue
             texture = nodes.new("ShaderNodeTexImage")
             texture.name = "Verified body/outfit diffuse"
-            texture.image = image
+            texture.image = bpy.data.images.load(texture_path, check_existing=True)
             links.new(texture.outputs["Color"], shader.inputs["Base Color"])
-            material["stellarblade_preview_texture"] = diffuse_path
+            material["stellarblade_preview_texture"] = texture_path
+            assignments[material.name] = texture_path
+    return assignments
 
 
 def prepare_head_materials(component: Component, assets_root: str) -> dict:
@@ -413,8 +496,12 @@ def prepare_head_materials(component: Component, assets_root: str) -> dict:
                 shader.inputs["Specular"].default_value = 0.65
                 assignment = "Eevee-calibrated iris/sclera blend + eye normal"
             elif base_name == "M_MikeEyeBlend_Inst":
-                set_principled_color(shader, (0.035, 0.012, 0.009, 1.0), 0.34)
-                assignment = "eye-corner blend preview"
+                # This shell covers the whole eye opening; opaque near-black
+                # made the eyes read as heavy smoky makeup over a dark hole.
+                set_principled_color(shader, (0.42, 0.26, 0.22, 1.0), 0.5)
+                shader.inputs["Alpha"].default_value = 0.10
+                material.blend_method = "HASHED"
+                assignment = "eye-corner blend preview (light translucent)"
             elif base_name == "MI_EyeBrow1":
                 set_principled_color(shader, (0.012, 0.009, 0.008, 1.0), 0.4)
                 link_color_texture(
@@ -437,10 +524,10 @@ def prepare_head_materials(component: Component, assets_root: str) -> dict:
                 material.blend_method = "HASHED"
                 assignment = "tear-fluid translucent preview"
             elif "eyeshadow_occlusion" in name or "teethocculusion" in name:
-                set_principled_color(shader, (0.008, 0.004, 0.004, 0.55), 0.65)
-                shader.inputs["Alpha"].default_value = 0.55
+                set_principled_color(shader, (0.30, 0.14, 0.11, 1.0), 0.65)
+                shader.inputs["Alpha"].default_value = 0.12
                 material.blend_method = "HASHED"
-                assignment = "occlusion preview"
+                assignment = "occlusion preview (subtle)"
             elif "eyelight" in name:
                 set_principled_color(shader, (0.8, 0.95, 1.0, 1.0), 0.05)
                 link_color_texture(
@@ -448,9 +535,9 @@ def prepare_head_materials(component: Component, assets_root: str) -> dict:
                 )
                 material.blend_method = "HASHED"
                 if "Emission" in shader.inputs:
-                    shader.inputs["Emission"].default_value = (0.3, 0.45, 0.6, 1.0)
-                    shader.inputs["Emission Strength"].default_value = 0.15
-                assignment = "eye-light texture + opacity"
+                    shader.inputs["Emission"].default_value = (0.55, 0.7, 0.85, 1.0)
+                    shader.inputs["Emission Strength"].default_value = 0.5
+                assignment = "eye-light texture + opacity (catchlight)"
             elif base_name == "NewMaterial":
                 set_principled_color(shader, (0.0, 0.0, 0.0, 0.0), 0.42)
                 shader.inputs["Alpha"].default_value = 0.0
@@ -505,22 +592,38 @@ def apply_component_transform(component: Component, transform: Matrix) -> None:
 
 
 def align_hair_components(
-    body: Component, hair: Component, tail: Component
+    body: Component,
+    hair: Component,
+    tail: Component,
+    reference: dict | None = None,
+    tail_short: Component | None = None,
 ) -> dict:
     """Attach local-space hair exports to the body's verified rest skeleton."""
     body_armature = body.armatures[0]
     hair_armature = hair.armatures[0]
     tail_armature = tail.armatures[0]
+    reference = reference or {}
 
     # The cap/bob skeleton is authored around a local origin.  SC_Hair is the
-    # explicit attachment socket on Eve's body skeleton.
+    # explicit attachment socket on Eve's body skeleton.  UE Viewer PSKs drop
+    # sockets, so bodies exported that way fall back to the transform recorded
+    # by a previous FModel-body validation (identical rest skeletons).
     socket = body_armature.data.bones.get("SC_Hair")
     hair_root = hair_armature.data.bones.get("Root")
-    if socket is None or hair_root is None:
+    hair_from_reference = False
+    if socket is not None and hair_root is not None:
+        socket_world = body_armature.matrix_world @ socket.matrix_local
+        hair_root_world = hair_armature.matrix_world @ hair_root.matrix_local
+        # Full rest-matrix alignment, not just translation: the standalone
+        # UE Viewer hair PSK carries the same 180-degree local-axis flip as
+        # the tail PSK, so translation-only attachment leaves the fringe
+        # facing backwards.
+        hair_transform = socket_world @ hair_root_world.inverted()
+    elif reference.get("hair_transform"):
+        hair_transform = Matrix(reference["hair_transform"])
+        hair_from_reference = True
+    else:
         raise RuntimeError("Cannot align main hair: SC_Hair/Root anchor is missing")
-    socket_world = body_armature.matrix_world @ socket.matrix_local
-    hair_root_world = hair_armature.matrix_world @ hair_root.matrix_local
-    hair_transform = Matrix.Translation(socket_world.translation - hair_root_world.translation)
     apply_component_transform(hair, hair_transform)
 
     # The ponytail shares the Ab-TL-HairB01 chain with Eve's body.  Aligning
@@ -536,25 +639,225 @@ def align_hair_components(
     tail_transform = body_anchor_world @ tail_anchor_world.inverted()
     apply_component_transform(tail, tail_transform)
 
-    hair_error = (
-        (hair.armatures[0].matrix_world @ hair_root.matrix_local).translation
-        - socket_world.translation
-    ).length
+    # The nape strands (EVE_HR_Tail_Short) anchor to Bip001-Head, which every
+    # body export keeps, so no socket or reference fallback is needed.
+    tail_short_error = None
+    if tail_short is not None:
+        short_anchor_name = "Bip001-Head"
+        body_head = body_armature.data.bones.get(short_anchor_name)
+        short_armature = tail_short.armatures[0]
+        short_head = short_armature.data.bones.get(short_anchor_name)
+        if body_head is None or short_head is None:
+            raise RuntimeError(
+                f"Cannot align short tail: {short_anchor_name} is missing"
+            )
+        body_head_world = body_armature.matrix_world @ body_head.matrix_local
+        short_head_world = short_armature.matrix_world @ short_head.matrix_local
+        apply_component_transform(
+            tail_short, body_head_world @ short_head_world.inverted()
+        )
+        tail_short_error = (
+            (tail_short.armatures[0].matrix_world @ short_head.matrix_local).translation
+            - body_head_world.translation
+        ).length
+        if tail_short_error > 1.0e-4:
+            raise RuntimeError(
+                f"Short tail alignment exceeded tolerance: {tail_short_error}"
+            )
+
+    hair_error = None
+    if not hair_from_reference:
+        hair_error = (
+            (hair.armatures[0].matrix_world @ hair_root.matrix_local).translation
+            - socket_world.translation
+        ).length
     tail_error = (
         (tail.armatures[0].matrix_world @ tail_anchor.matrix_local).translation
         - body_anchor_world.translation
     ).length
-    if hair_error > 1.0e-4 or tail_error > 1.0e-4:
+    if (hair_error is not None and hair_error > 1.0e-4) or tail_error > 1.0e-4:
         raise RuntimeError(
             f"Hair alignment exceeded tolerance: cap={hair_error}, tail={tail_error}"
         )
     return {
-        "hair_socket": "SC_Hair",
+        "hair_socket": (
+            "SC_Hair (transform reused from reference report)"
+            if hair_from_reference
+            else "SC_Hair"
+        ),
         "hair_anchor_error": hair_error,
         "tail_anchor": anchor_name,
         "tail_anchor_error": tail_error,
+        "tail_short_anchor": "Bip001-Head" if tail_short is not None else None,
+        "tail_short_anchor_error": tail_short_error,
         "hair_transform": [list(row) for row in hair_transform],
         "tail_transform": [list(row) for row in tail_transform],
+    }
+
+
+def merge_component_armatures(components: list, body: Component) -> dict:
+    """Merge every component skeleton into the body armature.
+
+    Components were aligned so shared bones already coincide with the body's
+    rest pose.  After joining, Blender suffixes incoming duplicate bones with
+    .001; those duplicates are removed so vertex groups fall through to the
+    body's identically named bones.  Chains without a shared parent (hair
+    simulation bones) are re-attached to the hair socket / head bone.
+    """
+    master = body.armatures[0]
+    anchors = {
+        "Hair": ["SC_Hair", "Bip001-Head"],
+        "HairTail": ["Ab-TL-HairB01", "Bip001-Head"],
+        "HairTailShort": ["Bip001-Head"],
+        "Head": ["Bip001-Head"],
+    }
+    component_bones = {
+        component.label: {
+            bone.name
+            for armature in component.armatures
+            for bone in armature.data.bones
+        }
+        for component in components
+    }
+    meshes = [mesh for component in components for mesh in component.meshes]
+    other_armatures = [
+        armature
+        for component in components
+        for armature in component.armatures
+        if armature != master
+    ]
+
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+    # A hair piece's own "Root" sits at its attachment point, not at the
+    # character origin.  Deduplicating it into the body Root would leave the
+    # scalp weighted to a static bone, so keep it as a uniquely named carrier
+    # bone and hang it off the component's anchor instead.
+    renamed_roots = {}
+    master_bone_names = {bone.name for bone in master.data.bones}
+    for component in components:
+        if component.label == "Body":
+            continue
+        for armature in component.armatures:
+            root = armature.data.bones.get("Root")
+            if root is None or "Root" not in master_bone_names:
+                continue
+            new_name = component.label + "_Root"
+            armature.data.bones["Root"].name = new_name
+            for mesh in component.meshes:
+                group = mesh.vertex_groups.get("Root")
+                if group is not None:
+                    group.name = new_name
+            renamed_roots[component.label] = new_name
+    for mesh in meshes:
+        world = mesh.matrix_world.copy()
+        mesh.parent = None
+        mesh.matrix_world = world
+
+    bpy.ops.object.select_all(action="DESELECT")
+    for armature in other_armatures:
+        armature.select_set(True)
+    master.select_set(True)
+    bpy.context.view_layer.objects.active = master
+    bpy.ops.object.join()
+
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit_bones = master.data.edit_bones
+    removed = 0
+    for bone in [b for b in list(edit_bones) if re.match(r".+\.\d{3}$", b.name)]:
+        original_name = bone.name.rsplit(".", 1)[0]
+        original = edit_bones.get(original_name)
+        if original is None:
+            continue
+        for child in list(bone.children):
+            child.parent = original
+        edit_bones.remove(bone)
+        removed += 1
+
+    reattached = {}
+    for label, anchor_names in anchors.items():
+        if label not in component_bones:
+            continue
+        anchor = next(
+            (edit_bones[name] for name in anchor_names if name in edit_bones), None
+        )
+        if anchor is None:
+            continue
+        # The renamed carrier root takes the whole piece with it.
+        carrier = renamed_roots.get(label)
+        if carrier and carrier in edit_bones:
+            edit_bones[carrier].parent = anchor
+            reattached.setdefault(label, []).append(carrier + " -> " + anchor.name)
+        for name in component_bones[label]:
+            if name == carrier:
+                continue
+            bone = edit_bones.get(name)
+            if bone is None or name in master_bone_names:
+                # Names the body already owned belong to the body hierarchy;
+                # never re-parent those.
+                continue
+            # Chains that fell through to the master Root (their own root was
+            # a removed duplicate) belong on the head/hair anchor instead.
+            if bone.parent is None or bone.parent.name == "Root":
+                if name != anchor.name:
+                    bone.parent = anchor
+                    reattached.setdefault(label, []).append(name)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    for mesh in meshes:
+        world = mesh.matrix_world.copy()
+        mesh.parent = master
+        mesh.matrix_world = world
+        for modifier in mesh.modifiers:
+            if modifier.type == "ARMATURE":
+                modifier.object = master
+    for component in components:
+        component.armatures = [master]
+    master.name = "Eve_Armature"
+    bpy.context.view_layer.update()
+    return {
+        "master": master.name,
+        "bones": len(master.data.bones),
+        "duplicates_removed": removed,
+        "reattached_chains": reattached,
+    }
+
+
+def resize_bone_display(armature_object) -> dict:
+    """Give bones a readable viewport length.
+
+    PSK/UEFormat imports leave every bone at a tiny fixed display length, so
+    a centimetre-scale character shows as a cloud of dots.  Only the length
+    along each bone's existing Y axis changes: head positions, orientations,
+    rolls and therefore skinning stay untouched.
+    """
+    previous_active = bpy.context.view_layer.objects.active
+    bpy.context.view_layer.objects.active = armature_object
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit_bones = armature_object.data.edit_bones
+    lengths_before = [bone.length for bone in edit_bones]
+    # Parents first so leaf bones can inherit the adjusted parent length.
+    for bone in sorted(edit_bones, key=lambda b: len(b.parent_recursive)):
+        child_distances = [
+            (child.head - bone.head).length
+            for child in bone.children
+            if (child.head - bone.head).length > 0.25
+        ]
+        if child_distances:
+            length = min(child_distances)
+        elif bone.parent is not None:
+            length = bone.parent.length * 0.6
+        else:
+            length = 10.0
+        bone.length = max(1.0, min(length, 25.0))
+    lengths_after = [bone.length for bone in edit_bones]
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.context.view_layer.objects.active = previous_active
+    return {
+        "bones": len(lengths_after),
+        "before_median": sorted(lengths_before)[len(lengths_before) // 2],
+        "after_median": sorted(lengths_after)[len(lengths_after) // 2],
     }
 
 
@@ -788,9 +1091,13 @@ def main() -> None:
         "Hair": args.hair,
         "HairTail": args.tail,
     }
-    for path in [*paths.values(), args.head_uemodel, args.body_diffuse, args.hair_alpha]:
+    if args.tail_short:
+        paths["HairTailShort"] = args.tail_short
+    for path in [*paths.values(), args.head_uemodel, args.hair_alpha]:
         if not os.path.isfile(path):
             raise FileNotFoundError(path)
+    if not os.path.isfile(args.body_diffuse) and not os.path.isdir(args.body_diffuse):
+        raise FileNotFoundError(args.body_diffuse)
     if not os.path.isdir(args.face_assets):
         raise NotADirectoryError(args.face_assets)
     if not os.path.isdir(args.ueformat_source):
@@ -803,16 +1110,36 @@ def main() -> None:
     )
     components.insert(1, head)
     by_label = {component.label: component for component in components}
+    alignment_reference = None
+    if args.alignment_reference:
+        with open(args.alignment_reference, "r", encoding="utf-8") as handle:
+            alignment_reference = json.load(handle).get("alignment")
     alignment = align_hair_components(
-        by_label["Body"], by_label["Hair"], by_label["HairTail"]
+        by_label["Body"],
+        by_label["Hair"],
+        by_label["HairTail"],
+        alignment_reference,
+        by_label.get("HairTailShort"),
     )
-    prepare_body_materials(by_label["Body"], os.path.abspath(args.body_diffuse))
+    merge_info = None
+    if args.merge_armatures:
+        merge_info = merge_component_armatures(components, by_label["Body"])
+    bone_display = {
+        armature.name: resize_bone_display(armature)
+        for armature in {
+            arm for component in components for arm in component.armatures
+        }
+    }
+    body_material_assignments = prepare_body_materials(
+        by_label["Body"], os.path.abspath(args.body_diffuse)
+    )
     head_materials = prepare_head_materials(
         by_label["Head"], os.path.abspath(args.face_assets)
     )
-    prepare_hair_materials(
-        [by_label["Hair"], by_label["HairTail"]], os.path.abspath(args.hair_alpha)
-    )
+    hair_components = [by_label["Hair"], by_label["HairTail"]]
+    if "HairTailShort" in by_label:
+        hair_components.append(by_label["HairTailShort"])
+    prepare_hair_materials(hair_components, os.path.abspath(args.hair_alpha))
 
     meshes = [mesh for component in components for mesh in component.meshes]
     minimum, maximum = create_preview(meshes, os.path.abspath(args.render))
@@ -831,21 +1158,33 @@ def main() -> None:
         "face_render": face_render,
         "components": [component_report(component) for component in components],
         "alignment": alignment,
+        "merged_armature": merge_info,
+        "bone_display": bone_display,
         "totals": {
             "components": len(components),
             "meshes": len(meshes),
-            "armatures": sum(len(component.armatures) for component in components),
+            "armatures": len(
+                {
+                    armature.name
+                    for component in components
+                    for armature in component.armatures
+                }
+            ),
             "vertices": sum(len(mesh.data.vertices) for mesh in meshes),
             "polygons": sum(len(mesh.data.polygons) for mesh in meshes),
             "bones": sum(
-                len(armature.data.bones)
-                for component in components
-                for armature in component.armatures
+                len(bpy.data.objects[name].data.bones)
+                for name in {
+                    armature.name
+                    for component in components
+                    for armature in component.armatures
+                }
             ),
             "bounds": {"min": list(minimum), "max": list(maximum)},
         },
         "preview_materials": {
             "body_diffuse": os.path.abspath(args.body_diffuse),
+            "body_assignments": body_material_assignments,
             "hair_alpha": os.path.abspath(args.hair_alpha),
             "head": head_materials,
         },
