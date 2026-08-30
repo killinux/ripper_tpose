@@ -272,6 +272,52 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 
 ---
 
+## 2026-08-30 — DOA6 / Throne of Desire：补齐导出总览画廊
+
+三个游戏现在都有和 `riseoferos/html/` 同款的画廊（manifest → 缩略图 → 自包含单页），
+结构一致，只是各自的分组维度和附录内容不同。
+
+### 新增
+
+- `scripts\doa6\html\`：DOA6 画廊。网格名在组装时已被重命名为
+  `<部件目录>_sm<N>`，据此归类部件；服装部件来自 `<Label>_cos` 暂存目录的即判定为
+  **mod 变体**（紫色徽标），facet 是 官方 / mod 变体。附录含三部件表、
+  `export_full.ps1` 与 `export_nude_mod.ps1` 用法、A/B 两条材质路线、
+  以及"别用 Cethleann 解 DOA6"等坑。24 个模型（含 5 个 mod 变体）。
+- `scripts\throneofdesire\html\`：ToD 画廊。递归扫导出根下全部 blend，
+  `female_all\` 下归为**批量裸模**、其余归为**单独导出**（facet），并入
+  `female_export_manifest.json` 的批量状态；统计含面数与贴图打包数。
+  附录说明 NFS+NIF/KFM 格式、`build_codecs.py` 前置、以及"静态网格+未绑定骨架"
+  这一当前限制。17 个模型（13 批量 + 4 单独）。
+  缩略图按 `<组>_<模型>.jpg` 命名——同名模型可能既在批量里又有单独导出。
+
+### 验证
+
+- DOA6：24 卡片 / 24 缩略图 / 页面 37.0KB，官方与 mod 变体分类正确。
+- ToD：17 卡片 / 17 缩略图 / 页面 30.3KB，批量与单独导出分组正确。
+
+## 2026-08-30 — DOA5LR：新增导出总览画廊（对齐 riseoferos/html）
+
+### 新增
+
+- `scripts\doa5lr\html\collect_manifest.py`：Blender 无头逐个打开 `_blends\*.blend`，
+  按网格名前缀（`WGT_body*`/`WGT_face*`/`WGT_hair*`/`MOT01_Head*`）归类部件，统计
+  网格/材质/透明材质/贴图数，写出 `doa5lr_models_manifest.json`；缺脸、缺发、贴图
+  过少会记为告警。
+- `scripts\doa5lr\html\make_gallery.py`：读 manifest 生成自包含单页
+  `html\index.html`（缩略图网格、搜索、按封包筛选、只看告警、点图看原图、
+  一键复制 blend 路径）。沿用 ROE 画廊的视觉与交互；缩略图写到
+  `D:\doa5lr_exports\_gallery\thumbs\`，**不进仓库**。
+- 封包徽标现扫 `chara_common`/`chara_initial` 索引得出，直接对应 `-Archive` 参数。
+  踩坑：匹配必须精确到 `<角色>_COS_001.TMC`，用子串会被 `KASUMI_BOSS_COS_001.TMC`
+  命中，把霞误标成 `chara_common`。
+
+### 验证
+
+- 21 张卡片、21 张缩略图（共 0.9MB）、页面 35.5KB；霞/绫音正确标注
+  `chara_initial`，其余 `chara_common`；两条告警均属实（Alpha-152 素材本身仅 5 张
+  贴图、`KASUMI_DLC_011` 是未加 `-Hair` 的光头对照件）。
+
 ## 2026-08-30 — DOA5LR：修正部件对齐与 Alpha 判据（用户反馈的 4 个缺陷）
 
 ### 修复

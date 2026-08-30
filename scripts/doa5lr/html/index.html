@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DOA5LR 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --arc: #1d7a52; --arc-bg: #e4f5ec; --shot: #d9dbe2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --arc: #6fd3a4; --arc-bg: #1b3a2c; --shot: #2a2d34;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header { padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* 作者写的 display 会盖过 UA 的 [hidden] 规则，筛选必须显式声明 */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg { padding: 46px 0; text-align: center; color: var(--muted); font-size: 12px; }
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.titlerow h3 { margin: 0; font-size: 15px; font-family: Consolas, monospace; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-arc { color: var(--arc); background: var(--arc-bg); cursor: default; }
+dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code, p code { font-family: Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>DOA5LR 模型导出总览</h1>
+  <div class="sub">生成于 2026-08-30 21:22 · 导出根目录 <code>D:\doa5lr_exports</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>21</b><span>已转模型</span></div>
+    <div class="stat"><b>19</b><span>覆盖角色</span></div>
+    <div class="stat"><b>331.6 MB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>2</b><span>有告警</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索角色名或路径…（按 / 聚焦）">
+  <button class="chip on" data-arc="">全部</button>
+  <button class="chip" data-arc="chara_common">chara_common</button><button class="chip" data-arc="chara_initial">chara_initial</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="alpha152_alpha152 alpha152 d:\doa5lr_exports\_blends\alpha152_alpha152.blend" data-arc="chara_common" data-warn="1">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/ALPHA152_Alpha152_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/ALPHA152_Alpha152.jpg" alt="ALPHA152_Alpha152"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>ALPHA152_Alpha152</h3><span class="badge badge-warn" title="贴图仅 5 张，原始素材可能就没有贴图">告警 1</span><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 1 · 脸 9 · 头发 41</dd>
+            <dt>规格</dt>
+            <dd>51 网格 · 51 材质（0 透明） · 5 贴图 · 4.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/ALPHA152_Alpha152.blend" title="D:\doa5lr_exports\_blends\ALPHA152_Alpha152.blend">D:\doa5lr_exports\_blends\ALPHA152_Alpha152.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\ALPHA152_Alpha152.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="ayane_ayane ayane d:\doa5lr_exports\_blends\ayane_ayane.blend" data-arc="chara_initial" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/AYANE_Ayane_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/AYANE_Ayane.jpg" alt="AYANE_Ayane"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>AYANE_Ayane</h3><span class="badge badge-arc">chara_initial</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>脸 9 · 头发 47 · 其它 31</dd>
+            <dt>规格</dt>
+            <dd>87 网格 · 87 材质（48 透明） · 49 贴图 · 17.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/AYANE_Ayane.blend" title="D:\doa5lr_exports\_blends\AYANE_Ayane.blend">D:\doa5lr_exports\_blends\AYANE_Ayane.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\AYANE_Ayane.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="christie_christie christie d:\doa5lr_exports\_blends\christie_christie.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/CHRISTIE_Christie_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/CHRISTIE_Christie.jpg" alt="CHRISTIE_Christie"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>CHRISTIE_Christie</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 9 · 脸 9 · 头发 36 · 其它 12</dd>
+            <dt>规格</dt>
+            <dd>66 网格 · 66 材质（39 透明） · 30 贴图 · 16.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/CHRISTIE_Christie.blend" title="D:\doa5lr_exports\_blends\CHRISTIE_Christie.blend">D:\doa5lr_exports\_blends\CHRISTIE_Christie.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\CHRISTIE_Christie.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="helena_helena helena d:\doa5lr_exports\_blends\helena_helena.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/HELENA_Helena_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/HELENA_Helena.jpg" alt="HELENA_Helena"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>HELENA_Helena</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 14 · 脸 8 · 头发 41 · 其它 15</dd>
+            <dt>规格</dt>
+            <dd>78 网格 · 78 材质（21 透明） · 50 贴图 · 20.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/HELENA_Helena.blend" title="D:\doa5lr_exports\_blends\HELENA_Helena.blend">D:\doa5lr_exports\_blends\HELENA_Helena.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\HELENA_Helena.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="hitomi_hitomi hitomi d:\doa5lr_exports\_blends\hitomi_hitomi.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/HITOMI_Hitomi_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/HITOMI_Hitomi.jpg" alt="HITOMI_Hitomi"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>HITOMI_Hitomi</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>脸 8 · 头发 32 · 其它 20</dd>
+            <dt>规格</dt>
+            <dd>60 网格 · 60 材质（33 透明） · 39 贴图 · 14.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/HITOMI_Hitomi.blend" title="D:\doa5lr_exports\_blends\HITOMI_Hitomi.blend">D:\doa5lr_exports\_blends\HITOMI_Hitomi.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\HITOMI_Hitomi.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="honoka_honoka honoka d:\doa5lr_exports\_blends\honoka_honoka.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/HONOKA_Honoka_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/HONOKA_Honoka.jpg" alt="HONOKA_Honoka"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>HONOKA_Honoka</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 19 · 脸 11 · 头发 60 · 其它 5</dd>
+            <dt>规格</dt>
+            <dd>95 网格 · 95 材质（65 透明） · 28 贴图 · 14.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/HONOKA_Honoka.blend" title="D:\doa5lr_exports\_blends\HONOKA_Honoka.blend">D:\doa5lr_exports\_blends\HONOKA_Honoka.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\HONOKA_Honoka.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="kasumi_dlc011_full kasumi d:\doa5lr_exports\_blends\kasumi_dlc011_full.blend" data-arc="chara_initial" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/KASUMI_DLC011_full_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/KASUMI_DLC011_full.jpg" alt="KASUMI_DLC011_full"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>KASUMI_DLC011_full</h3><span class="badge badge-arc">chara_initial</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 9 · 脸 3 · 头发 47</dd>
+            <dt>规格</dt>
+            <dd>59 网格 · 59 材质（59 透明） · 23 贴图 · 13.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/KASUMI_DLC011_full.blend" title="D:\doa5lr_exports\_blends\KASUMI_DLC011_full.blend">D:\doa5lr_exports\_blends\KASUMI_DLC011_full.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\KASUMI_DLC011_full.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="kasumi_dlc_011 kasumi d:\doa5lr_exports\_blends\kasumi_dlc_011.blend" data-arc="chara_initial" data-warn="1">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/KASUMI_DLC_011_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/KASUMI_DLC_011.jpg" alt="KASUMI_DLC_011"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>KASUMI_DLC_011</h3><span class="badge badge-warn" title="没有头发网格（导出时漏了 -Hair）">告警 1</span><span class="badge badge-arc">chara_initial</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 9 · 脸 3</dd>
+            <dt>规格</dt>
+            <dd>12 网格 · 12 材质（12 透明） · 18 贴图 · 10.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/KASUMI_DLC_011.blend" title="D:\doa5lr_exports\_blends\KASUMI_DLC_011.blend">D:\doa5lr_exports\_blends\KASUMI_DLC_011.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\KASUMI_DLC_011.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="kasumi_kasumi kasumi d:\doa5lr_exports\_blends\kasumi_kasumi.blend" data-arc="chara_initial" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/KASUMI_Kasumi_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/KASUMI_Kasumi.jpg" alt="KASUMI_Kasumi"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>KASUMI_Kasumi</h3><span class="badge badge-arc">chara_initial</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 22 · 脸 8 · 头发 47 · 其它 30</dd>
+            <dt>规格</dt>
+            <dd>107 网格 · 107 材质（47 透明） · 46 贴图 · 20.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/KASUMI_Kasumi.blend" title="D:\doa5lr_exports\_blends\KASUMI_Kasumi.blend">D:\doa5lr_exports\_blends\KASUMI_Kasumi.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\KASUMI_Kasumi.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="kokoro_kokoro kokoro d:\doa5lr_exports\_blends\kokoro_kokoro.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/KOKORO_Kokoro_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/KOKORO_Kokoro.jpg" alt="KOKORO_Kokoro"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>KOKORO_Kokoro</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 8 · 脸 10 · 头发 45 · 其它 14</dd>
+            <dt>规格</dt>
+            <dd>77 网格 · 77 材质（43 透明） · 42 贴图 · 17.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/KOKORO_Kokoro.blend" title="D:\doa5lr_exports\_blends\KOKORO_Kokoro.blend">D:\doa5lr_exports\_blends\KOKORO_Kokoro.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\KOKORO_Kokoro.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="leifang_leifang leifang d:\doa5lr_exports\_blends\leifang_leifang.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/LEIFANG_Leifang_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/LEIFANG_Leifang.jpg" alt="LEIFANG_Leifang"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>LEIFANG_Leifang</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 14 · 脸 6 · 头发 20 · 其它 7</dd>
+            <dt>规格</dt>
+            <dd>47 网格 · 47 材质（20 透明） · 30 贴图 · 17.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/LEIFANG_Leifang.blend" title="D:\doa5lr_exports\_blends\LEIFANG_Leifang.blend">D:\doa5lr_exports\_blends\LEIFANG_Leifang.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\LEIFANG_Leifang.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="lisa_lisa lisa d:\doa5lr_exports\_blends\lisa_lisa.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/LISA_Lisa_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/LISA_Lisa.jpg" alt="LISA_Lisa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>LISA_Lisa</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 10 · 脸 8 · 头发 23 · 其它 14</dd>
+            <dt>规格</dt>
+            <dd>55 网格 · 55 材质（26 透明） · 35 贴图 · 16.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/LISA_Lisa.blend" title="D:\doa5lr_exports\_blends\LISA_Lisa.blend">D:\doa5lr_exports\_blends\LISA_Lisa.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\LISA_Lisa.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="marie_marierose marie d:\doa5lr_exports\_blends\marie_marierose.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/MARIE_MarieRose_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/MARIE_MarieRose.jpg" alt="MARIE_MarieRose"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MARIE_MarieRose</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 12 · 脸 10 · 头发 39 · 其它 8</dd>
+            <dt>规格</dt>
+            <dd>69 网格 · 69 材质（37 透明） · 33 贴图 · 21.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/MARIE_MarieRose.blend" title="D:\doa5lr_exports\_blends\MARIE_MarieRose.blend">D:\doa5lr_exports\_blends\MARIE_MarieRose.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\MARIE_MarieRose.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mila_mila mila d:\doa5lr_exports\_blends\mila_mila.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/MILA_Mila_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/MILA_Mila.jpg" alt="MILA_Mila"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MILA_Mila</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>脸 9 · 头发 52 · 其它 19</dd>
+            <dt>规格</dt>
+            <dd>80 网格 · 80 材质（55 透明） · 32 贴图 · 17.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/MILA_Mila.blend" title="D:\doa5lr_exports\_blends\MILA_Mila.blend">D:\doa5lr_exports\_blends\MILA_Mila.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\MILA_Mila.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="momiji_momiji momiji d:\doa5lr_exports\_blends\momiji_momiji.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/MOMIJI_Momiji_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/MOMIJI_Momiji.jpg" alt="MOMIJI_Momiji"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MOMIJI_Momiji</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 10 · 脸 8 · 头发 37 · 其它 6</dd>
+            <dt>规格</dt>
+            <dd>61 网格 · 61 材质（39 透明） · 33 贴图 · 17.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/MOMIJI_Momiji.blend" title="D:\doa5lr_exports\_blends\MOMIJI_Momiji.blend">D:\doa5lr_exports\_blends\MOMIJI_Momiji.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\MOMIJI_Momiji.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="nyotengu_nyotengu nyotengu d:\doa5lr_exports\_blends\nyotengu_nyotengu.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/NYOTENGU_Nyotengu_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/NYOTENGU_Nyotengu.jpg" alt="NYOTENGU_Nyotengu"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NYOTENGU_Nyotengu</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 10 · 脸 14 · 头发 48 · 其它 18</dd>
+            <dt>规格</dt>
+            <dd>90 网格 · 90 材质（50 透明） · 45 贴图 · 21.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/NYOTENGU_Nyotengu.blend" title="D:\doa5lr_exports\_blends\NYOTENGU_Nyotengu.blend">D:\doa5lr_exports\_blends\NYOTENGU_Nyotengu.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\NYOTENGU_Nyotengu.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pai_pai pai d:\doa5lr_exports\_blends\pai_pai.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/PAI_Pai_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/PAI_Pai.jpg" alt="PAI_Pai"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PAI_Pai</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 9 · 脸 8 · 头发 10 · 其它 8</dd>
+            <dt>规格</dt>
+            <dd>35 网格 · 35 材质（6 透明） · 30 贴图 · 13.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/PAI_Pai.blend" title="D:\doa5lr_exports\_blends\PAI_Pai.blend">D:\doa5lr_exports\_blends\PAI_Pai.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\PAI_Pai.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="phase4_phase4 phase4 d:\doa5lr_exports\_blends\phase4_phase4.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/PHASE4_Phase4_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/PHASE4_Phase4.jpg" alt="PHASE4_Phase4"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PHASE4_Phase4</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 4 · 脸 14 · 头发 47 · 其它 29</dd>
+            <dt>规格</dt>
+            <dd>94 网格 · 94 材质（72 透明） · 31 贴图 · 13.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/PHASE4_Phase4.blend" title="D:\doa5lr_exports\_blends\PHASE4_Phase4.blend">D:\doa5lr_exports\_blends\PHASE4_Phase4.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\PHASE4_Phase4.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="rachel_rachel rachel d:\doa5lr_exports\_blends\rachel_rachel.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/RACHEL_Rachel_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/RACHEL_Rachel.jpg" alt="RACHEL_Rachel"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>RACHEL_Rachel</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 14 · 脸 7 · 头发 8 · 其它 47</dd>
+            <dt>规格</dt>
+            <dd>76 网格 · 76 材质（19 透明） · 33 贴图 · 13.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/RACHEL_Rachel.blend" title="D:\doa5lr_exports\_blends\RACHEL_Rachel.blend">D:\doa5lr_exports\_blends\RACHEL_Rachel.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\RACHEL_Rachel.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="sarah_sarah sarah d:\doa5lr_exports\_blends\sarah_sarah.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/SARAH_Sarah_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/SARAH_Sarah.jpg" alt="SARAH_Sarah"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>SARAH_Sarah</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 10 · 脸 8 · 头发 29 · 其它 6</dd>
+            <dt>规格</dt>
+            <dd>53 网格 · 53 材质（33 透明） · 24 贴图 · 13.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/SARAH_Sarah.blend" title="D:\doa5lr_exports\_blends\SARAH_Sarah.blend">D:\doa5lr_exports\_blends\SARAH_Sarah.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\SARAH_Sarah.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="tina_tina tina d:\doa5lr_exports\_blends\tina_tina.blend" data-arc="chara_common" data-warn="0">
+        <a class="shot" href="file:///D:/doa5lr_exports/_blends/TINA_Tina_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa5lr_exports/_gallery/thumbs/TINA_Tina.jpg" alt="TINA_Tina"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>TINA_Tina</h3><span class="badge badge-arc">chara_common</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 22 · 脸 9 · 头发 35 · 其它 8</dd>
+            <dt>规格</dt>
+            <dd>74 网格 · 74 材质（37 透明） · 42 贴图 · 15.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa5lr_exports/_blends/TINA_Tina.blend" title="D:\doa5lr_exports\_blends\TINA_Tina.blend">D:\doa5lr_exports\_blends\TINA_Tina.blend</a>
+                <button class="copy" data-copy="D:\doa5lr_exports\_blends\TINA_Tina.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+  <section class="appendix">
+    <h2>附录 · 导出脚本用法</h2>
+    <p>脚本在 <code>scripts\doa5lr\</code>，需在装有游戏的机器上运行。
+      完整说明见同目录 <code>EXPORT_GUIDE.md</code>（操作）与 <code>README.md</code>（格式与原理）。</p>
+
+    <h3>角色由三个 TMC 组成</h3>
+    <table>
+      <tr><th>部件</th><th>条目名</th><th>不加会怎样</th></tr>
+      <tr><td>服装 + 身体</td><td><code>&lt;角色&gt;_COS_NNN</code></td><td>—</td></tr>
+      <tr><td>脸</td><td><code>&lt;角色&gt;_FACE</code>（无编号）</td><td>不加 <code>-Face</code> → 无头</td></tr>
+      <tr><td>头发</td><td><code>&lt;角色&gt;_HAIR_NNN</code></td><td>不加 <code>-Hair</code> → 光头</td></tr>
+    </table>
+
+    <h3>一键出带材质 blend（export_full.ps1）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\doa5lr
+
+.\export_full.ps1 KASUMI_COS_001 -Archive chara_initial -Face auto -Hair 001 -Label KASUMI_Kasumi
+.\export_full.ps1 MARIE_COS_001 -Face auto -Hair 001 -Label MARIE_MarieRose</pre>
+    <p>产物是 <code>_blends\&lt;Label&gt;.blend</code>（贴图已打包进文件）和同名
+      <code>_preview.png</code>。卡片上的绿色徽标就是该角色所在封包，对应
+      <code>-Archive</code> 参数。</p>
+
+    <h3>查条目名 / 换服装</h3>
+    <pre>python extract_lnk.py "&lt;游戏&gt;\chara_initial.bin" --list --filter "KASUMI*"</pre>
+    <p>服装编号是纯数字（<code>COS_001</code>、<code>DLC_011</code>），名字看不出款式，
+      导出后看预览挑。模型分散在 36 个封包：常规服装在 <code>chara_initial</code> 或
+      <code>chara_common</code>，过场版在 <code>rtm_common</code>，DLC 在
+      <code>patch_XX_catalog</code>，场景在 <code>stage_*</code>。</p>
+
+    <h3>社区 mod（含 nude）</h3>
+    <pre>.\export_full.ps1 -TmcFile D:\mods\nude.TMC -Label KAS_Nude
+.\export_full.ps1 KASUMI_COS_001 -TmcFile D:\mods\nude.TMC -Archive chara_initial -Hair 001 -Label KAS_Nude</pre>
+    <div class="note"><b>官方内容没有 nude。</b>全部 36 个封包、12,625 个条目名搜
+      <code>nude/naked/bare/skin/under/lingerie</code> 零命中，衣服底下的皮肤网格被裁掉了。
+      mod 是替换用的 <code>.TMC</code> + 同名 <code>.TMCL</code>，格式与官方一致，
+      <code>-TmcFile</code> 直接吃；<code>-TmcFile</code> 也接受目录。
+      DOA5LR 的 mod 在 GameBanana 上是 0 个，主要在 LoversLab（需登录手动下载）。</div>
+
+    <h3>已知坑</h3>
+    <table>
+      <tr><th>症状</th><th>原因 / 处理</th></tr>
+      <tr><td>光头 / 无头</td><td>漏了 <code>-Hair</code> / <code>-Face</code></td></tr>
+      <tr><td>皮肤半透明起噪点</td><td>已修复。DOA5LR 把高光遮罩塞在 diffuse 的 alpha 里，
+        现在按数据判定（需 &gt;2% 全透明 <b>且</b> &gt;4% 全不透明像素）才接透明通道</td></tr>
+      <tr><td>头发压在脸上 / 没有脸</td><td>已修复。多数角色三部件本就同处一个坐标系，
+        早期版本强行按包围盒对齐反而挪歪（马尾的包围盒顶端是发梢；女天狗的翅膀撑大身体包围盒）</td></tr>
+      <tr><td>Alpha-152 通体白</td><td>素材如此：三部件加起来只有 8 张贴图，
+        游戏里靠特殊半透明 shader 表现，原始数据没有颜色贴图可还原</td></tr>
+      <tr><td>.ps1 报 missing terminator</td><td>脚本被存成无 BOM 的 UTF-8，
+        PowerShell 5.1 按 GBK 解析吞掉引号；用 UTF-8 with BOM 重存</td></tr>
+    </table>
+
+    <h3>重新生成本页</h3>
+    <pre>blender --background --factory-startup --python scripts\doa5lr\html\collect_manifest.py
+python scripts\doa5lr\html\make_gallery.py</pre>
+    <p>第一步用 Blender 打开每个 blend 收集网格/材质/贴图统计写成 manifest，
+      第二步把预览图缩成 JPEG 放进 <code>_gallery\thumbs\</code> 并重写本页。
+      <b>缩略图刻意不进仓库</b> —— 和其它脚本一样，仓库不收任何游戏素材。</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var arc = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!arc || card.dataset.arc === arc)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      arc = chip.dataset.arc || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard 需要安全上下文，file:// 不是
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

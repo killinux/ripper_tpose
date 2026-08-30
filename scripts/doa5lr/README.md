@@ -119,6 +119,26 @@ python extract_lnk.py "<游戏目录>\patch_25_catalog.bin" -o D:\out --filter "
 - **DDS→PNG**：Blender 读不了部分 BC 压缩格式，`export_full.ps1` 会先用 Noesis
   转一份同名 PNG，组装脚本优先使用。
 
+## 2.6 html/ —— 导出总览画廊
+
+和 `scripts\riseoferos\html\` 同款：manifest → 缩略图 → 自包含单页。
+
+```powershell
+blender --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py            # 加 --force 重建缩略图
+```
+
+`collect_manifest.py` 在 Blender 无头下逐个打开 `_blends\*.blend`，按网格名前缀
+（`WGT_body*`/`WGT_face*`/`WGT_hair*`）统计部件、材质、透明材质与贴图数，
+写出 `D:\doa5lr_exports\doa5lr_models_manifest.json`；`make_gallery.py` 读它生成
+`html\index.html`（搜索、按封包筛选、告警筛选、点图看原图、一键复制 blend 路径）。
+
+封包徽标由脚本现扫 `chara_common`/`chara_initial` 的索引得出，对应 `-Archive` 参数。
+注意匹配必须**精确**到 `<角色>_COS_001.TMC`——用子串匹配会被
+`KASUMI_BOSS_COS_001.TMC` 命中，把霞误标成 `chara_common`。
+
+缩略图写在 `D:\doa5lr_exports\_gallery\thumbs\`，**不进仓库**。
+
 ## 3. 格式与实现要点
 
 - `.bin` = `LFMO` 索引：0x30 起每 12 字节一条 `(offset+1)` 指向混淆名（`/` 前缀跳过）；

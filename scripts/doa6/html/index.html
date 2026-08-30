@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DOA6 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --mod: #7a3fa0; --mod-bg: #f1e7f8; --shot: #d9dbe2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --mod: #c99ae6; --mod-bg: #33203d; --shot: #2a2d34;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header { padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* 作者写的 display 会盖过 UA 的 [hidden] 规则，筛选必须显式声明 */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg { padding: 46px 0; text-align: center; color: var(--muted); font-size: 12px; }
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.titlerow h3 { margin: 0; font-size: 15px; font-family: Consolas, monospace; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-mod { color: var(--mod); background: var(--mod-bg); cursor: default; }
+dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code, p code { font-family: Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>DOA6 模型导出总览</h1>
+  <div class="sub">生成于 2026-08-30 21:36 · 导出根目录 <code>D:\doa6_exports</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>24</b><span>已转模型</span></div>
+    <div class="stat"><b>19</b><span>覆盖角色</span></div>
+    <div class="stat"><b>5</b><span>mod 变体</span></div>
+    <div class="stat"><b>1.1 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>0</b><span>有告警</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索角色名或路径…（按 / 聚焦）">
+  <button class="chip on" data-kind="">全部</button>
+  <button class="chip" data-kind="official">官方</button><button class="chip" data-kind="mod">mod 变体</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="aya_ayane aya d:\doa6_exports\_blends\aya_ayane.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/AYA_Ayane_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/AYA_Ayane.jpg" alt="AYA_Ayane"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>AYA_Ayane</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 26 · 脸 24 · 头发 20 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>70 网格 · 15 材质（15 透明） · 30 贴图 · 54.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/AYA_Ayane.blend" title="D:\doa6_exports\_blends\AYA_Ayane.blend">D:\doa6_exports\_blends\AYA_Ayane.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\AYA_Ayane.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="cri_christie cri d:\doa6_exports\_blends\cri_christie.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/CRI_Christie_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/CRI_Christie.jpg" alt="CRI_Christie"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>CRI_Christie</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 13 · 脸 20 · 头发 1 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>34 网格 · 12 材质（12 透明） · 24 贴图 · 46.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/CRI_Christie.blend" title="D:\doa6_exports\_blends\CRI_Christie.blend">D:\doa6_exports\_blends\CRI_Christie.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\CRI_Christie.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="hel_helena hel d:\doa6_exports\_blends\hel_helena.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/HEL_Helena_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/HEL_Helena.jpg" alt="HEL_Helena"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>HEL_Helena</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 23 · 脸 24 · 头发 14 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>61 网格 · 15 材质（15 透明） · 30 贴图 · 56.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/HEL_Helena.blend" title="D:\doa6_exports\_blends\HEL_Helena.blend">D:\doa6_exports\_blends\HEL_Helena.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\HEL_Helena.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="hon_honoka hon d:\doa6_exports\_blends\hon_honoka.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/HON_Honoka_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/HON_Honoka.jpg" alt="HON_Honoka"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>HON_Honoka</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 27 · 脸 20 · 头发 46 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>93 网格 · 18 材质（18 透明） · 32 贴图 · 56.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/HON_Honoka.blend" title="D:\doa6_exports\_blends\HON_Honoka.blend">D:\doa6_exports\_blends\HON_Honoka.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\HON_Honoka.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="htm_hitomi htm d:\doa6_exports\_blends\htm_hitomi.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/HTM_Hitomi_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/HTM_Hitomi.jpg" alt="HTM_Hitomi"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>HTM_Hitomi</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 6 · 脸 19 · 头发 44 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>69 网格 · 11 材质（11 透明） · 22 贴图 · 46.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/HTM_Hitomi.blend" title="D:\doa6_exports\_blends\HTM_Hitomi.blend">D:\doa6_exports\_blends\HTM_Hitomi.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\HTM_Hitomi.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="kas_kasumi kas d:\doa6_exports\_blends\kas_kasumi.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/KAS_Kasumi_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/KAS_Kasumi.jpg" alt="KAS_Kasumi"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>KAS_Kasumi</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 21 · 脸 21 · 头发 24 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>66 网格 · 18 材质（18 透明） · 32 贴图 · 51.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/KAS_Kasumi.blend" title="D:\doa6_exports\_blends\KAS_Kasumi.blend">D:\doa6_exports\_blends\KAS_Kasumi.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\KAS_Kasumi.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="kok_kokoro kok d:\doa6_exports\_blends\kok_kokoro.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/KOK_Kokoro_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/KOK_Kokoro.jpg" alt="KOK_Kokoro"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>KOK_Kokoro</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 12 · 脸 20 · 头发 29 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>61 网格 · 13 材质（13 透明） · 26 贴图 · 50.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/KOK_Kokoro.blend" title="D:\doa6_exports\_blends\KOK_Kokoro.blend">D:\doa6_exports\_blends\KOK_Kokoro.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\KOK_Kokoro.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="lei_leifang lei d:\doa6_exports\_blends\lei_leifang.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/LEI_Leifang_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/LEI_Leifang.jpg" alt="LEI_Leifang"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>LEI_Leifang</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 16 · 脸 25 · 头发 8 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>49 网格 · 13 材质（13 透明） · 26 贴图 · 58.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/LEI_Leifang.blend" title="D:\doa6_exports\_blends\LEI_Leifang.blend">D:\doa6_exports\_blends\LEI_Leifang.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\LEI_Leifang.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="lis_lisa lis d:\doa6_exports\_blends\lis_lisa.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/LIS_Lisa_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/LIS_Lisa.jpg" alt="LIS_Lisa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>LIS_Lisa</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 10 · 脸 22 · 头发 1 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>33 网格 · 11 材质（11 透明） · 22 贴图 · 52.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/LIS_Lisa.blend" title="D:\doa6_exports\_blends\LIS_Lisa.blend">D:\doa6_exports\_blends\LIS_Lisa.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\LIS_Lisa.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mai_maishiranui mai d:\doa6_exports\_blends\mai_maishiranui.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/MAI_MaiShiranui_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/MAI_MaiShiranui.jpg" alt="MAI_MaiShiranui"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MAI_MaiShiranui</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 19 · 脸 23 · 头发 6 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>48 网格 · 14 材质（14 透明） · 28 贴图 · 52.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/MAI_MaiShiranui.blend" title="D:\doa6_exports\_blends\MAI_MaiShiranui.blend">D:\doa6_exports\_blends\MAI_MaiShiranui.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\MAI_MaiShiranui.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mar_marierose mar d:\doa6_exports\_blends\mar_marierose.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/MAR_MarieRose_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/MAR_MarieRose.jpg" alt="MAR_MarieRose"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MAR_MarieRose</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 17 · 脸 22 · 头发 24 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>63 网格 · 14 材质（14 透明） · 28 贴图 · 58.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/MAR_MarieRose.blend" title="D:\doa6_exports\_blends\MAR_MarieRose.blend">D:\doa6_exports\_blends\MAR_MarieRose.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\MAR_MarieRose.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mil_mila mil d:\doa6_exports\_blends\mil_mila.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/MIL_Mila_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/MIL_Mila.jpg" alt="MIL_Mila"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MIL_Mila</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 9 · 脸 23 · 头发 1 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>33 网格 · 11 材质（11 透明） · 22 贴图 · 40.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/MIL_Mila.blend" title="D:\doa6_exports\_blends\MIL_Mila.blend">D:\doa6_exports\_blends\MIL_Mila.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\MIL_Mila.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mom_momiji mom d:\doa6_exports\_blends\mom_momiji.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/MOM_Momiji_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/MOM_Momiji.jpg" alt="MOM_Momiji"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MOM_Momiji</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 15 · 脸 22 · 头发 9 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>46 网格 · 15 材质（15 透明） · 30 贴图 · 54.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/MOM_Momiji.blend" title="D:\doa6_exports\_blends\MOM_Momiji.blend">D:\doa6_exports\_blends\MOM_Momiji.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\MOM_Momiji.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="nic_nico nic d:\doa6_exports\_blends\nic_nico.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/NIC_NiCO_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/NIC_NiCO.jpg" alt="NIC_NiCO"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NIC_NiCO</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 13 · 脸 21 · 头发 2 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>36 网格 · 15 材质（15 透明） · 26 贴图 · 51.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/NIC_NiCO.blend" title="D:\doa6_exports\_blends\NIC_NiCO.blend">D:\doa6_exports\_blends\NIC_NiCO.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\NIC_NiCO.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="nyo_nyotengu nyo d:\doa6_exports\_blends\nyo_nyotengu.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/NYO_Nyotengu_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/NYO_Nyotengu.jpg" alt="NYO_Nyotengu"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NYO_Nyotengu</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 16 · 脸 22 · 头发 26 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>64 网格 · 18 材质（18 透明） · 32 贴图 · 59.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/NYO_Nyotengu.blend" title="D:\doa6_exports\_blends\NYO_Nyotengu.blend">D:\doa6_exports\_blends\NYO_Nyotengu.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\NYO_Nyotengu.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="phf_phase4 phf d:\doa6_exports\_blends\phf_phase4.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/PHF_Phase4_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/PHF_Phase4.jpg" alt="PHF_Phase4"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PHF_Phase4</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 10 · 脸 21 · 头发 24 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>55 网格 · 15 材质（13 透明） · 26 贴图 · 35.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/PHF_Phase4.blend" title="D:\doa6_exports\_blends\PHF_Phase4.blend">D:\doa6_exports\_blends\PHF_Phase4.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\PHF_Phase4.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="rac_rachel rac d:\doa6_exports\_blends\rac_rachel.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/RAC_Rachel_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/RAC_Rachel.jpg" alt="RAC_Rachel"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>RAC_Rachel</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 15 · 脸 21 · 头发 6 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>42 网格 · 16 材质（16 透明） · 32 贴图 · 51.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/RAC_Rachel.blend" title="D:\doa6_exports\_blends\RAC_Rachel.blend">D:\doa6_exports\_blends\RAC_Rachel.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\RAC_Rachel.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="snk_kuladiamond snk d:\doa6_exports\_blends\snk_kuladiamond.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/SNK_KulaDiamond_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/SNK_KulaDiamond.jpg" alt="SNK_KulaDiamond"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>SNK_KulaDiamond</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 14 · 脸 22 · 头发 15 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>51 网格 · 14 材质（14 透明） · 28 贴图 · 46.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/SNK_KulaDiamond.blend" title="D:\doa6_exports\_blends\SNK_KulaDiamond.blend">D:\doa6_exports\_blends\SNK_KulaDiamond.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\SNK_KulaDiamond.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="tin_tina tin d:\doa6_exports\_blends\tin_tina.blend" data-kind="official" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/TIN_Tina_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/TIN_Tina.jpg" alt="TIN_Tina"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>TIN_Tina</h3>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 17 · 脸 22 · 头发 22 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>61 网格 · 13 材质（13 透明） · 26 贴图 · 50.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/TIN_Tina.blend" title="D:\doa6_exports\_blends\TIN_Tina.blend">D:\doa6_exports\_blends\TIN_Tina.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\TIN_Tina.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="aya_ayane_malf aya d:\doa6_exports\_blends\aya_ayane_malf.blend" data-kind="mod" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/AYA_Ayane_Malf_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/AYA_Ayane_Malf.jpg" alt="AYA_Ayane_Malf"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>AYA_Ayane_Malf</h3><span class="badge badge-mod">mod 变体</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 2 · 脸 24 · 头发 20 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>46 网格 · 11 材质（11 透明） · 22 贴图 · 34.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/AYA_Ayane_Malf.blend" title="D:\doa6_exports\_blends\AYA_Ayane_Malf.blend">D:\doa6_exports\_blends\AYA_Ayane_Malf.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\AYA_Ayane_Malf.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="hel_helena_nude hel d:\doa6_exports\_blends\hel_helena_nude.blend" data-kind="mod" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/HEL_Helena_Nude_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/HEL_Helena_Nude.jpg" alt="HEL_Helena_Nude"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>HEL_Helena_Nude</h3><span class="badge badge-mod">mod 变体</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 2 · 脸 24 · 头发 14 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>40 网格 · 13 材质（13 透明） · 26 贴图 · 56.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/HEL_Helena_Nude.blend" title="D:\doa6_exports\_blends\HEL_Helena_Nude.blend">D:\doa6_exports\_blends\HEL_Helena_Nude.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\HEL_Helena_Nude.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="lis_lisa_malf lis d:\doa6_exports\_blends\lis_lisa_malf.blend" data-kind="mod" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/LIS_Lisa_Malf_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/LIS_Lisa_Malf.jpg" alt="LIS_Lisa_Malf"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>LIS_Lisa_Malf</h3><span class="badge badge-mod">mod 变体</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 4 · 脸 22 · 头发 1 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>27 网格 · 12 材质（12 透明） · 24 贴图 · 29.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/LIS_Lisa_Malf.blend" title="D:\doa6_exports\_blends\LIS_Lisa_Malf.blend">D:\doa6_exports\_blends\LIS_Lisa_Malf.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\LIS_Lisa_Malf.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mai_mai_nsfw mai d:\doa6_exports\_blends\mai_mai_nsfw.blend" data-kind="mod" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/MAI_Mai_NSFW_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/MAI_Mai_NSFW.jpg" alt="MAI_Mai_NSFW"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MAI_Mai_NSFW</h3><span class="badge badge-mod">mod 变体</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 5 · 脸 23 · 头发 6 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>34 网格 · 13 材质（13 透明） · 26 贴图 · 33.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/MAI_Mai_NSFW.blend" title="D:\doa6_exports\_blends\MAI_Mai_NSFW.blend">D:\doa6_exports\_blends\MAI_Mai_NSFW.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\MAI_Mai_NSFW.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mom_momiji_malf mom d:\doa6_exports\_blends\mom_momiji_malf.blend" data-kind="mod" data-warn="0">
+        <a class="shot" href="file:///D:/doa6_exports/_blends/MOM_Momiji_Malf_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/doa6_exports/_gallery/thumbs/MOM_Momiji_Malf.jpg" alt="MOM_Momiji_Malf"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>MOM_Momiji_Malf</h3><span class="badge badge-mod">mod 变体</span>
+          </div>
+          <dl>
+            <dt>部件</dt><dd>身体 2 · 脸 22 · 头发 9 · 3 骨架</dd>
+            <dt>规格</dt>
+            <dd>33 网格 · 13 材质（13 透明） · 26 贴图 · 35.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/doa6_exports/_blends/MOM_Momiji_Malf.blend" title="D:\doa6_exports\_blends\MOM_Momiji_Malf.blend">D:\doa6_exports\_blends\MOM_Momiji_Malf.blend</a>
+                <button class="copy" data-copy="D:\doa6_exports\_blends\MOM_Momiji_Malf.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+  <section class="appendix">
+    <h2>附录 · 导出脚本用法</h2>
+    <p>脚本在 <code>scripts\doa6\</code>，需在装有游戏的机器上运行。
+      完整说明见同目录 <code>EXPORT_GUIDE.md</code>（操作）与 <code>README.md</code>（格式与原理）。</p>
+
+    <h3>角色由三个部件组成</h3>
+    <table>
+      <tr><th>部件</th><th>条目名</th><th>来源</th></tr>
+      <tr><td>服装 + 身体</td><td><code>&lt;角色&gt;_COS_NNN</code></td><td>CharacterEditor.rdb</td></tr>
+      <tr><td>脸</td><td><code>&lt;角色&gt;_FACE_NNN</code></td><td>CharacterEditor.rdb</td></tr>
+      <tr><td>头发</td><td><code>&lt;角色&gt;_HAIR_NNN</code></td><td>CharacterEditor.rdb</td></tr>
+      <tr><td>贴图</td><td><code>MPR_Muscle_Character_&lt;角色&gt;&lt;COS&gt;&lt;NNN&gt;_…</code></td><td>MaterialEditor.rdb（45GB）</td></tr>
+    </table>
+
+    <h3>一键出带材质 blend（export_full.ps1）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\doa6
+
+.\export_full.ps1 KAS -Label KAS_Kasumi        # 默认 COS_001/HAIR_001/FACE_001
+.\export_full.ps1 MOM -Cos 102 -Label MOM_DLC  # 指定服装编号
+.\export_full.ps1 -List                        # 列出全部 1536 个模型</pre>
+    <p>产物是 <code>_blends\&lt;Label&gt;.blend</code>（贴图已打包）和同名
+      <code>_preview.png</code>。</p>
+
+    <h3>mod 变体（含 nude）</h3>
+    <pre>.\export_nude_mod.ps1 D:\mods\xxx.zip -Chr HEL -Label HEL_Helena_Nude
+.\export_nude_mod.ps1 D:\mods\ayane.zip -Chr AYA -Label AYA_Malf -Assign "3=f01,5=body"</pre>
+    <p>吃 REDELBE layer2 mod（zip 或目录），自动接上该角色已导出的官方发型/脸。
+      紫色徽标标出的就是这类变体。两条材质路线自动选择：</p>
+    <table>
+      <tr><th>路线</th><th>触发条件</th><th>可靠性</th></tr>
+      <tr><td>A 精确</td><td>mod 替换的服装编号本机有（如 <code>HEL_COS_001</code>）→ 走原版 ktid 链</td><td>一次到位</td></tr>
+      <tr><td>B 启发式</td><td>替换未安装的 DLC 位（如 <code>MOM_COS_105</code>）→ 按网格大小猜部位</td><td>多数一次对，弄反时用 <code>-Assign</code> 纠正</td></tr>
+    </table>
+    <div class="note"><b>官方内容没有 nude</b>（逐条目核实过）。mod 主要来源：
+      GameBanana（game id <code>6966</code>，可脚本化直连下载，但多为微比基尼/走光级别）；
+      全裸整合包在 LoversLab / DeviantArt，需登录手动下载。</div>
+
+    <h3>已知坑</h3>
+    <table>
+      <tr><th>症状</th><th>原因 / 处理</th></tr>
+      <tr><td>Noesis 打开就崩</td><td><b>别用 Cethleann.DataExporter 解 DOA6</b>：它的 zlib
+        每块只读一次，1536 个 g1m 里 1300 个在 ~80% 处截断，坏文件让插件静默崩溃。
+        用仓库的 <code>extract_rdb.py</code></td></tr>
+      <tr><td>客串角色导出失败</td><td>NIC / MAI / SNK 的 <code>COS_000~003</code>
+        是无 ktid 的占位调试体，正装从 <code>COS_004</code> 起</td></tr>
+      <tr><td>Phase 4 头发是白模</td><td>她的 <code>HAIR_001</code> 在 MaterialEditor 里确实没有贴图</td></tr>
+      <tr><td>mod 变体皮肤/衣服贴图弄反</td><td>路线 B 的启发式猜错，按脚本打印的
+        <code>assign</code> 把两个部位对调后加 <code>-Assign</code> 重跑</td></tr>
+      <tr><td>.ps1 报 missing terminator</td><td>脚本被存成无 BOM 的 UTF-8，
+        PowerShell 5.1 按 GBK 解析吞掉引号；用 UTF-8 with BOM 重存</td></tr>
+    </table>
+
+    <h3>重新生成本页</h3>
+    <pre>blender --background --factory-startup --python scripts\doa6\html\collect_manifest.py
+python scripts\doa6\html\make_gallery.py</pre>
+    <p>第一步用 Blender 打开每个 blend 收集网格/材质/贴图统计写成 manifest，
+      第二步把预览图缩成 JPEG 放进 <code>_gallery\thumbs\</code> 并重写本页。
+      <b>缩略图刻意不进仓库</b> —— 和其它脚本一样，仓库不收任何游戏素材。</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var kind = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!kind || card.dataset.kind === kind)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      kind = chip.dataset.kind || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard 需要安全上下文，file:// 不是
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

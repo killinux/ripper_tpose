@@ -39,6 +39,25 @@ Throne of Desire 的女性 h 系模型**本体就是裸模**：衣服是附件�
 规范顺序保留未重导出的记录，不再把完整清单覆盖成一条；`-ValidateOnly` 的结果写入
 独立报告 `female_export_validation.json`，不改动导出 manifest。
 
+## html/ —— 导出总览画廊
+
+和 `scripts\riseoferos\html\`、`scripts\doa5lr\html\`、`scripts\doa6\html\` 同款：
+manifest → 缩略图 → 自包含单页。
+
+```powershell
+blender --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py            # 加 --force 重建缩略图
+```
+
+`collect_manifest.py` 递归扫导出根下全部 `.blend` 并逐个打开，统计网格/面数/骨架/
+材质/贴图（含打包数），按路径分组：`female_all\` 下的归为**批量裸模**，其余归为
+**单独导出**；同时并入 `female_export_manifest.json` 里的批量状态。
+`make_gallery.py` 读它生成 `html\index.html`（搜索、按组筛选、告警筛选、点图看原图、
+一键复制 blend 路径）。
+
+缩略图写在 `D:\throneofdesire_exports\_gallery\thumbs\`，按 `<组>_<模型>.jpg` 命名
+（同名模型可能既在批量里又有单独导出，不这样会互相覆盖）；**不进仓库**。
+
 ## 一键导出（单模型底层命令）
 
 ```powershell

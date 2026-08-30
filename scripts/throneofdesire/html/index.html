@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Throne of Desire 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --single: #1d5f7a; --single-bg: #e2f0f6; --shot: #d9dbe2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --single: #7fc6e0; --single-bg: #1a3540; --shot: #2a2d34;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header { padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* 作者写的 display 会盖过 UA 的 [hidden] 规则，筛选必须显式声明 */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg { padding: 46px 0; text-align: center; color: var(--muted); font-size: 12px; }
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.titlerow h3 { margin: 0; font-size: 15px; font-family: Consolas, monospace; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-single { color: var(--single); background: var(--single-bg); cursor: default; }
+dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.size { color: var(--muted); margin-left: 6px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code, p code { font-family: Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Throne of Desire 模型导出总览</h1>
+  <div class="sub">生成于 2026-08-30 21:40 · 导出根目录 <code>D:\throneofdesire_exports</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>17</b><span>已转模型</span></div>
+    <div class="stat"><b>13</b><span>批量裸模</span></div>
+    <div class="stat"><b>2.3 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>0</b><span>有告警</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索模型名或路径…（按 / 聚焦）">
+  <button class="chip on" data-group="">全部</button>
+  <button class="chip" data-group="batch">批量裸模</button><button class="chip" data-group="single">单独导出</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="h005 d:\throneofdesire_exports\female_all\h005\h005_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h005/h005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h005.jpg" alt="h005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h005</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>22 网格 · 115328 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>23 材质 · 23 贴图（23 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h005/h005_blender36.blend" title="D:\throneofdesire_exports\female_all\h005\h005_blender36.blend">D:\throneofdesire_exports\female_all\h005\h005_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h005\h005_blender36.blend">复制</button>
+                <span class="size">147.8 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h006 d:\throneofdesire_exports\female_all\h006\h006_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h006/h006_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h006.jpg" alt="h006"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h006</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>29 网格 · 149341 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>30 材质 · 22 贴图（22 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h006/h006_blender36.blend" title="D:\throneofdesire_exports\female_all\h006\h006_blender36.blend">D:\throneofdesire_exports\female_all\h006\h006_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h006\h006_blender36.blend">复制</button>
+                <span class="size">149.3 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h008 d:\throneofdesire_exports\female_all\h008\h008_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h008/h008_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h008.jpg" alt="h008"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h008</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>23 网格 · 109115 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>24 材质 · 24 贴图（24 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h008/h008_blender36.blend" title="D:\throneofdesire_exports\female_all\h008\h008_blender36.blend">D:\throneofdesire_exports\female_all\h008\h008_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h008\h008_blender36.blend">复制</button>
+                <span class="size">147.6 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h009 d:\throneofdesire_exports\female_all\h009\h009_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h009/h009_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h009.jpg" alt="h009"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h009</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>25 网格 · 105603 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>26 材质 · 26 贴图（26 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h009/h009_blender36.blend" title="D:\throneofdesire_exports\female_all\h009\h009_blender36.blend">D:\throneofdesire_exports\female_all\h009\h009_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h009\h009_blender36.blend">复制</button>
+                <span class="size">151.2 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h011 d:\throneofdesire_exports\female_all\h011\h011_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h011/h011_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h011.jpg" alt="h011"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h011</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>42 网格 · 160321 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>43 材质 · 23 贴图（23 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h011/h011_blender36.blend" title="D:\throneofdesire_exports\female_all\h011\h011_blender36.blend">D:\throneofdesire_exports\female_all\h011\h011_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h011\h011_blender36.blend">复制</button>
+                <span class="size">152.7 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h012 d:\throneofdesire_exports\female_all\h012\h012_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h012/h012_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h012.jpg" alt="h012"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h012</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>28 网格 · 119626 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>29 材质 · 23 贴图（23 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h012/h012_blender36.blend" title="D:\throneofdesire_exports\female_all\h012\h012_blender36.blend">D:\throneofdesire_exports\female_all\h012\h012_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h012\h012_blender36.blend">复制</button>
+                <span class="size">148.4 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h015 d:\throneofdesire_exports\female_all\h015\h015_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h015/h015_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h015.jpg" alt="h015"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h015</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>30 网格 · 117410 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>31 材质 · 26 贴图（26 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h015/h015_blender36.blend" title="D:\throneofdesire_exports\female_all\h015\h015_blender36.blend">D:\throneofdesire_exports\female_all\h015\h015_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h015\h015_blender36.blend">复制</button>
+                <span class="size">149.7 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h020 d:\throneofdesire_exports\female_all\h020\h020_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h020/h020_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h020.jpg" alt="h020"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h020</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>30 网格 · 149991 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>31 材质 · 29 贴图（29 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h020/h020_blender36.blend" title="D:\throneofdesire_exports\female_all\h020\h020_blender36.blend">D:\throneofdesire_exports\female_all\h020\h020_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h020\h020_blender36.blend">复制</button>
+                <span class="size">157.7 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h021 d:\throneofdesire_exports\female_all\h021\h021_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h021/h021_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h021.jpg" alt="h021"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h021</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>19 网格 · 102258 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>20 材质 · 24 贴图（24 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h021/h021_blender36.blend" title="D:\throneofdesire_exports\female_all\h021\h021_blender36.blend">D:\throneofdesire_exports\female_all\h021\h021_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h021\h021_blender36.blend">复制</button>
+                <span class="size">148.4 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h091 d:\throneofdesire_exports\female_all\h091\h091_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h091/h091_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h091.jpg" alt="h091"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h091</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>21 网格 · 101090 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>22 材质 · 26 贴图（26 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h091/h091_blender36.blend" title="D:\throneofdesire_exports\female_all\h091\h091_blender36.blend">D:\throneofdesire_exports\female_all\h091\h091_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h091\h091_blender36.blend">复制</button>
+                <span class="size">149.5 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h997 d:\throneofdesire_exports\female_all\h997\h997_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h997/h997_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h997.jpg" alt="h997"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h997</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>8 网格 · 84197 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>9 材质 · 25 贴图（25 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h997/h997_blender36.blend" title="D:\throneofdesire_exports\female_all\h997\h997_blender36.blend">D:\throneofdesire_exports\female_all\h997\h997_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h997\h997_blender36.blend">复制</button>
+                <span class="size">154.6 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h998 d:\throneofdesire_exports\female_all\h998\h998_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h998/h998_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h998.jpg" alt="h998"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h998</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>10 网格 · 117276 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>11 材质 · 24 贴图（24 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h998/h998_blender36.blend" title="D:\throneofdesire_exports\female_all\h998\h998_blender36.blend">D:\throneofdesire_exports\female_all\h998\h998_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h998\h998_blender36.blend">复制</button>
+                <span class="size">150.9 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h999 d:\throneofdesire_exports\female_all\h999\h999_blender36.blend" data-group="batch" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/female_all/h999/h999_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/batch_h999.jpg" alt="h999"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h999</h3>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>9 网格 · 74509 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>10 材质 · 28 贴图（28 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/female_all/h999/h999_blender36.blend" title="D:\throneofdesire_exports\female_all\h999\h999_blender36.blend">D:\throneofdesire_exports\female_all\h999\h999_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\female_all\h999\h999_blender36.blend">复制</button>
+                <span class="size">201.7 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h005 d:\throneofdesire_exports\h005\h005_blender36.blend" data-group="single" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/h005/h005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/single_h005.jpg" alt="h005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h005</h3><span class="badge badge-single">单独导出</span>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>22 网格 · 115328 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>23 材质 · 24 贴图（24 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/h005/h005_blender36.blend" title="D:\throneofdesire_exports\h005\h005_blender36.blend">D:\throneofdesire_exports\h005\h005_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\h005\h005_blender36.blend">复制</button>
+                <span class="size">148.8 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h020 d:\throneofdesire_exports\h020\h020_blender36.blend" data-group="single" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/h020/h020_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/single_h020.jpg" alt="h020"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h020</h3><span class="badge badge-single">单独导出</span>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>30 网格 · 149991 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>31 材质 · 30 贴图（30 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/h020/h020_blender36.blend" title="D:\throneofdesire_exports\h020\h020_blender36.blend">D:\throneofdesire_exports\h020\h020_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\h020\h020_blender36.blend">复制</button>
+                <span class="size">158.7 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="h996 d:\throneofdesire_exports\h996\h996_blender36.blend" data-group="single" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/h996/h996_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/single_h996.jpg" alt="h996"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>h996</h3><span class="badge badge-single">单独导出</span>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>2 网格 · 13666 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>3 材质 · 3 贴图（3 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/h996/h996_blender36.blend" title="D:\throneofdesire_exports\h996\h996_blender36.blend">D:\throneofdesire_exports\h996\h996_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\h996\h996_blender36.blend">复制</button>
+                <span class="size">3.4 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="hm003 d:\throneofdesire_exports\hm003\hm003_blender36.blend" data-group="single" data-warn="0">
+        <a class="shot" href="file:///D:/throneofdesire_exports/hm003/hm003_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/throneofdesire_exports/_gallery/thumbs/single_hm003.jpg" alt="hm003"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>hm003</h3><span class="badge badge-single">单独导出</span>
+          </div>
+          <dl>
+            <dt>几何</dt><dd>9 网格 · 25662 面 · 1 骨架</dd>
+            <dt>材质</dt><dd>10 材质 · 6 贴图（6 已打包）</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/throneofdesire_exports/hm003/hm003_blender36.blend" title="D:\throneofdesire_exports\hm003\hm003_blender36.blend">D:\throneofdesire_exports\hm003\hm003_blender36.blend</a>
+                <button class="copy" data-copy="D:\throneofdesire_exports\hm003\hm003_blender36.blend">复制</button>
+                <span class="size">8.8 MB</span></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+  <section class="appendix">
+    <h2>附录 · 导出脚本用法</h2>
+    <p>脚本在 <code>scripts\throneofdesire\</code>，需在装有游戏的机器上运行。
+      完整说明见同目录 <code>README.md</code> 与
+      <code>docs\throne-of-desire-extraction.md</code>。</p>
+
+    <h3>这游戏的特别之处</h3>
+    <p>不是 Unreal/Unity：X-Legend 自家的 NFS 封包 + Gamebryo 的 NIF/KFM 模型格式。
+      <b>女性 h 系模型本体就是裸模</b>，衣服是默认隐藏的附件，导 FBX 时被排除，
+      所以不需要额外的 nude 流程。</p>
+
+    <h3>一次性准备（build_codecs.py）</h3>
+    <pre>python scripts\throneofdesire\build_codecs.py</pre>
+    <p>编译 LZHAM 与 ETC 解码器（通过 WSL 的 g++）。封包和贴图都用这两种压缩，
+      不先编译后面会直接失败。</p>
+
+    <h3>批量导出裸模（export_nude_models.ps1）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
+
+.\export_nude_models.ps1              # 13 个 h 系女性基础体
+.\export_nude_models.ps1 -Only h005   # 只导一个</pre>
+    <p>内部包的是 <code>batch_export_female.py</code>；产物是
+      <code>&lt;导出根&gt;\female_all\&lt;model&gt;\&lt;model&gt;_blender36.blend</code>
+      与同名 FBX、预览图，同目录还留有 <code>source\</code>（原始 NIF/KFM）和
+      <code>textures\</code>。批量清单写在 <code>female_all\female_export_manifest.json</code>。</p>
+
+    <div class="note"><b>当前限制：静态网格 + 未绑定的静止骨架。</b>
+      蒙皮权重和动画还没做，导出的骨架只是摆在那里的 rest pose，不能直接摆姿势。
+      需要动作的话得另外处理 KFM。</div>
+
+    <h3>底层工具</h3>
+    <table>
+      <tr><th>脚本</th><th>作用</th></tr>
+      <tr><td><code>extract_nfs.py</code></td><td>读 <code>packageindex</code> 与
+        <code>FileListPC.txt</code>，从 NFS 封包取出 NIF/KFM</td></tr>
+      <tr><td><code>extract_model_textures.py</code></td><td>取模型对应贴图并解码</td></tr>
+      <tr><td><code>import_xlegend_nif36.py</code></td><td>Blender 3.6 的 NIF 导入器</td></tr>
+      <tr><td><code>xlegend_nif.py</code></td><td>NIF 解析核心</td></tr>
+      <tr><td><code>inspect_materials.py</code></td><td>排查材质/贴图对应关系</td></tr>
+      <tr><td><code>validate_female_exports36.py</code></td><td>校验产物完整性，
+        结果写 <code>female_export_validation.json</code></td></tr>
+    </table>
+
+    <h3>重新生成本页</h3>
+    <pre>blender --background --factory-startup --python scripts\throneofdesire\html\collect_manifest.py
+python scripts\throneofdesire\html\make_gallery.py</pre>
+    <p>第一步递归扫导出根下全部 blend、逐个打开收集统计写成 manifest
+      （<code>female_all\</code> 下的归为批量裸模，其余归为单独导出），
+      第二步把预览图缩成 JPEG 放进 <code>_gallery\thumbs\</code> 并重写本页。
+      <b>缩略图刻意不进仓库</b> —— 和其它脚本一样，仓库不收任何游戏素材。</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var group = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!group || card.dataset.group === group)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      group = chip.dataset.group || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard 需要安全上下文，file:// 不是
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

@@ -100,6 +100,19 @@ nude 只能用社区 mod。DOA5LR 的 mod 就是替换用的 `.TMC` + 同名 `.T
 | `extract_lnk.py` | `.bin/.lnk` 解包器（自研：解混淆名 + XOR 解密 + 分块 zlib） |
 | `build_blend.py` | Blender 无头组装：材质重建、部件对齐、打包贴图、渲预览 |
 | `import_mod.ps1` | 任意 mod（zip/目录）批量转 FBX+DDS，不组装 blend |
+| `html/collect_manifest.py` | Blender 无头扫全部 blend，收集统计写 manifest |
+| `html/make_gallery.py` | 读 manifest 生成可浏览的单页画廊 `html/index.html` |
+
+### 浏览已导出的模型
+
+```powershell
+blender --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py
+```
+
+生成 `scripts\doa5lr\html\index.html`：缩略图网格、搜索、按封包筛选、告警标记，
+卡片直接链到本机的 blend 与原图。缩略图写在 `D:\doa5lr_exports\_gallery\thumbs\`，
+**不进仓库**（同 ROE 的规矩，仓库不收任何游戏素材）。
 
 格式细节与实现要点见同目录 `README.md`；产物索引见 `D:\doa5lr_exports\README.md`。
 
