@@ -84,8 +84,11 @@ def arguments() -> argparse.Namespace:
                         help="Character display name used in files and reports")
     parser.add_argument("--body", required=True, type=Path,
                         help="Prepared BODY glTF")
-    parser.add_argument("--face", required=True, type=Path,
-                        help="Prepared FACE glTF")
+    parser.add_argument("--face", required=False, type=Path, default=None,
+                        help=(
+                            "Prepared FACE glTF; optional for bodies that "
+                            "already include a head (e.g. the nude base body)"
+                        ))
     parser.add_argument("--hair", required=True, type=Path,
                         help="Prepared HAIR glTF")
     parser.add_argument("--output-dir", required=True, type=Path,
@@ -930,11 +933,10 @@ def main() -> int:
     }
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    requested = (
-        ("BODY", args.body),
-        ("FACE", args.face),
-        ("HAIR", args.hair),
-    )
+    requested = [("BODY", args.body)]
+    if args.face is not None:
+        requested.append(("FACE", args.face))
+    requested.append(("HAIR", args.hair))
     components = {
         label: import_component(label, path, alpha_map[label])
         for label, path in requested
@@ -987,8 +989,18 @@ def main() -> int:
         },
         "combined_bounds": scene_bounds,
         "assembly_stats": original_stats,
-        "head_fit": head_fit(vertex_data["FACE"], vertex_data["HAIR"]),
-        "neck_fit": neck_fit(vertex_data["FACE"], vertex_data["BODY"]),
+        # Without a FACE component the body itself carries the head, so the
+        # hair-fit diagnostic runs against the BODY vertices and the FACE/BODY
+        # neck-seam diagnostic does not apply.
+        "head_fit": head_fit(
+            vertex_data["FACE" if "FACE" in vertex_data else "BODY"],
+            vertex_data["HAIR"],
+        ),
+        "neck_fit": (
+            neck_fit(vertex_data["FACE"], vertex_data["BODY"])
+            if "FACE" in vertex_data
+            else None
+        ),
         "render_mode": render_mode,
         "preview_size": [args.preview_size, args.preview_size],
         "previews_skipped": args.skip_previews,

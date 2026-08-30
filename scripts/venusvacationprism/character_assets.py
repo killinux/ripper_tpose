@@ -709,8 +709,17 @@ def _convert_g1t(path: Path) -> dict[str, Any]:
     }
 
 
+DEFAULT_FACE_V1_IRIS_PAIRS: tuple[tuple[int, int, int], ...] = (
+    (2, 25, 26),
+    (3, 35, 36),
+)
+
+
 def _bake_face_v1_iris(
-    component_dir: Path, texture_rows: Sequence[Mapping[str, Any]], label: str
+    component_dir: Path,
+    texture_rows: Sequence[Mapping[str, Any]],
+    label: str,
+    iris_pairs: Sequence[Sequence[int]] = DEFAULT_FACE_V1_IRIS_PAIRS,
 ) -> dict[str, Any]:
     """Bake the two face iris overlays used by the verified PRISM face shader."""
 
@@ -718,7 +727,9 @@ def _bake_face_v1_iris(
     texture_dir = component_dir / "textures"
     outputs: list[dict[str, Any]] = []
     rows_by_slot = {int(row["slot"]): row for row in texture_rows}
-    for material, base_slot, iris_slot in ((2, 25, 26), (3, 35, 36)):
+    for material, base_slot, iris_slot in (
+        tuple(int(v) for v in pair) for pair in iris_pairs
+    ):
         if base_slot not in rows_by_slot or iris_slot not in rows_by_slot:
             raise CharacterAssetError(
                 f"{label}: face_v1 needs resolved texture slots "
@@ -954,6 +965,7 @@ def _patch_gltf_materials(
     role: str,
     material_profile: str,
     texture_rows: Sequence[Mapping[str, Any]],
+    iris_pairs: Sequence[Sequence[int]] = DEFAULT_FACE_V1_IRIS_PAIRS,
 ) -> dict[str, Any]:
     """Point converter materials at decoded PNGs and preserve alpha semantics."""
 
@@ -967,7 +979,7 @@ def _patch_gltf_materials(
         )
     iris_mapping: dict[int, str] = {}
     if material_profile == "face_v1":
-        iris = _bake_face_v1_iris(component_dir, texture_rows, label)
+        iris = _bake_face_v1_iris(component_dir, texture_rows, label, iris_pairs)
         iris_mapping = {
             int(row["base_slot"]): str(row["baked"]) for row in iris["overlays"]
         }
@@ -2318,12 +2330,20 @@ def extract_character_assets(
                 component_dir, spec.label, unresolved_texture_rows
             )
         material_profile = _auto_material_profile(spec)
+        # Display heads (e.g. the nude base head 843) bind their eye base/iris
+        # textures two slots later than the standard FACE layout; a profile
+        # may override the baked pairs without touching the default.
+        iris_pairs = (
+            spec.postprocess.get("face_v1_iris_pairs")
+            or DEFAULT_FACE_V1_IRIS_PAIRS
+        )
         material_report = _patch_gltf_materials(
             component_dir,
             spec.label,
             spec.role,
             material_profile,
             texture_rows,
+            iris_pairs,
         )
         postprocess: dict[str, Any] | None = None
         post_kind = str(spec.postprocess.get("kind") or "").lower()

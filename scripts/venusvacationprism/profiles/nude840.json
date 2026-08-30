@@ -1,0 +1,60 @@
+{
+  "character": "Nude840",
+  "components": {
+    "body": {
+      "label": "BODY_NUDE_840",
+      "model_index": 840,
+      "g1m_id": "0xC48EDAD9"
+    },
+    "face": {
+      "label": "HEAD_NUDE_843",
+      "model_index": 843,
+      "g1m_id": "0x309B9861",
+      "postprocess": {
+        "unresolved_texture_slot_indices": [
+          2,
+          4,
+          12,
+          14,
+          18,
+          20
+        ],
+        "unresolved_texture_handles": [
+          3878423401,
+          959550893,
+          2081673503,
+          3457768291,
+          3125624274,
+          2702788374
+        ],
+        "unresolved_texture_g1t_ids": [
+          1645876818,
+          1555833742,
+          1453877724,
+          1363834648,
+          2598112969,
+          1966062853
+        ],
+        "unresolved_texture_policy": "prune_if_unreferenced",
+        "face_v1_iris_pairs": [
+          [
+            2,
+            27,
+            28
+          ],
+          [
+            3,
+            37,
+            38
+          ]
+        ]
+      },
+      "material_profile": "face_v1"
+    },
+    "hair": {
+      "label": "HAIR_NUDE_844",
+      "model_index": 844,
+      "g1m_id": "0xF586FAB4"
+    }
+  }
+}

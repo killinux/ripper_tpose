@@ -2,6 +2,40 @@
 
 这组脚本直接读取游戏的 `fdata_package/*.fdata`，不注入游戏进程，也不修改安装目录。它能枚举原生 G1M 模型，并把选中的条目从 PRISM 的分块 Zlib 数据中还原出来。
 
+## 快速上手（与 riseoferos/extract_character.ps1 相同的操作方式）
+
+```powershell
+cd scripts\venusvacationprism
+.\export_character.ps1 -List                 # 查看可导出角色（中/英/代码名）
+.\export_character.ps1 Nanami                # 按名字一键导出（blend+fbx+glb）
+.\export_character.ps1 七海,菲欧娜            # 逗号分隔多名
+.\export_character.ps1 Fiona -Format blend,glb
+.\export_character.ps1 Tamaki -Plan          # 只打印将用的模型/工具/路径
+.\export_character.ps1 Honoka -Resume        # 断点续跑
+.\export_character.ps1 -ListModels           # 生成原生 G1M 清单（models.csv/json/md）
+.\export_character.ps1 -ListModels -Probe    # 逐个解压补充骨骼数/版本（慢）
+```
+
+游戏目录与输出目录自动解析（`-GameRoot`/`-OutputRoot` 可覆盖；输出默认
+`D:\venusvacationprism_exports\<角色>\complete_auto`）。旧的 GNU 风格调用
+（`.\export_character.ps1 --name 穗香 ...`）原样透传，继续可用。
+
+浏览原生模型（不经过角色 profile）用 `export_model.ps1`——按需转换，不批量：
+
+```powershell
+.\export_model.ps1 -List            # 71 个角色候选：索引/KTID/骨骼数/大小/已知名称/已转换
+.\export_model.ps1 -List -AllModels # 全部 1,527 个 G1M
+.\export_model.ps1 830              # 转换一个：FDATA→G1M→glTF→.blend+前后预览图
+.\export_model.ps1 830,833 -Force   # 多个 / 重转
+.\export_model.ps1 FACE_FON_000     # 也接受内部名称或 0xKTID
+```
+
+输出在 `D:\venusvacationprism_exports\models\model_<索引>_<KTID>\`。注意
+两点：①这是 gust_stuff basic glTF 管线，只有几何+骨架+权重（灰模无贴图），
+识别模型内容够用；带材质的完整人物仍走 `export_character.ps1`。②所有 BODY
+模型**没有头**是游戏设计（头在 FACE、头发在 HAIR 组件），不是导出不全。
+首次运行会自动构建 probe 清单和角色名对应表（一次性，几分钟）。
+
 ## 当前验证结果
 
 在 2026-08-08 的本机 Steam 安装中：
@@ -14,6 +48,44 @@
 - 已由内部名称哈希确认的六名角色分件：35
 
 “角色候选”是按骨骼数量得到的技术筛选结果，不等于 71 个不同角色。游戏会把身体、脸、服装、头发等拆成独立模型，也存在共用组件。
+
+## 0. 素体（nude）结论与完整组装
+
+71 个角色候选逐个转换目检后确认：官方资产中**素体只有一组**，位于
+`0x8baaa1ce.fdata` 的模块化展示套件——
+
+| 索引 | 内容 | 说明 |
+|---|---|---|
+| 836 | 带头假人素体 | 皮肤贴图躯干为灰色（试衣底模），不适合直接用 |
+| **840** | **无头全裸素体** | **完整皮肤贴图**，26,226 顶点 / 355 骨 |
+| 843 | 配套展示头（含脸） | 69 槽标准脸布局，但静置位置比标准 FACE 高约 6.7 |
+| 844 | 配套发型 | 半扎公主头；前发束是物理骨绑定姿态，静置垂在脸前 |
+| 852 | 配套手臂 | 备用件 |
+
+另有 114/118/849 三个内衣/塑身衣体（半裸）。其余候选均为服装体。
+
+已验证的完整组装（840+843+发型，全贴图、虹膜烘焙、透明卡片）：
+
+```powershell
+# 组件提取（含 843 缺失贴图豁免与虹膜槽位覆写，见 profiles/nude840.json）
+python character_assets.py --game <游戏目录> --output D:\venusvacationprism_exports\nude840\components `
+  --gust-dir ..\..\.tmp\gust_stuff --converter-deps ..\..\.tmp\gust_deps --python-deps ..\..\.tmp\pydeps `
+  --profile profiles\nude840.json --resume
+# Blender 组装（--face 现为可选；无 FACE 的身体可只配 --hair）
+blender --background --python-exit-code 1 --python blender_assemble_character.py -- `
+  --character Nude840_NNMHair --body <BODY_NUDE_840.gltf> --face <HEAD_NUDE_843.gltf> `
+  --hair <HAIR_NNM_001.gltf> --face-alpha 1,4,5,7,8,9 --hair-alpha 0,1,2 `
+  --output-dir <out> --formats blend fbx glb
+```
+
+要点：①843 的眼贴图在槽 27/28、37/38（标准脸是 25/26、35/36），profile 的
+`postprocess.face_v1_iris_pairs` 可覆写虹膜烘焙槽位对；②这套展示件的
+静置位置**彼此不共位**：843 头比标准脸高 ~6.7，而 840 身体的领口
+（zmax 134.7）又低于标准脖口，所以组装后需要把头下移 −16.5、发型下移
+−9.58（保持发-头相对 +6.92 的贴合）才能颈胸无缝——成品
+`*_Aligned.blend` 已按此对位并目检（颈部黑缝消失）；③843 的原生发型
+844 无需相对偏移，但其前发束受绑定姿态所限垂在脸前，与 Fiona NUN
+布料同类限制。
 
 ## 1. 生成模型清单
 
