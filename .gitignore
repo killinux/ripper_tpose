@@ -4,3 +4,6 @@ __pycache__/
 # Local extraction, render, and integration-test artifacts.
 .tmp/
 .tmp_*
+
+# Stray tool logs (umodel, Chrome crashpad, Blender).
+*.log
