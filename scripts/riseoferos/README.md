@@ -31,6 +31,7 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `export_character_models.ps1` | 游戏机 PowerShell | **穿衣**角色批量生成带材质 .blend + 预览图 | 本页 §5 |
 | `export_character_model_blender.py` | 被上一脚本调用（Blender 无头） | 穿衣角色材质重建、贴图打包、三视图预览合成 | 内部 worker |
 | `html/make_gallery.py` | 任意 Python 3 | 按 manifest 生成可浏览的模型总览网页 | 本页 §5 |
+| `prune_exports.py` | 任意 Python 3 | 清理导出目录里的重复贴图副本与 Blender 备份 | 本页 §5 |
 | `roe_xps_addon.py` | Blender 3.6 插件 | HD 角色一步步转带材质的 XPS（**主推**） | [xps-addon.md](../../docs/xps-addon.md) |
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
 | `convert_fbx.py` | 被 ps1 调用（Blender 无头） | FBX → XPS/PMX/GLB **白模**转换 | 本页 §8 |
@@ -337,6 +338,33 @@ NOMESH 的 ID。页面用 `file://` 链接本机文件，**缩略图写到
 `D:\roe_exports\_gallery\thumbs\` 而不是仓库**——仓库不收任何游戏素材。换机器或换
 导出根目录后重新跑一次即可（`--source-root` 可改）。
 
+### 清理导出目录（prune_exports.py）
+
+`extract_character.ps1` 每次运行都会把**每张贴图存两遍**：一份进 `<id>\_textures\`，
+另一份跟着每个对象再复制到 `<id>\<对象>\FBX_GameObjects\` 下。管线只读 `_textures`，
+后者纯属占地方——128 个角色的树上这部分有 **18 GB**。重新提取会再长回来，所以这是
+一个需要不时跑一次的维护脚本。
+
+```powershell
+python prune_exports.py            # 空跑，只报告
+python prune_exports.py --apply    # 真删
+```
+
+删除前逐个文件校验，不靠猜：
+
+- 贴图副本**必须**在本角色 `_textures` 里有同名文件、且两者**哈希一致**才删；
+- `.blend1` **必须**对应的 `.blend` 还在才删（孤儿备份是唯一副本，保留）；
+- `_textures\` 与 `blend\` **不进入遍历**，成品和贴图本体碰不到。
+
+缺省是空跑，`--apply` 才动手；`--skip-textures` / `--skip-backups` 可单独关掉某一类。
+回归测试 `tests\test_prune_exports.py`（纯 Python，无需 Blender 和素材）用合成目录
+覆盖了同名不同内容、无 `_textures` 的角色、受保护目录里的同名文件、孤儿 `.blend1`
+等情形，并验证重复执行是幂等的。
+
+> 顺带一提：**清理之前必须先有"只打包用到的贴图"那个修复**（见
+> [避坑手册 #17](../../docs/roe-material-pitfalls.md)）。旧版 `pack_images()` 会去碰
+> FBX 导入器创建、但没有任何材质使用的图片数据块，副本一删就打包失败。
+
 ### 限制
 
 与 §4 一样，本脚本不复刻 Unity 的 Toon/NPR Shader、MGAC 全通道和法线表现，
@@ -442,6 +470,12 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 同样方式可跑 `test_texture_aliases`、`test_body_texture_variants`、
 `test_xps_alpha_slots`、`test_fbx_missing_bind_compat`。每个测试成功时最后打印
 `*_TEST=PASS` 标记。
+
+`test_prune_exports.py` 是**纯 Python**、不需要 Blender：
+
+```powershell
+python tests	est_prune_exports.py
+```
 
 > **⚠️ Blender 在 Python 异常后仍可能以退出码 0 结束**，判断通过与否必须看
 > `*_TEST=PASS` 标记，不能只看退出码。
