@@ -192,9 +192,30 @@ def attach_fused_head_eyeballs(module, meshes, texture_dir, family):
     return attached
 
 
-def pack_images():
+def materials_images(meshes):
+    """Every image reachable from the materials actually assigned to the model.
+
+    The FBX importer creates an image datablock per texture named in the file,
+    resolved beside the FBX.  Those datablocks stay in the scene even though the
+    add-on rebuilds materials from the ``_textures`` copies, so packing all of
+    ``bpy.data.images`` would embed unused duplicates — and hard-fail once the
+    redundant per-object copies are pruned from disk.
+    """
+    images = set()
+    for obj in meshes:
+        for slot in obj.material_slots:
+            material = slot.material
+            if material is None or not material.use_nodes:
+                continue
+            for node in material.node_tree.nodes:
+                if node.type == "TEX_IMAGE" and node.image is not None:
+                    images.add(node.image)
+    return images
+
+
+def pack_images(meshes):
     packed, failed = [], []
-    for image in bpy.data.images:
+    for image in materials_images(meshes):
         if image.source != "FILE":
             continue
         try:
@@ -504,7 +525,7 @@ def main():
                 meshes, os.path.join(output_root, stem + "_preview.png"),
                 os.path.join(output_root, "." + stem))
         if "blend" in formats:
-            packed, failures = pack_images()
+            packed, failures = pack_images(meshes)
             if failures:
                 raise RuntimeError("image packing failed: %s"
                                    % "; ".join(failures))

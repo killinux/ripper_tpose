@@ -258,10 +258,31 @@ def validate_materials(module, meshes, expected_family):
     })
 
 
-def pack_images():
+def materials_images(meshes):
+    """Every image reachable from the materials actually assigned to the model.
+
+    The FBX importer creates an image datablock per texture named in the file,
+    resolved beside the FBX, and those stay in the scene even though the add-on
+    rebuilds materials from the staged texture directory.  Packing all of
+    ``bpy.data.images`` would embed unused duplicates, and hard-fails once the
+    redundant per-object texture copies are pruned from the export tree.
+    """
+    images = set()
+    for obj in meshes:
+        for slot in obj.material_slots:
+            material = slot.material
+            if material is None or not material.use_nodes:
+                continue
+            for node in material.node_tree.nodes:
+                if node.type == "TEX_IMAGE" and node.image is not None:
+                    images.add(node.image)
+    return images
+
+
+def pack_images(meshes):
     packed = []
     failed = []
-    for image in bpy.data.images:
+    for image in materials_images(meshes):
         if image.source != "FILE":
             continue
         try:
@@ -482,7 +503,7 @@ def main():
         output_root = os.path.dirname(output_path)
         output_stem = Path(output_path).stem
         if "blend" in formats:
-            packed, pack_failures = pack_images()
+            packed, pack_failures = pack_images(meshes)
             if pack_failures:
                 raise RuntimeError("贴图打包失败: %s" % "; ".join(pack_failures))
             os.makedirs(output_root, exist_ok=True)
