@@ -138,7 +138,7 @@ VaM 的 JSON 带尾逗号，所有 JSON 都走 `lenient_json_loads`。
   `p_eye_mat`，嘴/眼再缺则回退到 `f_c_mat` / `m_c_mat`。默认贴图名各家一套
   （`V5BreeHeadM`、`Kayla FaceD (B)`、`Tina Face D Nude`、`M5PhillipFace01S`…），
   `classify_texture_name` 做容错分类，变体（Browless、MU01、(B)）排后。
-- `Skin Color` 按 HSV 转 RGB 乘在 Base Color 上；`Cornea` / `EyeReflection` / `Tear` 做成透明玻璃；
+- Decal 贴图（`*DecalUrl` / `customTexture_DecalTex`）按自身 alpha 叠在漫反射上再乘 `Skin Color`；`Skin Color` 按 HSV 转 RGB 乘在 Base Color 上；`Cornea` / `EyeReflection` / `Tear` 做成透明玻璃；
   `Hidden`（被 graft 遮住的面）直接删掉。
 - **衣服**：`.vam`（元数据）+ `.vaj`（材质参数 JSON）+ `.vab`（网格二进制，见下）。贴图键
   `customTexture_MainTex/_BumpMap/_SpecTex/_GlossTex/_AlphaTex/_DecalTex`，值可能是
@@ -181,7 +181,7 @@ VaM/Unity：米，Y 向上，+Z 朝前，+X 是角色的**右**（用脚尖方�
 - 姿势 morph 缺省跳过；表情/手势要 `-IncludePoseMorphs`。
 - 场景依赖的包没装（`clothingMissing`）或 morph 缺失（`morphs.missing`）时照常导出，只是少那件/那点形变；
   `Breast Impact*` 这类物理驱动 morph 不在 morph 库里，值也很小，可忽略。
-- 衣服贴合是近似；Decal 贴图（纹身/妆容层）目前不叠加。
+- 衣服贴合是近似。Decal 贴图按其 alpha 叠在漫反射之上（JPEG Decal 等于整张替换——mai.tifa8K 就是把 8K 皮肤放在 Decal 槽里）。
 - 默认眼睛贴图按角色皮肤包挑第一张，可能和 VaM 里选的不同。
 
 ## 7. 测试

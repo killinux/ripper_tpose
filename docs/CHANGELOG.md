@@ -51,7 +51,7 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 ### 实现原理与兼容性
 
 - 坐标 `(x, y, z) → (-x, -z, y)`（镜像，面序反转）；+X 为角色右侧用脚尖朝向与脸部 UV 验证。
-- 姿势 morph 缺省跳过（`-IncludePoseMorphs` 保留）；头发是发丝数据不转；无骨架；Decal 层不叠加；
+- 姿势 morph 缺省跳过（`-IncludePoseMorphs` 保留）；头发是发丝数据不转；无骨架；Decal 按 alpha 叠在漫反射上（有创作者把整套皮肤放 Decal 槽）；
   依赖包缺失的衣服/morph 记进 manifest 后继续。
 - `.ps1` 字符串全 ASCII（PS 5.1 OEM 码页规则），中文包名通过参数传递没问题，`-List` 里正常显示。
 

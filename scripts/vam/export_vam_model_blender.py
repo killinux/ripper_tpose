@@ -88,25 +88,49 @@ def build_material(spec, texture_dir, stats):
 
     y = 300
     diffuse = load_image(texture_dir, spec.get("diffuse"))
+    decal = load_image(texture_dir, spec.get("decal"))
+    color_socket = None
+    diffuse_node = None
     if diffuse is not None:
         tex = nodes.new("ShaderNodeTexImage")
         tex.image = diffuse
-        tex.location = (-620, y)
+        tex.location = (-920, y)
+        color_socket = tex.outputs["Color"]
+        diffuse_node = tex
+    if decal is not None:
+        # VaM composites the decal over the diffuse by the decal's alpha; a
+        # JPEG decal (alpha 1) therefore replaces it - creators use that slot
+        # to ship whole skin sets, so it cannot be ignored.
+        dtex = nodes.new("ShaderNodeTexImage")
+        dtex.image = decal
+        dtex.location = (-920, y - 300)
+        over = nodes.new("ShaderNodeMixRGB")
+        over.blend_type = "MIX"
+        over.location = (-620, y)
+        if color_socket is not None:
+            links.new(color_socket, over.inputs["Color1"])
+        else:
+            over.inputs["Color1"].default_value = (rgb[0], rgb[1], rgb[2], 1.0)
+        links.new(dtex.outputs["Color"], over.inputs["Color2"])
+        links.new(dtex.outputs["Alpha"], over.inputs["Fac"])
+        color_socket = over.outputs["Color"]
+        if diffuse_node is None:
+            diffuse_node = dtex
+        y -= 300
+    if color_socket is not None:
         if color and any(abs(c - 1.0) > 0.01 for c in rgb):
             mix = nodes.new("ShaderNodeMixRGB")
             mix.blend_type = "MULTIPLY"
             mix.inputs["Fac"].default_value = 1.0
             mix.inputs["Color2"].default_value = (rgb[0], rgb[1], rgb[2], 1.0)
             mix.location = (-320, y)
-            links.new(tex.outputs["Color"], mix.inputs["Color1"])
+            links.new(color_socket, mix.inputs["Color1"])
             links.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
         else:
-            links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+            links.new(color_socket, bsdf.inputs["Base Color"])
         stats["textured"] += 1
-        diffuse_node = tex
     else:
         bsdf.inputs["Base Color"].default_value = (rgb[0], rgb[1], rgb[2], 1.0)
-        diffuse_node = None
         if not spec.get("_unused"):
             stats["untextured"].append(spec.get("name") or "?")
     y -= 300
