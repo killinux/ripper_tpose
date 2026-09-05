@@ -28,7 +28,7 @@ PAGE_NAME = "index.html"
 DEFAULT_GAME = r"D:\Program Files (x86)\Steam\steamapps\common\Dead or Alive 5 Last Round"
 # 只扫这两个封包：常规服装/发型都在里面（其余是场景/过场，与本页无关）
 ARCHIVES = ("chara_common", "chara_initial")
-COSTUME_TMC_RE = re.compile(r"^([A-Z0-9]+_(?:COS|DLC)_\d+)\.TMC$")
+COSTUME_TMC_RE = re.compile(r"^([A-Z0-9]+_(?:COS|DLC|DLCU)_\d+)\.TMC$")
 
 
 def parse_args():

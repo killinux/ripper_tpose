@@ -36,9 +36,9 @@ cd E:\code\othercode\ripper_tpose\scripts\doa5lr
 .\export_full.ps1 KASUMI_DLC_011 -Face auto -Hair 001 -Label KASUMI_Kasumi_DLC_011
 ```
 
-> 19 名女性角色的默认服装 + **全部 223 套换装（COS/DLC）** 已批量导出在
+> 19 名女性角色的默认服装 + **全部 270 套换装（COS/DLC/DLCU）** 已批量导出在
 > `D:\doa5lr_exports\_blends\`（见该目录 README §1）。换装批量就是上面那条命令
-> 按清单循环：`python extract_lnk.py <bin> --list` 抓 `<角色>_(COS|DLC)_NNN.TMC`，
+> 按清单循环：`python extract_lnk.py <bin> --list` 抓 `<角色>_(COS|DLC|DLCU)_NNN.TMC`，
 > 三路并行，每套 5–16 s。
 
 **查名字**（DOA5LR 模型分散在 36 个封包里；`-Archive auto` 会自己找，手动指定时要选对）：
@@ -57,8 +57,8 @@ python extract_lnk.py "D:\Program Files (x86)\Steam\steamapps\common\Dead or Ali
 | `stage_*` | 场景 |
 
 服装命名是**纯编号**（`COS_001` / `DLC_011`），名字看不出款式，只能导出后看预览挑——
-画廊页（`html\index.html`）可按角色下拉筛选、搜服装号。`DLCU_NNN`（47 套）是 DLC 的
-变体位，本批未导；`MILA_COS_008 / SARAH_DLC_002 / PAI_DLC_002` 是 10KB 占位条目，跳过。
+画廊页（`html\index.html`）可按角色下拉筛选、搜服装号。`DLCU_NNN`（47 套）是「Ultimate」
+系 DLC 位，与同号 `DLC` 不是同一套；`MILA_COS_008 / SARAH_DLC_002 / PAI_DLC_002` 是 10KB 占位条目，跳过。
 头发一律用 `HAIR_001`；官方每套服装的默认发型无法从条目名得知，需要别的发型用
 `-Hair 003` 重导。
 

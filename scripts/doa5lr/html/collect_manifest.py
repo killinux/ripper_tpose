@@ -40,7 +40,7 @@ def classify_mesh(name):
 
 # 文件名约定：<角色>_<显示名>.blend 是默认服装 COS_001；
 # 换装批量出的是 <角色>_<显示名>_<COS|DLC>_<NNN>.blend
-COSTUME_RE = re.compile(r"^([A-Z0-9]+)_[A-Za-z0-9]+_(COS|DLC)_(\d+)$")
+COSTUME_RE = re.compile(r"^([A-Z0-9]+)_[A-Za-z0-9]+_(COS|DLC|DLCU)_(\d+)$")
 
 
 def costume_of(label):
