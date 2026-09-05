@@ -79,8 +79,19 @@ def make_vab(name="Dress", materials=("mat-a", "mat-b")):
         buf.write(struct.pack("<2f", *uv))
     buf.write(struct.pack("<i", 1))
     buf.write(struct.pack("<ii", 5, 0))
-    buf.write(b"\x00" * 32)                             # trailing wrap data
+    buf.write(b"\x00" * 32)                             # unknown trailing block
     return buf.getvalue(), verts, polys, uvs
+
+
+def make_wrap_store(records):
+    """DAZSkinWrapStore: (tri, v1, v2, v3, offset, t1, t2, nN, nT1, nT2) per UV vertex."""
+    buf = io.BytesIO()
+    w_str(buf, "DAZSkinWrapStore")
+    w_str(buf, "1.0")
+    buf.write(struct.pack("<i", len(records)))
+    for rec in records:
+        buf.write(struct.pack("<4i6f", *rec))
+    return buf.getvalue()
 
 
 def make_hair_vab(scalp="UdaneScalp", scalp_verts=4, segments=3):
@@ -219,6 +230,79 @@ def test_vab_and_vmb():
         raise AssertionError("corrupt UV map accepted")
     idx, delta = vl.parse_vmb(make_vmb([(3, (1, 2, 3)), (7, (-1, 0, 0.5))]))
     assert idx.tolist() == [3, 7] and delta.shape == (2, 3) and delta[1, 2] == 0.5
+
+    # Skin-wrap store: one record per UV vertex (6 here), the seam duplicate
+    # is dropped, and the frame rebuilds the vertex on any body.
+    assert mesh.wrap is None
+    records = [(7, 0, 1, 2, 0.1, 0.3, 0.2, 1.0, 0.0, 0.0)] * 6
+    wrapped = vl.parse_dazmesh_vab(data + make_wrap_store(records))
+    assert wrapped.wrap is not None
+    assert wrapped.wrap[0].shape == (5, 3) and wrapped.wrap[1].shape == (5, 3)
+    assert wrapped.wrap[0][0].tolist() == [0, 1, 2]
+    body = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
+    up = np.tile([0.0, 0.0, 1.0], (3, 1))
+    placed = vl.wrap_to_body(wrapped.wrap[0], wrapped.wrap[1], body, up)
+    # v1 + N*0.1 + T1*0.3 + T2*0.2, T1 = centroid - v1 = (1/3, 1/3, 0), T2 = N x T1
+    assert np.allclose(placed[0], [0.1 - 0.2 / 3, 0.1 + 0.2 / 3, 0.1], atol=1e-6), placed[0]
+    # Tangent offsets scale with the body, the normal offset does not, and the
+    # item's surfaceOffset adds to it.
+    placed = vl.wrap_to_body(wrapped.wrap[0], wrapped.wrap[1], body * 2 + [5, 0, 0], up, 0.05)
+    assert np.allclose(placed[0], [5 + 0.2 - 0.4 / 3, 0.2 + 0.4 / 3, 0.15], atol=1e-6), placed[0]
+    # A record vertex order with the opposite winding still points N along
+    # the body's outward normals.
+    flipped = wrapped.wrap[0][:, [0, 2, 1]]
+    placed = vl.wrap_to_body(flipped, wrapped.wrap[1], body, up)
+    assert np.isclose(placed[0][2], 0.1), placed[0]
+    fitted, how = vl.fit_clothing(wrapped, body, body, up)
+    assert how == "wrap" and np.allclose(fitted[0], [0.1 - 0.2 / 3, 0.1 + 0.2 / 3, 0.1], atol=1e-6)
+    # Loose parts: 20 tight vertices moved +x by 1 cm, a loose one whose own
+    # wrap says +0.5 z follows the tight ones (+1 cm x) instead; a half-loose
+    # one gets half of each.
+    raw = np.zeros((22, 3), dtype=np.float32)
+    raw[:, 1] = np.arange(22) * 0.01
+    placed = raw.copy()
+    placed[:20, 0] += 0.01
+    placed[20, 2] += 0.5
+    placed[21, 2] += 0.5
+    dist = np.full(22, 0.001, dtype=np.float32)
+    dist[20] = 0.2
+    dist[21] = 0.025
+    relaxed = vl.relax_loose_parts(raw, placed, dist)
+    assert np.allclose(relaxed[:20], placed[:20])
+    assert np.allclose(relaxed[20], raw[20] + [0.01, 0, 0], atol=1e-6), relaxed[20]
+    assert np.allclose(relaxed[21], raw[21] + [0.005, 0, 0.25], atol=1e-6), relaxed[21]
+    fitted, how = vl.fit_clothing(mesh, mesh.verts, mesh.verts, np.zeros_like(mesh.verts))
+    assert how == "idw" and np.allclose(fitted, mesh.verts)
+    # A metre of surface offset (an accident creators ship) is too long a
+    # lever for the wrap frame: displacement transfer instead.
+    assert vl.fit_clothing(wrapped, body, body, up, surface_offset=-1.0)[1] == "idw"
+    vaj = {"storables": [{"id": "X:ItemWrapControl", "surfaceOffset": "0.002"}]}
+    assert np.isclose(vl.wrap_surface_offset(vaj), 0.002)
+    assert np.isclose(vl.wrap_surface_offset(vaj, {"X:ItemWrapControl": {"surfaceOffset": "-0.001"}},
+                                             "X:Item"), -0.001)
+    # VaM winding is clockwise from outside: outward normals are the negated
+    # right-hand-rule normals.
+    assert np.allclose(vl.outward_normals(mesh.verts, mesh.poly_len, mesh.poly_idx)[0], [0, 0, -1])
+    # Poke-through guard: a point inside or hugging the skin is lifted to the
+    # clearance along the skin normal, one further out is untouched.
+    skin = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
+    lifted = vl.lift_off_skin(np.array([[0.1, 0.1, -0.002], [0.1, 0.1, 0.0004], [0.1, 0.1, 0.05]]),
+                              skin, up, clearance=0.001)
+    assert np.allclose(lifted[:, 2], [0.001, 0.001, 0.05], atol=1e-6), lifted
+    # disableAnatomy: the .vaj ItemControl, overridden by the scene.
+    vaj = {"storables": [{"id": "X:ItemItemControl", "disableAnatomy": "true"}]}
+    assert vl.clothing_disables_anatomy(vaj) is True
+    assert vl.clothing_disables_anatomy(vaj, {"X:ItemItemControl": {"disableAnatomy": "false"}},
+                                        "X:Item") is False
+    # Graft polygons (vertex 4 past the first component) go, "Hidden" ones
+    # come back on the hip material.
+    graft = vl.graft_polygons(mesh, {"geometryId": "Body:Graft",
+                                     "components": {"Body": (0, 4), "Graft": (4, 1)}})
+    assert graft.tolist() == [False, True]
+    hidden_mesh = vl.DazMesh("m", ["Hips", "Hidden"], mesh.verts, [1, 0], mesh.poly_len,
+                             mesh.poly_idx, mesh.uv_poly_idx, mesh.uvs)
+    poly_mat, keep = vl.hide_anatomy(hidden_mesh, graft, np.array([False, True]))
+    assert keep.tolist() == [True, False] and poly_mat.tolist() == [0, 0]
     try:
         vl.parse_vmb(make_vmb([(3, (1, 2, 3))])[:-4])
     except ValueError:

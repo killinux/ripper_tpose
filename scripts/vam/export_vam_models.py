@@ -194,7 +194,7 @@ def mark_skin_layer(mesh, specs, body_verts, verts):
     fraction = vl.skin_layer_fraction(verts, body_verts)
     if fraction < SKIN_LAYER_MIN_FRACTION:
         return verts, False
-    normals = vl.vertex_normals(verts, mesh.poly_len, mesh.poly_idx)
+    normals = vl.outward_normals(verts, mesh.poly_len, mesh.poly_idx)
     for spec in specs:
         spec["layer"] = True
     return verts + normals * SKIN_LAYER_PUSH, True
@@ -248,7 +248,7 @@ def scalp_material(vaj, overrides, uid):
 
 
 def add_hair_item(ctx, bundle, package, vam_member, name, overrides, base_verts,
-                  morphed_verts, missing):
+                  morphed_verts, missing, body_normals=None):
     """Strand hair -> curves (+ scalp cap); mesh hair -> clothing-style object.
 
     Returns a short description for the notes.
@@ -266,11 +266,15 @@ def add_hair_item(ctx, bundle, package, vam_member, name, overrides, base_verts,
         specs, hidden = clothing_materials(ctx, mesh, vaj, package, item_dir, bundle,
                                            overrides=overrides, missing=missing)
         verts = mesh.verts
+        how = ""
         if morphed_verts is not None:
-            verts = vl.transfer_displacement(mesh.verts, base_verts, morphed_verts)
-            verts, _layer = mark_skin_layer(mesh, specs, morphed_verts, verts)
+            verts, how = vl.fit_clothing(mesh, base_verts, morphed_verts, body_normals,
+                                         vl.wrap_surface_offset(vaj, overrides, name))
+            verts, layer = mark_skin_layer(mesh, specs, morphed_verts, verts)
+            if not layer:
+                verts = vl.lift_off_skin(verts, morphed_verts, body_normals)
         add_clothing_object(ctx, bundle, name, mesh, specs, hidden, verts)
-        return "%s (mesh)" % name
+        return "%s (mesh%s)" % (name, ", displacement fit" if how == "idw" else "")
     guides = vl.parse_hair_vab(data)
     sim = hair_sim_storable(vaj, overrides)
     children = max(1, min(HAIR_CHILDREN_MAX, int(vl.as_float(sim.get("hairMultiplier"), 4))))
@@ -292,7 +296,7 @@ def add_hair_item(ctx, bundle, package, vam_member, name, overrides, base_verts,
         verts = scalp.verts
         if morphed_verts is not None:
             verts = vl.transfer_displacement(scalp.verts, base_verts, morphed_verts)
-        normals = vl.vertex_normals(verts, scalp.poly_len, scalp.poly_idx)
+        normals = vl.outward_normals(verts, scalp.poly_len, scalp.poly_idx)
         verts = verts + normals * SKIN_LAYER_PUSH
         faces, loop_uv_idx, face_mat = vl.clean_polygons(
             scalp.poly_len, scalp.poly_idx, scalp.uv_poly_idx, scalp.poly_mat)
@@ -322,12 +326,22 @@ def build_clothing_bundle(ctx, entry, out_dir):
     missing = []
     specs, hidden = clothing_materials(ctx, mesh, vaj, entry.package, item_dir, bundle,
                                        missing=missing)
-    add_clothing_object(ctx, bundle, entry.display, mesh, specs, hidden)
+    # As VaM shows it on the default figure: re-wrapped onto the base body, so
+    # items wrapped on a creator's morphed body land on the standard one.
+    item_type = str(entry.extra.get("itemType") or "").lower()
+    gender = "male" if "male" in item_type and "female" not in item_type else "female"
+    base_mesh, _meta = ctx.cache.base(gender)
+    normals = vl.outward_normals(base_mesh.verts, base_mesh.poly_len, base_mesh.poly_idx)
+    fitted, how = vl.fit_clothing(mesh, base_mesh.verts, base_mesh.verts, normals,
+                                  vl.wrap_surface_offset(vaj))
+    if vl.skin_layer_fraction(fitted, base_mesh.verts) < SKIN_LAYER_MIN_FRACTION:
+        fitted = vl.lift_off_skin(fitted, base_mesh.verts, normals)
+    add_clothing_object(ctx, bundle, entry.display, mesh, specs, hidden, fitted)
     bundle.notes.update({
         "package": entry.package.id, "uid": entry.extra.get("uid"),
         "itemType": entry.extra.get("itemType"), "vertices": mesh.num_verts,
         "polygons": mesh.num_polys, "materials": mesh.material_names,
-        "missingTextures": missing,
+        "fit": how, "missingTextures": missing,
     })
     return bundle.write(), bundle.notes
 
@@ -595,6 +609,7 @@ def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=
     verts = base_mesh.verts.copy()
     morph_report = apply_morphs(ctx, verts, geometry.get("morphs", []), gender, base_meta,
                                 entry.package, include_pose)
+    body_normals = vl.outward_normals(verts, base_mesh.poly_len, base_mesh.poly_idx)
 
     try:
         custom_bundle = "m_c" if gender == "male" else "f_c"
@@ -607,14 +622,9 @@ def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=
     specs, hidden, table, used_defaults = body_materials(
         ctx, bundle, base_mesh, base_meta, storables, entry.package, defaults, skin_color,
         missing)
-    keep = ~np.isin(base_mesh.poly_mat, np.asarray(hidden, dtype=np.int32)) if hidden else None
-    faces, loop_uv_idx, face_mat = vl.clean_polygons(
-        base_mesh.poly_len, base_mesh.poly_idx, base_mesh.uv_poly_idx, base_mesh.poly_mat,
-        keep)
-    bundle.add_object("Body", verts, faces, base_mesh.uvs[loop_uv_idx], face_mat, specs,
-                      role="body")
-
-    clothing_done, clothing_missing = [], []
+    # Load the worn items first: whether any of them hides the anatomy
+    # decides what the body mesh shows.
+    clothing_done, clothing_missing, worn = [], [], []
     if include_clothing:
         for item in geometry.get("clothing", []) or []:
             if not vl.as_bool(item.get("enabled"), True):
@@ -633,16 +643,32 @@ def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=
             except (ValueError, FileNotFoundError, KeyError) as exc:
                 clothing_missing.append("%s (%s)" % (item.get("internalId") or uid, exc))
                 continue
-            item_missing = []
-            item_specs, item_hidden = clothing_materials(
-                ctx, mesh, vaj, pkg, item_dir, bundle, overrides=storables,
-                missing=item_missing)
-            missing.extend(item_missing)
-            fitted = vl.transfer_displacement(mesh.verts, base_mesh.verts, verts)
-            fitted, is_layer = mark_skin_layer(mesh, item_specs, verts, fitted)
-            name = item.get("internalId") or mesh.name
-            add_clothing_object(ctx, bundle, name, mesh, item_specs, item_hidden, fitted)
-            clothing_done.append(name + (" (skin layer)" if is_layer else ""))
+            worn.append((item.get("internalId") or mesh.name, pkg, mesh, vaj, item_dir))
+    anatomy_hidden = any(vl.clothing_disables_anatomy(vaj, storables, name)
+                         for name, _pkg, _mesh, vaj, _dir in worn)
+
+    keep = ~np.isin(base_mesh.poly_mat, np.asarray(hidden, dtype=np.int32)) if hidden else None
+    poly_mat = base_mesh.poly_mat
+    if anatomy_hidden:
+        poly_mat, keep = vl.hide_anatomy(base_mesh, vl.graft_polygons(base_mesh, base_meta), keep)
+    faces, loop_uv_idx, face_mat = vl.clean_polygons(
+        base_mesh.poly_len, base_mesh.poly_idx, base_mesh.uv_poly_idx, poly_mat, keep)
+    bundle.add_object("Body", verts, faces, base_mesh.uvs[loop_uv_idx], face_mat, specs,
+                      role="body")
+
+    for name, pkg, mesh, vaj, item_dir in worn:
+        item_missing = []
+        item_specs, item_hidden = clothing_materials(
+            ctx, mesh, vaj, pkg, item_dir, bundle, overrides=storables, missing=item_missing)
+        missing.extend(item_missing)
+        fitted, how = vl.fit_clothing(mesh, base_mesh.verts, verts, body_normals,
+                                      vl.wrap_surface_offset(vaj, storables, name))
+        fitted, is_layer = mark_skin_layer(mesh, item_specs, verts, fitted)
+        if not is_layer:
+            fitted = vl.lift_off_skin(fitted, verts, body_normals)
+        add_clothing_object(ctx, bundle, name, mesh, item_specs, item_hidden, fitted)
+        clothing_done.append(name + (" (skin layer)" if is_layer else "")
+                             + (" (displacement fit)" if how == "idw" else ""))
 
     hair_done, hair_missing = [], []
     for item in geometry.get("hair", []) or []:
@@ -663,7 +689,8 @@ def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=
             continue
         try:
             hair_done.append(add_hair_item(ctx, bundle, pkg, member, label, storables,
-                                           base_mesh.verts, verts, missing))
+                                           base_mesh.verts, verts, missing,
+                                           body_normals=body_normals))
         except (ValueError, FileNotFoundError, KeyError) as exc:
             hair_missing.append("%s (%s)" % (label, exc))
     attachments, attachments_skipped = [], []
@@ -681,6 +708,7 @@ def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=
         "attachments": attachments, "attachmentsSkipped": attachments_skipped,
         "skinBundle": info.get("bundle"), "morphs": morph_report,
         "skinTextures": table, "defaultTexturesUsed": used_defaults,
+        "anatomyHidden": anatomy_hidden,
         "clothing": clothing_done, "clothingMissing": clothing_missing,
         "hair": hair_done, "hairMissing": hair_missing, "missingTextures": missing,
     })

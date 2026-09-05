@@ -54,6 +54,17 @@
   旋转，179 对 Off 父子控制点验证 0.2°）推一步——maiden_queen 全 On 的链存的骨骼角度是陈旧的预设值，
   只能信控制点。`linkTo` 指向控制点时仍跟控制点。之前"存的骨骼旋转是相对静止朝向的增量"的结论是错的，
   已改回。
+- **衣服贴合改用 DAZSkinWrapStore**（同日）：Cloud 的上衣缩进胸里、裤子鼓成灯笼——`.vab` 里的顶点是
+  创作者 morph 过的身体上的位置，不能按"基础体→morph 体位移"搬。解出了 DAZMesh 后面的
+  `DAZSkinWrapStore`（每顶点：最近皮肤三角形 + 局部坐标 `v1 + N·(f0+surfaceOffset) + (质心−v1)·f1 +
+  (N×(质心−v1))·f2`，328 件衣服验证，标准体上做的误差 0.2–0.3 mm），照 VaM 运行时那样在当前身体上
+  重建，离皮肤 1–4 cm 以外的松散部位（裙摆、灯笼裤）保留制作时的形状、按贴身顶点的位移平移（逐三角形
+  重建会碎成锯齿）；没有包裹数据或 `surfaceOffset` 超过 1 cm（牛仔帽的 −1 会把帽子抹开）才退回位移搬运。顺带：DAZ 多边形从外看顺时针，之前皮肤层 / 头皮帽的"外推"其实
+  是往里推，改为 `outward_normals`；衣服 `disableAnatomy` 时隐藏生殖器 graft、露出 `Hidden` 材质上的
+  原生裆部面；陷进皮肤 1 mm 以内的衣服顶点沿皮肤法线推出（穿模保护）。
+- **画廊**（同日）：`vam\html\make_gallery.py`（`-Gallery` 开关）从清单生成 `vam\html\index.html`，
+  缩略图写在 `D:\vam_exports\_gallery\thumbs\`，卡片列出衣服 / 头发 / morph / 附件、告警与备注，
+  可按种类过滤与搜索。
 
 ### 用户如何操作
 

@@ -1,0 +1,2001 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virt-A-Mate 导出总览</title>
+<style>
+:root {
+  --bg: #f4f1ea; --card: #fffdf8; --ink: #2b2620; --muted: #7a6f63; --line: #e4dccd;
+  --accent: #8a4b2a; --warn: #b3341f; --info: #3a6ea5; --kind: #5b6b3a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+header { padding: 26px 28px 14px; border-bottom: 1px solid var(--line); background: #ede7db; }
+h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: .5px; }
+.sub { color: var(--muted); }
+.sub code { font-size: 12px; }
+.stats { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; }
+.stat b { display: block; font-size: 22px; line-height: 1.1; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px;
+  align-items: center; padding: 10px 28px; background: rgba(244,241,234,.95);
+  border-bottom: 1px solid var(--line); backdrop-filter: blur(4px); }
+#q { flex: 1 1 320px; max-width: 520px; padding: 7px 10px; border: 1px solid var(--line);
+  border-radius: 8px; font-size: 14px; background: #fff; }
+.chip, .toggle { padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px;
+  background: #fff; cursor: pointer; font-size: 13px; }
+.chip.on, .toggle.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.count { margin-left: auto; color: var(--muted); }
+main { padding: 18px 28px 40px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.card[hidden] { display: none; }
+.shot { display: block; background: #cfd0d6; aspect-ratio: 2 / 1; overflow: hidden; }
+.shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.noimg { height: 100%; display: grid; place-items: center; color: #666; }
+.body { padding: 10px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+h3 { margin: 0; font-size: 16px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { font-size: 11px; padding: 2px 7px; border-radius: 999px; color: #fff; background: var(--kind); }
+.badge-warn { background: var(--warn); }
+.badge-info { background: var(--info); }
+.key { margin: 4px 0 6px; color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.key code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.facts { color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin: 0; font-size: 12.5px; }
+dt { color: var(--muted); }
+dd { margin: 0; overflow: hidden; text-overflow: ellipsis; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { font-size: 11px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; cursor: pointer; margin-left: 4px; }
+.empty { text-align: center; color: var(--muted); padding: 40px; }
+.appendix { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); max-width: 960px; }
+.appendix h2 { font-size: 18px; }
+.appendix h3 { font-size: 15px; margin-bottom: 4px; }
+.appendix pre { background: #2b2620; color: #f4f1ea; padding: 10px 14px; border-radius: 8px;
+  overflow-x: auto; font-size: 12.5px; }
+.appendix li { display: grid; grid-template-columns: minmax(200px, 1fr) 70px 2fr; gap: 10px; padding: 3px 0;
+  border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.appendix ul { list-style: none; padding: 0; }
+.st { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Virt-A-Mate 导出总览</h1>
+  <div class="sub">生成于 2026-09-05 21:51:53 · 导出根目录 <code>D:\vam_exports</code> · 游戏目录 <code>E:\tools\vam\vam1.22\vam1.22\1.22</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>27</b><span>已导出</span></div>
+    <div class="stat"><b>26</b><span>Look</span></div>
+    <div class="stat"><b>1</b><span>衣服</span></div>
+    <div class="stat"><b>0</b><span>头发</span></div>
+    <div class="stat"><b>5.4 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>9</b><span>有告警</span></div>
+    <div class="stat"><b>0</b><span>失败 / 跳过</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索名字、包名、衣服、morph 或路径…（按 / 聚焦）">
+  <button class="chip on" data-kind="">全部</button>
+  <button class="chip" data-kind="look">Look (26)</button><button class="chip" data-kind="clothing">衣服 (1)</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="cumzoner69.womb_fantussy.1~womb_fantussy_v1~tifa womb fantussy v1 / tifa cumzoner69.womb_fantussy.1 cumzoner69.womb_fantussy.1:/saves/scene/womb fantussy v1.json d:\vam_exports\looks\cumzoner69.womb_fantussy.1~womb_fantussy_v1~tifa\blend\cumzoner69.womb_fantussy.1~womb_fantussy_v1~tifa.blend suparioamateur:tifa lingerie stocking paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) head scale=-0.2" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa/blend/cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa.jpg" alt="cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa">Womb Fantussy v1 / Tifa</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="衣服缺依赖: Korisaki:HeelBootShort
+衣服缺依赖: YameteOuji:Blouse_HT01
+衣服缺依赖: paledriver:Fingernails Mask
+衣服缺依赖: VL_13:Skirt_A
+衣服缺依赖: dessertCloth:mesh upper top
+衣服缺依赖: Jackaroo:New Gums and Tongue
+衣服缺依赖: Jackaroo:New Teeth
+衣服缺依赖: JackyCracky:Lingerie_HarnessStraps_02_Bottom
+衣服缺依赖: JackyCracky:Lingerie_HarnessStraps_02_Top
+衣服缺依赖: Skynet:Toenails HD shorter
+头发缺依赖: VL_13:Lashes_lower
+头发缺依赖: VL_13:Lashes_upper
+贴图缺失: face diffuse: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_D_Face.png
+贴图缺失: face specular: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_S_Face.png
+贴图缺失: face gloss: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_G_Face.png
+贴图缺失: face normal: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_N_Face.png
+贴图缺失: torso diffuse: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_D_Torso.png
+贴图缺失: torso specular: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_S_Torso.png
+贴图缺失: torso gloss: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_G_Torso.png
+贴图缺失: torso normal: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_N_Torso.png
+贴图缺失: limbs diffuse: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_D_Limbs.png
+贴图缺失: limbs specular: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_S_Limbs.png
+贴图缺失: limbs gloss: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_G_Limbs.png
+贴图缺失: limbs normal: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_N_Limbs.png
+贴图缺失: genitals diffuse: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_D_Gens.png
+贴图缺失: genitals specular: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_S_Gens.png
+贴图缺失: genitals gloss: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_G_Gens.png
+贴图缺失: genitals normal: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/TifaLockhart/Tifa_N_Gens.png
+贴图缺失: irises: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Textures/Eyes/JackyCracky_Eyes_Red_01.png
+morph 缺失: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Morphs/female_genitalia/JackyCracky_Tifa - Genital.vmi
+morph 缺失: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Morphs/female/JackyCracky_Lashes_Down_2.vmi
+morph 缺失: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Morphs/female/JackyCracky_Tifa_Body.vmi
+morph 缺失: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Morphs/female/JackyCracky_Tifa_Head.vmi
+morph 缺失: JackyCracky.Tifa_Base.latest:/Custom/Atom/Person/Morphs/female/JackyCracky_Tifa_LegsLonger.vmi
+人体槽无贴图: Tifa_Lingerie_Legs">告警 35</span><span class="badge badge-info" title="回退默认皮肤: face.diffuse
+回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: face.normal
+回退默认皮肤: torso.diffuse
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: torso.normal
+回退默认皮肤: limbs.diffuse
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: limbs.normal
+回退默认皮肤: genitals.diffuse
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss
+回退默认皮肤: genitals.normal">备注 16</span>
+          </div>
+          <div class="key"><code>cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa</code><button class="copy" data-copy="cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa">复制</button></div>
+          <div class="facts">Female Custom · 女 · morph 1 个 · 衣服 6 件 · 头发 4 · 15 物体 · 45 材质 · 26 贴图</div>
+          <dl>
+            <dt>包</dt><dd>cumzoner69.Womb_Fantussy.1</dd>
+            <dt>衣服</dt><dd title="SupaRioAmateur:Tifa Lingerie Stocking
+paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)">SupaRioAmateur:Tifa Lingerie Stocking、paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>morph</dt><dd title="Head Scale=-0.2">Head Scale=-0.2</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa/blend" title="D:\vam_exports\looks\cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa\blend\cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa.blend">cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa.blend</a> · 204.5 MB · 38.7s
+                <button class="copy" data-copy="D:\vam_exports\looks\cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa\blend\cumzoner69.Womb_Fantussy.1~Womb_Fantussy_v1~Tifa.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="hmz.瑶瑶.1~瑶瑶~person 瑶瑶 / person hmz.瑶瑶.1 hmz.瑶瑶.1:/saves/scene/瑶瑶.json d:\vam_exports\looks\hmz.瑶瑶.1~瑶瑶~person\blend\hmz.瑶瑶.1~瑶瑶~person.blend orangegumi:cl_orgm_naturalnail_v01 (skin layer) vam-yj:maid suit2 vam-yj:maid suit3 vam-yj:maid suit4 vam-yj:maid suit5 vam-yj:maid suit1 paledriver:eyes reflection (skin layer) vrdollz:makeup eyeshadow1 vrd (skin layer) dnaddr:long_091 (146 guides x8) dnaddr:tp_02 (mesh) dnaddr:bob0156 (10 guides x8) dnaddr:long_093 (25 guides x8) dnaddr:ponytail_028 (68 guides x8) dnaddr:ponytail_029 (70 guides x8) dnaddr:ponytail_030 (145 guides x8) dnaddr:bob0159 (48 guides x8) dnaddr:long_063 (49 guides x8) dnaddr:long_065 (49 guides x8) dnaddr:long_096 (594 guides x8) shaping - face nose broken 01=0.0219 pupildilation=-0.0318 eyebrows inner up=0.0517 eyebrows outer up=-0.217 eyebrows outer up right=0.14 eyes almond=-0.145 eyes outer up=0.279 face oval=-0.0584 face thin=-0.0132 face wide=-0.00943 face young=0.0201 head big=-0.0329 d0916-1-body=0.167 d0916-1-head=0.167 l-qian genital=0.167 l-qian-body=0.167 l-qian-head=0.167 s.caroline genital=0.167 s.caroline-body=0.167 s.caroline-head=0.167 vamdoll-kiana v1 genital=0.0556 vamdoll-kiana v1-body=0.0556 vamdoll-kiana v1-head=0.0414 xiaowu0910-body=0.0556 xiaowu0910-head=0.0556 mouth arc=0.0537 mouth big=0.0208 mouth big x=-0.00109 mouth big y=-0.023 mouth corner width=0.00767 mouth relax bottom=0.0252 nose ala relax=-0.0515 nose big=-0.0263 nose flat=-0.0373 nose ridge round=-0.0373 nose ridge small=0.0329 nose round=-0.0274 dnaddr_victoria_23.9.7 genital=0.167 dnaddr_victoria_23.9.7-body=0.167 dnaddr_victoria_23.9.7-head=0.167 eyebrows arc=-0.36 eyes inner up=0.419 chin wide=0.0307 idun-genital=0.0556 mouth frown=0.0142 areolae diameter=0.0278 nipples=0.0333 nipples diameter=0.167 nipples large=0.0222 !breast diameter=0.019 !breast height lower=0.000381 labia majora-relaxation=0.194 labia majora-spread-lup=-0.0417 labia majora-spread-rup=-0.0417 labia minora-thickness=0.167 hands size=-0.0833 face depth outer=-0.000325 face lower thin=0.122 face middle thin=0.0493 chin depth=0.0263 chin height=-0.0189 chin round=0.144 chin width left=-0.0499 chin width right=-0.0499 eyebrows big=1 eyelid size=0.25 eyelids top in height=-0.0838 eyelids upper rotate=-0.21 eyeoutupdown=-0.204 eyes almond=0.414 eyeshape5=-0.0219 pupils dialate=0.00555 face center depth=0.0502 face depth=0.167 face depth lower =-0.0707 face flat left=-0.01 face flat right=-0.01 face heart left=-0.0833 face heart right=-0.0833 face height=0.0482 face height 2=-0.08 face round left=-0.00287 face round right=-0.00287 face size=0.00573 facemodel=-0.0197 faceshape2=-0.0285 faceshapeoval=0.0142 facesmoothall=0.0406 lowerfacesmoothround=-0.0416 nose bridge lower depth=-0.00986 nose septum angle=0.0296 mouth corner depth=0.066 mouth curves arch corner=-0.0789 mouth curves center width=-0.0658 mouth curves corner=-0.167 mouth marionette lines=-0.0592 mouthcenterxscale=-0.0668 mouthcurves1=0.046 mouthlarger1=-0.046 mouthshape1=0.00328 mouthshape10=0.0318 mouthshape11=-0.0307 mouthshape12=0.0219 mouthshape2=0.0296 mouthshape3=0.011 mouthshape4=-0.0142 mouthshape6=-0.0153 mouthshape7=0.0241 mouthshape8=0.0121 mouthshape9=-0.0866 mouthsmaller1=0.00877 outer mouth shape v=0.0701 keiko genki nose subtle=-0.034 mack nose=-0.0427 nose a=0.103 navel depth=0.167 d0916-body a=0.000167 harley_face=0.00986 idun - body=0.0556 idun - head=0.0556 xingye - body=0.167 xingye-genital=0.167" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/HMZ.%E7%91%B6%E7%91%B6.1~%E7%91%B6%E7%91%B6~Person/blend/HMZ.%E7%91%B6%E7%91%B6.1~%E7%91%B6%E7%91%B6~Person_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/HMZ.%E7%91%B6%E7%91%B6.1~%E7%91%B6%E7%91%B6~Person.jpg" alt="HMZ.瑶瑶.1~瑶瑶~Person"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="HMZ.瑶瑶.1~瑶瑶~Person">瑶瑶 / Person</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="morph 缺失: Anonymous.Preset_默认1.1:/Custom/Atom/Person/Morphs/female/xingye - head-APr.vmi
+morph 缺失: qiaqia.小小舞.1:/Custom/Atom/Person/Morphs/female/xingye - head-q小小.vmi
+morph 缺失: Breast Impact Front1 Left
+morph 缺失: Breast Impact Front1 Right
+人体槽无贴图: Nostrils-1
+人体槽无贴图: Lips-1
+人体槽无贴图: Face-1">告警 7</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: face.normal
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: torso.normal
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: limbs.normal
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss
+回退默认皮肤: genitals.normal">备注 12</span>
+          </div>
+          <div class="key"><code>HMZ.瑶瑶.1~瑶瑶~Person</code><button class="copy" data-copy="HMZ.瑶瑶.1~瑶瑶~Person">复制</button></div>
+          <div class="facts">Lexi · 女 · morph 122 个 · 衣服 8 件 · 头发 11 · 30 物体 · 73 材质 · 39 贴图</div>
+          <dl>
+            <dt>包</dt><dd>HMZ.瑶瑶.1</dd>
+            <dt>衣服</dt><dd title="OrangeGumi:Cl_OrGm_NaturalNail_v01 (skin layer)
+VAM-YJ:Maid suit2
+VAM-YJ:Maid suit3
+VAM-YJ:Maid suit4
+VAM-YJ:Maid suit5
+VAM-YJ:Maid suit1
+paledriver:Eyes reflection (skin layer)
+VRDollz:Makeup EyeShadow1 VRD (skin layer)">OrangeGumi:Cl_OrGm_NaturalNail_v01 (skin layer)、VAM-YJ:Maid suit2、VAM-YJ:Maid suit3、VAM-YJ:Maid suit4、VAM-YJ:Maid suit5、VAM-YJ:Maid suit1 …(+2)</dd>
+            <dt>头发</dt><dd title="Dnaddr:long_091 (146 guides x8)
+Dnaddr:TP_02 (mesh)
+Dnaddr:bob0156 (10 guides x8)
+Dnaddr:long_093 (25 guides x8)
+Dnaddr:ponytail_028 (68 guides x8)
+Dnaddr:ponytail_029 (70 guides x8)
+Dnaddr:ponytail_030 (145 guides x8)
+Dnaddr:bob0159 (48 guides x8)
+Dnaddr:Long_063 (49 guides x8)
+Dnaddr:Long_065 (49 guides x8)
+Dnaddr:long_096 (594 guides x8)">Dnaddr:long_091 (146 guides x8)、Dnaddr:TP_02 (mesh)、Dnaddr:bob0156 (10 guides x8)、Dnaddr:long_093 (25 guides x8)、Dnaddr:ponytail_028 (68 guides x8)、Dnaddr:ponytail_029 (70 guides x8) …(+5)</dd>
+            <dt>morph</dt><dd title="Shaping - Face Nose Broken 01=0.0219
+PupilDilation=-0.0318
+Eyebrows inner up=0.0517
+Eyebrows outer up=-0.217
+Eyebrows outer up right=0.14
+Eyes almond=-0.145
+Eyes outer up=0.279
+Face oval=-0.0584
+Face thin=-0.0132
+Face wide=-0.00943
+Face young=0.0201
+Head big=-0.0329
+D0916-1-Body=0.167
+D0916-1-Head=0.167
+L-Qian Genital=0.167
+L-Qian-Body=0.167
+L-Qian-Head=0.167
+S.Caroline Genital=0.167
+S.Caroline-Body=0.167
+S.Caroline-Head=0.167
+VAMDoll-Kiana v1 Genital=0.0556
+VAMDoll-Kiana v1-Body=0.0556
+VAMDoll-Kiana v1-Head=0.0414
+XIAOWU0910-Body=0.0556
+XIAOWU0910-Head=0.0556
+Mouth arc=0.0537
+Mouth big=0.0208
+Mouth big X=-0.00109
+Mouth big Y=-0.023
+Mouth corner width=0.00767
+Mouth relax bottom=0.0252
+Nose ala relax=-0.0515
+Nose big=-0.0263
+Nose flat=-0.0373
+Nose ridge round=-0.0373
+Nose ridge small=0.0329
+Nose round=-0.0274
+Dnaddr_Victoria_23.9.7 Genital=0.167
+Dnaddr_Victoria_23.9.7-Body=0.167
+Dnaddr_Victoria_23.9.7-Head=0.167
+Eyebrows arc=-0.36
+Eyes inner up=0.419
+Chin wide=0.0307
+Idun-Genital=0.0556
+Mouth Frown=0.0142
+Areolae Diameter=0.0278
+Nipples=0.0333
+Nipples Diameter=0.167
+Nipples Large=0.0222
+!Breast Diameter=0.019
+!Breast Height Lower=0.000381
+Labia majora-relaxation=0.194
+Labia majora-spread-LUp=-0.0417
+Labia majora-spread-RUp=-0.0417
+Labia minora-thickness=0.167
+Hands Size=-0.0833
+Face Depth Outer=-0.000325
+Face Lower Thin=0.122
+Face Middle Thin=0.0493
+Chin Depth=0.0263
+Chin Height=-0.0189
+Chin Round=0.144
+Chin Width Left=-0.0499
+Chin Width Right=-0.0499
+Eyebrows big=1
+Eyelid Size=0.25
+Eyelids Top In Height=-0.0838
+Eyelids Upper Rotate=-0.21
+EyeOutUpDown=-0.204
+Eyes almond=0.414
+EyeShape5=-0.0219
+Pupils Dialate=0.00555
+Face Center Depth=0.0502
+Face Depth=0.167
+Face Depth Lower =-0.0707
+Face Flat Left=-0.01
+Face Flat Right=-0.01
+Face Heart Left=-0.0833
+Face Heart Right=-0.0833
+Face Height=0.0482
+Face Height 2=-0.08
+Face Round Left=-0.00287
+Face Round Right=-0.00287
+Face Size=0.00573
+FaceModel=-0.0197
+FaceShape2=-0.0285
+FaceShapeOval=0.0142
+FaceSmoothAll=0.0406
+LowerFaceSmoothRound=-0.0416
+Nose Bridge Lower Depth=-0.00986
+Nose Septum Angle=0.0296
+Mouth Corner Depth=0.066
+Mouth Curves Arch Corner=-0.0789
+Mouth Curves Center Width=-0.0658
+Mouth Curves Corner=-0.167
+Mouth Marionette lines=-0.0592
+MouthCenterXScale=-0.0668
+MouthCurves1=0.046
+MouthLarger1=-0.046
+MouthShape1=0.00328
+MouthShape10=0.0318
+MouthShape11=-0.0307
+MouthShape12=0.0219
+MouthShape2=0.0296
+MouthShape3=0.011
+MouthShape4=-0.0142
+MouthShape6=-0.0153
+MouthShape7=0.0241
+MouthShape8=0.0121
+MouthShape9=-0.0866
+MouthSmaller1=0.00877
+Outer Mouth Shape V=0.0701
+Keiko Genki Nose Subtle=-0.034
+Mack Nose=-0.0427
+Nose A=0.103
+Navel Depth=0.167
+D0916-Body A=0.000167
+Harley_Face=0.00986
+Idun - body=0.0556
+Idun - head=0.0556
+xingye - body=0.167
+xingye-Genital=0.167">Shaping - Face Nose Broken 01=0.0219、PupilDilation=-0.0318、Eyebrows inner up=0.0517、Eyebrows outer up=-0.217、Eyebrows outer up right=0.14、Eyes almond=-0.145 …(+116)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/HMZ.%E7%91%B6%E7%91%B6.1~%E7%91%B6%E7%91%B6~Person/blend" title="D:\vam_exports\looks\HMZ.瑶瑶.1~瑶瑶~Person\blend\HMZ.瑶瑶.1~瑶瑶~Person.blend">HMZ.瑶瑶.1~瑶瑶~Person.blend</a> · 200.5 MB · 50.6s
+                <button class="copy" data-copy="D:\vam_exports\looks\HMZ.瑶瑶.1~瑶瑶~Person\blend\HMZ.瑶瑶.1~瑶瑶~Person.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackaroo.cloud.1~cloud~person cloud / person jackaroo.cloud.1 jackaroo.cloud.1:/saves/scene/cloud.json d:\vam_exports\looks\jackaroo.cloud.1~cloud~person\blend\jackaroo.cloud.1~cloud~person.blend jackaroo:cloudgloves jackaroo:cloudpants jackaroo:cloudshirt jackaroo:cloudboots jackaroo:cloudear paledriver:eyes reflection (skin layer) vamchan:cloud hair (1506 guides x8) jackaroo:cloudbrow (mesh) customunityasset -&gt; rhand (1 fbx) chest small x=-0.384 cloud_jar=1 uncut2 genital=1 openxxl=0.000527" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/Jackaroo.Cloud.1~Cloud~Person/blend/Jackaroo.Cloud.1~Cloud~Person_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/Jackaroo.Cloud.1~Cloud~Person.jpg" alt="Jackaroo.Cloud.1~Cloud~Person"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="Jackaroo.Cloud.1~Cloud~Person">Cloud / Person</h3><span class="badge badge-kind">Look</span>
+          </div>
+          <div class="key"><code>Jackaroo.Cloud.1~Cloud~Person</code><button class="copy" data-copy="Jackaroo.Cloud.1~Cloud~Person">复制</button></div>
+          <div class="facts">Male 4 · 男 · morph 4 个 · 衣服 6 件 · 头发 2 · 附件 1 · 11 物体 · 43 材质 · 34 贴图</div>
+          <dl>
+            <dt>包</dt><dd>Jackaroo.Cloud.1</dd>
+            <dt>衣服</dt><dd title="Jackaroo:CloudGloves
+Jackaroo:CloudPants
+Jackaroo:CloudShirt
+Jackaroo:CloudBoots
+Jackaroo:CloudEar
+paledriver:Eyes reflection (skin layer)">Jackaroo:CloudGloves、Jackaroo:CloudPants、Jackaroo:CloudShirt、Jackaroo:CloudBoots、Jackaroo:CloudEar、paledriver:Eyes reflection (skin layer)</dd>
+            <dt>头发</dt><dd title="VaMChan:Cloud hair (1506 guides x8)
+Jackaroo:CloudBrow (mesh)">VaMChan:Cloud hair (1506 guides x8)、Jackaroo:CloudBrow (mesh)</dd>
+            <dt>附件</dt><dd title="CustomUnityAsset -&gt; rHand (1 fbx)">CustomUnityAsset -&gt; rHand (1 fbx)</dd>
+            <dt>morph</dt><dd title="Chest small X=-0.384
+Cloud_JaR=1
+Uncut2 Genital=1
+OpenXXL=0.000527">Chest small X=-0.384、Cloud_JaR=1、Uncut2 Genital=1、OpenXXL=0.000527</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/Jackaroo.Cloud.1~Cloud~Person/blend" title="D:\vam_exports\looks\Jackaroo.Cloud.1~Cloud~Person\blend\Jackaroo.Cloud.1~Cloud~Person.blend">Jackaroo.Cloud.1~Cloud~Person.blend</a> · 122.7 MB · 164.2s
+                <button class="copy" data-copy="D:\vam_exports\looks\Jackaroo.Cloud.1~Cloud~Person\blend\Jackaroo.Cloud.1~Cloud~Person.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_default_base preset_tifa_default_base jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_default_base.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_default_base\blend\jackycracky.tifa_complete.3~preset_tifa_default_base.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_shoes jackycracky:tifa_armguard jackycracky:tifa_top jackycracky:tifa_suspenders jackycracky:tifa_extras jackycracky:tifa_socks jackycracky:tifa_sleeves jackycracky:tifa_glove_r jackycracky:tifa_glove_l jackycracky:tifa_skirt jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base">Preset_Tifa_Default_Base</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base">复制</button></div>
+          <div class="facts">Tina · 女 · morph 20 个 · 衣服 15 件 · 头发 4 · 24 物体 · 55 材质 · 35 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Shoes
+JackyCracky:Tifa_ArmGuard
+JackyCracky:Tifa_Top
+JackyCracky:Tifa_Suspenders
+JackyCracky:Tifa_Extras
+JackyCracky:Tifa_Socks
+JackyCracky:Tifa_Sleeves
+JackyCracky:Tifa_Glove_R
+JackyCracky:Tifa_Glove_L
+JackyCracky:Tifa_Skirt">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Shoes …(+9)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+14)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base.blend</a> · 197.6 MB · 101.4s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Base.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_default_baselewd preset_tifa_default_baselewd jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_default_baselewd.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_default_baselewd\blend\jackycracky.tifa_complete.3~preset_tifa_default_baselewd.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_shoes jackycracky:tifa_armguard jackycracky:tifa_socks jackycracky:tifa_sleeves jackycracky:tifa_glove_r jackycracky:tifa_glove_l jackycracky:tifa_top_lewd jackycracky:tifa_suspenders_lewd jackycracky:tifa_belt_lewd jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd">Preset_Tifa_Default_BaseLewd</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd">复制</button></div>
+          <div class="facts">Tina · 女 · morph 20 个 · 衣服 14 件 · 头发 4 · 23 物体 · 54 材质 · 34 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Shoes
+JackyCracky:Tifa_ArmGuard
+JackyCracky:Tifa_Socks
+JackyCracky:Tifa_Sleeves
+JackyCracky:Tifa_Glove_R
+JackyCracky:Tifa_Glove_L
+JackyCracky:Tifa_Top_Lewd
+JackyCracky:Tifa_Suspenders_Lewd
+JackyCracky:Tifa_Belt_Lewd">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Shoes …(+8)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+14)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd.blend</a> · 197.2 MB · 98.8s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BaseLewd.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_default_beach preset_tifa_default_beach jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_default_beach.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_default_beach\blend\jackycracky.tifa_complete.3~preset_tifa_default_beach.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_bikini_wristband jackycracky:tifa_bikini_top jackycracky:tifa_bikini_strings jackycracky:tifa_bikini_skirt jackycracky:tifa_bikini_bottom jackycracky:tifa_bikini_hairtie jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) jackycracky:tifa_beach_back (147 guides x8) jackycracky:tifa_beach_top (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach">Preset_Tifa_Default_Beach</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach">复制</button></div>
+          <div class="facts">Tina · 女 · morph 20 个 · 衣服 11 件 · 头发 5 · 22 物体 · 51 材质 · 30 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Bikini_Wristband
+JackyCracky:Tifa_Bikini_Top
+JackyCracky:Tifa_Bikini_Strings
+JackyCracky:Tifa_Bikini_Skirt
+JackyCracky:Tifa_Bikini_Bottom
+JackyCracky:Tifa_Bikini_Hairtie">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Bikini_Wristband …(+5)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)
+JackyCracky:Tifa_Beach_Back (147 guides x8)
+JackyCracky:Tifa_Beach_Top (532 guides x8)">JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)、JackyCracky:Tifa_Beach_Back (147 guides x8)、JackyCracky:Tifa_Beach_Top (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+14)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach.blend</a> · 183.3 MB · 63.8s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Beach.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_default_beachlewd preset_tifa_default_beachlewd jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_default_beachlewd.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_default_beachlewd\blend\jackycracky.tifa_complete.3~preset_tifa_default_beachlewd.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_bikini_wristband jackycracky:tifa_bikini_top_lewd jackycracky:tifa_bikini_strings jackycracky:tifa_bikini_bottom_lewd jackycracky:tifa_bikini_hairtie jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) jackycracky:tifa_beach_back (147 guides x8) jackycracky:tifa_beach_top (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd">Preset_Tifa_Default_BeachLewd</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd">复制</button></div>
+          <div class="facts">Tina · 女 · morph 20 个 · 衣服 10 件 · 头发 5 · 21 物体 · 50 材质 · 29 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Bikini_Wristband
+JackyCracky:Tifa_Bikini_Top_Lewd
+JackyCracky:Tifa_Bikini_Strings
+JackyCracky:Tifa_Bikini_Bottom_Lewd
+JackyCracky:Tifa_Bikini_Hairtie">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Bikini_Wristband …(+4)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)
+JackyCracky:Tifa_Beach_Back (147 guides x8)
+JackyCracky:Tifa_Beach_Top (532 guides x8)">JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)、JackyCracky:Tifa_Beach_Back (147 guides x8)、JackyCracky:Tifa_Beach_Top (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+14)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd.blend</a> · 182.5 MB · 53.5s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_BeachLewd.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_default_cowgirl preset_tifa_default_cowgirl jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_default_cowgirl.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_default_cowgirl\blend\jackycracky.tifa_complete.3~preset_tifa_default_cowgirl.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_cowgirl_gloves jackycracky:tifa_cowgirl_skirt jackycracky:tifa_cowgirl_shirt jackycracky:tifa_cowgirl_jacket jackycracky:tifa_cowgirl_boots jackycracky:tifa_cowgirl_hat (displacement fit) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_r_hat (195 guides x8, 3 unstyled dropped) jackycracky:tifa_front_l_hat (75 guides x8) jackycracky:tifa_back_long_hat (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl">Preset_Tifa_Default_Cowgirl</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl">复制</button></div>
+          <div class="facts">Tina · 女 · morph 20 个 · 衣服 11 件 · 头发 4 · 20 物体 · 50 材质 · 33 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Cowgirl_Gloves
+JackyCracky:Tifa_Cowgirl_Skirt
+JackyCracky:Tifa_Cowgirl_Shirt
+JackyCracky:Tifa_Cowgirl_Jacket
+JackyCracky:Tifa_Cowgirl_Boots
+JackyCracky:Tifa_Cowgirl_Hat (displacement fit)">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Cowgirl_Gloves …(+5)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Front_L_Hat (75 guides x8)
+JackyCracky:Tifa_Back_Long_Hat (532 guides x8)">JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Front_L_Hat (75 guides x8)、JackyCracky:Tifa_Back_Long_Hat (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+14)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl.blend</a> · 182.2 MB · 52.3s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Cowgirl.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_default_cowgirllewd preset_tifa_default_cowgirllewd jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_default_cowgirllewd.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_default_cowgirllewd\blend\jackycracky.tifa_complete.3~preset_tifa_default_cowgirllewd.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_cowgirl_gloves jackycracky:tifa_cowgirl_boots jackycracky:tifa_cowgirl_skirt_lewd jackycracky:tifa_cowgirl_jacket_lewd jackycracky:tifa_cowgirl_hat (displacement fit) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_r_hat (195 guides x8, 3 unstyled dropped) jackycracky:tifa_front_l_hat (75 guides x8) jackycracky:tifa_back_long_hat (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd">Preset_Tifa_Default_CowgirlLewd</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd">复制</button></div>
+          <div class="facts">Tina · 女 · morph 20 个 · 衣服 10 件 · 头发 4 · 19 物体 · 49 材质 · 32 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Cowgirl_Gloves
+JackyCracky:Tifa_Cowgirl_Boots
+JackyCracky:Tifa_Cowgirl_Skirt_Lewd
+JackyCracky:Tifa_Cowgirl_Jacket_Lewd
+JackyCracky:Tifa_Cowgirl_Hat (displacement fit)">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Cowgirl_Gloves …(+4)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Front_L_Hat (75 guides x8)
+JackyCracky:Tifa_Back_Long_Hat (532 guides x8)">JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Front_L_Hat (75 guides x8)、JackyCracky:Tifa_Back_Long_Hat (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+14)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd.blend</a> · 182.1 MB · 57.6s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_CowgirlLewd.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_default_nude preset_tifa_default_nude jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_default_nude.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_default_nude\blend\jackycracky.tifa_complete.3~preset_tifa_default_nude.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude">Preset_Tifa_Default_Nude</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude">复制</button></div>
+          <div class="facts">Tina · 女 · morph 20 个 · 衣服 5 件 · 头发 4 · 14 物体 · 43 材质 · 26 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+14)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude.blend</a> · 159.0 MB · 32.7s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Default_Nude.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_game_base preset_tifa_game_base jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_game_base.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_game_base\blend\jackycracky.tifa_complete.3~preset_tifa_game_base.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_shoes jackycracky:tifa_armguard jackycracky:tifa_top jackycracky:tifa_suspenders jackycracky:tifa_extras jackycracky:tifa_socks jackycracky:tifa_sleeves jackycracky:tifa_glove_r jackycracky:tifa_glove_l jackycracky:tifa_skirt jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base">Preset_Tifa_Game_Base</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 15 件 · 头发 4 · 24 物体 · 55 材质 · 35 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Shoes
+JackyCracky:Tifa_ArmGuard
+JackyCracky:Tifa_Top
+JackyCracky:Tifa_Suspenders
+JackyCracky:Tifa_Extras
+JackyCracky:Tifa_Socks
+JackyCracky:Tifa_Sleeves
+JackyCracky:Tifa_Glove_R
+JackyCracky:Tifa_Glove_L
+JackyCracky:Tifa_Skirt">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Shoes …(+9)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base.blend</a> · 197.6 MB · 103.1s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Base.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_game_baselewd preset_tifa_game_baselewd jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_game_baselewd.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_game_baselewd\blend\jackycracky.tifa_complete.3~preset_tifa_game_baselewd.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_shoes jackycracky:tifa_armguard jackycracky:tifa_socks jackycracky:tifa_sleeves jackycracky:tifa_glove_r jackycracky:tifa_glove_l jackycracky:tifa_top_lewd jackycracky:tifa_suspenders_lewd jackycracky:tifa_belt_lewd jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd">Preset_Tifa_Game_BaseLewd</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 14 件 · 头发 4 · 23 物体 · 54 材质 · 34 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Shoes
+JackyCracky:Tifa_ArmGuard
+JackyCracky:Tifa_Socks
+JackyCracky:Tifa_Sleeves
+JackyCracky:Tifa_Glove_R
+JackyCracky:Tifa_Glove_L
+JackyCracky:Tifa_Top_Lewd
+JackyCracky:Tifa_Suspenders_Lewd
+JackyCracky:Tifa_Belt_Lewd">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Shoes …(+8)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd.blend</a> · 197.2 MB · 99.8s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BaseLewd.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_game_beach preset_tifa_game_beach jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_game_beach.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_game_beach\blend\jackycracky.tifa_complete.3~preset_tifa_game_beach.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_bikini_wristband jackycracky:tifa_bikini_top jackycracky:tifa_bikini_strings jackycracky:tifa_bikini_skirt jackycracky:tifa_bikini_bottom jackycracky:tifa_bikini_hairtie jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) jackycracky:tifa_beach_back (147 guides x8) jackycracky:tifa_beach_top (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach">Preset_Tifa_Game_Beach</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 11 件 · 头发 5 · 22 物体 · 51 材质 · 30 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Bikini_Wristband
+JackyCracky:Tifa_Bikini_Top
+JackyCracky:Tifa_Bikini_Strings
+JackyCracky:Tifa_Bikini_Skirt
+JackyCracky:Tifa_Bikini_Bottom
+JackyCracky:Tifa_Bikini_Hairtie">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Bikini_Wristband …(+5)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)
+JackyCracky:Tifa_Beach_Back (147 guides x8)
+JackyCracky:Tifa_Beach_Top (532 guides x8)">JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)、JackyCracky:Tifa_Beach_Back (147 guides x8)、JackyCracky:Tifa_Beach_Top (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach.blend</a> · 183.3 MB · 64.0s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Beach.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_game_beachlewd preset_tifa_game_beachlewd jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_game_beachlewd.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_game_beachlewd\blend\jackycracky.tifa_complete.3~preset_tifa_game_beachlewd.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_bikini_wristband jackycracky:tifa_bikini_top_lewd jackycracky:tifa_bikini_strings jackycracky:tifa_bikini_bottom_lewd jackycracky:tifa_bikini_hairtie jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) jackycracky:tifa_beach_back (147 guides x8) jackycracky:tifa_beach_top (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd">Preset_Tifa_Game_BeachLewd</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 10 件 · 头发 5 · 21 物体 · 50 材质 · 29 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Bikini_Wristband
+JackyCracky:Tifa_Bikini_Top_Lewd
+JackyCracky:Tifa_Bikini_Strings
+JackyCracky:Tifa_Bikini_Bottom_Lewd
+JackyCracky:Tifa_Bikini_Hairtie">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Bikini_Wristband …(+4)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)
+JackyCracky:Tifa_Beach_Back (147 guides x8)
+JackyCracky:Tifa_Beach_Top (532 guides x8)">JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)、JackyCracky:Tifa_Beach_Back (147 guides x8)、JackyCracky:Tifa_Beach_Top (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd.blend</a> · 182.5 MB · 52.8s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_BeachLewd.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_game_cowgirl preset_tifa_game_cowgirl jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_game_cowgirl.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_game_cowgirl\blend\jackycracky.tifa_complete.3~preset_tifa_game_cowgirl.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_cowgirl_gloves jackycracky:tifa_cowgirl_skirt jackycracky:tifa_cowgirl_shirt jackycracky:tifa_cowgirl_jacket jackycracky:tifa_cowgirl_boots jackycracky:tifa_cowgirl_hat (displacement fit) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_r_hat (195 guides x8, 3 unstyled dropped) jackycracky:tifa_front_l_hat (75 guides x8) jackycracky:tifa_back_long_hat (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl">Preset_Tifa_Game_Cowgirl</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 11 件 · 头发 4 · 20 物体 · 50 材质 · 33 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Cowgirl_Gloves
+JackyCracky:Tifa_Cowgirl_Skirt
+JackyCracky:Tifa_Cowgirl_Shirt
+JackyCracky:Tifa_Cowgirl_Jacket
+JackyCracky:Tifa_Cowgirl_Boots
+JackyCracky:Tifa_Cowgirl_Hat (displacement fit)">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Cowgirl_Gloves …(+5)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Front_L_Hat (75 guides x8)
+JackyCracky:Tifa_Back_Long_Hat (532 guides x8)">JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Front_L_Hat (75 guides x8)、JackyCracky:Tifa_Back_Long_Hat (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl.blend</a> · 182.2 MB · 59.7s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Cowgirl.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_game_cowgirllewd preset_tifa_game_cowgirllewd jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_game_cowgirllewd.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_game_cowgirllewd\blend\jackycracky.tifa_complete.3~preset_tifa_game_cowgirllewd.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_cowgirl_gloves jackycracky:tifa_cowgirl_boots jackycracky:tifa_cowgirl_skirt_lewd jackycracky:tifa_cowgirl_jacket_lewd jackycracky:tifa_cowgirl_hat (displacement fit) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_r_hat (195 guides x8, 3 unstyled dropped) jackycracky:tifa_front_l_hat (75 guides x8) jackycracky:tifa_back_long_hat (532 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd">Preset_Tifa_Game_CowgirlLewd</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 10 件 · 头发 4 · 19 物体 · 49 材质 · 32 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Cowgirl_Gloves
+JackyCracky:Tifa_Cowgirl_Boots
+JackyCracky:Tifa_Cowgirl_Skirt_Lewd
+JackyCracky:Tifa_Cowgirl_Jacket_Lewd
+JackyCracky:Tifa_Cowgirl_Hat (displacement fit)">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Cowgirl_Gloves …(+4)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Front_L_Hat (75 guides x8)
+JackyCracky:Tifa_Back_Long_Hat (532 guides x8)">JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_R_Hat (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Front_L_Hat (75 guides x8)、JackyCracky:Tifa_Back_Long_Hat (532 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd.blend</a> · 182.1 MB · 57.1s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_CowgirlLewd.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~preset_tifa_game_nude preset_tifa_game_nude jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/custom/atom/person/appearance/preset_tifa_game_nude.vap d:\vam_exports\looks\jackycracky.tifa_complete.3~preset_tifa_game_nude\blend\jackycracky.tifa_complete.3~preset_tifa_game_nude.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude/blend/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude.jpg" alt="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude">Preset_Tifa_Game_Nude</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 5 件 · 头发 4 · 14 物体 · 43 材质 · 26 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude.blend">JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude.blend</a> · 158.9 MB · 33.2s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude\blend\JackyCracky.Tifa_Complete.3~Preset_Tifa_Game_Nude.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~tifa_7thheaven~tifa tifa_7thheaven / tifa jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/saves/scene/jackycracky/tifa_7thheaven.json d:\vam_exports\looks\jackycracky.tifa_complete.3~tifa_7thheaven~tifa\blend\jackycracky.tifa_complete.3~tifa_7thheaven~tifa.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_shoes jackycracky:tifa_armguard jackycracky:tifa_top jackycracky:tifa_suspenders jackycracky:tifa_extras jackycracky:tifa_socks jackycracky:tifa_sleeves jackycracky:tifa_glove_r jackycracky:tifa_glove_l jackycracky:tifa_skirt jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) tifa_earring -&gt; head (1 fbx) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa/blend/JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa.jpg" alt="JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa">Tifa_7thHeaven / Tifa</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 15 件 · 头发 4 · 附件 1 · 25 物体 · 56 材质 · 36 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Shoes
+JackyCracky:Tifa_ArmGuard
+JackyCracky:Tifa_Top
+JackyCracky:Tifa_Suspenders
+JackyCracky:Tifa_Extras
+JackyCracky:Tifa_Socks
+JackyCracky:Tifa_Sleeves
+JackyCracky:Tifa_Glove_R
+JackyCracky:Tifa_Glove_L
+JackyCracky:Tifa_Skirt">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Shoes …(+9)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>附件</dt><dd title="Tifa_EarRing -&gt; head (1 fbx)">Tifa_EarRing -&gt; head (1 fbx)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa\blend\JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa.blend">JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa.blend</a> · 197.8 MB · 103.3s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa\blend\JackyCracky.Tifa_Complete.3~Tifa_7thHeaven~Tifa.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="jackycracky.tifa_complete.3~tifa~tifa tifa / tifa jackycracky.tifa_complete.3 jackycracky.tifa_complete.3:/saves/scene/jackycracky/tifa.json d:\vam_exports\looks\jackycracky.tifa_complete.3~tifa~tifa\blend\jackycracky.tifa_complete.3~tifa~tifa.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) jackycracky:tifa_eyelashes (skin layer) jackycracky:tifa_shoes jackycracky:tifa_armguard jackycracky:tifa_top jackycracky:tifa_suspenders jackycracky:tifa_extras jackycracky:tifa_socks jackycracky:tifa_sleeves jackycracky:tifa_glove_r jackycracky:tifa_glove_l jackycracky:tifa_skirt jackycracky:tifa_back_long (532 guides x8) jackycracky:tifa_front_r (195 guides x8, 3 unstyled dropped) jackycracky:tifa_bangs_l (60 guides x8) jackycracky:tifa_front_l (75 guides x8) tifa_earring -&gt; head (1 fbx) gen_innie=0.5 brow height=0.1 brow inner height=0.4 brow outer height=0.2 eyeballs depth=0.25 eyelid upper shape  outer=0.5 eyelids bottom in height=0.75 eyes inner corner height=0.2 eyes inner corner width=-0.5 eyes size left=0.15 eyes size right=0.15 teeth lower jaw move forward-back=-0.6 teeth upper jaw move forward-back=-0.4 lip upper size=0.3 lips bow shape=0.5 head scale=-0.5 neck length=2 jackycracky_lashes_down_2=1 jackycracky_tifa_body=1 jackycracky_tifa_head=1 jackycracky_tifa_legslonger=0.8" data-kind="look" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Tifa~Tifa/blend/JackyCracky.Tifa_Complete.3~Tifa~Tifa_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/JackyCracky.Tifa_Complete.3~Tifa~Tifa.jpg" alt="JackyCracky.Tifa_Complete.3~Tifa~Tifa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="JackyCracky.Tifa_Complete.3~Tifa~Tifa">Tifa / Tifa</h3><span class="badge badge-kind">Look</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss">备注 8</span>
+          </div>
+          <div class="key"><code>JackyCracky.Tifa_Complete.3~Tifa~Tifa</code><button class="copy" data-copy="JackyCracky.Tifa_Complete.3~Tifa~Tifa">复制</button></div>
+          <div class="facts">Tina · 女 · morph 21 个 · 衣服 15 件 · 头发 4 · 附件 1 · 25 物体 · 56 材质 · 36 贴图</div>
+          <dl>
+            <dt>包</dt><dd>JackyCracky.Tifa_Complete.3</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)
+JackyCracky:Tifa_Eyelashes (skin layer)
+JackyCracky:Tifa_Shoes
+JackyCracky:Tifa_ArmGuard
+JackyCracky:Tifa_Top
+JackyCracky:Tifa_Suspenders
+JackyCracky:Tifa_Extras
+JackyCracky:Tifa_Socks
+JackyCracky:Tifa_Sleeves
+JackyCracky:Tifa_Glove_R
+JackyCracky:Tifa_Glove_L
+JackyCracky:Tifa_Skirt">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)、JackyCracky:Tifa_Eyelashes (skin layer)、JackyCracky:Tifa_Shoes …(+9)</dd>
+            <dt>头发</dt><dd title="JackyCracky:Tifa_Back_Long (532 guides x8)
+JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)
+JackyCracky:Tifa_Bangs_L (60 guides x8)
+JackyCracky:Tifa_Front_L (75 guides x8)">JackyCracky:Tifa_Back_Long (532 guides x8)、JackyCracky:Tifa_Front_R (195 guides x8, 3 unstyled dropped)、JackyCracky:Tifa_Bangs_L (60 guides x8)、JackyCracky:Tifa_Front_L (75 guides x8)</dd>
+            <dt>附件</dt><dd title="Tifa_EarRing -&gt; head (1 fbx)">Tifa_EarRing -&gt; head (1 fbx)</dd>
+            <dt>morph</dt><dd title="Gen_Innie=0.5
+Brow Height=0.1
+Brow Inner Height=0.4
+Brow Outer Height=0.2
+Eyeballs Depth=0.25
+Eyelid Upper Shape  Outer=0.5
+Eyelids Bottom In Height=0.75
+Eyes Inner Corner Height=0.2
+Eyes Inner Corner Width=-0.5
+Eyes Size Left=0.15
+Eyes Size Right=0.15
+Teeth Lower Jaw Move Forward-Back=-0.6
+Teeth Upper Jaw Move Forward-Back=-0.4
+Lip Upper Size=0.3
+Lips Bow Shape=0.5
+Head Scale=-0.5
+Neck Length=2
+JackyCracky_Lashes_Down_2=1
+JackyCracky_Tifa_Body=1
+JackyCracky_Tifa_Head=1
+JackyCracky_Tifa_LegsLonger=0.8">Gen_Innie=0.5、Brow Height=0.1、Brow Inner Height=0.4、Brow Outer Height=0.2、Eyeballs Depth=0.25、Eyelid Upper Shape  Outer=0.5 …(+15)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/JackyCracky.Tifa_Complete.3~Tifa~Tifa/blend" title="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Tifa~Tifa\blend\JackyCracky.Tifa_Complete.3~Tifa~Tifa.blend">JackyCracky.Tifa_Complete.3~Tifa~Tifa.blend</a> · 197.8 MB · 104.1s
+                <button class="copy" data-copy="D:\vam_exports\looks\JackyCracky.Tifa_Complete.3~Tifa~Tifa\blend\JackyCracky.Tifa_Complete.3~Tifa~Tifa.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mai.tifa8k.1~tifare_01~person tifare 01 / person mai.tifa8k.1 mai.tifa8k.1:/saves/scene/tifare 01.json d:\vam_exports\looks\mai.tifa8k.1~tifare_01~person\blend\mai.tifa8k.1~tifare_01~person.blend suparioamateur:tifa g2f eyelashes (skin layer) hunting-succubus:enhanced eyelid blender (skin layer) hunting-succubus:enhanced eyes realastic alt (skin layer) hunting-succubus:enhanced eyes realastic (skin layer) suparioamateur:scarlet earrings left tolborg:layered makeup eyeliner (skin layer) vrdollz:makeup lipgloss vrd (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) callimofu:inm-t-2 (mesh) 蒂法re genital=1 蒂法re-body=1 蒂法re-head=1 labia majora-relaxation=0.5" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/mai.tifa8K.1~tifaRe_01~Person/blend/mai.tifa8K.1~tifaRe_01~Person_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/mai.tifa8K.1~tifaRe_01~Person.jpg" alt="mai.tifa8K.1~tifaRe_01~Person"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="mai.tifa8K.1~tifaRe_01~Person">tifaRe 01 / Person</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="衣服缺依赖: VL_13:Bodysuit_TF
+衣服缺依赖: VL_13:Bodysuit_TF_Belt
+衣服缺依赖: VL_13:Bodysuit_TF_Arm
+头发缺依赖: Miki:Tifa Back
+头发缺依赖: Miki:Tifa Bangs Left
+头发缺依赖: Miki:Tifa Bangs Right
+头发缺依赖: SupaRioAmateur:Tifa Bangs Right V2
+头发缺依赖: callimofu:inm-t-1
+头发缺依赖: Oronan:FF_F01
+贴图缺失: sclera: D:/纹理/新建文件夹 (2)/EyeballD.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+人体槽无贴图: Nostrils-1
+人体槽无贴图: Lips-1
+人体槽无贴图: Face-1
+人体槽无贴图: Nostrils-1
+人体槽无贴图: Lips-1
+人体槽无贴图: Face-1
+人体槽无贴图: Hips-1.003
+人体槽无贴图: Torso-1.003
+人体槽无贴图: Legs-1.003">告警 47</span><span class="badge badge-info" title="回退默认皮肤: face.diffuse
+回退默认皮肤: torso.diffuse
+回退默认皮肤: limbs.diffuse
+回退默认皮肤: genitals.diffuse">备注 4</span>
+          </div>
+          <div class="key"><code>mai.tifa8K.1~tifaRe_01~Person</code><button class="copy" data-copy="mai.tifa8K.1~tifaRe_01~Person">复制</button></div>
+          <div class="facts">Female Custom · 女 · morph 4 个 · 衣服 10 件 · 头发 1 · 12 物体 · 70 材质 · 29 贴图</div>
+          <dl>
+            <dt>包</dt><dd>mai.tifa8K.1</dd>
+            <dt>衣服</dt><dd title="SupaRioAmateur:Tifa G2F Eyelashes (skin layer)
+Hunting-Succubus:Enhanced EyeLid Blender (skin layer)
+HUNTING-SUCCUBUS:Enhanced Eyes Realastic Alt (skin layer)
+HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)
+SupaRioAmateur:Scarlet Earrings Left
+tolborg:Layered Makeup EyeLiner (skin layer)
+VRDollz:Makeup LipGloss VRD (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)">SupaRioAmateur:Tifa G2F Eyelashes (skin layer)、Hunting-Succubus:Enhanced EyeLid Blender (skin layer)、HUNTING-SUCCUBUS:Enhanced Eyes Realastic Alt (skin layer)、HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)、SupaRioAmateur:Scarlet Earrings Left、tolborg:Layered Makeup EyeLiner (skin layer) …(+4)</dd>
+            <dt>头发</dt><dd title="callimofu:inm-t-2 (mesh)">callimofu:inm-t-2 (mesh)</dd>
+            <dt>morph</dt><dd title="蒂法RE Genital=1
+蒂法RE-Body=1
+蒂法RE-Head=1
+Labia majora-relaxation=0.5">蒂法RE Genital=1、蒂法RE-Body=1、蒂法RE-Head=1、Labia majora-relaxation=0.5</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/mai.tifa8K.1~tifaRe_01~Person/blend" title="D:\vam_exports\looks\mai.tifa8K.1~tifaRe_01~Person\blend\mai.tifa8K.1~tifaRe_01~Person.blend">mai.tifa8K.1~tifaRe_01~Person.blend</a> · 293.3 MB · 23.9s
+                <button class="copy" data-copy="D:\vam_exports\looks\mai.tifa8K.1~tifaRe_01~Person\blend\mai.tifa8K.1~tifaRe_01~Person.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mai.tifa8k.1~tifare_02~person tifare 02 / person mai.tifa8k.1 mai.tifa8k.1:/saves/scene/tifare 02.json d:\vam_exports\looks\mai.tifa8k.1~tifare_02~person\blend\mai.tifa8k.1~tifare_02~person.blend suparioamateur:tifa g2f eyelashes (skin layer) hunting-succubus:enhanced eyelid blender (skin layer) hunting-succubus:enhanced eyes realastic alt (skin layer) hunting-succubus:enhanced eyes realastic (skin layer) suparioamateur:scarlet earrings left tolborg:layered makeup eyeliner (skin layer) vrdollz:makeup lipgloss vrd (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) callimofu:inm-t-2 (mesh) 蒂法re genital=1 蒂法re-body=1 蒂法re-head=1" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/mai.tifa8K.1~tifaRe_02~Person/blend/mai.tifa8K.1~tifaRe_02~Person_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/mai.tifa8K.1~tifaRe_02~Person.jpg" alt="mai.tifa8K.1~tifaRe_02~Person"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="mai.tifa8K.1~tifaRe_02~Person">tifaRe 02 / Person</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="衣服缺依赖: rukk:TifaTights
+衣服缺依赖: rukk:TifaBottoms
+衣服缺依赖: rukk:TifaGloves
+衣服缺依赖: rukk:TifaHarness
+衣服缺依赖: rukk:TifaVambrace
+衣服缺依赖: rukk:TifaBoots
+衣服缺依赖: ASnail:Swimwear Shirt 1
+头发缺依赖: Miki:Tifa Back
+头发缺依赖: Miki:Tifa Bangs Left
+头发缺依赖: Miki:Tifa Bangs Right
+头发缺依赖: SupaRioAmateur:Tifa Bangs Right V2
+头发缺依赖: callimofu:inm-t-1
+头发缺依赖: Oronan:FF_F01
+贴图缺失: sclera: D:/纹理/新建文件夹 (2)/EyeballD.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+人体槽无贴图: Nostrils-1
+人体槽无贴图: Lips-1
+人体槽无贴图: Face-1
+人体槽无贴图: Nostrils-1
+人体槽无贴图: Lips-1
+人体槽无贴图: Face-1
+人体槽无贴图: Hips-1.003
+人体槽无贴图: Torso-1.003
+人体槽无贴图: Legs-1.003">告警 51</span><span class="badge badge-info" title="回退默认皮肤: face.diffuse
+回退默认皮肤: torso.diffuse
+回退默认皮肤: limbs.diffuse
+回退默认皮肤: genitals.diffuse">备注 4</span>
+          </div>
+          <div class="key"><code>mai.tifa8K.1~tifaRe_02~Person</code><button class="copy" data-copy="mai.tifa8K.1~tifaRe_02~Person">复制</button></div>
+          <div class="facts">Female Custom · 女 · morph 3 个 · 衣服 10 件 · 头发 1 · 12 物体 · 70 材质 · 29 贴图</div>
+          <dl>
+            <dt>包</dt><dd>mai.tifa8K.1</dd>
+            <dt>衣服</dt><dd title="SupaRioAmateur:Tifa G2F Eyelashes (skin layer)
+Hunting-Succubus:Enhanced EyeLid Blender (skin layer)
+HUNTING-SUCCUBUS:Enhanced Eyes Realastic Alt (skin layer)
+HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)
+SupaRioAmateur:Scarlet Earrings Left
+tolborg:Layered Makeup EyeLiner (skin layer)
+VRDollz:Makeup LipGloss VRD (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)">SupaRioAmateur:Tifa G2F Eyelashes (skin layer)、Hunting-Succubus:Enhanced EyeLid Blender (skin layer)、HUNTING-SUCCUBUS:Enhanced Eyes Realastic Alt (skin layer)、HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)、SupaRioAmateur:Scarlet Earrings Left、tolborg:Layered Makeup EyeLiner (skin layer) …(+4)</dd>
+            <dt>头发</dt><dd title="callimofu:inm-t-2 (mesh)">callimofu:inm-t-2 (mesh)</dd>
+            <dt>morph</dt><dd title="蒂法RE Genital=1
+蒂法RE-Body=1
+蒂法RE-Head=1">蒂法RE Genital=1、蒂法RE-Body=1、蒂法RE-Head=1</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/mai.tifa8K.1~tifaRe_02~Person/blend" title="D:\vam_exports\looks\mai.tifa8K.1~tifaRe_02~Person\blend\mai.tifa8K.1~tifaRe_02~Person.blend">mai.tifa8K.1~tifaRe_02~Person.blend</a> · 293.3 MB · 23.4s
+                <button class="copy" data-copy="D:\vam_exports\looks\mai.tifa8K.1~tifaRe_02~Person\blend\mai.tifa8K.1~tifaRe_02~Person.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mai.tifa8k.1~tifare_03~person tifare 03 / person mai.tifa8k.1 mai.tifa8k.1:/saves/scene/tifare 03.json d:\vam_exports\looks\mai.tifa8k.1~tifare_03~person\blend\mai.tifa8k.1~tifare_03~person.blend suparioamateur:tifa g2f eyelashes (skin layer) hunting-succubus:enhanced eyelid blender (skin layer) hunting-succubus:enhanced eyes realastic alt (skin layer) hunting-succubus:enhanced eyes realastic (skin layer) suparioamateur:tifa lingerie stocking suparioamateur:scarlet earrings left tolborg:layered makeup eyeliner (skin layer) vrdollz:makeup lipgloss vrd (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) callimofu:inm-t-2 (mesh) 蒂法re genital=1 蒂法re-body=1 蒂法re-head=1" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/mai.tifa8K.1~tifaRe_03~Person/blend/mai.tifa8K.1~tifaRe_03~Person_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/mai.tifa8K.1~tifaRe_03~Person.jpg" alt="mai.tifa8K.1~tifaRe_03~Person"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="mai.tifa8K.1~tifaRe_03~Person">tifaRe 03 / Person</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="衣服缺依赖: SupaRioAmateur:Tifa Mature Dress Main
+衣服缺依赖: SupaRioAmateur:Tifa Mature Dress Belt
+衣服缺依赖: SupaRioAmateur:Tifa Mature Dress Collar
+衣服缺依赖: SupaRioAmateur:Tifa Mature Collar Acc
+衣服缺依赖: SupaRioAmateur:Tifa Mature Belt Acc
+衣服缺依赖: SupaRioAmateur:Tifa Mature Dress Panties
+头发缺依赖: Miki:Tifa Back
+头发缺依赖: Miki:Tifa Bangs Left
+头发缺依赖: Miki:Tifa Bangs Right
+头发缺依赖: SupaRioAmateur:Tifa Bangs Right V2
+头发缺依赖: callimofu:inm-t-1
+头发缺依赖: Oronan:FF_F01
+贴图缺失: sclera: D:/纹理/新建文件夹 (2)/EyeballD.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Chain: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Jewels: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Main_Socket: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Pillars: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Sockets: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Secondary_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/D.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/N.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/S.jpg
+贴图缺失: Main_Jewel: Custom/Clothing/Female/SupaRioAmateur/Scarlet Heels/G.jpg
+人体槽无贴图: Tifa_Lingerie_Legs
+人体槽无贴图: Nostrils-1
+人体槽无贴图: Lips-1
+人体槽无贴图: Face-1
+人体槽无贴图: Nostrils-1
+人体槽无贴图: Lips-1
+人体槽无贴图: Face-1
+人体槽无贴图: Hips-1.003
+人体槽无贴图: Torso-1.003
+人体槽无贴图: Legs-1.003">告警 51</span><span class="badge badge-info" title="回退默认皮肤: face.diffuse
+回退默认皮肤: torso.diffuse
+回退默认皮肤: limbs.diffuse
+回退默认皮肤: genitals.diffuse">备注 4</span>
+          </div>
+          <div class="key"><code>mai.tifa8K.1~tifaRe_03~Person</code><button class="copy" data-copy="mai.tifa8K.1~tifaRe_03~Person">复制</button></div>
+          <div class="facts">Female Custom · 女 · morph 3 个 · 衣服 11 件 · 头发 1 · 13 物体 · 72 材质 · 29 贴图</div>
+          <dl>
+            <dt>包</dt><dd>mai.tifa8K.1</dd>
+            <dt>衣服</dt><dd title="SupaRioAmateur:Tifa G2F Eyelashes (skin layer)
+Hunting-Succubus:Enhanced EyeLid Blender (skin layer)
+HUNTING-SUCCUBUS:Enhanced Eyes Realastic Alt (skin layer)
+HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)
+SupaRioAmateur:Tifa Lingerie Stocking
+SupaRioAmateur:Scarlet Earrings Left
+tolborg:Layered Makeup EyeLiner (skin layer)
+VRDollz:Makeup LipGloss VRD (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)">SupaRioAmateur:Tifa G2F Eyelashes (skin layer)、Hunting-Succubus:Enhanced EyeLid Blender (skin layer)、HUNTING-SUCCUBUS:Enhanced Eyes Realastic Alt (skin layer)、HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)、SupaRioAmateur:Tifa Lingerie Stocking、SupaRioAmateur:Scarlet Earrings Left …(+5)</dd>
+            <dt>头发</dt><dd title="callimofu:inm-t-2 (mesh)">callimofu:inm-t-2 (mesh)</dd>
+            <dt>morph</dt><dd title="蒂法RE Genital=1
+蒂法RE-Body=1
+蒂法RE-Head=1">蒂法RE Genital=1、蒂法RE-Body=1、蒂法RE-Head=1</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/mai.tifa8K.1~tifaRe_03~Person/blend" title="D:\vam_exports\looks\mai.tifa8K.1~tifaRe_03~Person\blend\mai.tifa8K.1~tifaRe_03~Person.blend">mai.tifa8K.1~tifaRe_03~Person.blend</a> · 298.5 MB · 27.7s
+                <button class="copy" data-copy="D:\vam_exports\looks\mai.tifa8K.1~tifaRe_03~Person\blend\mai.tifa8K.1~tifaRe_03~Person.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="vamsoy.angela.1~angela~person angela / person vamsoy.angela.1 vamsoy.angela.1:/saves/scene/newfolder/angela.json d:\vam_exports\looks\vamsoy.angela.1~angela~person\blend\vamsoy.angela.1~angela~person.blend vl_13:lacrimal gland_v1 (skin layer) boomoon:lips layer (skin layer) cma:cma_eyesshadow up (skin layer) analoguebob:realistic eyes (skin layer) monstershinkai:long4e (60 guides x8) ddaamm:long12 scalp (ms long 4) (mesh) monstershinkai:long4c (84 guides x8) monstershinkai:long4f (9 guides x8) monstershinkai:long4d (46 guides x8) monstershinkai:long4b (134 guides x8) monstershinkai:long4a (504 guides x8) angela - body=1 angela - genital=1 angela - head=1" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/VAMSOY.Angela.1~Angela~Person/blend/VAMSOY.Angela.1~Angela~Person_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/VAMSOY.Angela.1~Angela~Person.jpg" alt="VAMSOY.Angela.1~Angela~Person"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="VAMSOY.Angela.1~Angela~Person">Angela / Person</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="衣服缺依赖: maru01:bram06
+衣服缺依赖: maru01:panty024
+morph 缺失: Breast Impact Front1 Left
+morph 缺失: Breast Impact Front1 Right
+morph 缺失: Dnaddr.Yuki_VOL1.latest:/Custom/Atom/Person/Morphs/female/dmd/pCTRLrFingersGrasp.vmi">告警 5</span><span class="badge badge-info" title="回退默认皮肤: torso.specular
+回退默认皮肤: limbs.specular
+回退默认皮肤: genitals.specular">备注 3</span>
+          </div>
+          <div class="key"><code>VAMSOY.Angela.1~Angela~Person</code><button class="copy" data-copy="VAMSOY.Angela.1~Angela~Person">复制</button></div>
+          <div class="facts">Female Custom · 女 · morph 3 个 · 衣服 4 件 · 头发 7 · 18 物体 · 50 材质 · 32 贴图</div>
+          <dl>
+            <dt>包</dt><dd>VAMSOY.Angela.1</dd>
+            <dt>衣服</dt><dd title="VL_13:Lacrimal gland_v1 (skin layer)
+BooMoon:Lips Layer (skin layer)
+CMA:CMA_EYESSHADOW UP (skin layer)
+AnalogueBob:Realistic Eyes (skin layer)">VL_13:Lacrimal gland_v1 (skin layer)、BooMoon:Lips Layer (skin layer)、CMA:CMA_EYESSHADOW UP (skin layer)、AnalogueBob:Realistic Eyes (skin layer)</dd>
+            <dt>头发</dt><dd title="MonsterShinkai:Long4e (60 guides x8)
+ddaamm:long12 scalp (MS long 4) (mesh)
+MonsterShinkai:Long4c (84 guides x8)
+MonsterShinkai:Long4f (9 guides x8)
+MonsterShinkai:Long4d (46 guides x8)
+MonsterShinkai:Long4b (134 guides x8)
+MonsterShinkai:Long4a (504 guides x8)">MonsterShinkai:Long4e (60 guides x8)、ddaamm:long12 scalp (MS long 4) (mesh)、MonsterShinkai:Long4c (84 guides x8)、MonsterShinkai:Long4f (9 guides x8)、MonsterShinkai:Long4d (46 guides x8)、MonsterShinkai:Long4b (134 guides x8) …(+1)</dd>
+            <dt>morph</dt><dd title="Angela - Body=1
+Angela - Genital=1
+Angela - Head=1">Angela - Body=1、Angela - Genital=1、Angela - Head=1</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/VAMSOY.Angela.1~Angela~Person/blend" title="D:\vam_exports\looks\VAMSOY.Angela.1~Angela~Person\blend\VAMSOY.Angela.1~Angela~Person.blend">VAMSOY.Angela.1~Angela~Person.blend</a> · 204.7 MB · 30.6s
+                <button class="copy" data-copy="D:\vam_exports\looks\VAMSOY.Angela.1~Angela~Person\blend\VAMSOY.Angela.1~Angela~Person.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="wunderwise.maiden_queen.1~wunderwise_maiden_queen~person wunderwise_maiden_queen / person wunderwise.maiden_queen.1 wunderwise.maiden_queen.1:/saves/scene/wunderwise/wunderwise_maiden_queen.json d:\vam_exports\looks\wunderwise.maiden_queen.1~wunderwise_maiden_queen~person\blend\wunderwise.maiden_queen.1~wunderwise_maiden_queen~person.blend hunting-succubus:enhanced eyes realastic (skin layer) wunderwise:maiden_queen_panties_cloth wunderwise:maiden_queen_dress wunderwise:maiden_queen_panties_metals wunderwise:maiden_queen_arm_bands_main wunderwise:maiden_queen_sandals_right_plates wunderwise:maiden_queen_sandals_left_plates wunderwise:maiden_queen_thigh_band wunderwise:maiden_queen_sandals_left wunderwise:maiden_queen_sandals_right hair -&gt; head (1 fbx) crown -&gt; head (4 fbx) belt_gold -&gt; pelvis (1 fbx) belt_stones -&gt; pelvis (1 fbx) necklace -&gt; chest (1 fbx) bracelet_right -&gt; rforearm (4 fbx) bracelet_left -&gt; lforearm (4 fbx) wunderwise_maiden_queen_morph=1" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person/blend/wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person.jpg" alt="wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person">wunderwise_maiden_queen / Person</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="衣服缺依赖: Clothing Creator
+morph 缺失: Breast Impact Front1 Left
+morph 缺失: Breast Impact Front1 Right">告警 3</span><span class="badge badge-info" title="回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss
+附件跳过: wunder_collider_head_1 (skipped: collider/effect)
+附件跳过: wunder_collider_chest_1 (skipped: collider/effect)
+附件跳过: wunder_collider_booba_right (skipped: collider/effect)
+附件跳过: wunder_collider_booba_left (skipped: collider/effect)
+附件跳过: wunder_collider_hips (skipped: collider/effect)
+附件跳过: wunder_collider_back (skipped: collider/effect)
+附件跳过: wunder_collider_shoulder_left (skipped: collider/effect)
+附件跳过: wunder_collider_shoulder_right (skipped: collider/effect)
+附件跳过: wunder_collider_hands_left (skipped: collider/effect)
+附件跳过: wunder_collider_hands_right (skipped: collider/effect)
+附件跳过: wunder_collider_thigh_left (skipped: collider/effect)
+附件跳过: wunder_collider_thigh_right (skipped: collider/effect)">备注 20</span>
+          </div>
+          <div class="key"><code>wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person</code><button class="copy" data-copy="wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person">复制</button></div>
+          <div class="facts">Female 1 · 女 · morph 1 个 · 衣服 10 件 · 附件 7 · 27 物体 · 65 材质 · 36 贴图</div>
+          <dl>
+            <dt>包</dt><dd>wunderwise.maiden_queen.1</dd>
+            <dt>衣服</dt><dd title="HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)
+wunderwise:maiden_queen_panties_cloth
+wunderwise:maiden_queen_dress
+wunderwise:maiden_queen_panties_metals
+wunderwise:maiden_queen_arm_bands_main
+wunderwise:maiden_queen_sandals_right_plates
+wunderwise:maiden_queen_sandals_left_plates
+wunderwise:maiden_queen_thigh_band
+wunderwise:maiden_queen_sandals_left
+wunderwise:maiden_queen_sandals_right">HUNTING-SUCCUBUS:Enhanced Eyes Realastic (skin layer)、wunderwise:maiden_queen_panties_cloth、wunderwise:maiden_queen_dress、wunderwise:maiden_queen_panties_metals、wunderwise:maiden_queen_arm_bands_main、wunderwise:maiden_queen_sandals_right_plates …(+4)</dd>
+            <dt>附件</dt><dd title="hair -&gt; head (1 fbx)
+crown -&gt; head (4 fbx)
+belt_gold -&gt; pelvis (1 fbx)
+belt_stones -&gt; pelvis (1 fbx)
+necklace -&gt; chest (1 fbx)
+bracelet_right -&gt; rForeArm (4 fbx)
+bracelet_left -&gt; lForeArm (4 fbx)">hair -&gt; head (1 fbx)、crown -&gt; head (4 fbx)、belt_gold -&gt; pelvis (1 fbx)、belt_stones -&gt; pelvis (1 fbx)、necklace -&gt; chest (1 fbx)、bracelet_right -&gt; rForeArm (4 fbx) …(+1)</dd>
+            <dt>morph</dt><dd title="wunderwise_maiden_queen_morph=1">wunderwise_maiden_queen_morph=1</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person/blend" title="D:\vam_exports\looks\wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person\blend\wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person.blend">wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person.blend</a> · 643.6 MB · 58.1s
+                <button class="copy" data-copy="D:\vam_exports\looks\wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person\blend\wunderwise.maiden_queen.1~wunderwise_maiden_queen~Person.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="xnpvv.tifa_.1~xnpvv_tifa~tifa xnpvv tifa     / tifa xnpvv.tifa__.1 xnpvv.tifa__.1:/saves/scene/xnpvv tifa    .json d:\vam_exports\looks\xnpvv.tifa_.1~xnpvv_tifa~tifa\blend\xnpvv.tifa_.1~xnpvv_tifa~tifa.blend xnpvv:tifa eyelash   (skin layer) xnpvv:tifa eyebrow tifa hair cua -&gt; head (1 fbx) xnpvv tifa ff7-body=1 xnpvv tifa ff7-head=1 xnpvv 线条美感-body=0.325" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/xnpvv.Tifa_.1~XNPVV_Tifa~Tifa/blend/xnpvv.Tifa_.1~XNPVV_Tifa~Tifa_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/xnpvv.Tifa_.1~XNPVV_Tifa~Tifa.jpg" alt="xnpvv.Tifa_.1~XNPVV_Tifa~Tifa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="xnpvv.Tifa_.1~XNPVV_Tifa~Tifa">XNPVV Tifa     / Tifa</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="morph 缺失: Breast Impact Front1 Left
+morph 缺失: Breast Impact Front1 Right">告警 2</span><span class="badge badge-info" title="回退默认皮肤: face.normal
+附件跳过: Tifa Body Collider CUA (skipped: collider/effect)
+附件跳过: Tifa Right chest Collider CUA (skipped: collider/effect)
+附件跳过: Tifa Left chest Collider CUA (skipped: collider/effect)
+附件跳过: Tifa Waist Collider CUA (skipped: collider/effect)
+附件跳过: Tifa Right hip Collider CUA (skipped: collider/effect)
+附件跳过: Tifa Left hip Collider CUA (skipped: collider/effect)
+附件跳过: Tifa Right arm Collider CUA (skipped: collider/effect)
+附件跳过: Tifa Left arm Collider CUA (skipped: collider/effect)">备注 9</span>
+          </div>
+          <div class="key"><code>xnpvv.Tifa_.1~XNPVV_Tifa~Tifa</code><button class="copy" data-copy="xnpvv.Tifa_.1~XNPVV_Tifa~Tifa">复制</button></div>
+          <div class="facts">Janie · 女 · morph 3 个 · 衣服 2 件 · 附件 1 · 6 物体 · 35 材质 · 27 贴图</div>
+          <dl>
+            <dt>包</dt><dd>xnpvv.Tifa__.1</dd>
+            <dt>衣服</dt><dd title="xnpvv:Tifa Eyelash   (skin layer)
+xnpvv:Tifa Eyebrow">xnpvv:Tifa Eyelash   (skin layer)、xnpvv:Tifa Eyebrow</dd>
+            <dt>附件</dt><dd title="Tifa Hair CUA -&gt; head (1 fbx)">Tifa Hair CUA -&gt; head (1 fbx)</dd>
+            <dt>morph</dt><dd title="XNPVV Tifa ff7-Body=1
+XNPVV Tifa ff7-Head=1
+XNPVV 线条美感-Body=0.325">XNPVV Tifa ff7-Body=1、XNPVV Tifa ff7-Head=1、XNPVV 线条美感-Body=0.325</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/xnpvv.Tifa_.1~XNPVV_Tifa~Tifa/blend" title="D:\vam_exports\looks\xnpvv.Tifa_.1~XNPVV_Tifa~Tifa\blend\xnpvv.Tifa_.1~XNPVV_Tifa~Tifa.blend">xnpvv.Tifa_.1~XNPVV_Tifa~Tifa.blend</a> · 85.8 MB · 14.7s
+                <button class="copy" data-copy="D:\vam_exports\looks\xnpvv.Tifa_.1~XNPVV_Tifa~Tifa\blend\xnpvv.Tifa_.1~XNPVV_Tifa~Tifa.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="zinigo.alivia.8~preset_alivia preset_alivia zinigo.alivia.8 zinigo.alivia.8:/custom/atom/person/appearance/preset_alivia.vap d:\vam_exports\looks\zinigo.alivia.8~preset_alivia\blend\zinigo.alivia.8~preset_alivia.blend paledriver:eyes upper shadow (skin layer) paledriver:eyes side shadow (skin layer) paledriver:eyes bottom shadow (skin layer) paledriver:eyes reflection (skin layer) ddaamm:long5 (692 guides x8) zinigo:accent bangs (60 guides x8) shoulder width=0.533 shoulder width (b)=0.0688 shoulders size=-0.329 (ren) thin=0.396 areola depth=0.361 areola size=-0.404 breast centered=0.206 breast height=0.654 breast round=-0.163 breasts cleavage=0.043 breasts gone=0.0774 breasts shape 01=0.0344 breasts shape 03=0.0172 breasts shape 04=0.0516 breasts shape 07=0.0344 breastscrease=-0.129 nipples apply=0.202 armpit curve=-0.43 center gap height=0.198 center gap smooth=0.447 center gap updown=-0.12 centre gap narrow=0.232 chest smoother=0.0946 chestshape=0.396 chestunderbreast=0.835 chestup=0.267 chestuppernarrow=0.0861 gen_innie=0.241 labia majora-relaxation=-0.37 labia majora-spread-rlow=0.104 labia minora-relaxation=0.566 labia minora-size=-0.343 labia minora-style3=-0.224 labia minora-style4=0.318 brow define left=0.36 brow define right=0.36 brow depth left=-0.00643 brow depth right=-0.00643 brow height=0.33 brow inner height=0.318 brow outer height=0.263 brow shape inner=-0.0968 brow shape middle=0.129 brow width left=-0.0452 brow width right=-0.0452 browareasmooth=0.37 browareasmooth2=0.0861 cheek bone define =-0.189 cheek bones width=-0.0774 chin cleft=0.614 chin width left=-0.279 chin width right=-0.279 ears size left=-0.439 ears size right=-0.439 eyes angle left=0.267 eyes angle right=0.267 eyes closed (ren)=0.052 eyes depth left=-0.086 eyes depth right=-0.086 eyes height inner=0.568 eyes height left=-0.387 eyes height right=-0.387 eyes height upper=0.267 eyes inner  shape=0.361 eyes inner corner width=-0.241 eyes round=-0.232 eyes round lower=-0.301 eyes round upper=0.198 eyes size left=0.163 eyes size right=0.163 eyes slant outer =0.835 eyes width left=-0.181 eyes width right=-0.181 eyeshape6=-0.335 eyesshape1=0.189 eyesshape2=-0.0344 eyesshape3=0.0688 eyesshape4=-0.0946 face height 2=-0.115 face height lower=-0.102 face height upper =0.447 jaw angle=0.955 jaw chin shape=0.279 jaw corner shape=-0.413 jaw curve=-0.267 jaw height left=0.258 jaw height right=0.258 jaw size left=-0.142 jaw size right=-0.142 front teeth size=0.31 teeth gap=0.314 vampire fangs=0.0473 mouth size=-0.252 mouth width=-0.419 mouth_uplipdefine=-0.766 mouthlowlipdefine=0.852 mouthpouty=0.327 mouthproportion=-0.00862 nose a=0.0688 nose bridge depth=-0.31 nose bridge height=-0.198 nose bridge middle width=-0.198 nose bridge middlle depth=0.452 nose bridge slope=-0.129 nose depth=0.146 nose height=-0.595 nose septum shape=0.043 nose septum width=0.0129 nose size=-0.482 nose tilt=0.292 nose tip bottom shape=-0.12 nose tip depth=-0.497 nose tip height=0.146 nose tip width=-0.301 nose tip width upper=-0.163 nose width=-0.181 noseareasmooth=0.68 nosemouthratio=0.198 noseridgereduce=0.834 noseshape1=0.422 noseshape10=0.086 noseshape11=0.043 noseturnedup=0.0516 head scale=0.12 glutes size=0.432 glutes width=0.163 gluteshape1=0.404 gluteshape2=0.224 glutesup=-0.339 hips high=0.232 hipshape1=0.292 hipsmall=0.456 hipsmall2=0.551 thigh bone size=0.68 thigh upper gap=0.835 thighs tone=0.494 thighshape=-0.249 neck length=-0.206 neck size=-0.284 stomach depth=-0.275 stomach lower depth=-0.206 stomach shape 1=0.258 waist narrow upper=0.439 waist width=-0.043 waisthipdefine=0.559 waistlower=0.043 waistnarrow=0.0688 waistnarrow2=0.206" data-kind="look" data-warn="1">
+        <a class="shot" href="file:///D:/vam_exports/looks/Zinigo.Alivia.8~Preset_Alivia/blend/Zinigo.Alivia.8~Preset_Alivia_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/Zinigo.Alivia.8~Preset_Alivia.jpg" alt="Zinigo.Alivia.8~Preset_Alivia"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="Zinigo.Alivia.8~Preset_Alivia">Preset_Alivia</h3><span class="badge badge-kind">Look</span><span class="badge badge-warn" title="morph 缺失: Breast Diameter
+morph 缺失: Breast Large
+morph 缺失: Breast Pointed
+morph 缺失: Breast Sag2
+morph 缺失: Breast Small
+morph 缺失: Breast Top Curve1
+morph 缺失: Breast Top Curve2
+morph 缺失: Breast Under Smoother4
+morph 缺失: Breast Under Smoother5">告警 9</span><span class="badge badge-info" title="回退默认皮肤: face.diffuse
+回退默认皮肤: face.specular
+回退默认皮肤: face.gloss
+回退默认皮肤: face.normal
+回退默认皮肤: torso.diffuse
+回退默认皮肤: torso.specular
+回退默认皮肤: torso.gloss
+回退默认皮肤: torso.normal
+回退默认皮肤: limbs.diffuse
+回退默认皮肤: limbs.specular
+回退默认皮肤: limbs.gloss
+回退默认皮肤: limbs.normal
+回退默认皮肤: genitals.diffuse
+回退默认皮肤: genitals.specular
+回退默认皮肤: genitals.gloss
+回退默认皮肤: genitals.normal">备注 16</span>
+          </div>
+          <div class="key"><code>Zinigo.Alivia.8~Preset_Alivia</code><button class="copy" data-copy="Zinigo.Alivia.8~Preset_Alivia">复制</button></div>
+          <div class="facts">Kayla · 女 · morph 148 个 · 衣服 4 件 · 头发 2 · 9 物体 · 38 材质 · 26 贴图</div>
+          <dl>
+            <dt>包</dt><dd>Zinigo.Alivia.8</dd>
+            <dt>衣服</dt><dd title="paledriver:Eyes upper shadow (skin layer)
+paledriver:Eyes side shadow (skin layer)
+paledriver:Eyes bottom shadow (skin layer)
+paledriver:Eyes reflection (skin layer)">paledriver:Eyes upper shadow (skin layer)、paledriver:Eyes side shadow (skin layer)、paledriver:Eyes bottom shadow (skin layer)、paledriver:Eyes reflection (skin layer)</dd>
+            <dt>头发</dt><dd title="ddaamm:long5 (692 guides x8)
+Zinigo:Accent Bangs (60 guides x8)">ddaamm:long5 (692 guides x8)、Zinigo:Accent Bangs (60 guides x8)</dd>
+            <dt>morph</dt><dd title="Shoulder Width=0.533
+Shoulder Width (B)=0.0688
+Shoulders Size=-0.329
+(REN) Thin=0.396
+Areola Depth=0.361
+Areola Size=-0.404
+Breast Centered=0.206
+Breast Height=0.654
+Breast Round=-0.163
+Breasts Cleavage=0.043
+Breasts Gone=0.0774
+Breasts Shape 01=0.0344
+Breasts Shape 03=0.0172
+Breasts Shape 04=0.0516
+Breasts Shape 07=0.0344
+BreastsCrease=-0.129
+Nipples Apply=0.202
+Armpit Curve=-0.43
+Center Gap Height=0.198
+Center Gap Smooth=0.447
+Center Gap UpDown=-0.12
+Centre Gap Narrow=0.232
+Chest Smoother=0.0946
+ChestShape=0.396
+ChestUnderBreast=0.835
+ChestUp=0.267
+ChestUpperNarrow=0.0861
+Gen_Innie=0.241
+Labia majora-relaxation=-0.37
+Labia majora-spread-RLow=0.104
+Labia minora-relaxation=0.566
+Labia minora-size=-0.343
+Labia minora-style3=-0.224
+Labia minora-style4=0.318
+Brow Define Left=0.36
+Brow Define Right=0.36
+Brow Depth Left=-0.00643
+Brow Depth Right=-0.00643
+Brow Height=0.33
+Brow Inner Height=0.318
+Brow Outer Height=0.263
+Brow Shape Inner=-0.0968
+Brow Shape Middle=0.129
+Brow Width Left=-0.0452
+Brow Width Right=-0.0452
+BrowAreaSmooth=0.37
+BrowAreaSmooth2=0.0861
+Cheek Bone Define =-0.189
+Cheek Bones Width=-0.0774
+Chin Cleft=0.614
+Chin Width Left=-0.279
+Chin Width Right=-0.279
+Ears Size Left=-0.439
+Ears Size Right=-0.439
+Eyes Angle Left=0.267
+Eyes Angle Right=0.267
+Eyes Closed (REN)=0.052
+Eyes Depth Left=-0.086
+Eyes Depth Right=-0.086
+Eyes Height Inner=0.568
+Eyes Height Left=-0.387
+Eyes Height Right=-0.387
+Eyes Height Upper=0.267
+Eyes Inner  Shape=0.361
+Eyes Inner Corner Width=-0.241
+Eyes Round=-0.232
+Eyes Round Lower=-0.301
+Eyes Round Upper=0.198
+Eyes Size Left=0.163
+Eyes Size Right=0.163
+Eyes Slant Outer =0.835
+Eyes Width Left=-0.181
+Eyes Width Right=-0.181
+EyeShape6=-0.335
+EyesShape1=0.189
+EyesShape2=-0.0344
+EyesShape3=0.0688
+EyesShape4=-0.0946
+Face Height 2=-0.115
+Face Height Lower=-0.102
+Face Height Upper =0.447
+Jaw Angle=0.955
+Jaw Chin Shape=0.279
+Jaw Corner Shape=-0.413
+Jaw Curve=-0.267
+Jaw Height Left=0.258
+Jaw Height Right=0.258
+Jaw Size Left=-0.142
+Jaw Size Right=-0.142
+Front Teeth size=0.31
+Teeth Gap=0.314
+Vampire Fangs=0.0473
+Mouth Size=-0.252
+Mouth Width=-0.419
+Mouth_UpLipDefine=-0.766
+MouthLowLipDefine=0.852
+MouthPouty=0.327
+MouthProportion=-0.00862
+Nose A=0.0688
+Nose Bridge Depth=-0.31
+Nose Bridge Height=-0.198
+Nose Bridge Middle Width=-0.198
+Nose Bridge Middlle Depth=0.452
+Nose Bridge Slope=-0.129
+Nose Depth=0.146
+Nose Height=-0.595
+Nose Septum Shape=0.043
+Nose Septum Width=0.0129
+Nose Size=-0.482
+Nose Tilt=0.292
+Nose Tip Bottom Shape=-0.12
+Nose Tip Depth=-0.497
+Nose Tip Height=0.146
+Nose Tip Width=-0.301
+Nose Tip Width Upper=-0.163
+Nose Width=-0.181
+NoseAreaSmooth=0.68
+NoseMouthRatio=0.198
+NoseRidgeReduce=0.834
+NoseShape1=0.422
+NoseShape10=0.086
+NoseShape11=0.043
+NoseTurnedUp=0.0516
+Head Scale=0.12
+Glutes Size=0.432
+Glutes Width=0.163
+GluteShape1=0.404
+GluteShape2=0.224
+GlutesUp=-0.339
+Hips High=0.232
+HipShape1=0.292
+HipSmall=0.456
+HipSmall2=0.551
+Thigh Bone Size=0.68
+Thigh Upper Gap=0.835
+Thighs Tone=0.494
+ThighShape=-0.249
+Neck Length=-0.206
+Neck Size=-0.284
+Stomach Depth=-0.275
+Stomach Lower Depth=-0.206
+Stomach Shape 1=0.258
+Waist Narrow Upper=0.439
+Waist Width=-0.043
+WaistHipDefine=0.559
+WaistLower=0.043
+WaistNarrow=0.0688
+WaistNarrow2=0.206">Shoulder Width=0.533、Shoulder Width (B)=0.0688、Shoulders Size=-0.329、(REN) Thin=0.396、Areola Depth=0.361、Areola Size=-0.404 …(+142)</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/looks/Zinigo.Alivia.8~Preset_Alivia/blend" title="D:\vam_exports\looks\Zinigo.Alivia.8~Preset_Alivia\blend\Zinigo.Alivia.8~Preset_Alivia.blend">Zinigo.Alivia.8~Preset_Alivia.blend</a> · 185.6 MB · 21.3s
+                <button class="copy" data-copy="D:\vam_exports\looks\Zinigo.Alivia.8~Preset_Alivia\blend\Zinigo.Alivia.8~Preset_Alivia.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="vam-yj.cheongsam_set.1~cheongsam_set cheongsam set vam-yj.cheongsam_set.1 vam-yj.cheongsam_set.1:/custom/clothing/female/vam-yj/cheongsam set/cheongsam set.vam d:\vam_exports\clothings\vam-yj.cheongsam_set.1~cheongsam_set\blend\vam-yj.cheongsam_set.1~cheongsam_set.blend" data-kind="clothing" data-warn="0">
+        <a class="shot" href="file:///D:/vam_exports/clothings/VAM-YJ.Cheongsam_set.1~Cheongsam_set/blend/VAM-YJ.Cheongsam_set.1~Cheongsam_set_preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/vam_exports/_gallery/thumbs/VAM-YJ.Cheongsam_set.1~Cheongsam_set.jpg" alt="VAM-YJ.Cheongsam_set.1~Cheongsam_set"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3 title="VAM-YJ.Cheongsam_set.1~Cheongsam_set">Cheongsam set</h3><span class="badge badge-kind">衣服</span>
+          </div>
+          <div class="key"><code>VAM-YJ.Cheongsam_set.1~Cheongsam_set</code><button class="copy" data-copy="VAM-YJ.Cheongsam_set.1~Cheongsam_set">复制</button></div>
+          <div class="facts">ClothingFemale · 14,281 顶点 · 1 物体 · 1 材质 · 1 贴图</div>
+          <dl>
+            <dt>包</dt><dd>VAM-YJ.Cheongsam_set.1</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vam_exports/clothings/VAM-YJ.Cheongsam_set.1~Cheongsam_set/blend" title="D:\vam_exports\clothings\VAM-YJ.Cheongsam_set.1~Cheongsam_set\blend\VAM-YJ.Cheongsam_set.1~Cheongsam_set.blend">VAM-YJ.Cheongsam_set.1~Cheongsam_set.blend</a> · 37.8 MB · 6.7s
+                <button class="copy" data-copy="D:\vam_exports\clothings\VAM-YJ.Cheongsam_set.1~Cheongsam_set\blend\VAM-YJ.Cheongsam_set.1~Cheongsam_set.blend">复制路径</button></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的条目</div>
+
+  <section class="appendix">
+    <h2>附录 · 未成功的条目（0）</h2>
+    <ul>
+    </ul>
+
+    <h2>附录 · 导出脚本用法</h2>
+    <p>脚本在 <code>scripts\vam\</code>，需要本机装有 VaM 1.22、Blender 3.6 与 AssetStudioModCLI。
+      Look 是"基础人体 + morph + 皮肤贴图 + 衣服 + 头发 + 挂在骨骼上的 CustomUnityAsset"，
+      导出的是静止 A-pose 静态网格（无骨架），贴图打包进 <code>.blend</code>。</p>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\vam
+
+.\export_vam_models.ps1 -List                              # 列出全部 Look / 衣服 / 头发（带序号）
+.\export_vam_models.ps1 -List -Type look -Filter tifa      # 只看 Look，名字含 tifa
+.\export_vam_models.ps1 -Only VAMSOY.Angela.1~Angela~Person  # 按 key 导出
+.\export_vam_models.ps1 -Only Angela~Person                # 唯一子串也行，逗号分隔可多项
+.\export_vam_models.ps1 -Index 125,550                     # 按 -List 序号
+.\export_vam_models.ps1 -All -Type look -Force             # 全部 Look 重导
+.\export_vam_models.ps1 -Only 瑶瑶~Person -Format blend,glb # 同时出 glb
+python html\make_gallery.py                                # 重建本页</pre>
+    <p>常用开关：<code>-NoClothing</code> / <code>-NoHair</code> / <code>-NoAttachments</code> 只导人体或去掉某类；
+      <code>-IncludePoseMorphs</code> 保留姿势 morph；<code>-Force</code> 覆盖已有产物（缺省已有 blend 与预览的条目 SKIP）；
+      <code>-ManifestPath</code> 给并行进程各自的清单。产物在 <code>D:\vam_exports\looks|clothings|hairs\&lt;key&gt;\blend\</code>，
+      清单 <code>D:\vam_exports\vam_models_manifest.json</code>。缩略图写在 <code>D:\vam_exports\_gallery\thumbs\</code>。</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var q = document.getElementById('q');
+  var grid = document.getElementById('grid');
+  var cards = Array.prototype.slice.call(grid.querySelectorAll('.card'));
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var warnOnly = document.getElementById('warnOnly');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var kind = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!kind || card.dataset.kind === kind)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      kind = chip.dataset.kind || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard needs a secure context, which file:// is not.
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

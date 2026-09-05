@@ -506,7 +506,9 @@ class DazMesh:
     """Polygon mesh with per-polygon material and a separate UV vertex set.
 
     ``poly_idx`` / ``uv_poly_idx`` are flat index arrays; ``poly_len`` gives the
-    vertex count per polygon and ``poly_mat`` its material index.
+    vertex count per polygon and ``poly_mat`` its material index.  ``wrap``
+    holds the item's DAZSkinWrapStore (see ``parse_skin_wrap``) when the
+    file has one, else None.
     """
 
     def __init__(self, name, material_names, verts, poly_mat, poly_len, poly_idx,
@@ -520,6 +522,7 @@ class DazMesh:
         self.poly_idx = np.asarray(poly_idx, dtype=np.int32)
         self.uv_poly_idx = np.asarray(uv_poly_idx, dtype=np.int32)
         self.uvs = np.asarray(uvs, dtype=np.float32).reshape(-1, 2)
+        self.wrap = None
 
     @property
     def num_verts(self):
@@ -569,7 +572,8 @@ def parse_dazmesh_vab(data):
       {int material, int count, int[count]}[numPolys]                UV polys
       int numUVVerts, Vector2[numUVVerts]
       int numMapped, {int uvVert, int baseVert}[numMapped]   (numUVVerts-numVerts)
-      ... skin-wrap / simulation data (not needed for a static export)
+      ... then the "DAZSkinWrapStore" (see parse_skin_wrap), material options
+      and simulation data
     """
     reader = _Reader(data)
     magic = [reader.string() for _ in range(4)]
@@ -604,8 +608,54 @@ def parse_dazmesh_vab(data):
     num_mapped = reader.int32()
     if num_mapped != num_uv_verts - num_verts:
         raise ValueError("UV map count %d != %d" % (num_mapped, num_uv_verts - num_verts))
-    return DazMesh(name, materials, verts.copy(), poly_mat, poly_len, poly_idx,
+    mesh = DazMesh(name, materials, verts.copy(), poly_mat, poly_len, poly_idx,
                    uv_idx, uvs.copy(), ids)
+    mesh.wrap = parse_skin_wrap(data, num_verts, num_uv_verts, reader.pos + 8 * num_mapped)
+    return mesh
+
+
+SKIN_WRAP_STORE = b"DAZSkinWrapStore"
+
+
+def parse_skin_wrap(data, num_verts, num_uv_verts, start=0):
+    """The ``DAZSkinWrapStore`` behind the DAZMesh section of a clothing or
+    mesh-hair ``.vab``: how VaM glues every vertex to the skin.
+
+      string "DAZSkinWrapStore", string "1.0", int count (= numUVVerts)
+      { int closestTriangle, int v1, int v2, int v3,
+        float normalOffset, float tangent1, float tangent2,   # position
+        float nN, float nT1, float nT2 }[count]               # vertex normal
+
+    ``v1..v3`` are the skin triangle's base-vertex indices (merged body mesh).
+    Position = v1 + N*normalOffset + T1*tangent1 + T2*tangent2 with N the
+    outward face normal, T1 = centroid - v1 and T2 = N x T1 (unnormalised,
+    the coefficients are per |T|^2); at run time VaM adds the item's
+    ``surfaceOffset`` to the normal offset.  Records past ``num_verts`` are
+    UV seam duplicates and dropped.  Returns (tris, coeffs) or None.
+    Worked out from 328 items: the ones wrapped on the default figure
+    reconstruct to 0.2-0.3 mm.
+    """
+    pos = data.find(SKIN_WRAP_STORE, start)
+    if pos < 1:
+        return None
+    reader = _Reader(data)
+    reader.pos = pos - 1
+    try:
+        if reader.string() != SKIN_WRAP_STORE.decode("ascii"):
+            return None
+        reader.string()
+        count = reader.int32()
+    except (IndexError, UnicodeDecodeError, struct.error):
+        return None
+    if count < num_verts or count > num_uv_verts or reader.pos + count * 40 > len(data):
+        return None
+    ints = np.frombuffer(data, dtype="<i4", count=count * 10, offset=reader.pos).reshape(count, 10)
+    floats = np.frombuffer(data, dtype="<f4", count=count * 10, offset=reader.pos).reshape(count, 10)
+    tris = np.array(ints[:num_verts, 1:4], dtype=np.int32)
+    coeffs = np.array(floats[:num_verts, 4:7], dtype=np.float32)
+    if tris.size == 0 or tris.min() < 0 or not np.all(np.isfinite(coeffs)):
+        return None
+    return tris, coeffs
 
 
 HAIR_STORE = "RuntimeHairGeometryCreator"
@@ -1811,6 +1861,177 @@ def skin_layer_fraction(points, body_verts, tolerance=0.002):
         return 0.0
     distance = nearest_distance(points, body_verts)
     return float(np.mean(distance < tolerance))
+
+
+def outward_normals(verts, poly_len, poly_idx):
+    """Outward vertex normals of a VaM mesh.
+
+    DAZ/VaM polygons wind clockwise seen from outside (the default figure's
+    crown vertex gets y = -0.99 from the right-hand rule), so this is the
+    negated ``vertex_normals``; clothing exported from VaM shares the winding.
+    """
+    return -vertex_normals(verts, poly_len, poly_idx)
+
+
+def wrap_to_body(tris, coeffs, body_verts, body_outward_normals, surface_offset=0.0,
+                 with_distance=False):
+    """Rebuild wrapped vertices on ``body_verts`` in any morph state.
+
+    Each record's face normal is oriented along the body's outward vertex
+    normals (the record's vertex order is not consistent), then
+    ``v1 + N*(offset + surfaceOffset) + T1*t1 + T2*t2`` with T1 = centroid -
+    v1 and T2 = N x T1.  Tangent offsets scale with the triangle, the normal
+    offset does not, exactly like VaM's DAZSkinWrap.  ``with_distance`` also
+    returns each vertex's distance from its skin triangle's centroid.
+    """
+    body = np.asarray(body_verts, dtype=np.float64)
+    a, b, c = body[tris[:, 0]], body[tris[:, 1]], body[tris[:, 2]]
+    normal = np.cross(b - a, c - a)
+    normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-20)
+    hint = np.asarray(body_outward_normals, dtype=np.float64)
+    hint = hint[tris[:, 0]] + hint[tris[:, 1]] + hint[tris[:, 2]]
+    sign = np.sign(np.einsum("ij,ij->i", normal, hint))
+    sign[sign == 0] = 1.0
+    normal *= sign[:, None]
+    tangent1 = (a + b + c) / 3.0 - a
+    tangent2 = np.cross(normal, tangent1)
+    coeffs = np.asarray(coeffs, dtype=np.float64)
+    out = (a + normal * (coeffs[:, 0:1] + float(surface_offset))
+           + tangent1 * coeffs[:, 1:2] + tangent2 * coeffs[:, 2:3])
+    if with_distance:
+        distance = np.linalg.norm(out - (a + b + c) / 3.0, axis=1)
+        return out.astype(np.float32), distance.astype(np.float32)
+    return out.astype(np.float32)
+
+
+def relax_loose_parts(raw_verts, placed, distance, tight=0.01, loose=0.04, k=8):
+    """Keep the authored shape of a garment's loose parts.
+
+    Rebuilding triangle by triangle is exact where cloth hugs the skin, but
+    a skirt hem or a baggy cuff hangs several cm off it and neighbouring
+    cloth vertices then follow different limbs: the result is shredded (VaM
+    smooths that away with cloth simulation).  Vertices closer than
+    ``tight`` keep the wrap; vertices beyond ``loose`` move by the
+    distance-weighted mean displacement of the nearest tight vertices (so
+    they follow the hips/limbs they hang from with their shape intact);
+    in between the two blend.
+    """
+    raw = np.asarray(raw_verts, dtype=np.float32)
+    placed = np.asarray(placed, dtype=np.float32)
+    weight = np.clip((loose - np.asarray(distance, dtype=np.float32)) / (loose - tight), 0.0, 1.0)
+    tight_idx = np.nonzero(weight >= 0.999)[0]
+    loose_idx = np.nonzero(weight < 0.999)[0]
+    if tight_idx.size < 16 or loose_idx.size == 0:
+        return placed
+    displacement = placed - raw
+    followed = transfer_displacement(raw[loose_idx], raw[tight_idx],
+                                     raw[tight_idx] + displacement[tight_idx], k=k)
+    out = placed.copy()
+    blend = weight[loose_idx, None]
+    out[loose_idx] = raw[loose_idx] + blend * displacement[loose_idx] \
+        + (1.0 - blend) * (followed - raw[loose_idx])
+    return out
+
+
+# Beyond this the saved normal offset is a metre-long lever (creators leave
+# surfaceOffset = -1 behind): any difference between the authoring body and
+# this one smears the item, so such items use the displacement transfer.
+WRAP_MAX_SURFACE_OFFSET = 0.01
+
+
+def fit_clothing(mesh, base_verts, body_verts, body_outward_normals, surface_offset=0.0):
+    """Clothing vertices on ``body_verts``: the item's skin-wrap store when it
+    has one that fits the body (VaM's own behaviour, right even for items
+    wrapped on a morphed figure; loose parts keep their authored shape, see
+    ``relax_loose_parts``), else -- no store, or a surface offset past
+    ``WRAP_MAX_SURFACE_OFFSET`` -- the base->body displacement transfer.
+    Returns (verts, "wrap" | "idw")."""
+    wrap = getattr(mesh, "wrap", None)
+    if (wrap is not None and int(wrap[0].max()) < len(body_verts)
+            and abs(float(surface_offset)) <= WRAP_MAX_SURFACE_OFFSET):
+        placed, distance = wrap_to_body(wrap[0], wrap[1], body_verts, body_outward_normals,
+                                        surface_offset, with_distance=True)
+        return relax_loose_parts(mesh.verts, placed, distance), "wrap"
+    return transfer_displacement(mesh.verts, base_verts, body_verts), "idw"
+
+
+def wrap_surface_offset(vaj, overrides=None, uid=None):
+    """``surfaceOffset`` of an item's DAZSkinWrap: the .vaj value, overridden
+    by the scene's ``<uid>WrapControl`` storable when the look changed it."""
+    offset = 0.0
+    for storable in vaj.get("storables", []) or []:
+        if str(storable.get("id", "")).endswith("WrapControl"):
+            offset = as_float(storable.get("surfaceOffset"), offset)
+    if overrides and uid:
+        override = overrides.get(uid + "WrapControl") or {}
+        offset = as_float(override.get("surfaceOffset"), offset)
+    return offset
+
+
+def lift_off_skin(points, body_verts, body_outward_normals, clearance=0.001, chunk=512):
+    """Push points sitting inside or within ``clearance`` of the skin out to
+    ``clearance`` along the nearest skin vertex's outward normal.
+
+    A cheap stand-in for VaM's cloth collision: a static wrap leaves the odd
+    vertex a hair inside the skin, which renders as skin specks poking
+    through the garment.  Points further out are left alone.
+    """
+    points = np.asarray(points, dtype=np.float32)
+    out = points.copy()
+    body = np.asarray(body_verts, dtype=np.float64)
+    normals = np.asarray(body_outward_normals, dtype=np.float64)
+    for start, block, dist in _squared_distances(points, body, chunk):
+        idx = np.argmin(dist, axis=1)
+        signed = np.einsum("ij,ij->i", block - body[idx], normals[idx])
+        lift = clearance - signed
+        mask = lift > 0
+        if np.any(mask):
+            rows = start + np.nonzero(mask)[0]
+            out[rows] += (normals[idx[mask]] * lift[mask, None]).astype(np.float32)
+    return out
+
+
+def clothing_disables_anatomy(vaj, overrides=None, uid=None):
+    """True when a worn item asks VaM to hide the figure's genitals
+    (``ItemControl.disableAnatomy`` in the .vaj, scene override wins)."""
+    value = False
+    for storable in vaj.get("storables", []) or []:
+        if str(storable.get("id", "")).endswith("ItemControl") and "disableAnatomy" in storable:
+            value = as_bool(storable.get("disableAnatomy"), value)
+    if overrides and uid:
+        override = overrides.get(uid + "ItemControl") or {}
+        if "disableAnatomy" in override:
+            value = as_bool(override.get("disableAnatomy"), value)
+    return value
+
+
+def graft_polygons(mesh, meta):
+    """Mask of the merged body's polygons that belong to a graft (genitalia):
+    any vertex past the first component's vertex range."""
+    parts = meta["geometryId"].split(":")
+    offset, count = meta["components"][parts[0]]
+    if mesh.poly_len.size == 0:
+        return np.zeros(0, dtype=bool)
+    starts = np.cumsum(mesh.poly_len) - mesh.poly_len
+    return np.maximum.reduceat(mesh.poly_idx, starts) >= offset + count
+
+
+def hide_anatomy(mesh, graft_mask, keep_mask=None, cover="Hips", fallback="Torso"):
+    """What VaM's disableAnatomy shows: drop the graft polygons and bring
+    back the base figure's own polygons under it -- the merged mesh keeps
+    them on the ``Hidden`` material -- on the hip skin material.
+    Returns (poly_mat, keep_mask)."""
+    names = list(mesh.material_names)
+    poly_mat = mesh.poly_mat.copy()
+    keep = np.ones(len(poly_mat), dtype=bool) if keep_mask is None else keep_mask.copy()
+    keep &= ~graft_mask
+    if "Hidden" in names:
+        covered = (poly_mat == names.index("Hidden")) & ~graft_mask
+        target = next((names.index(n) for n in (cover, fallback) if n in names), None)
+        if target is not None:
+            keep |= covered
+            poly_mat[covered] = target
+    return poly_mat, keep
 
 
 def clean_polygons(poly_len, poly_idx, uv_poly_idx, poly_mat, keep_mask=None):

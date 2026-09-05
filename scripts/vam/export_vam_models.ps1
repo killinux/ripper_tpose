@@ -15,6 +15,9 @@
     -NoHair           leave the strand hair out of a look
     -NoAttachments    leave out CustomUnityAsset props linked to the person
                       (mesh hair, jewellery, weapons)
+    -Gallery          rebuild html\index.html (thumbnail gallery built from the
+                      manifest) after exporting, or on its own when nothing
+                      is selected
 
   Outputs land in <OutRoot>\looks\<key>\blend\ and
   <OutRoot>\clothings\<key>\blend\ next to the assembled model.json,
@@ -34,6 +37,9 @@
 
 .EXAMPLE
   .\export_vam_models.ps1 -Prepare        # build the cache up front (~3-5 min)
+
+.EXAMPLE
+  .\export_vam_models.ps1 -Gallery        # just rebuild html\index.html
 #>
 [CmdletBinding()]
 param(
@@ -58,7 +64,8 @@ param(
     [switch]$ValidateOnly,
     [switch]$Force,
     [switch]$List,
-    [switch]$Prepare
+    [switch]$Prepare,
+    [switch]$Gallery
 )
 
 # Keep every string literal in this file ASCII: PowerShell 5.1 reads a BOM-less
@@ -91,8 +98,15 @@ try {
         & $PythonExe $cli @common @listArgs
         exit $LASTEXITCODE
     }
+    $galleryScript = Join-Path $scriptDir 'html\make_gallery.py'
+    $galleryArgs = @('--source-root', $OutRoot)
+    if ($ManifestPath) { $galleryArgs += @('--manifest', $ManifestPath) }
     if (-not $Only -and -not $Index -and -not $All) {
-        throw 'Nothing selected: use -List to browse, then -Only <key>, -Index <#> or -All.'
+        if ($Gallery) {
+            & $PythonExe $galleryScript @galleryArgs
+            exit $LASTEXITCODE
+        }
+        throw 'Nothing selected: use -List to browse, then -Only <key>, -Index <#> or -All (or -Gallery alone to rebuild the page).'
     }
     if (-not (Test-Path -LiteralPath $BlenderExe)) {
         throw "Blender not found: $BlenderExe"
@@ -130,7 +144,11 @@ try {
     if ($ManifestPath) { $exportArgs += @('--manifest', $ManifestPath) }
 
     & $PythonExe $cli @common @exportArgs
-    exit $LASTEXITCODE
+    $exportExit = $LASTEXITCODE
+    if ($Gallery) {
+        & $PythonExe $galleryScript @galleryArgs
+    }
+    exit $exportExit
 }
 finally {
     [Console]::OutputEncoding = $previousEncoding

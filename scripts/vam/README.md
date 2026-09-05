@@ -62,6 +62,8 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 .\export_vam_models.ps1 -Index 125,550                     # 用 -List 里的 # 号
 .\export_vam_models.ps1 -All -Type clothing                # 328 件衣服全转
 .\export_vam_models.ps1 -Only 瑶瑶~Person -Format blend,glb -Force
+.\export_vam_models.ps1 -Only Angela~Person -Gallery      # 导完顺手重建画廊
+python html\make_gallery.py                                # 只重建画廊 html\index.html
 ```
 
 `-List` 的 key 长这样：`<Creator>.<Package>.<版本>~<场景名>~<Person 原子 id>`（场景里的人）、
@@ -87,6 +89,7 @@ key 或显示名（大小写不敏感），多义会报错列出候选。
 | `-Force` | 覆盖已有产物（缺省时 `.blend` 与预览图都在的条目 SKIP） |
 | `-ManifestPath` | 自定义 manifest；多进程并行时每个进程各给一个 |
 | `-Prepare` | 只建缓存 |
+| `-Gallery` | 导出后（或单独用）重建画廊 `html\index.html`：每个条目一张缩略图 + 用了哪些衣服 / 头发 / morph / 附件、告警、blend 路径，可按种类过滤、搜索 |
 
 ## 4. 产物
 
@@ -100,17 +103,26 @@ D:\vam_exports\looks\<key>\blend\glb\<key>.glb       # 仅 -Format glb
 D:\vam_exports\clothings\<key>\...                   # 单件衣服同结构（预览只有 3/4 + 正面）
 D:\vam_exports\hairs\<key>\...                       # 单个发型同结构
 D:\vam_exports\vam_models_manifest.json              # 全量清单，-Only 时按条目合并
+D:\vam_exports\_gallery\thumbs\                       # 画廊缩略图（页面本身在 scripts\vam\html\index.html）
 ```
 
 manifest 每条带 `notes`：角色/性别/皮肤包、morph 统计（`applied` / `skippedPose` / `missing`）、
 用了哪些衣服、哪些衣服因依赖包缺失没找到（`clothingMissing`）、头发（`hair`，含引导线数与丢弃数）
-与没找到的头发（`hairMissing`）、挂在骨骼上的 CustomUnityAsset（`attachments`，`名 -> 骨骼 (n fbx)`）与被跳过的
+与没找到的头发（`hairMissing`）、是否因衣服的 `disableAnatomy` 隐藏了生殖器（`anatomyHidden`）、
+挂在骨骼上的 CustomUnityAsset（`attachments`，`名 -> 骨骼 (n fbx)`）与被跳过的
 （`attachmentsSkipped`：碰撞体/粒子/灯光、包缺失、包里没网格）、哪些皮肤贴图槽回退到
 默认皮肤（`defaultTexturesUsed`）、找不到的贴图（`missingTextures`）；Blender 侧再补
 `objects` / `materials` / `packed_images` / `untextured_slots`。
 
 `untextured_slots` 里出现衣服自己的纯色材质（VaM 里很多眼影/眼膜/内衬只给 `Diffuse Color`
 不给贴图）是正常的；出现 `Face` / `Torso` / `Limbs` 这类人体槽才是问题。
+
+### 画廊
+
+`python html\make_gallery.py`（或导出时加 `-Gallery`）读清单，把每张预览缩成 720 px 的 JPEG 写到
+`D:\vam_exports\_gallery\thumbs\`，生成 `scripts\vam\html\index.html`：按 Look / 衣服 / 头发过滤、
+搜索名字 / 包名 / 衣服 / morph、告警（缺依赖、缺贴图、人体槽无贴图）与备注（回退默认皮肤、跳过的附件）
+悬停可见、blend 路径一键复制。页面里只有 `file://` 链接和文字，仓库不进任何游戏图片。
 
 ## 5. 它是怎么做的（格式说明）
 
@@ -151,13 +163,28 @@ VaM 的 JSON 带尾逗号，所有 JSON 都走 `lenient_json_loads`。
   `customTexture_MainTex/_BumpMap/_SpecTex/_GlossTex/_AlphaTex/_DecalTex`，值可能是
   `SELF:/…`、别的包、`./tex/x.png`、裸文件名、`NULL`。场景里同 id 的 storable（如
   `BooMoon:Lips LayerMaterialFace` 的 `Alpha Adjust`、`Diffuse Color`）覆盖 `.vaj` 默认值。
-  衣服文件里的顶点是**套在未 morph 的标准体**上的；VaM 运行时用 DAZSkinWrap 重新贴合，这里用
-  「最近 4 个身体顶点的位移按距离平方反比加权」近似搬运，普通衣服足够，贴身的极端 morph 可能穿模。
+  衣服文件里的顶点是创作者**制作时那具身体**上的位置——很多人是在自己 morph 过的角色上包裹的
+  （Cloud 的衣服套在基础男体上时上衣缩进胸里、裤子鼓成灯笼），所以不能拿「基础体→morph 体的位移」
+  去搬。VaM 自己也不用这些顶点：`.vab` 里 DAZMesh 后面跟着 **DAZSkinWrapStore**（布局见下），把每个
+  顶点记成「最近的皮肤三角形 + 该三角形局部坐标系里的偏移」，运行时按当前皮肤重建。这里照做：
+  `顶点 = v1 + N·(f0 + surfaceOffset) + T1·f1 + T2·f2`，N 是三角形朝外的面法线，T1 = 质心 − v1，
+  T2 = N × T1（都不归一化，系数按 |T|² 计）。328 件衣服在标准体上重建，做在标准体上的那些误差
+  0.2–0.3 mm（常数 0.3 mm 是 VaM 默认 surfaceOffset 烤进去的）。`surfaceOffset` 取 `.vaj` 的
+  `<uid>WrapControl`，场景同名 storable 覆盖；`surfaceOffset` 超过 1 cm 的条目（JackyCracky 的牛仔帽是 −1，
+  1 m 的杠杆会把法线的微小差异放大成十几厘米、整顶帽子抹开）和没有包裹数据的条目退回最近 4 个身体顶点的
+  反距离平方位移搬运（清单里标 `displacement fit`）。离皮肤超过 1–4 cm 的**松散部位**（裙摆、灯笼裤、袖口）
+  逐三角形重建会碎成锯齿（相邻布料顶点各跟一条腿；VaM 靠布料模拟抹平），这里改为保留制作时的形状：
+  松散顶点按最近的若干贴身顶点的位移加权平均移动，1–4 cm 之间线性过渡。贴合后再做一次**穿模保护**：离皮肤不足 1 mm
+  或陷进皮肤的衣服顶点沿皮肤法线推到 1 mm（VaM 靠布料碰撞做这件事，这里没有物理）。
+  衣服 `ItemControl` 里 `disableAnatomy` 为真（裤子、内裤常见）时，和 VaM 一样隐藏生殖器 graft、
+  露出被它盖住的原生裆部面（合并网格里这些面停在 `Hidden` 材质上，挂回 `Hips` 材质）。
+  注意 DAZ/VaM 的多边形是从外面看**顺时针**绕的，按右手定则算出的顶点法线朝内（`outward_normals`
+  取反），皮肤层外推、头皮帽外推、包裹朝向都靠它。
 - **头发**：`.vab` 是 `RuntimeHairGeometryCreator` 存储（布局见下）——每个头皮顶点一条**造型后的引导线**
   （20–50 个点，米制，未 morph 的标准体空间）。VaM 运行时按 `hairMultiplier × curveDensity` 在引导线
   周围随机生成发丝，这里退化成「每条引导线 + 最多 7 条随机偏移的子发丝」写成 Blender 曲线（POLY
   样条 + bevel 0.5–1.2 mm），颜色取 `.vaj`/场景 `<uid>Sim` 里 `rootColor` 与 `tipColor` 的均值。
-  引导线先随身体 morph 位移（同衣服的最近顶点搬运）。从未造型的引导线仍是沿头皮法线的一条直线
+  引导线先随身体 morph 位移（最近 4 个身体顶点的反距离平方位移搬运；引导线没有包裹数据）。从未造型的引导线仍是沿头皮法线的一条直线
   （会像铁丝一样横伸出头），检测「≥15 cm 且笔直 且不是向下垂」就丢弃——垂直向下的长直发保留。
   发丝下面加同名**头皮帽**（`SoleilScalp`/`UdaneScalp`/`KrayonScalp`/`LeytonScalp`/`OmriScalp` 对应
   `a_per` 里的 922/868/1948 顶点小网格，材质只有 `scalp`，缓存里 `scalp_*.npz`），颜色取
@@ -205,6 +232,23 @@ int numMapped (= numUVVerts - numVerts), {int uvVert, int baseVert}[numMapped]
 
 本机 119 个 `.var` 里 372 个衣服 `.vab` 全部按上面的布局解析通过（每一步都有一致性断言，不对就报错而不是出乱模）。
 
+### `.vab` 里的 DAZSkinWrapStore
+
+DAZMesh 段之后（中间隔着一小段用途不明的整数三元组）依次是 `"DAZSkinWrap"`、`"Normal"`、然后：
+
+```text
+string "DAZSkinWrapStore", string "1.0"
+int count                                   # = numUVVerts（按 UV 顶点存，前 numVerts 条对应基础顶点）
+{ int closestTriangle,                       # 皮肤三角形序号（每个四边形拆成 (0,1,2)(0,2,3)）
+  int v1, int v2, int v3,                    # 该三角形的三个皮肤顶点（合并人体网格的下标）
+  float f0, float f1, float f2,              # 位置：N·f0 + T1·f1 + T2·f2（见上）
+  float n0, float n1, float n2 }[count]      # 该顶点的法线在同一坐标系里的分量
+string "MaterialOptions" ...                 # DAZSkinWrapMaterialOptions，之后是 Sim 数据
+```
+
+三个顶点的顺序不保证一致的绕向，N 的朝向要用皮肤顶点法线校正；`surfaceOffset = -1` 的几件
+（BooMoon 的牙齿 / 穿孔）重建不出来，原因不明，导出时也只是它们不对。
+
 ### 头发 `.vab`（RuntimeHairGeometryCreator）布局
 
 ```
@@ -235,7 +279,9 @@ VaM/Unity：米，Y 向上，+Z 朝前，+X 是角色的**右**（用脚尖方�
 - 姿势 morph 缺省跳过；表情/手势要 `-IncludePoseMorphs`。
 - 场景依赖的包没装（`clothingMissing`）或 morph 缺失（`morphs.missing`）时照常导出，只是少那件/那点形变；
   `Breast Impact*` 这类物理驱动 morph 不在 morph 库里，值也很小，可忽略。
-- 衣服贴合是近似。Decal 贴图按其 alpha 叠在漫反射之上（JPEG Decal 等于整张替换——mai.tifa8K 就是把 8K 皮肤放在 Decal 槽里）。
+- 衣服没有布料物理：VaM 里靠模拟 / 碰撞撑开的部位（裙摆、披风）保留的是制作时的形状，跟着髋部 / 四肢平移，1 mm 穿模保护
+  之外偶尔还有几个皮肤小点透出来；`smoothIterations`、`additionalThicknessMultiplier` 没有实现。
+- Decal 贴图按其 alpha 叠在漫反射之上（JPEG Decal 等于整张替换——mai.tifa8K 就是把 8K 皮肤放在 Decal 槽里）。
 - 默认眼睛贴图按角色皮肤包挑第一张，可能和 VaM 里选的不同。
 
 ## 7. 测试
@@ -252,4 +298,5 @@ Tifa Look（JackyCracky 16 + mai 3 + xnpvv + Womb Fantussy；JackyCracky 的 4 �
 均 PASS，单个 Look 8–160 s（头发多的最慢）。CustomUnityAsset 附件用 xnpvv Tifa（网格头发，人物根
 节点转了 270° 且臀部控制点 Off）、JackyCracky Tifa（耳环）、maiden_queen（7 件首饰/头发）、
 Cloud（右手大剑）核对过落点。xnpvv 的头发按头部控制点摆时偏了 4–10 cm，改成从 Off 控制点锚定的
-骨骼正向运动学后，正 / 侧 / 顶视图都贴合头皮。
+骨骼正向运动学后，正 / 侧 / 顶视图都贴合头皮。衣服贴合改用 DAZSkinWrapStore 后 Cloud 的上衣 / 裤子 /
+腰带贴身、生殖器按 `disableAnatomy` 隐藏，27 个条目全部重导并重建画廊。
