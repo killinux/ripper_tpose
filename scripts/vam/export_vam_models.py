@@ -26,6 +26,7 @@ import json
 import os
 import posixpath
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -508,8 +509,79 @@ def body_materials(ctx, bundle, base_mesh, base_meta, storables, package, defaul
     return specs, hidden, table, used_defaults
 
 
+# ------------------------------------------------------------------------
+# CustomUnityAsset attachments (mesh hair, jewellery, weapons linked to bones)
+# ------------------------------------------------------------------------
+
+ATTACHMENT_SKIP_WORDS = ("collider", "fluid", "particle", "light", "focus")
+
+
+def load_scene_atoms(entry):
+    if entry.extra.get("source") != "scene":
+        return []
+    data = vl.lenient_json_loads(entry.package.read(entry.member))
+    return [a for a in data.get("atoms", []) if isinstance(a, dict)]
+
+
+def add_cua_attachments(ctx, bundle, entry, atoms, person_id, storables, gender, out_dir):
+    """Export every CustomUnityAsset linked to this person and place it in
+    the rest pose via bone forward kinematics.  Returns (done, skipped)."""
+    done, skipped = [], []
+    rig = None
+    scene_dir = posixpath.dirname(entry.member)
+    for atom in atoms:
+        if atom.get("type") != "CustomUnityAsset" or not vl.as_bool(atom.get("on"), True):
+            continue
+        atom_storables = vl.person_storables(atom)
+        control = atom_storables.get("control", {})
+        link = str(control.get("linkTo") or "")
+        if ":" not in link or link.split(":", 1)[0] != person_id:
+            continue
+        target = link.split(":", 1)[1]
+        name = atom.get("id") or "asset"
+        asset = atom_storables.get("asset", {})
+        url = asset.get("assetUrl") or ""
+        haystack = (name + " " + url + " " + str(asset.get("assetName", ""))).lower()
+        if any(word in haystack for word in ATTACHMENT_SKIP_WORDS):
+            skipped.append("%s (skipped: %s)" % (name, "collider/effect"))
+            continue
+        pkg, member = resolve_item_texture(ctx, url, entry.package, scene_dir)
+        if member is None:
+            skipped.append("%s (bundle not found: %s)" % (name, url))
+            continue
+        safe = vl.sanitize(name, 40)
+        out = os.path.join(out_dir, "_attachments", safe)
+        if os.path.isdir(out):
+            shutil.rmtree(out, ignore_errors=True)
+        os.makedirs(out, exist_ok=True)
+        bundle_path = os.path.join(out, "source.assetbundle")
+        pkg.extract_to(member, bundle_path)
+        try:
+            fbx_files = ctx.cache.studio.split_objects(bundle_path, out)
+        except RuntimeError as exc:
+            skipped.append("%s (AssetStudio failed: %s)" % (name, str(exc)[:80]))
+            continue
+        finally:
+            try:
+                os.remove(bundle_path)
+            except OSError:
+                pass
+        if not fbx_files:
+            skipped.append("%s (no mesh in bundle)" % name)
+            continue
+        if rig is None:
+            rig = ctx.cache.rig()
+        scale_storable = atom_storables.get("scale", {})
+        scale = vl.as_float(scale_storable.get("scale"), 1.0) if isinstance(scale_storable, dict) \
+            else 1.0
+        matrix = vl.attachment_rest_transform(rig, gender, storables, target, control, scale)
+        bundle.add_attachment(name, fbx_files, matrix)
+        done.append("%s -> %s (%d fbx)" % (name, target, len(fbx_files)))
+    return done, skipped
+
+
 def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=True,
-                      include_hair=True):
+                      include_hair=True, include_attachments=True):
     bundle = vl.ModelBundle(out_dir, entry.key, "look", entry.display)
     atom = load_person(entry)
     storables = vl.person_storables(atom)
@@ -594,9 +666,19 @@ def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=
                                            base_mesh.verts, verts, missing))
         except (ValueError, FileNotFoundError, KeyError) as exc:
             hair_missing.append("%s (%s)" % (label, exc))
+    attachments, attachments_skipped = [], []
+    if include_attachments and entry.extra.get("source") == "scene":
+        try:
+            attachments, attachments_skipped = add_cua_attachments(
+                ctx, bundle, entry, load_scene_atoms(entry), entry.extra.get("person"),
+                storables, gender, out_dir)
+        except (RuntimeError, ValueError, KeyError, OSError) as exc:
+            attachments_skipped.append("attachments failed: %s" % exc)
+
     bundle.notes.update({
         "package": entry.package.id, "source": entry.member,
         "person": entry.extra.get("person"), "character": character, "gender": gender,
+        "attachments": attachments, "attachmentsSkipped": attachments_skipped,
         "skinBundle": info.get("bundle"), "morphs": morph_report,
         "skinTextures": table, "defaultTexturesUsed": used_defaults,
         "clothing": clothing_done, "clothingMissing": clothing_missing,
@@ -738,7 +820,8 @@ def cmd_export(ctx, args):
                 _path, notes = build_look_bundle(ctx, entry, model_dir,
                                                  include_pose=args.include_pose_morphs,
                                                  include_clothing=not args.no_clothing,
-                                                 include_hair=not args.no_hair)
+                                                 include_hair=not args.no_hair,
+                                                 include_attachments=not args.no_attachments)
             elif entry.kind == "hair":
                 _path, notes = build_hair_bundle(ctx, entry, model_dir)
             else:
@@ -800,6 +883,10 @@ def describe_notes(entry, notes):
             log("  hair: %s" % ", ".join(notes["hair"]))
         if notes.get("hairMissing"):
             log("    hair not found: %s" % ", ".join(str(h) for h in notes["hairMissing"]))
+        if notes.get("attachments"):
+            log("  attachments (CustomUnityAsset): %s" % ", ".join(notes["attachments"]))
+        if notes.get("attachmentsSkipped"):
+            log("    attachments skipped: %s" % ", ".join(notes["attachmentsSkipped"]))
         if notes.get("defaultTexturesUsed"):
             log("  default skin textures used for: %s"
                 % ", ".join(notes["defaultTexturesUsed"]))
@@ -864,6 +951,7 @@ def main(argv=None):
     p_export.add_argument("--include-pose-morphs", action="store_true")
     p_export.add_argument("--no-clothing", action="store_true")
     p_export.add_argument("--no-hair", action="store_true")
+    p_export.add_argument("--no-attachments", action="store_true")
     p_export.add_argument("--manifest")
 
     args = parser.parse_args(argv)

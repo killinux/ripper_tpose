@@ -583,6 +583,104 @@ def test_geometry():
     assert vl.skin_layer_fraction(shell + 1.0, quad) == 0.0
 
 
+BONE_DUMP = """MonoBehaviour Base
+\tUInt8 isRoot = 0
+\tstring _id = "head"
+\tVector3f _worldPosition
+\t\tfloat x = 0
+\t\tfloat y = 1.6184
+\t\tfloat z = -0.0228
+\tVector3f _maleWorldPosition
+\t\tfloat x = 0
+\t\tfloat y = 0
+\t\tfloat z = 0
+\tVector3f _worldOrientation
+\t\tfloat x = 1.45
+\t\tfloat y = 0
+\t\tfloat z = 0
+\tVector3f _maleWorldOrientation
+\t\tfloat x = 0
+\t\tfloat y = 0
+\t\tfloat z = 0
+\tPPtr<$DAZBones> dazBones
+\t\tint m_FileID = 0
+\t\tSInt64 m_PathID = 4770755750654332344
+\tPPtr<$DAZBone> parentBone
+\t\tint m_FileID = 0
+\t\tSInt64 m_PathID = -55
+"""
+
+
+def test_transforms_and_rig(tmp):
+    # Unity Euler: 90 deg about Y maps +Z to +X (v' = Ry v).
+    ry = vl.unity_euler_matrix((0, 90, 0))
+    assert np.allclose(ry @ np.array([0, 0, 1.0]), [1, 0, 0], atol=1e-9)
+    rx = vl.unity_euler_matrix((90, 0, 0))
+    assert np.allclose(rx @ np.array([0, 1.0, 0]), [0, 0, 1], atol=1e-9)
+    # Order: Z first, then X, then Y  ->  R = Ry Rx Rz
+    rzxy = vl.unity_euler_matrix((10, 20, 30))
+    expect = vl.unity_euler_matrix((0, 20, 0)) @ vl.unity_euler_matrix((10, 0, 0)) \
+        @ vl.unity_euler_matrix((0, 0, 30))
+    assert np.allclose(rzxy, expect)
+    # Matrix conversion agrees with the point conversion.
+    T = vl.trs_matrix((1, 2, 3), (10, 20, 30), 2.0)
+    p = np.array([0.5, -0.25, 4.0])
+    lhs = (vl.to_blender_matrix(T) @ np.append(vl.to_blender(p[None, :])[0], 1.0))[:3]
+    rhs = vl.to_blender((T @ np.append(p, 1.0))[:3][None, :])[0]
+    assert np.allclose(lhs, rhs, atol=1e-5), (lhs, rhs)
+
+    path = os.path.join(tmp, "DAZBone @-1.txt")
+    open(path, "w", encoding="utf-8").write(BONE_DUMP)
+    bone = vl.parse_dump_bone(path)
+    assert bone["id"] == "head" and bone["parentPathId"] == -55 and bone["isRoot"] is False
+    assert bone["female"] == [0, 1.6184, -0.0228] and bone["orientFemale"] == [1.45, 0, 0]
+
+    rig = vl.BoneRig({
+        "hip": {"parent": None, "female": [0, 1.0, 0], "male": None,
+                "orientFemale": [0, 0, 0], "orientMale": None},
+        "neck": {"parent": "hip", "female": [0, 1.5, 0], "male": None,
+                 "orientFemale": [0, 0, 0], "orientMale": None},
+        "head": {"parent": "neck", "female": [0, 1.6, 0], "male": None,
+                 "orientFemale": [0, 0, 0], "orientMale": None},
+    })
+    assert rig.chain("head") == ["hip", "neck", "head"]
+    rest_pos, rest_rot = rig.rest_local("head", "female")
+    assert np.allclose(rest_pos, [0, 0.1, 0]) and np.allclose(rest_rot, np.eye(3))
+    # Unposed person: head at its rest world position.
+    unposed = {"control": {}}
+    assert np.allclose(rig.transform("head", unposed, "female", posed=True)[:3, 3], [0, 1.6, 0])
+    # Neck bent 90 deg about X (delta on an identity rest): Rx(90) maps +y to +z.
+    posed = {"control": {}, "neck": {"rotation": {"x": "90", "y": "0", "z": "0"}}}
+    head = rig.transform("head", posed, "female", posed=True)
+    assert np.allclose(head[:3, 3], [0, 1.5, 0.1], atol=1e-6), head[:3, 3]
+    # No head control saved -> FK path: an asset 5 cm above the bent head
+    # lands 5 cm above the upright head.
+    cua = {"position": {"x": "0", "y": "1.5", "z": "0.15"},
+           "rotation": {"x": "90", "y": "0", "z": "0"}}
+    placed = vl.attachment_rest_transform(rig, "female", posed, "head", cua)
+    assert np.allclose(placed[:3, 3], [0, 1.65, 0], atol=1e-6), placed[:3, 3]
+    assert np.allclose(placed[:3, :3], np.eye(3), atol=1e-6)
+    # With a head control the saved localPosition/localRotation wins, and the
+    # person's container transform is undone (root moved +1 x, yawed 90 deg).
+    posed = {"control": {"position": {"x": "1", "y": "0", "z": "0"},
+                         "rotation": {"x": "0", "y": "90", "z": "0"}},
+             "headControl": {"localPosition": {"x": "0", "y": "1.6", "z": "0"},
+                             "localRotation": {"x": "0", "y": "0", "z": "0"}}}
+    # World head = container * local = (1, 1.6, 0).  Yaw +90 turns +z into +x,
+    # so an asset at world x = 0.9 is 10 cm behind the head and must land at
+    # z = -0.1 behind the upright person.
+    cua = {"position": {"x": "0.9", "y": "1.6", "z": "0"},
+           "rotation": {"x": "0", "y": "90", "z": "0"}}
+    placed = vl.attachment_rest_transform(rig, "female", posed, "head", cua)
+    assert np.allclose(placed[:3, 3], [0, 1.6, -0.1], atol=1e-6), placed[:3, 3]
+    assert np.allclose(placed[:3, :3], np.eye(3), atol=1e-6)
+    # Root-linked assets just lose the person's own transform.
+    moved = {"control": {"position": {"x": "1", "y": "0", "z": "0"}}}
+    placed = vl.attachment_rest_transform(rig, "female", moved, "control",
+                                          {"position": {"x": "1", "y": "1", "z": "0"}}, 2.0)
+    assert np.allclose(placed[:3, 3], [0, 1, 0]) and np.isclose(placed[0, 0], 2.0)
+
+
 def test_model_bundle(tmp):
     root = build_install(os.path.join(tmp, "game"))
     index = vl.PackageIndex(root)
@@ -625,6 +723,7 @@ def main():
         test_dump_parsers(tmp)
         test_texture_names()
         test_geometry()
+        test_transforms_and_rig(tmp)
         test_model_bundle(tmp)
     except AssertionError as exc:
         print("%s=FAIL" % MARKER)

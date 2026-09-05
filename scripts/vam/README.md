@@ -81,6 +81,7 @@ key 或显示名（大小写不敏感），多义会报错列出候选。
 | `-IncludePoseMorphs` | 保留姿势 morph（握拳、眨眼、耸肩…）；缺省跳过，导出的是静止 A-pose |
 | `-NoClothing` | Look 只导人体，不带衣服 |
 | `-NoHair` | Look 不带头发 |
+| `-NoAttachments` | Look 不带挂在人物骨骼上的 CustomUnityAsset（网格头发、首饰、武器） |
 | `-NoPreview` | 不渲染预览图 |
 | `-ValidateOnly` | 只拼装 + 在 Blender 里建网格/材质检查，不写产物 |
 | `-Force` | 覆盖已有产物（缺省时 `.blend` 与预览图都在的条目 SKIP） |
@@ -92,6 +93,7 @@ key 或显示名（大小写不敏感），多义会报错列出候选。
 ```text
 D:\vam_exports\looks\<key>\model.json, model.npz     # 给 Blender 的中间产物（顶点/面/UV/材质表）
 D:\vam_exports\looks\<key>\_textures\                # 该 Look 用到的全部贴图（从 .var 里解出）
+D:\vam_exports\looks\<key>\_attachments\<名>\         # CustomUnityAsset 解出的 FBX + 贴图（AssetStudio splitObjects）
 D:\vam_exports\looks\<key>\blend\<key>.blend         # 贴图已打包
 D:\vam_exports\looks\<key>\blend\<key>_preview.png   # 3/4 + 正面 + 头部
 D:\vam_exports\looks\<key>\blend\glb\<key>.glb       # 仅 -Format glb
@@ -102,7 +104,8 @@ D:\vam_exports\vam_models_manifest.json              # 全量清单，-Only 时�
 
 manifest 每条带 `notes`：角色/性别/皮肤包、morph 统计（`applied` / `skippedPose` / `missing`）、
 用了哪些衣服、哪些衣服因依赖包缺失没找到（`clothingMissing`）、头发（`hair`，含引导线数与丢弃数）
-与没找到的头发（`hairMissing`）、哪些皮肤贴图槽回退到
+与没找到的头发（`hairMissing`）、挂在骨骼上的 CustomUnityAsset（`attachments`，`名 -> 骨骼 (n fbx)`）与被跳过的
+（`attachmentsSkipped`：碰撞体/粒子/灯光、包缺失、包里没网格）、哪些皮肤贴图槽回退到
 默认皮肤（`defaultTexturesUsed`）、找不到的贴图（`missingTextures`）；Blender 侧再补
 `objects` / `materials` / `packed_images` / `untextured_slots`。
 
@@ -160,6 +163,18 @@ VaM 的 JSON 带尾逗号，所有 JSON 都走 `lenient_json_loads`。
   `a_per` 里的 922/868/1948 顶点小网格，材质只有 `scalp`，缓存里 `scalp_*.npz`），颜色取
   `<uid>…ScalpMaterial…` 的 `Diffuse Color`。少数发型（眉毛、`xxx scalp` 类）本身就是 DAZMesh 网格，
   按衣服处理。`.glb` 导出前曲线先转网格。
+- **CustomUnityAsset 附件**：不少 Look 的头发/首饰/武器不是 VaM 衣服，而是 Unity 资源包（`.assetbundle`）
+  做成的 `CustomUnityAsset` 原子，用 `linkTo: "<Person>:<骨骼>"` 挂在人物骨骼上（xnpvv 的 Tifa 头发、
+  JackyCracky 的 Tifa 耳环、maiden_queen 的头发/王冠/项链/腰链/手镯、Cloud 的大剑）。导出时用
+  AssetStudioModCLI `-m splitObjects` 把资源包拆成 FBX + 贴图，在 Blender 里以 `global_scale=100`
+  导入（AssetStudio 把米制数据写进 cm 单位的 FBX），去掉导入器生成的骨骼末端空物体和重复的
+  无蒙皮副本，材质接上贴图 alpha 用 HASHED。**摆放**：场景里存的是资产的世界变换，而人物有姿势；
+  VaM 给每个关节的控制点都存了相对人物容器的 `localPosition/localRotation`（46 个场景无一例外），
+  于是 `T_静止 = T_关节静止 · inv(T_容器 · T_关节local) · T_资产`——`T_关节静止` 的位置来自骨骼静止
+  数据（`a_per` 的 `DAZBone` `_worldPosition`，morph 改过的关节用场景里存的局部位置），朝向用
+  `_worldOrientation`。没有控制点的骨骼（臀部、胸肌）退回正向运动学：存的骨骼旋转是**相对静止朝向
+  的增量**（用 12 个附件到骨骼的距离打分选出的模型，Unity ZXY 欧拉）。名字或路径含
+  collider / fluid / particle / light / focus 的原子跳过。
 - **皮肤层**（口红层、眼影、眼膜、指甲等）是贴在皮肤上方零点几毫米的壳。检测到 ≥60% 顶点离身体
   < 2 mm 就标成 skin layer：材质用 `BLEND`（EEVEE 的 HASHED/CLIP 深度预通道会和皮肤 z-fight，
   在脸上渲出黑色蕾丝状噪点，实测即使 alpha 恒为 0 也会），并沿法线外推 0.4 mm。
@@ -204,6 +219,9 @@ VaM/Unity：米，Y 向上，+Z 朝前，+X 是角色的**右**（用脚尖方�
 
 - **头发是近似**：只有创作者造型的引导线是真实数据，发丝密度、随机卷曲、物理下垂都没有；预览里
   看起来比 VaM 稀疏、更"束状"。想要更密可以在 Blender 里把曲线转粒子毛发，或改 `HAIR_CHILDREN_MAX`。
+- **CustomUnityAsset 附件是按静止姿势重摆的**：手上的武器、手镯会跟着手到 T-pose 的位置，方向按保存
+  时相对关节的关系保留；关节控制点被关掉（Off）而身体被物理拖走的场景，落点可能有几厘米偏差。
+  资源包里的 Unity 材质只接了漫反射/法线/alpha，Shader 特效（金属度、发光）不还原。
 - **没有骨架**：只有静态网格（DAZSkinV2 里有权重，以后可加）。
 - 姿势 morph 缺省跳过；表情/手势要 `-IncludePoseMorphs`。
 - 场景依赖的包没装（`clothingMissing`）或 morph 缺失（`morphs.missing`）时照常导出，只是少那件/那点形变；
@@ -222,4 +240,6 @@ python tests\test_vam_lib.py        # 纯 Python，合成 .var/.vab/.vmb/dump fi
 `Cloud`（Male 4 + 6 件衣服）、`Preset_Alivia`（Kayla 皮肤全默认贴图，148 个 morph）、
 `瑶瑶`（Lexi 皮肤，中文包名，女仆装 5 件 + 3 层皮肤层）、单件 `Cheongsam set`，以及 21 个
 Tifa Look（JackyCracky 16 + mai 3 + xnpvv + Womb Fantussy；JackyCracky 的 4 段发丝头发 6.9k 根曲线）
-均 PASS，单个 Look 8–160 s（头发多的最慢）。
+均 PASS，单个 Look 8–160 s（头发多的最慢）。CustomUnityAsset 附件用 xnpvv Tifa（网格头发，人物根
+节点转了 270° 且臀部控制点 Off）、JackyCracky Tifa（耳环）、maiden_queen（7 件首饰/头发）、
+Cloud（右手大剑）核对过落点。

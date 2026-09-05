@@ -984,6 +984,17 @@ class AssetStudio:
                 names.append(match.group(1))
         return names
 
+    def split_objects(self, bundle_path, out_dir):
+        """FBX (+ textures) per root GameObject of an arbitrary asset bundle."""
+        os.makedirs(out_dir, exist_ok=True)
+        self._run([bundle_path, "-m", "splitObjects", "--image-format", "png", "-o", out_dir])
+        found = []
+        for dirpath, _dirs, files in os.walk(out_dir):
+            for name in files:
+                if name.lower().endswith(".fbx"):
+                    found.append(os.path.join(dirpath, name))
+        return sorted(found)
+
     def export_textures(self, bundle_name, names, out_dir):
         os.makedirs(out_dir, exist_ok=True)
         if not names:
@@ -1132,7 +1143,12 @@ class VamCache:
             components = {}
             merged = {}
             scalps = []
+            bones = {}
             for name in files:
+                if name.startswith("DAZBone @"):
+                    path_id = int(re.search(r"@(-?\d+)\.txt$", name).group(1))
+                    bones[path_id] = parse_dump_bone(os.path.join(tmp, name))
+                    continue
                 if name.startswith("DAZMesh @"):
                     header = _dump_header(os.path.join(tmp, name))
                     components[header.get("geometryId", "")] = int(
@@ -1144,6 +1160,7 @@ class VamCache:
                     header = _dump_header(os.path.join(tmp, name))
                     merged[header.get("geometryId", "")] = os.path.join(tmp, name)
             self._save_scalps(scalps)
+            self._save_bones(bones)
             for gender, spec in self.GENDER_BUNDLES.items():
                 target = None
                 for geometry_id, path in merged.items():
@@ -1205,6 +1222,33 @@ class VamCache:
                           "materialNames": mesh.material_names})
         with open(os.path.join(self.dir, "scalps.json"), "w", encoding="utf-8") as handle:
             json.dump(table, handle, ensure_ascii=False, indent=1)
+
+    def _save_bones(self, bones):
+        """Rest skeleton: prefer the largest DAZBones set (the humanoid one),
+        resolve parents by PathID and fall back to the Genesis 2 table."""
+        table = {}
+        by_set = {}
+        for path_id, bone in bones.items():
+            by_set.setdefault(bone["setPathId"], []).append(path_id)
+        for set_id in sorted(by_set, key=lambda s: -len(by_set[s])):
+            for path_id in by_set[set_id]:
+                bone = bones[path_id]
+                if not bone["id"] or bone["id"] in table:
+                    continue
+                parent = bones.get(bone["parentPathId"], {}).get("id")
+                if not parent or parent == bone["id"]:
+                    parent = GENESIS2_PARENTS.get(bone["id"])
+                table[bone["id"]] = {"parent": parent, "female": bone["female"],
+                                     "male": bone["male"], "orientFemale": bone["orientFemale"],
+                                     "orientMale": bone["orientMale"]}
+        with open(os.path.join(self.dir, "bones.json"), "w", encoding="utf-8") as handle:
+            json.dump(table, handle, ensure_ascii=False, indent=1, sort_keys=True)
+
+    def rig(self):
+        path = os.path.join(self.dir, "bones.json")
+        if not os.path.isfile(path):
+            self.prepare_person()
+        return BoneRig(json.load(open(path, encoding="utf-8")))
 
     def scalp_mesh(self, token, vertex_count):
         """DazMesh of the scalp cap a strand-hair file refers to, or None."""
@@ -1379,6 +1423,212 @@ def is_pose_morph(info):
     group = str(info.get("group", "")).lower()
     region = str(info.get("region", "")).lower()
     return group.startswith("pose") or region.startswith("pose")
+
+
+# --------------------------------------------------------------------------
+# Transforms and the Genesis 2 bone rig (for CustomUnityAsset attachments)
+# --------------------------------------------------------------------------
+
+def unity_euler_matrix(euler_deg):
+    """Unity ``Quaternion.Euler(x, y, z)``: rotate about Z, then X, then Y."""
+    x, y, z = (np.radians(float(v)) for v in euler_deg)
+    cx, sx, cy, sy, cz, sz = np.cos(x), np.sin(x), np.cos(y), np.sin(y), np.cos(z), np.sin(z)
+    rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]], dtype=np.float64)
+    ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]], dtype=np.float64)
+    rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]], dtype=np.float64)
+    return ry @ rx @ rz
+
+
+def trs_matrix(pos=None, euler_deg=None, scale=1.0, rot=None):
+    """4x4 from translation, Unity euler (or an explicit 3x3) and uniform scale."""
+    out = np.eye(4, dtype=np.float64)
+    if rot is None:
+        rot = unity_euler_matrix(euler_deg) if euler_deg is not None else np.eye(3)
+    out[:3, :3] = np.asarray(rot, dtype=np.float64) * float(scale)
+    if pos is not None:
+        out[:3, 3] = np.asarray(pos, dtype=np.float64)
+    return out
+
+
+# Same axis change as to_blender(): x' = -x, y' = -z, z' = y (a mirror).
+_BLENDER_BASIS = np.array([[-1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+                          dtype=np.float64)
+
+
+def to_blender_matrix(matrix):
+    """Express a VaM/Unity 4x4 transform in Blender axes."""
+    return _BLENDER_BASIS @ np.asarray(matrix, dtype=np.float64) @ np.linalg.inv(_BLENDER_BASIS)
+
+
+def storable_vec3(storable, key):
+    value = (storable or {}).get(key)
+    if not isinstance(value, dict):
+        return None
+    return np.array([as_float(value.get("x")), as_float(value.get("y")),
+                     as_float(value.get("z"))], dtype=np.float64)
+
+
+def _vec_or_zero(value):
+    return np.zeros(3) if value is None else value
+
+
+# Fallback hierarchy when the dump's parent pointers cannot be resolved.
+GENESIS2_PARENTS = {
+    "hip": None, "pelvis": "hip", "abdomen": "hip", "abdomen2": "abdomen",
+    "chest": "abdomen2", "neck": "chest", "head": "neck",
+    "lCollar": "chest", "lShldr": "lCollar", "lForeArm": "lShldr", "lHand": "lForeArm",
+    "rCollar": "chest", "rShldr": "rCollar", "rForeArm": "rShldr", "rHand": "rForeArm",
+    "lPectoral": "chest", "rPectoral": "chest", "lNipple": "lPectoral", "rNipple": "rPectoral",
+    "lThigh": "pelvis", "lShin": "lThigh", "lFoot": "lShin", "lToe": "lFoot",
+    "rThigh": "pelvis", "rShin": "rThigh", "rFoot": "rShin", "rToe": "rFoot",
+    "LGlute": "pelvis", "RGlute": "pelvis", "Gen1": "pelvis", "Gen2": "Gen1", "Gen3": "Gen2",
+    "Testes": "pelvis", "lEye": "head", "rEye": "head", "upperJaw": "head",
+    "lowerJaw": "head", "tongueBase": "lowerJaw",
+}
+
+
+def parse_dump_bone(path):
+    """Rest data of one ``DAZBone`` MonoBehaviour dump."""
+    text = open(path, encoding="utf-8", errors="replace").read()
+
+    def vec(key):
+        match = re.search(r"Vector3f %s\s*\n\s*float x = ([-\d.eE+]+)\s*\n\s*float y = "
+                          r"([-\d.eE+]+)\s*\n\s*float z = ([-\d.eE+]+)" % re.escape(key), text)
+        return [float(v) for v in match.groups()] if match else None
+
+    def pptr(key):
+        match = re.search(r"%s\s*\n\s*int m_FileID = \d+\s*\n\s*SInt64 m_PathID = (-?\d+)"
+                          % re.escape(key), text)
+        return int(match.group(1)) if match else 0
+
+    ident = re.search(r'string _id = "([^"]*)"', text)
+    return {
+        "id": ident.group(1) if ident else "",
+        "parentPathId": pptr("PPtr<$DAZBone> parentBone"),
+        "setPathId": pptr("PPtr<$DAZBones> dazBones"),
+        "isRoot": bool(re.search(r"UInt8 isRoot = 1", text)),
+        "female": vec("_worldPosition"),
+        "male": vec("_maleWorldPosition"),
+        "orientFemale": vec("_worldOrientation"),
+        "orientMale": vec("_maleWorldOrientation"),
+    }
+
+
+class BoneRig:
+    """Rest pose of the person skeleton + forward kinematics from scene JSON.
+
+    VaM saves a pose as the atom's root ``control`` transform plus each bone's
+    *full* local rotation (rest orientation included) and, only where morphs
+    moved a joint, its local position.  Everything else comes from the
+    ``DAZBone`` rest data (world position + world orientation per bone).
+    """
+
+    def __init__(self, table):
+        self.table = table
+
+    def has(self, bone):
+        return bone in self.table
+
+    def parent(self, bone):
+        return self.table[bone].get("parent")
+
+    def chain(self, bone):
+        out = []
+        while bone is not None and bone in self.table:
+            out.append(bone)
+            bone = self.table[bone].get("parent")
+        return out[::-1]
+
+    def rest_world(self, bone, gender):
+        entry = self.table[bone]
+        pos = entry.get("male") if gender == "male" and any(entry.get("male") or []) \
+            else entry.get("female")
+        orient = entry.get("orientMale") if gender == "male" and any(entry.get("orientMale") or []) \
+            else entry.get("orientFemale")
+        rot = unity_euler_matrix(orient or (0, 0, 0))
+        return np.asarray(pos or (0, 0, 0), dtype=np.float64), rot
+
+    def rest_local(self, bone, gender):
+        pos, rot = self.rest_world(bone, gender)
+        parent = self.parent(bone)
+        if parent is None:
+            return pos, rot
+        ppos, prot = self.rest_world(parent, gender)
+        return prot.T @ (pos - ppos), prot.T @ rot
+
+    def transform(self, bone, storables, gender, posed=True):
+        """World 4x4 of ``bone``.
+
+        ``posed``: start from the person's ``control`` storable and use the
+        bones' saved rotations; otherwise identity root + rest rotations, i.e.
+        the frame the exported (rest pose) mesh lives in.  Saved local
+        positions (morph-shifted joints) apply in both cases.
+        """
+        matrix = np.eye(4, dtype=np.float64)
+        if posed:
+            control = storables.get("control", {})
+            matrix = trs_matrix(storable_vec3(control, "position"),
+                                _vec_or_zero(storable_vec3(control, "rotation")))
+        for name in self.chain(bone):
+            rest_pos, rest_rot = self.rest_local(name, gender)
+            saved = storables.get(name, {})
+            pos = storable_vec3(saved, "position")
+            pos = rest_pos if pos is None else pos
+            rot = rest_rot
+            if posed:
+                euler = storable_vec3(saved, "rotation")
+                if euler is not None:
+                    # Saved bone rotations are joint angles relative to the rest
+                    # orientation (scored best against linked-asset positions).
+                    rot = rest_rot @ unity_euler_matrix(euler)
+            matrix = matrix @ trs_matrix(pos, rot=rot)
+        return matrix
+
+
+# FreeControllerV3 node that sits on a bone's joint (saved with localPosition /
+# localRotation relative to the atom container in every scene JSON).
+CONTROL_FOR_BONE = {
+    "head": "headControl", "neck": "neckControl", "chest": "chestControl",
+    "abdomen": "abdomenControl", "abdomen2": "abdomen2Control", "hip": "hipControl",
+    "pelvis": "pelvisControl", "lCollar": "lShoulderControl", "rCollar": "rShoulderControl",
+    "lShldr": "lArmControl", "rShldr": "rArmControl", "lForeArm": "lElbowControl",
+    "rForeArm": "rElbowControl", "lHand": "lHandControl", "rHand": "rHandControl",
+    "lThigh": "lThighControl", "rThigh": "rThighControl", "lShin": "lKneeControl",
+    "rShin": "rKneeControl", "lFoot": "lFootControl", "rFoot": "rFootControl",
+    "lToe": "lToeControl", "rToe": "rToeControl",
+}
+
+
+def attachment_rest_transform(rig, gender, storables, link_target, control_storable,
+                              scale=1.0):
+    """Where a person-linked CustomUnityAsset sits once the person is unposed.
+
+    ``link_target`` is the part after ``Person:`` in ``linkTo`` (``head``,
+    ``rHandControl``, ``control``).  The asset's saved transform is world
+    space; the posed joint comes from the matching control node's
+    ``localPosition``/``localRotation`` (relative to the atom container),
+    falling back to bone forward kinematics when a bone has no control.
+    Returns the 4x4 in VaM coordinates.
+    """
+    target = link_target[:-len("Control")] if link_target.endswith("Control") else link_target
+    cua = trs_matrix(storable_vec3(control_storable, "position"),
+                     _vec_or_zero(storable_vec3(control_storable, "rotation")), scale)
+    person = storables.get("control", {})
+    container = trs_matrix(storable_vec3(person, "position"),
+                           _vec_or_zero(storable_vec3(person, "rotation")))
+    if target in ("control", "") or not rig.has(target):
+        return np.linalg.inv(container) @ cua
+    control = storables.get(CONTROL_FOR_BONE.get(target, target + "Control")) or {}
+    local_pos = storable_vec3(control, "localPosition")
+    if local_pos is not None:
+        posed = container @ trs_matrix(local_pos,
+                                       _vec_or_zero(storable_vec3(control, "localRotation")))
+        rest_pos = rig.transform(target, storables, gender, posed=False)[:3, 3]
+        rest = trs_matrix(rest_pos, rot=rig.rest_world(target, gender)[1])
+    else:
+        posed = rig.transform(target, storables, gender, posed=True)
+        rest = rig.transform(target, storables, gender, posed=False)
+    return rest @ np.linalg.inv(posed) @ cua
 
 
 # --------------------------------------------------------------------------
@@ -1592,6 +1842,13 @@ class ModelBundle:
         self.objects.append({"name": name, "prefix": prefix, "role": role, "curve": True,
                              "materials": [material], "strands": int(lengths.size),
                              "vertices": int(points.shape[0]), "radius": float(radius)})
+
+    def add_attachment(self, name, fbx_paths, matrix_vam, role="attachment"):
+        """An imported-in-Blender FBX group placed by a VaM-space 4x4."""
+        rel = [os.path.relpath(p, self.out_dir).replace("\\", "/") for p in fbx_paths]
+        self.objects.append({"name": name, "prefix": "a%d_" % len(self.objects), "role": role,
+                             "attachment": True, "fbx": rel, "materials": [],
+                             "matrix": to_blender_matrix(matrix_vam).tolist()})
 
     def write(self):
         np.savez_compressed(os.path.join(self.out_dir, "model.npz"), **self.arrays)

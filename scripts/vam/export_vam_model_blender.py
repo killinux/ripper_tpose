@@ -22,7 +22,7 @@ import traceback
 
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 RESULT_PREFIX = "VAM_EXPORT="
 PREVIEW_VIEWS = ("hero", "front", "head")
@@ -294,6 +294,90 @@ def build_curve_object(entry, arrays, texture_dir, stats):
     return obj
 
 
+ATTACHMENT_FBX_SCALE = 100.0   # AssetStudio writes metre data into a cm-unit FBX
+
+
+def _mesh_signature(obj):
+    verts = obj.data.vertices
+    if not verts:
+        return None
+    xs = [v.co.x for v in verts]
+    ys = [v.co.y for v in verts]
+    zs = [v.co.z for v in verts]
+    return (len(verts), round(min(xs), 4), round(max(xs), 4), round(min(ys), 4),
+            round(max(ys), 4), round(min(zs), 4), round(max(zs), 4))
+
+
+def _prepare_attachment_material(material):
+    """FBX-imported material: alpha from the base texture, hashed blending."""
+    if material is None or not material.use_nodes:
+        return
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    bsdf = next((n for n in nodes if n.type == "BSDF_PRINCIPLED"), None)
+    if bsdf is None:
+        return
+    for node in nodes:
+        if node.type == "NORMAL_MAP":
+            for link in node.inputs["Color"].links:
+                if link.from_node.type == "TEX_IMAGE" and link.from_node.image:
+                    link.from_node.image.colorspace_settings.name = "Non-Color"
+    base = bsdf.inputs["Base Color"]
+    if base.links and base.links[0].from_node.type == "TEX_IMAGE":
+        tex = base.links[0].from_node
+        if not bsdf.inputs["Alpha"].links:
+            links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+        material.blend_method = "HASHED"
+        material.shadow_method = "HASHED"
+    material.use_backface_culling = False
+
+
+def import_attachment(entry, model_dir, stats):
+    """Import the attachment's FBX files and parent them to a placed empty."""
+    root = bpy.data.objects.new(entry["name"] + " (CUA)", None)
+    root.empty_display_size = 0.05
+    bpy.context.scene.collection.objects.link(root)
+    root.matrix_world = Matrix(entry["matrix"])
+    meshes = []
+    for rel in entry["fbx"]:
+        path = os.path.join(model_dir, rel.replace("/", os.sep))
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.fbx(filepath=path, global_scale=ATTACHMENT_FBX_SCALE)
+        imported = [o for o in bpy.data.objects if o not in before]
+        # Leaf empties are bone ends the importer materialised; drop them.
+        for obj in list(imported):
+            if obj.type == "EMPTY" and not obj.children:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                imported.remove(obj)
+        # The exporter emits a skinned and an unskinned copy of the same mesh.
+        seen = {}
+        for obj in list(imported):
+            if obj.type != "MESH":
+                continue
+            signature = _mesh_signature(obj)
+            other = seen.get(signature)
+            if other is None:
+                seen[signature] = obj
+                continue
+            drop = obj if not obj.modifiers and other.modifiers else other
+            keep = other if drop is obj else obj
+            seen[signature] = keep
+            bpy.data.objects.remove(drop, do_unlink=True)
+            imported.remove(drop)
+        for obj in imported:
+            if obj.parent is None or obj.parent not in imported:
+                world = obj.matrix_world.copy()
+                obj.parent = root
+                obj.matrix_parent_inverse = Matrix.Identity(4)
+                obj.matrix_basis = world
+            if obj.type == "MESH":
+                for slot in obj.material_slots:
+                    _prepare_attachment_material(slot.material)
+                meshes.append(obj)
+    stats["attachments"] += 1
+    return meshes
+
+
 def curves_to_meshes(objects):
     """glTF ignores curve objects; convert them in place before exporting."""
     curves = [o for o in objects if o.type == "CURVE"]
@@ -418,13 +502,21 @@ def compose_preview(tiles, out_path):
     return out_path
 
 
-def render_preview(objects, out_path, scratch_prefix, has_body):
+def render_preview(objects, out_path, scratch_prefix, has_body, body_objects=None):
     setup_preview_world()
     scene = bpy.context.scene
     low, high = mesh_bounds(objects)
     center = (low + high) * 0.5
     extent = high - low
     distance = max(extent.length, 0.1) * 2.0
+    # The head close-up frames the body itself, not a sword or a cape that
+    # widens the overall bounds.
+    if body_objects:
+        b_low, b_high = mesh_bounds(body_objects)
+        head_center = (b_low + b_high) * 0.5
+        head_high, head_extent = b_high, b_high - b_low
+    else:
+        head_center, head_high, head_extent = center, high, extent
 
     camera_data = bpy.data.cameras.new("preview_cam")
     camera_data.type = "ORTHO"
@@ -433,11 +525,12 @@ def render_preview(objects, out_path, scratch_prefix, has_body):
     scene.camera = camera
 
     tall = max(extent.z, extent.x, extent.y)
-    head_target = Vector((center.x, center.y, high.z - extent.z * 0.10))
+    head_target = Vector((head_center.x, head_center.y, head_high.z - head_extent.z * 0.10))
     plans = {
         "hero": (center, tall * 1.12, Vector((-0.75, -0.95, 0.12)).normalized(), 620, 940),
         "front": (center, tall * 1.12, Vector((0.0, -1.0, 0.0)), 620, 940),
-        "head": (head_target, tall * 0.26, Vector((0.0, -1.0, 0.05)).normalized(), 620, 620),
+        "head": (head_target, head_extent.z * 0.26, Vector((0.0, -1.0, 0.05)).normalized(),
+                 620, 620),
     }
     views = PREVIEW_VIEWS if has_body else ("hero", "front")
     tiles = []
@@ -479,12 +572,23 @@ def main():
     try:
         with open(os.path.join(model_dir, "model.json"), encoding="utf-8") as handle:
             model = json.load(handle)
-        arrays = np.load(os.path.join(model_dir, "model.npz"))
+        npz_path = os.path.join(model_dir, "model.npz")
+        arrays = np.load(npz_path) if os.path.isfile(npz_path) else {}
         texture_dir = os.path.join(model_dir, model.get("textureDir", "_textures"))
-        stats = {"textured": 0, "untextured": []}
-        objects = [build_curve_object(entry, arrays, texture_dir, stats)
-                   if entry.get("curve") else build_object(entry, arrays, texture_dir, stats)
-                   for entry in model["objects"]]
+        stats = {"textured": 0, "untextured": [], "attachments": 0}
+        objects = []
+        built_entries = []
+        for entry in model["objects"]:
+            if entry.get("attachment"):
+                imported = import_attachment(entry, model_dir, stats)
+                objects.extend(imported)
+                built_entries.extend([entry] * len(imported))
+            elif entry.get("curve"):
+                objects.append(build_curve_object(entry, arrays, texture_dir, stats))
+                built_entries.append(entry)
+            else:
+                objects.append(build_object(entry, arrays, texture_dir, stats))
+                built_entries.append(entry)
         strands = sum(int(entry.get("strands", 0)) for entry in model["objects"])
         has_body = any(entry.get("role") == "body" for entry in model["objects"])
         material_count = sum(len(obj.material_slots) for obj in objects)
@@ -498,6 +602,7 @@ def main():
             "polygons": sum(len(obj.data.polygons) for obj in objects
                             if obj.type == "MESH"),
             "strands": strands,
+            "attachments": stats["attachments"],
         }
         if mode == "validate":
             result("PASS", **details)
@@ -508,7 +613,9 @@ def main():
         if preview:
             preview_path = os.path.splitext(out_blend)[0] + "_preview.png"
             scratch = os.path.join(os.path.dirname(out_blend), "_preview_tmp")
-            render_preview(objects, preview_path, scratch, has_body)
+            body_objects = [obj for obj, entry in zip(objects, built_entries)
+                            if entry.get("role") == "body"]
+            render_preview(objects, preview_path, scratch, has_body, body_objects)
             # Do not save preview helpers into the deliverable.
             for name in ("preview_cam", "key", "fill"):
                 obj = bpy.data.objects.get(name)

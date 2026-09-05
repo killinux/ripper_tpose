@@ -41,6 +41,12 @@
   随 morph 位移；从未造型的直线引导线（横伸出头的"铁丝"）按「≥15 cm、笔直、不向下垂」丢弃。
   Look 缺省带头发（`-NoHair` 关），头发也能单独导（`-Type hair`）。预览取景只按网格算包围盒
   （后台模式曲线包围盒不可靠）。
+- **CustomUnityAsset 附件**（同日追加）：挂在人物骨骼上的 Unity 资源包原子（网格头发、耳环、王冠、
+  腰链、手镯、大剑）用 AssetStudioModCLI `splitObjects` 拆成 FBX + 贴图，Blender `global_scale=100`
+  导入并挂到按静止姿势重算的空物体上。姿势→静止的换算用场景里每个关节控制点的
+  `localPosition/localRotation`（相对人物容器；46 个场景全有），静止关节位置来自 `a_per` 的 `DAZBone`；
+  无控制点的骨骼退回正向运动学（存的骨骼旋转是相对静止朝向的增量）。`-NoAttachments` 关闭。
+  xnpvv Tifa 的头发就是这种 CUA——之前"没有头发"的原因。
 
 ### 用户如何操作
 
@@ -69,6 +75,8 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
   默认皮肤，148 morph）、瑶瑶（Lexi，女仆装 5 件 + 3 皮肤层，中文子串选择）、单件 Cheongsam set，
   全部 PASS，预览逐张看过；`-List`、`-ValidateOnly` 经 `.ps1` 走通。
 - 21 个 Tifa Look（含头发重导）+ 上述 4 个 Look 带头发重导，全部 PASS，预览拼图核对。
+- CUA 附件：xnpvv Tifa（网格头发落在头上）、JackyCracky Tifa/7thHeaven（耳环）、maiden_queen
+  （头发/王冠/项链/腰链/手镯）、Cloud（大剑在右手）重导核对。
 
 ---
 

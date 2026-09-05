@@ -13,6 +13,8 @@
     -Index <numbers>  export by the # shown in -List
     -All              export every look, clothing item and hair item with data
     -NoHair           leave the strand hair out of a look
+    -NoAttachments    leave out CustomUnityAsset props linked to the person
+                      (mesh hair, jewellery, weapons)
 
   Outputs land in <OutRoot>\looks\<key>\blend\ and
   <OutRoot>\clothings\<key>\blend\ next to the assembled model.json,
@@ -51,6 +53,7 @@ param(
     [switch]$IncludePoseMorphs,
     [switch]$NoClothing,
     [switch]$NoHair,
+    [switch]$NoAttachments,
     [switch]$NoPreview,
     [switch]$ValidateOnly,
     [switch]$Force,
@@ -120,6 +123,7 @@ try {
     if ($IncludePoseMorphs) { $exportArgs += '--include-pose-morphs' }
     if ($NoClothing) { $exportArgs += '--no-clothing' }
     if ($NoHair) { $exportArgs += '--no-hair' }
+    if ($NoAttachments) { $exportArgs += '--no-attachments' }
     if ($NoPreview) { $exportArgs += '--no-preview' }
     if ($ValidateOnly) { $exportArgs += '--validate' }
     if ($Force) { $exportArgs += '--force' }
