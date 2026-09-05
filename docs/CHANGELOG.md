@@ -14,6 +14,37 @@
 
 ---
 
+## 2026-09-05 — Stellar Blade：每个 Eve 模型打成可单独分发的文件夹（`package_outfits.py`）
+
+### 新增
+
+- **`scripts/stellarblade/package_outfits.py`**（Blender 3.6 headless）：`blender\Eve_*.blend` 的贴图是
+  `//..\umodel_*_exports\` 相对外链，单拷 .blend 会整身丢图。脚本把每个模型打成自足的文件夹
+  `D:\stellarblade_exports\packages\Eve_<包名>\`：`.blend`（贴图改成 `//textures/` 相对路径）+
+  `textures\`（材质接着的 12–17 张）+ `textures\extra\`（服装自己目录里没接节点的 _N/_ORM/_Mask/换色图）+
+  `preview.png` / `preview_face.png` + 中英 `README.txt` + `package.json`。参数
+  `--only/--force/--lane/--lanes/--no-extra/--zip/--include-probe`，`--index`（纯 python）写 `packages\README.md`。
+  实现：open → 拷贴图 → 图片路径指到新绝对位置 → `save_as_mainfile` → `make_paths_relative` → 再存 →
+  重新打开校验每张图都在包内；对象/材质自定义属性里的源 PSK 绝对路径改成相对；`save_version=0`。
+- 画廊 `scripts/stellarblade/html/`：manifest 记 `packageDir`，卡片多一行「独立包」指向该文件夹。
+
+### 本批结果
+
+148 个包（146 套服装 + 标准 Eve + 裸模；UEFormat 探针不打）33.2 GB，三路并行约 8 分钟。
+校验：14 个样本包拷到 C 盘另一路径，用 `--factory-startup`（无插件）Blender 3.6.15 打开，
+贴图 14/14 全部从包内加载、从副本渲染与预览一致；审查代理另外在 4.5.10 / 5.1.2 打开无误。
+
+### 待改（下次）
+
+审查发现的非阻塞问题：README 把头部网格叫 `Face_003`，实际对象名是 `Eve_Head_Mesh_01`（表情 Shape Keys
+在它上面）；`01_Body` / `Eve_Standard_validation` 的 `textures\extra\` 为空、`49_TypeB` 缺 TypeB 专属副图
+（来源目录判定要放宽）；`60NH` 身体材质接的是 `CH_P_EVE_BB_A.png`（源 .blend 的匹配问题，需回查
+`validate_eve.py`）；.blend 的着色工作区文件浏览器还存着作者机器的 `C:\Users\<user>\Documents`、
+Scene 上有 Faceit 插件残留属性、工作区是中文名；相对路径用的反斜杠（Windows 可用，建议改 `/`）；
+README 材质段对头发（只接了 alpha）说过头、单位是 UE 厘米、"管线"等内部用语。
+
+---
+
 ## 2026-09-05 — Virt-A-Mate：Look / 衣服导出脚本（`scripts/vam/`）
 
 ### 新增

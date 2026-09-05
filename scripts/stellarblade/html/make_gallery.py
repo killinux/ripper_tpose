@@ -89,6 +89,7 @@ def collect(manifest_path, thumb_dir, force):
             "morphs": entry.get("morphs") or 0,
             "kind": entry.get("kind") or "official",
             "blend": entry.get("blend") or "",
+            "package": entry.get("packageDir") or "",
             "preview": entry.get("preview") or "",
             "thumb": thumb or "",
             "blend_size": entry.get("blendSize") or 0,
@@ -135,7 +136,7 @@ def render_card(model):
             <dd>{meshes} 网格 · {vertices} 顶点 · {bones} 骨骼 · {morphs} 表情 · {size}</dd>
             <dt>blend</dt>
             <dd><a href="{blend_uri}" title="{blend}">{blend}</a>
-                <button class="copy" data-copy="{blend}">复制</button></dd>
+                <button class="copy" data-copy="{blend}">复制</button></dd>{package_row}
           </dl>
         </div>
       </article>
@@ -146,7 +147,11 @@ def render_card(model):
            meshes=model["meshes"], vertices=model["vertices"], bones=model["bones"],
            morphs=model["morphs"],
            size=human_size(model["blend_size"]),
-           blend_uri=esc(blend_uri), blend=esc(model["blend"]))
+           blend_uri=esc(blend_uri), blend=esc(model["blend"]),
+           package_row=('\n            <dt>独立包</dt>\n            <dd><a href="%s" title="整个文件夹可拷给别人：blend + textures\\ + README">%s</a>'
+                        '\n                <button class="copy" data-copy="%s">复制</button></dd>'
+                        % (esc(file_uri(model["package"])), esc(model["package"]), esc(model["package"])))
+                       if model["package"] else "")
 
 
 def render(models, source_root):

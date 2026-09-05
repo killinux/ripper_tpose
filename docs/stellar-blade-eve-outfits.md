@@ -137,6 +137,16 @@ Eve 服装资产清单。编号→名称映射来自
 画廊 `scripts\stellarblade\html\index.html` 可按编号筛选、搜服装名。批量方法与踩坑见
 `scripts\stellarblade\README.md`「全部服装批量」。
 
+## 4.6 每套一个可分发的独立文件夹（2026-09-05）
+
+`blender\` 里的 .blend 贴图是外链，单拷一个文件到别的电脑会丢图。
+`scripts\stellarblade\package_outfits.py` 把 148 个模型（146 套服装 + 标准 Eve + 裸模）各打成
+`D:\stellarblade_exports\packages\Eve_<包名>\`：`.blend`（贴图改成 `//textures/` 相对路径）+
+`textures\`（已接的贴图）+ `textures\extra\`（服装自己的法线 / ORM / Mask / 换色图，未接节点）+
+`preview.png` + `preview_face.png` + 中英 `README.txt` + `package.json`。整个文件夹拷到任何装了
+Blender 3.6 以上的电脑直接双击打开。总索引 `packages\README.md`；画廊卡片上的「独立包」
+指向对应文件夹。用法见 `scripts\stellarblade\README.md`「打包给别人」。
+
 ## 5. 怎么导出某套服装（简单示例）
 
 最快的方式是专用 UE Viewer 命令行，**直接用包名**（不用写完整路径，

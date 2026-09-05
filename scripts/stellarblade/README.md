@@ -120,6 +120,48 @@ LODSettings / Physics / Shadow / _sample / Test / Taper / NoHair / Clothdata` �
 `..\final\html\render_blend_preview.py -- D:\stellarblade_exports\blender --suffix _gallery` 补渲
 （`validate_eve.py` 自己的渲染偏暗，仍保留在 `validation\`）。
 
+## 打包给别人（`package_outfits.py`，2026-09-05：148 个独立文件夹）
+
+`blender\Eve_*.blend` 的贴图是 `//..\umodel_*_exports\...` 相对外链，单拷一个 .blend 到别的机器
+会整身丢图。`package_outfits.py` 把每个模型打成一个**自足的文件夹**，整个文件夹拷走就能开：
+
+```
+D:\stellarblade_exports\packages\Eve_CH_P_EVE_45_TypeB\
+├─ Eve_CH_P_EVE_45_TypeB.blend   贴图全部改成 //textures/ 相对路径；对象上记录的源 PSK 路径也改成相对
+├─ textures\                     材质节点里接着的 12–17 张 PNG（服装 + 脸 + 眼 + 发）
+│  └─ extra\                     服装自己 Textures\ 目录里没接节点的 _N / _ORM / _Mask / 换色贴图
+├─ preview.png / preview_face.png
+├─ README.txt                    中英双语：内容、怎么摆姿势 / 表情 / 导出、材质说明、来源
+└─ package.json                  贴图来源清单 + 网格统计
+```
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\stellarblade
+blender --background --python package_outfits.py                              # 全部，已有 package.json 的跳过
+blender --background --python package_outfits.py -- --only Eve_CH_P_EVE_45_TypeB --force
+blender --background --python package_outfits.py -- --lane 0 --lanes 3        # 三路并行各开一个（0/1/2）
+python package_outfits.py --index                                             # 汇总 packages\README.md + packages_index.json
+```
+
+| 参数 | 作用 |
+|---|---|
+| `--only A B` | 只打这些 label（`blender\` 里的文件名去掉 .blend） |
+| `--force` | 已有的重做（会先清空该包的 `textures\`） |
+| `--lane I --lanes N` | 按排序后的 label 分片并行 |
+| `--no-extra` | 不附带 `textures\extra\`（每包少 50–100 MB） |
+| `--zip` | 每个文件夹再打一个同名 .zip 到 `packages\` |
+| `--include-probe` | 连 `Eve_Face003_UEFormat36_test`（UEFormat 导入探针，无贴图）也打 |
+| `--index` | 不开 Blender，扫 `package.json` 写总索引 |
+
+实现：`open_mainfile` → 每张 `FILE` 图片拷进 `textures\`（同名不同源的加上一级目录名前缀，如
+`CH_P_EVE_Head_Tex_P_EVE_Head_A.png`）→ 图片路径先指到新绝对位置 → `save_as_mainfile` 到目标
+→ `bpy.ops.file.make_paths_relative()` → 再存一次 → **重新打开校验**每张图都是 `//textures/`
+且文件在包内；对象 / 材质自定义属性里以导出根开头的绝对路径改成相对（`relativize_custom_props`），
+`save_version=0` 不留 `.blend1`。148 个包 33.2 GB（平均 225 MB），三路并行约 8 分钟。
+校验：14 个样本包拷到 C 盘另一路径，用 `--factory-startup`（不带任何插件）打开、逐图加载、
+从副本渲染与预览比对；全部 .blend 二进制里已无 `stellarblade_exports` 字样。
+画廊卡片上的「独立包」一行就是这个文件夹（`collect_manifest.py` 记 `packageDir`）。
+
 ## 裸模（EveOriginalProportions Mod）
 
 原版没有 nude 资产；裸模来自本机安装的 EveOriginalProportions Mod（覆盖

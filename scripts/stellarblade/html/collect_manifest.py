@@ -20,6 +20,7 @@ ROOT = sys.argv[1] if len(sys.argv) > 1 else r"D:\stellarblade_exports"
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "stellarblade_models_manifest.json")
 BLEND_DIR = os.path.join(ROOT, "blender")
 VAL_DIR = os.path.join(ROOT, "validation")
+PKG_DIR = os.path.join(ROOT, "packages")
 
 # 编号 -> 名称（docs/stellar-blade-eve-outfits.md，来源 Stellar Blade Modding Guide ID's Library）
 NAMES = {
@@ -122,9 +123,12 @@ def main():
         err = al.get("tail_anchor_error")
         if isinstance(err, (int, float)) and err > 1.0:
             warnings.append("马尾锚点误差 %.2f" % err)
+        pkg_dir = os.path.join(PKG_DIR, label)
         results.append({
             "label": label, "package": pkg, "name": name, "group": group, "kind": kind,
             "blend": os.path.join(BLEND_DIR, f), "preview": preview,
+            # package_outfits.py 打出的独立文件夹（blend + textures\，可整个拷给别人）
+            "packageDir": pkg_dir if os.path.isfile(os.path.join(pkg_dir, "package.json")) else "",
             "facePreview": os.path.join(VAL_DIR, label + "_face.png") if os.path.isfile(os.path.join(VAL_DIR, label + "_face.png")) else "",
             "blendSize": os.path.getsize(os.path.join(BLEND_DIR, f)),
             "meshes": totals.get("meshes", 0), "vertices": totals.get("vertices", 0),
