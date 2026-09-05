@@ -96,6 +96,8 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 - CUA 附件：xnpvv Tifa（网格头发落在头上）、JackyCracky Tifa/7thHeaven（耳环）、maiden_queen
   （头发/王冠/项链/腰链/手镯）、Cloud（大剑在右手）重导核对；摆放修正后这 5 个 Look 再次重导核对，
   xnpvv 头发正 / 侧 / 顶视贴合头皮，maiden_queen 原本偏 10 cm 的右手镯落回手腕。
+- 目录里剩余的 40 个 Look 全部导出（同日晚），至此 66 个 Look + 1 件衣服全部 PASS，画廊 67 条；
+  新导的 40 个只看了清单没有逐一目检。
 
 ---
 
