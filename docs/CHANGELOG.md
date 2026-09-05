@@ -14,6 +14,56 @@
 
 ---
 
+## 2026-09-05 — Virt-A-Mate：Look / 衣服导出脚本（`scripts/vam/`）
+
+### 新增
+
+- **`scripts/vam/export_vam_models.ps1`** + `export_vam_models.py` + `vam_lib.py` +
+  `export_vam_model_blender.py`：与 ROE `export_character_models.ps1` 同款接口——`-List` 列出
+  全部 Look（场景里的 Person 原子 + 外观预设 .vap）、衣服、头发；`-Only <key|唯一子串>` /
+  `-Index <#>` / `-All` 导出为带材质 `.blend`（可选 `.glb`）+ 三视图预览。本机 119 个 `.var`：
+  66 个 Look、328 件衣服、219 个头发条目。
+- 一个 Look 由**游戏包 `a_per` 里的 Genesis 2 合并网格**（女 21556+1452、男 21556+1325+89 顶点，
+  AssetStudioModCLI 带 `--assembly-folder` dump 后解析）+ `.vmb` morph 增量 + 内置 morph 库
+  （`f_mb`/`m_mb`）+ 场景 `textures` 四区皮肤贴图（缺的回退默认皮肤包）+ 衣服 `.vab` 网格拼成；
+  衣服用最近 4 顶点距离平方反比把 morph 位移搬到衣服上。贴皮肤的壳（口红层/眼影/眼膜/指甲）
+  自动识别为 skin layer：BLEND 材质 + 法线外推 0.4 mm，否则 EEVEE 的 HASHED 深度预通道会在脸上
+  渲出黑色蕾丝状 z-fight（实测 alpha 恒 0 也出现）。
+- 逆向的格式：`.vab` DAZMesh DynamicStore（字符串头 → 顶点 → 材质名 → 基础面 → UV 面 → UV →
+  UV 映射）、`.vmb`（`count + {int idx, float3}`）、创作者 Body morph 的越界索引（21556..26469，
+  皆为 ~1e-5 噪声，丢弃）、内置 morph 用 displayName 引用且 `isPoseControl` 对 CTRL 系不可靠
+  （改按分组名 `Pose Controls`）。全部写在 `scripts/vam/README.md` §5。
+- `tests/test_vam_lib.py`：合成 `.var`/`.vab`/`.vmb`/AssetStudio dump fixture 的纯 Python 回归。
+
+### 用户如何操作
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\vam
+.\export_vam_models.ps1 -List
+.\export_vam_models.ps1 -Only VAMSOY.Angela.1~Angela~Person
+.\export_vam_models.ps1 -Index 125,550 -Format blend,glb
+```
+
+产物在 `D:\vam_exports\looks\<key>\blend\` 与 `D:\vam_exports\clothings\<key>\blend\`，
+清单 `D:\vam_exports\vam_models_manifest.json`，缓存 `D:\vam_exports\_cache`（首次自动建，~40 s，
+默认贴图按需导出后 ~1.4 GB）。
+
+### 实现原理与兼容性
+
+- 坐标 `(x, y, z) → (-x, -z, y)`（镜像，面序反转）；+X 为角色右侧用脚尖朝向与脸部 UV 验证。
+- 姿势 morph 缺省跳过（`-IncludePoseMorphs` 保留）；头发是发丝数据不转；无骨架；Decal 层不叠加；
+  依赖包缺失的衣服/morph 记进 manifest 后继续。
+- `.ps1` 字符串全 ASCII（PS 5.1 OEM 码页规则），中文包名通过参数传递没问题，`-List` 里正常显示。
+
+### 已执行的验证
+
+- `tests\test_vam_lib.py` PASS。
+- 集成：Angela（Female Custom，4 件皮肤层）、Cloud（Male 4，6 件衣服）、Preset_Alivia（Kayla
+  默认皮肤，148 morph）、瑶瑶（Lexi，女仆装 5 件 + 3 皮肤层，中文子串选择）、单件 Cheongsam set，
+  全部 PASS，预览逐张看过；`-List`、`-ValidateOnly` 经 `.ps1` 走通。
+
+---
+
 ## 2026-09-05 — FF7 Remake：36 个 Player 主模型批量导出 + 画廊
 
 ### 新增与修复

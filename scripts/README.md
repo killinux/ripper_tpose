@@ -12,6 +12,7 @@
 | Operation LOVECRAFT: Fallen Doll | Unreal (UE4.26, AES 加密 pak) | [`fallendoll/`](fallendoll/) | `fallendoll\prepare_fmodel.ps1` |
 | Dead or Alive 5 Last Round | Team Ninja .bin/.lnk + TMC/TMCL | [`doa5lr/`](doa5lr/) | `doa5lr\export_full.ps1` |
 | Dead or Alive 6 | KTGL v2 RDB + G1M/G1T | [`doa6/`](doa6/) | `doa6\export_full.ps1` |
+| Virt-A-Mate 1.22 | Unity 资源包 + `.var`（DAZ Genesis 2 人体 / 自定义网格） | [`vam/`](vam/) | `vam\export_vam_models.ps1` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -56,6 +57,13 @@ Operation LOVECRAFT: Fallen Doll 是 UE4.26 游戏，单个 AES 加密 pak（pak
 配置指引，`export_models.ps1` 在拿到 key、从 FModel 导出后批量材质化（复用 FF7 Rebirth
 的 UE4.26 管线）。当前唯一阻塞是 pak 的 AES key（不在仓库保存）；详见
 [Fallen Doll 提取调研](../docs/fallen-doll-extraction.md)。
+
+Virt-A-Mate 没有传统意义的「角色模型文件」：一个 Look = 游戏自带的 Genesis 2 基础人体
+（`VaM_Data\StreamingAssets_per`）+ 一串 morph 增量（`.vmb`）+ 皮肤贴图 + 若干件衣服网格
+（`.vab`），全部散落在 `AddonPackages\*.var`（zip）和场景 JSON 里。`vam\export_vam_models.ps1`
+把这些拼回一个带材质的 `.blend` + 预览图，`-List` 列出全部 Look / 衣服 / 头发，`-Only` /
+`-Index` 按名字或序号转；头发是发丝数据不转。格式细节见
+[`vam/README.md`](vam/README.md)。
 
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
