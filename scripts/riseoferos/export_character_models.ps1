@@ -22,6 +22,7 @@
 
 .EXAMPLE
   .\export_character_models.ps1 -Force -Format blend,glb
+  .\export_character_models.ps1 -Format xps -NoPreview   # add XPS beside existing blends
 #>
 [CmdletBinding()]
 param(
@@ -62,8 +63,8 @@ if ($Format) {
 }
 if (-not $formats) { $formats = @('blend') }
 $formats = @($formats | Select-Object -Unique)
-$invalid = @($formats | Where-Object { $_ -notin @('blend', 'glb') })
-if ($invalid) { throw "Unknown format(s): $($invalid -join ', '). Valid: blend, glb" }
+$invalid = @($formats | Where-Object { $_ -notin @('blend', 'glb', 'xps', 'pmx') })
+if ($invalid) { throw "Unknown format(s): $($invalid -join ', '). Valid: blend, glb, xps, pmx" }
 
 function Get-FbxCandidates {
     param([string]$Directory, [string]$Id)
@@ -141,7 +142,7 @@ if ($List) {
         Write-Host ("No standalone mesh (skipped): " + $skipped.Count) -ForegroundColor DarkYellow
         ($skipped | ForEach-Object { $_.model }) -join ', '
     }
-    Write-Host 'Formats: blend, glb   Preview: <stem>_preview.png beside the .blend' `
+    Write-Host 'Formats: blend, glb, xps, pmx   Preview: <stem>_preview.png beside the .blend' `
         -ForegroundColor DarkGray
     exit 0
 }
@@ -163,16 +164,31 @@ foreach ($entry in $entries) {
     $stem = $entry.Fbx.BaseName
     $outputBlend = Join-Path $entry.OutputDir ($stem + '.blend')
     $previewPath = Join-Path $entry.OutputDir ($stem + '_preview.png')
+    # Mirror the worker's output layout so an unchanged model can be skipped.
+    $expected = @{
+        blend = $outputBlend
+        glb = Join-Path (Join-Path $entry.OutputDir 'glb') ($stem + '.glb')
+        xps = Join-Path (Join-Path (Join-Path $entry.OutputDir 'xps') $stem) ($stem + '.mesh')
+        pmx = Join-Path (Join-Path (Join-Path $entry.OutputDir 'pmx') $stem) ($stem + '.pmx')
+    }
+    $missing = @($formats | Where-Object { -not (Test-Path -LiteralPath $expected[$_]) })
     Write-Host ""
     Write-Host ("[$index/" + $entries.Count + "] " + $entry.Key + ': ' + $entry.Fbx.Name) `
         -ForegroundColor Cyan
 
-    if (-not $Force -and -not $ValidateOnly -and (Test-Path -LiteralPath $outputBlend) -and
+    if (-not $Force -and -not $ValidateOnly -and -not $missing -and
             ($NoPreview -or (Test-Path -LiteralPath $previewPath))) {
         Write-Host '  exists, skipped (use -Force)' -ForegroundColor Yellow
+        # Record which outputs exist so the manifest merge can pick up a
+        # format produced by an earlier run (e.g. a single-model test).
+        $present = [ordered]@{}
+        foreach ($fmt in @('blend', 'xps', 'glb', 'pmx')) {
+            if (Test-Path -LiteralPath $expected[$fmt]) { $present[$fmt] = $expected[$fmt] }
+        }
         $results += [pscustomobject]@{
             model = $entry.Key; status = 'SKIP'; source = $entry.Fbx.FullName
-            output = $outputBlend; preview = $previewPath
+            output = $outputBlend; outputs = [pscustomobject]$present
+            preview = $previewPath
             reason = 'output already exists (use -Force)'
         }
         continue
@@ -269,7 +285,18 @@ foreach ($entry in $entries) {
                 ($payload.family_mismatches -join ', ')) -ForegroundColor DarkYellow
         }
         if (-not $ValidateOnly) {
-            Write-Host ("    BLEND: " + $payload.output) -ForegroundColor DarkGreen
+            if ($payload.outputs.blend) {
+                Write-Host ("    BLEND: " + $payload.outputs.blend) -ForegroundColor DarkGreen
+            }
+            if ($payload.outputs.xps) {
+                Write-Host ("    XPS: " + $payload.outputs.xps) -ForegroundColor DarkGreen
+            }
+            if ($payload.outputs.glb) {
+                Write-Host ("    GLB: " + $payload.outputs.glb) -ForegroundColor DarkGreen
+            }
+            if ($payload.outputs.pmx) {
+                Write-Host ("    PMX: " + $payload.outputs.pmx) -ForegroundColor DarkGreen
+            }
             if ($payload.preview) {
                 Write-Host ("    PREVIEW: " + $payload.preview) -ForegroundColor DarkGreen
             }
@@ -291,14 +318,56 @@ if ($ManifestPath) {
     $manifestPath = Join-Path $SourceRoot $manifestName
 }
 $manifestResults = @($results) + @($skipped)
-if (-not $ValidateOnly -and $Only -and (Test-Path -LiteralPath $manifestPath)) {
+$manifestFormats = $formats
+if (-not $ValidateOnly -and (Test-Path -LiteralPath $manifestPath)) {
+    # Merge with the previous manifest: a run that only adds a format (or that
+    # skipped unchanged models) must not erase the blend/preview details, and
+    # the gallery reads those from here.
     try {
         $previous = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 |
             ConvertFrom-Json
-        $updated = @($results | ForEach-Object { $_.model })
+        $previousByModel = @{}
+        foreach ($item in @($previous.results)) { $previousByModel[$item.model] = $item }
+        $merged = @()
+        foreach ($item in @($results)) {
+            $old = $previousByModel[$item.model]
+            if ($old -and $item.status -eq 'SKIP' -and $old.status -eq 'PASS') {
+                # Keep the previous PASS details, but adopt any output that is
+                # on disk now and was not in the manifest yet.
+                $outputs = [ordered]@{}
+                foreach ($source in @($old.outputs, $item.outputs)) {
+                    if ($source) {
+                        foreach ($prop in $source.PSObject.Properties) {
+                            $outputs[$prop.Name] = $prop.Value
+                        }
+                    }
+                }
+                $old.outputs = [pscustomobject]$outputs
+                $merged += $old
+                continue
+            }
+            if ($old -and $item.status -eq 'PASS' -and $old.status -eq 'PASS') {
+                if (-not $item.preview -and $old.preview) { $item.preview = $old.preview }
+                $outputs = [ordered]@{}
+                foreach ($source in @($old.outputs, $item.outputs)) {
+                    if ($source) {
+                        foreach ($prop in $source.PSObject.Properties) {
+                            $outputs[$prop.Name] = $prop.Value
+                        }
+                    }
+                }
+                $item.outputs = [pscustomobject]$outputs
+                if (-not $item.output -and $outputs.blend) { $item.output = $outputs.blend }
+            }
+            $merged += $item
+        }
+        $updated = @($merged | ForEach-Object { $_.model }) + @($skipped | ForEach-Object { $_.model })
         $manifestResults = @(
-            @($previous.results | Where-Object { $_.model -notin $updated }) + @($results)
+            @($previous.results | Where-Object { $_.model -notin $updated }) +
+            $merged + @($skipped)
         ) | Sort-Object model
+        $manifestFormats = @(@($previous.formats) + $formats |
+            Where-Object { $_ } | Select-Object -Unique)
     }
     catch {
         Write-Host ("  Existing manifest could not be merged: " + $_.Exception.Message) `
@@ -309,7 +378,7 @@ $manifest = [pscustomobject]@{
     generatedAt = [DateTime]::Now.ToString('o')
     sourceRoot = [IO.Path]::GetFullPath($SourceRoot)
     validateOnly = [bool]$ValidateOnly
-    formats = $formats
+    formats = $manifestFormats
     preview = (-not $NoPreview)
     results = $manifestResults
 }

@@ -90,6 +90,10 @@ def collect(manifest_path, thumb_dir, force):
             continue
         blend = entry.get("output") or ""
         preview = entry.get("preview") or ""
+        outputs = entry.get("outputs") or {}
+        xps = outputs.get("xps") or ""
+        if xps and not os.path.isfile(xps):
+            xps = ""
         thumb = build_thumb(preview, os.path.join(thumb_dir, key + ".jpg"), force)
         warnings = []
         for label, values in (("缺贴图", entry.get("untexturedSlots")),
@@ -101,6 +105,7 @@ def collect(manifest_path, thumb_dir, force):
             "family": (key[:1] or "?").upper(),
             "source": entry.get("source") or "",
             "blend": blend,
+            "xps": xps,
             "preview": preview,
             "thumb": thumb or "",
             "blend_size": os.path.getsize(blend) if blend and os.path.isfile(blend) else 0,
@@ -128,7 +133,14 @@ def render_card(model):
         badges += '<span class="badge badge-warn" title="%s">缺图 %d</span>' % (
             esc("; ".join(model["warnings"])), len(model["warnings"]))
     search_blob = esc(" ".join([model["key"], os.path.basename(model["source"]),
-                                model["blend"]]).lower())
+                                model["blend"], model["xps"]]).lower())
+    xps_row = ""
+    if model["xps"]:
+        xps_dir = os.path.dirname(model["xps"])
+        xps_row = ('<dt>XPS</dt>\n            <dd><a href="%s" title="%s">%s</a>\n'
+                   '                <button class="copy" data-copy="%s">复制</button></dd>\n            '
+                   % (esc(file_uri(xps_dir)), esc(model["xps"]), esc(model["xps"]),
+                      esc(model["xps"])))
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["key"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
     return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="{warn}">
@@ -143,7 +155,7 @@ def render_card(model):
             <dt>blend</dt>
             <dd><a href="{blend_uri}" title="{blend}">{blend}</a>
                 <button class="copy" data-copy="{blend}">复制</button></dd>
-            <dt>规格</dt>
+            {xps_row}<dt>规格</dt>
             <dd>{meshes} 网格 · {materials} 材质槽 · {textures} 贴图 · {size}</dd>
           </dl>
         </div>
@@ -152,7 +164,7 @@ def render_card(model):
            warn="1" if model["warnings"] else "0",
            preview=esc(preview_uri), figure=figure, key=esc(model["key"]),
            badges=badges, fbx=esc(os.path.basename(model["source"])),
-           blend_uri=esc(blend_uri), blend=esc(model["blend"]),
+           blend_uri=esc(blend_uri), blend=esc(model["blend"]), xps_row=xps_row,
            meshes=model["meshes"], materials=model["materials"],
            textures=model["textures"], size=human_size(model["blend_size"]))
 
@@ -343,6 +355,7 @@ td code, li code {{ font-family: Consolas, monospace; }}
       <tr><td><code>-Only &lt;ids&gt;</code></td><td>写 <code>m01</code> 连 outfit 变体一起转；写 <code>m01_outfit1</code> 只转那一套</td></tr>
       <tr><td><code>-Force</code></td><td>覆盖重做；不加时 blend 与预览图都在的会 SKIP</td></tr>
       <tr><td><code>-Format blend,glb</code></td><td>额外导 GLB 到 <code>blend\\glb\\</code>，缺省只有 blend</td></tr>
+      <tr><td><code>-Format xps -NoPreview</code></td><td>给已有 blend 的角色补带材质 XPS 到 <code>blend\\xps\\&lt;stem&gt;\\</code>（.mesh + 同目录 PNG）</td></tr>
       <tr><td><code>-NoPreview</code></td><td>不渲预览图（实测只快约 9%，一般没必要关）</td></tr>
       <tr><td><code>-ValidateOnly</code></td><td>只检查材质不写文件，排查用</td></tr>
       <tr><td><code>-ManifestPath</code></td><td>自定义清单路径；<b>多进程分片并行时每个分片必须各给一个</b></td></tr>

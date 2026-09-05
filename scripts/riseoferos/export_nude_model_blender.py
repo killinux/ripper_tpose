@@ -422,7 +422,7 @@ def export_portable(fmt, path, meshes, armatures):
         select_character_objects(meshes, armatures)
         bpy.ops.mmd_tools.export_pmx(
             filepath=path,
-            scale=0.08,
+            scale=12.5,  # PMX = Blender * scale (1.7 m -> ~21 units)
             copy_textures=True,
         )
     else:

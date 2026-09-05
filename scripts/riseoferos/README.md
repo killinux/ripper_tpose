@@ -262,6 +262,7 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 .\export_character_models.ps1                # 全部转换，已有产物跳过
 .\export_character_models.ps1 -Only m02,g11  # 只转指定角色
 .\export_character_models.ps1 -Force -Format blend,glb
+.\export_character_models.ps1 -Format xps -NoPreview   # 给已有 blend 的角色补带材质 XPS
 ```
 
 ### 参数
@@ -269,7 +270,7 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 | 参数 | 说明 |
 |---|---|
 | `-Only` | 只处理指定角色；写 `<id>` 会连同该角色的 `outfit` 变体一起选中，写 `<id>_outfit1` 只选那一套 |
-| `-Format` | `blend`、`glb` 或两者，缺省 `blend` |
+| `-Format` | `blend`、`glb`、`xps`、`pmx` 任意组合，缺省 `blend`；不加 `-Force` 时只补缺的格式 |
 | `-IncludeOutfits` | 布尔，缺省 `$true`；关掉则只转每个角色的主模型 |
 | `-NoPreview` | 不渲染预览图。省下的时间很少（实测 g11 单模型 5.1s → 4.7s，约 9%），耗时大头是导入和打包，一般没必要关 |
 | `-ValidateOnly` | 只导入 + 检查材质，不写任何产物 |
@@ -286,8 +287,17 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 D:\roe_exports\<id>\blend\<stem>.blend          # 贴图已打包进文件
 D:\roe_exports\<id>\blend\<stem>_preview.png    # 三视图合成预览
 D:\roe_exports\<id>\blend\glb\<stem>.glb        # 仅 -Format glb 时
+D:\roe_exports\<id>\blend\xps\<stem>\<stem>.mesh # 仅 -Format xps 时，同目录放贴图 PNG + 烘焙眼球
+D:\roe_exports\<id>\blend\pmx\<stem>\<stem>.pmx  # 仅 -Format pmx 时（mmd_tools，贴图复制到同目录，眼球先烘焙）
 D:\roe_exports\character_models_manifest.json   # 全量清单
 ```
+
+> **PMX 目前只是 mmd_tools 直出**：骨骼仍是游戏原名（`Bip001 L UpperArm` 等）、无 IK / 半标准骨 /
+> 表情，MMD 动作（VMD）不能直接驱动。要能跳舞需走 `E:\code\othercode\Convert_to_MMD5` 插件的
+> 一键转换（Blender 3.6 已装）。2026-09-05 在 a02 上验证可行，前提两条：先清父级并应用旋转让骨架
+> 空间变成 Z 朝上（FBX 导入是 Y 朝上，插件自动识别会把腿认成手臂），再用 Biped 预设填槽位而不是
+> 自动识别（盆骨→下半身、センター 留空）。试跑产物在 `D:\roe_exports\a02\blend\pmx_c2m_test\`，
+> 尚未接进 worker。
 
 manifest 逐模型记录源 FBX、产物路径、网格/材质槽/贴图数与三个检查字段：
 

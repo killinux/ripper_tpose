@@ -2,7 +2,9 @@
 
 Blender-side worker for ``export_character_models.ps1``.  It drives the same
 importer and material operators as the interactive ROE add-on, then writes a
-packed .blend plus a single side-by-side preview PNG (3/4, front, head).
+packed .blend plus a single side-by-side preview PNG (3/4, front, head), and
+optionally a GLB, a materialised XPS (.mesh with PNG sidecars) and/or a PMX
+(mmd_tools, textures copied beside the file).
 
 Unlike ``export_nude_model_blender.py`` this worker makes no assumption that the
 body is a single combined nude mesh: it neither splits the body into six slots
@@ -11,7 +13,7 @@ nor fails on a missing nude atlas, so it accepts any dressed HD/LD model.
 Usage:
   blender --background --python export_character_model_blender.py -- \
       <fbx>[;<fallback fbx>...] <texture_dir> <out.blend> <roe_xps_addon.py> \
-      <validate|export> [blend,glb] [preview:0|1]
+      <validate|export> [blend,glb,xps,pmx] [preview:0|1]
 
 Candidates are tried in order and the first one that actually imports geometry
 wins: several characters ship a ``*_nk_bs.fbx`` that holds only a rig, and an
@@ -242,6 +244,102 @@ def select_character_objects(meshes, armatures):
         bpy.context.view_layer.objects.active = meshes[0]
 
 
+def export_xps(module, path, meshes, armatures):
+    """Write a materialised XPS model through the add-on's export operator.
+
+    The operator bakes the eye texture, splits the head by material slot, sets
+    the XPS render groups and copies every diffuse PNG beside the ``.mesh``
+    (XPS resolves textures by file name in the same directory).  Each model gets
+    its own directory so an outfit's sidecars never overwrite the base body's.
+    """
+    def operator_ready():
+        try:
+            bpy.ops.xps_tools.export_model.get_rna_type()
+            return True
+        except Exception:
+            return False
+
+    # An installed exporter may register the operator under any module name;
+    # only walk the known add-on names when it is not available yet.
+    if not operator_ready():
+        for addon_name in ("XNALaraMesh-master", "XNALaraMesh", "b2xps_addon"):
+            try:
+                bpy.ops.preferences.addon_enable(module=addon_name)
+            except Exception:
+                continue
+            if operator_ready():
+                break
+    if not operator_ready():
+        raise RuntimeError("no XNALaraMesh/b2xps exporter add-on available")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.isfile(path):
+        os.remove(path)
+    select_character_objects(meshes, armatures)
+    bpy.context.scene.roe.xps_out = path
+    exported = bpy.ops.roe.export_xps()
+    if exported != {"FINISHED"}:
+        raise RuntimeError("XPS export failed: %r" % (exported,))
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        raise RuntimeError("XPS not written: %s" % path)
+    return path
+
+
+def bake_portable_eye(module, head, out_dir):
+    """Replace the procedural eye material with a baked PNG for PMX/GLB.
+
+    The head's eye slot (index 1 on a dressed character) is a node graph
+    (sclera + iris disc) that only Blender can evaluate.  Returns a status dict
+    for the manifest; a model without a classified head keeps whatever the eye
+    material resolves to, which is auditable rather than silently wrong.
+    """
+    if head is None or len(head.material_slots) < 2:
+        return {"status": "skipped", "reason": "no classified head/eye slot"}
+    eye_slot = 1
+    eye_material = head.material_slots[eye_slot].material
+    iris_image = module.diffuse_image(eye_material) if eye_material else None
+    iris_path = (bpy.path.abspath(iris_image.filepath)
+                 if iris_image is not None else "")
+    if not iris_path or not os.path.isfile(iris_path):
+        return {"status": "skipped", "reason": "eye slot has no iris image"}
+    os.makedirs(out_dir, exist_ok=True)
+    baked_path = os.path.join(
+        out_dir, re.sub(r"[^A-Za-z0-9_.-]+", "_", head.name) + "_eye_baked.png")
+    module.bake_eye_texture(head, iris_path, baked_path, eye_slot=eye_slot)
+    head.data.materials[eye_slot] = module.albedo_mat(
+        "eye_portable", baked_path, desat=False)
+    head.data.update()
+    return {"status": "baked", "path": baked_path}
+
+
+def export_pmx(path, meshes, armatures):
+    """Convert the rig to an MMD model in place and write a PMX.
+
+    mmd_tools rebuilds the armature, so this must be the last export of the
+    scene.  Textures are copied beside the .pmx by the exporter.
+    """
+    try:
+        bpy.ops.preferences.addon_enable(module="mmd_tools")
+    except Exception:
+        pass
+    if not hasattr(bpy.ops, "mmd_tools") or not hasattr(bpy.ops.mmd_tools, "export_pmx"):
+        raise RuntimeError("mmd_tools add-on is not available")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.isfile(path):
+        os.remove(path)
+    select_character_objects(meshes, armatures)
+    converted = bpy.ops.mmd_tools.convert_to_mmd_model()
+    if converted != {"FINISHED"}:
+        raise RuntimeError("cannot convert armature to an MMD model: %r" % (converted,))
+    select_character_objects(meshes, armatures)
+    # mmd_tools multiplies by ``scale`` on export (PMX = Blender units * scale),
+    # so 12.5 turns a 1.7 m character into the usual ~21 PMX units; 0.08 would
+    # produce a 0.14-unit model.
+    bpy.ops.mmd_tools.export_pmx(filepath=path, scale=12.5, copy_textures=True)
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        raise RuntimeError("PMX not written: %s" % path)
+    return path
+
+
 def setup_preview_world():
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
@@ -380,7 +478,7 @@ def main():
     if len(argv) not in {5, 6, 7}:
         raise RuntimeError(
             "usage: <fbx> <texture_dir> <out.blend> <roe_xps_addon.py> "
-            "<validate|export> [blend,glb] [preview:0|1]")
+            "<validate|export> [blend,glb,xps,pmx] [preview:0|1]")
 
     candidates = [os.path.abspath(item) for item in argv[0].split(";")
                   if item.strip()]
@@ -391,7 +489,7 @@ def main():
                 if item.strip()} if len(argv) >= 6 else {"blend"})
     want_preview = argv[6] != "0" if len(argv) == 7 else True
 
-    unknown = formats - {"blend", "glb"}
+    unknown = formats - {"blend", "glb", "xps", "pmx"}
     if unknown:
         raise RuntimeError("unknown format(s): %s" % ", ".join(sorted(unknown)))
     if mode not in {"validate", "export"}:
@@ -517,6 +615,7 @@ def main():
     outputs = {}
     preview_path = ""
     packed = []
+    portable_eye = None
     if mode == "export":
         output_root = os.path.dirname(output_path)
         os.makedirs(output_root, exist_ok=True)
@@ -535,6 +634,12 @@ def main():
             if not os.path.isfile(output_path):
                 raise RuntimeError("blend not written: %s" % output_path)
             outputs["blend"] = output_path
+        if "xps" in formats:
+            # After the .blend: the operator bakes an eye PNG and copies the
+            # sidecars from the images' file paths, which packing keeps intact.
+            outputs["xps"] = export_xps(
+                module, os.path.join(output_root, "xps", stem, stem + ".mesh"),
+                meshes, armatures)
         if "glb" in formats:
             glb_path = os.path.join(output_root, "glb", stem + ".glb")
             os.makedirs(os.path.dirname(glb_path), exist_ok=True)
@@ -544,6 +649,16 @@ def main():
             if not os.path.isfile(glb_path) or os.path.getsize(glb_path) == 0:
                 raise RuntimeError("GLB not written: %s" % glb_path)
             outputs["glb"] = glb_path
+        if "pmx" in formats:
+            # Last: mmd_tools rewrites the rig in place, and the eye bake
+            # replaces the procedural eye material the earlier formats used.
+            pmx_dir = os.path.join(output_root, "pmx", stem)
+            # mmd_tools copies textures into <pmx dir>/textures; bake there
+            # so the eye PNG is not duplicated at the root.
+            portable_eye = bake_portable_eye(
+                module, head, os.path.join(pmx_dir, "textures"))
+            outputs["pmx"] = export_pmx(
+                os.path.join(pmx_dir, stem + ".pmx"), meshes, armatures)
 
     result(
         "PASS",
@@ -563,6 +678,7 @@ def main():
         head_slots=head_slots,
         head_face_polygons=head_face_polygons,
         fused_head_eyes=fused_eyes,
+        portable_eye=portable_eye,
         diagnostic=bpy.context.scene.roe.diagnostic_report,
     )
 
