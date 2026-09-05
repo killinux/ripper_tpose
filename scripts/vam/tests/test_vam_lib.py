@@ -649,22 +649,29 @@ def test_transforms_and_rig(tmp):
     # Unposed person: head at its rest world position.
     unposed = {"control": {}}
     assert np.allclose(rig.transform("head", unposed, "female", posed=True)[:3, 3], [0, 1.6, 0])
-    # Neck bent 90 deg about X (delta on an identity rest): Rx(90) maps +y to +z.
+    # A saved bone rotation is the full local rotation (Unity euler): neck
+    # bent 90 deg about X, Rx(90) maps +y to +z.
     posed = {"control": {}, "neck": {"rotation": {"x": "90", "y": "0", "z": "0"}}}
     head = rig.transform("head", posed, "female", posed=True)
     assert np.allclose(head[:3, 3], [0, 1.5, 0.1], atol=1e-6), head[:3, 3]
-    # No head control saved -> FK path: an asset 5 cm above the bent head
-    # lands 5 cm above the upright head.
+    # No controls saved -> FK from the atom root: an asset 5 cm above the
+    # bent head lands 5 cm above the upright head.
     cua = {"position": {"x": "0", "y": "1.5", "z": "0.15"},
            "rotation": {"x": "90", "y": "0", "z": "0"}}
     placed = vl.attachment_rest_transform(rig, "female", posed, "head", cua)
     assert np.allclose(placed[:3, 3], [0, 1.65, 0], atol=1e-6), placed[:3, 3]
     assert np.allclose(placed[:3, :3], np.eye(3), atol=1e-6)
-    # With a head control the saved localPosition/localRotation wins, and the
-    # person's container transform is undone (root moved +1 x, yawed 90 deg).
+    # Control states: the JSON only stores values that differ from VaM's
+    # defaults (hip/chest/head/hands/feet On, the rest Off).
+    assert vl.control_state({}, "headControl") == ("On", "On")
+    assert vl.control_state({}, "neckControl") == ("Off", "Off")
+    assert vl.control_state({"hipControl": {"positionState": "Off"}}, "hipControl") == ("Off", "On")
+    # A head control in the Off state follows the head bone: exact anchor, and
+    # the person's container transform is undone (root moved +1 x, yawed 90).
     posed = {"control": {"position": {"x": "1", "y": "0", "z": "0"},
                          "rotation": {"x": "0", "y": "90", "z": "0"}},
-             "headControl": {"localPosition": {"x": "0", "y": "1.6", "z": "0"},
+             "headControl": {"positionState": "Off", "rotationState": "Off",
+                             "localPosition": {"x": "0", "y": "1.6", "z": "0"},
                              "localRotation": {"x": "0", "y": "0", "z": "0"}}}
     # World head = container * local = (1, 1.6, 0).  Yaw +90 turns +z into +x,
     # so an asset at world x = 0.9 is 10 cm behind the head and must land at
@@ -674,6 +681,51 @@ def test_transforms_and_rig(tmp):
     placed = vl.attachment_rest_transform(rig, "female", posed, "head", cua)
     assert np.allclose(placed[:3, 3], [0, 1.6, -0.1], atol=1e-6), placed[:3, 3]
     assert np.allclose(placed[:3, :3], np.eye(3), atol=1e-6)
+    # A head control left On (default) is only a target.  The head bone is
+    # where the neck control (Off -> following) plus the saved head rotation
+    # put it: neck at world (1, 1.5, 0) yawed 90, head bent 90 about its X.
+    posed = {"control": {"position": {"x": "1", "y": "0", "z": "0"},
+                         "rotation": {"x": "0", "y": "90", "z": "0"}},
+             "neckControl": {"localPosition": {"x": "0", "y": "1.5", "z": "0"},
+                             "localRotation": {"x": "0", "y": "0", "z": "0"}},
+             "headControl": {"localPosition": {"x": "0.3", "y": "1.9", "z": "0"},
+                             "localRotation": {"x": "0", "y": "0", "z": "0"}},
+             "head": {"rotation": {"x": "90", "y": "0", "z": "0"}}}
+    head = rig.posed_world("head", posed, "female")
+    assert np.allclose(head[:3, 3], [1, 1.6, 0], atol=1e-6), head[:3, 3]
+    assert np.allclose(head[:3, :3], vl.unity_euler_matrix((90, 90, 0)), atol=1e-6)
+    # An asset 5 cm along the bent head's own +y (= world +x) with the head's
+    # rotation sits 5 cm above the upright head, unrotated.
+    cua = {"position": {"x": "1.05", "y": "1.6", "z": "0"},
+           "rotation": {"x": "90", "y": "90", "z": "0"}}
+    placed = vl.attachment_rest_transform(rig, "female", posed, "head", cua)
+    assert np.allclose(placed[:3, 3], [0, 1.65, 0], atol=1e-6), placed[:3, 3]
+    assert np.allclose(placed[:3, :3], np.eye(3), atol=1e-6)
+    # Linked to the control node itself it follows that node instead: node at
+    # world (1, 1.9, -0.3) yawed 90 -> asset offset (-0.3, -0.3, 0.05) in the
+    # node frame, rotation Rx(90) relative to it.
+    placed = vl.attachment_rest_transform(rig, "female", posed, "headControl", cua)
+    assert np.allclose(placed[:3, 3], [-0.3, 1.3, 0.05], atol=1e-6), placed[:3, 3]
+    assert np.allclose(placed[:3, :3], vl.unity_euler_matrix((90, 0, 0)), atol=1e-6)
+    # An On head control one bone length (within 3 cm) from the neck was
+    # reached: it is the head, whatever the (possibly stale) saved rotation.
+    reached = {"control": {},
+               "neckControl": {"localPosition": {"x": "0", "y": "1.5", "z": "0"},
+                               "localRotation": {"x": "0", "y": "0", "z": "0"}},
+               "headControl": {"localPosition": {"x": "0", "y": "1.6", "z": "0.02"},
+                               "localRotation": {"x": "0", "y": "45", "z": "0"}},
+               "head": {"rotation": {"x": "90", "y": "0", "z": "0"}}}
+    head = rig.posed_world("head", reached, "female")
+    assert np.allclose(head[:3, 3], [0, 1.6, 0.02], atol=1e-6), head[:3, 3]
+    assert np.allclose(head[:3, :3], vl.unity_euler_matrix((0, 45, 0)), atol=1e-6)
+    # ... and an all-On chain with no Off control starts from the hip control.
+    all_on = {"control": {},
+              "hipControl": {"localPosition": {"x": "0.5", "y": "1", "z": "0"},
+                             "localRotation": {"x": "0", "y": "0", "z": "0"}},
+              "neck": {"rotation": {"x": "0", "y": "0", "z": "90"}}}
+    # Rz(90) maps +y to -x: the head sits 10 cm to -x of the neck.
+    head = rig.posed_world("head", all_on, "female")
+    assert np.allclose(head[:3, 3], [0.4, 1.5, 0], atol=1e-6), head[:3, 3]
     # Root-linked assets just lose the person's own transform.
     moved = {"control": {"position": {"x": "1", "y": "0", "z": "0"}}}
     placed = vl.attachment_rest_transform(rig, "female", moved, "control",

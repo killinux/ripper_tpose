@@ -168,12 +168,20 @@ VaM 的 JSON 带尾逗号，所有 JSON 都走 `lenient_json_loads`。
   JackyCracky 的 Tifa 耳环、maiden_queen 的头发/王冠/项链/腰链/手镯、Cloud 的大剑）。导出时用
   AssetStudioModCLI `-m splitObjects` 把资源包拆成 FBX + 贴图，在 Blender 里以 `global_scale=100`
   导入（AssetStudio 把米制数据写进 cm 单位的 FBX），去掉导入器生成的骨骼末端空物体和重复的
-  无蒙皮副本，材质接上贴图 alpha 用 HASHED。**摆放**：场景里存的是资产的世界变换，而人物有姿势；
-  VaM 给每个关节的控制点都存了相对人物容器的 `localPosition/localRotation`（46 个场景无一例外），
-  于是 `T_静止 = T_关节静止 · inv(T_容器 · T_关节local) · T_资产`——`T_关节静止` 的位置来自骨骼静止
-  数据（`a_per` 的 `DAZBone` `_worldPosition`，morph 改过的关节用场景里存的局部位置），朝向用
-  `_worldOrientation`。没有控制点的骨骼（臀部、胸肌）退回正向运动学：存的骨骼旋转是**相对静止朝向
-  的增量**（用 12 个附件到骨骼的距离打分选出的模型，Unity ZXY 欧拉）。名字或路径含
+  无蒙皮副本，材质接上贴图 alpha 用 HASHED。**摆放**：场景里存的是资产的世界变换，而人物有姿势，
+  要换算成 `T_静止 = T_骨骼静止 · inv(T_骨骼姿势) · T_资产`。`T_骨骼静止` 来自 `a_per` 的 `DAZBone`
+  （`_worldPosition` / `_worldOrientation`，morph 改过的关节用场景里存的局部位置）。`T_骨骼姿势`
+  **不能直接用控制点**：VaM 给每个控制点都存了相对人物容器的 `localPosition/localRotation`，但控制点
+  只是用户放的目标——只有 Off 状态的控制点跟着骨骼走（位置、旋转都精确），On / Comply / Hold /
+  ParentLink 的控制点物理未必追得上（xnpvv 场景里头部控制点离真正的头骨 10 cm、5.6°，头发最初就是
+  因此歪的）。JSON 只写与默认值不同的状态：默认 On 的是 hip / chest / head / 双手 / 双脚控制点，其余
+  默认 Off。于是取链上**最深的 Off 控制点**当锚点（没有就用 hip 控制点，再没有才从人物根节点算），
+  然后沿链往下：某骨骼的控制点若离上一帧正好一段骨长（±3 cm）就认为物理追到了、直接采用控制点，
+  否则用场景里存的骨骼旋转（Unity ZXY 欧拉表示的**完整**局部旋转，含静止朝向；在 179 对 Off 父子
+  控制点上验证，平均误差 0.2° / 0.1 mm）从上一帧推一步。两条规则缺一不可：xnpvv 的头部控制点离颈部
+  0.16 m（骨长 0.09 m）、根本追不到，只能靠骨骼旋转推；maiden_queen 全部控制点都是 On 且链是刚性的，
+  但存的骨骼角度是预设写进去的两位小数、与实际姿势差 40°，只能信控制点。`linkTo` 指向控制点本身
+  （如 `rHandControl`）时资产跟的是控制点，直接用控制点的变换。名字或路径含
   collider / fluid / particle / light / focus 的原子跳过。
 - **皮肤层**（口红层、眼影、眼膜、指甲等）是贴在皮肤上方零点几毫米的壳。检测到 ≥60% 顶点离身体
   < 2 mm 就标成 skin layer：材质用 `BLEND`（EEVEE 的 HASHED/CLIP 深度预通道会和皮肤 z-fight，
@@ -220,7 +228,8 @@ VaM/Unity：米，Y 向上，+Z 朝前，+X 是角色的**右**（用脚尖方�
 - **头发是近似**：只有创作者造型的引导线是真实数据，发丝密度、随机卷曲、物理下垂都没有；预览里
   看起来比 VaM 稀疏、更"束状"。想要更密可以在 Blender 里把曲线转粒子毛发，或改 `HAIR_CHILDREN_MAX`。
 - **CustomUnityAsset 附件是按静止姿势重摆的**：手上的武器、手镯会跟着手到 T-pose 的位置，方向按保存
-  时相对关节的关系保留；关节控制点被关掉（Off）而身体被物理拖走的场景，落点可能有几厘米偏差。
+  时相对关节的关系保留；控制点既没追到、存的骨骼角度又是陈旧预设值的骨骼（maiden_queen 的右前臂）
+  只能按陈旧角度推，落点可能有几厘米偏差。
   资源包里的 Unity 材质只接了漫反射/法线/alpha，Shader 特效（金属度、发光）不还原。
 - **没有骨架**：只有静态网格（DAZSkinV2 里有权重，以后可加）。
 - 姿势 morph 缺省跳过；表情/手势要 `-IncludePoseMorphs`。
@@ -242,4 +251,5 @@ python tests\test_vam_lib.py        # 纯 Python，合成 .var/.vab/.vmb/dump fi
 Tifa Look（JackyCracky 16 + mai 3 + xnpvv + Womb Fantussy；JackyCracky 的 4 段发丝头发 6.9k 根曲线）
 均 PASS，单个 Look 8–160 s（头发多的最慢）。CustomUnityAsset 附件用 xnpvv Tifa（网格头发，人物根
 节点转了 270° 且臀部控制点 Off）、JackyCracky Tifa（耳环）、maiden_queen（7 件首饰/头发）、
-Cloud（右手大剑）核对过落点。
+Cloud（右手大剑）核对过落点。xnpvv 的头发按头部控制点摆时偏了 4–10 cm，改成从 Off 控制点锚定的
+骨骼正向运动学后，正 / 侧 / 顶视图都贴合头皮。

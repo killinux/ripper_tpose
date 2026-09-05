@@ -1517,10 +1517,21 @@ def parse_dump_bone(path):
 class BoneRig:
     """Rest pose of the person skeleton + forward kinematics from scene JSON.
 
-    VaM saves a pose as the atom's root ``control`` transform plus each bone's
-    *full* local rotation (rest orientation included) and, only where morphs
-    moved a joint, its local position.  Everything else comes from the
-    ``DAZBone`` rest data (world position + world orientation per bone).
+    VaM saves a pose as the atom's root ``control`` transform, every control
+    node's ``localPosition``/``localRotation`` (relative to that root), each
+    bone's *full* local rotation (rest orientation included, Unity euler) and,
+    only where morphs moved a joint, its local position.  Everything else
+    comes from the ``DAZBone`` rest data (world position + orientation).
+
+    Control nodes are only where the *user* put them: a node in the Off state
+    follows its bone exactly, any other state (On, Comply, Hold, ParentLink)
+    is a target the physics may or may not have reached.  Saved bone rotations
+    are exact for bones whose control is Off but can be stale for physics
+    driven ones (maiden_queen stores preset-like two-decimal angles that
+    contradict its reached controls).  ``posed_world`` therefore anchors on
+    the deepest Off control, accepts a target control only when it sits one
+    bone length from the last trusted frame (reached), and walks the saved
+    rotations across the rest.
     """
 
     def __init__(self, table):
@@ -1556,33 +1567,75 @@ class BoneRig:
         ppos, prot = self.rest_world(parent, gender)
         return prot.T @ (pos - ppos), prot.T @ rot
 
-    def transform(self, bone, storables, gender, posed=True):
-        """World 4x4 of ``bone``.
+    def local_matrix(self, bone, storables, gender, posed=True):
+        """Local 4x4 of ``bone`` relative to its parent bone.
 
-        ``posed``: start from the person's ``control`` storable and use the
-        bones' saved rotations; otherwise identity root + rest rotations, i.e.
-        the frame the exported (rest pose) mesh lives in.  Saved local
-        positions (morph-shifted joints) apply in both cases.
+        A saved joint position (morphs moved it) applies always.  A saved
+        rotation is the bone's *full* local rotation as Unity euler angles,
+        rest orientation included: checked on 179 parent/child control pairs
+        in the Off state (0.2 deg / 0.1 mm mean error; the "delta on rest"
+        reading scores 16 deg).
         """
-        matrix = np.eye(4, dtype=np.float64)
+        rest_pos, rest_rot = self.rest_local(bone, gender)
+        saved = storables.get(bone, {}) or {}
+        pos = storable_vec3(saved, "position")
+        rot = rest_rot
         if posed:
-            control = storables.get("control", {})
-            matrix = trs_matrix(storable_vec3(control, "position"),
-                                _vec_or_zero(storable_vec3(control, "rotation")))
+            euler = storable_vec3(saved, "rotation")
+            if euler is not None:
+                rot = unity_euler_matrix(euler)
+        return trs_matrix(rest_pos if pos is None else pos, rot=rot)
+
+    def transform(self, bone, storables, gender, posed=True):
+        """World 4x4 of ``bone``: the saved pose (``posed_world``) or the rest
+        pose (identity root + rest rotations), i.e. the frame the exported
+        mesh lives in.  Saved joint positions apply in both cases."""
+        if posed:
+            return self.posed_world(bone, storables, gender)
+        matrix = np.eye(4, dtype=np.float64)
         for name in self.chain(bone):
-            rest_pos, rest_rot = self.rest_local(name, gender)
-            saved = storables.get(name, {})
-            pos = storable_vec3(saved, "position")
-            pos = rest_pos if pos is None else pos
-            rot = rest_rot
-            if posed:
-                euler = storable_vec3(saved, "rotation")
-                if euler is not None:
-                    # Saved bone rotations are joint angles relative to the rest
-                    # orientation (scored best against linked-asset positions).
-                    rot = rest_rot @ unity_euler_matrix(euler)
-            matrix = matrix @ trs_matrix(pos, rot=rot)
+            matrix = matrix @ self.local_matrix(name, storables, gender, posed=False)
         return matrix
+
+    # A bone that did reach its control still hangs this far off it on the
+    # joint springs; further away the control is a target it never got to.
+    REACHED_TOLERANCE = 0.03
+
+    def posed_world(self, bone, storables, gender):
+        """World 4x4 of ``bone`` in the saved scene.
+
+        The deepest control on the chain whose position *and* rotation state
+        is Off follows its bone, so it is an exact anchor (without one the
+        hip control anchors the root, failing that the atom root).  From
+        there each bone's control is taken as the bone when it lies one bone
+        length from the previous frame -- the physics reached that target --
+        otherwise the saved bone rotation steps from the previous frame.
+        xnpvv's head control sat 10 cm / 5.6 deg from its head (FK wins);
+        maiden_queen's all-On chain is rigid while its saved angles are stale
+        (controls win).
+        """
+        chain = self.chain(bone)
+        container = person_container(storables)
+        frame, start = container, 0
+        for index, name in enumerate(chain):
+            control_id = CONTROL_FOR_BONE.get(name)
+            world = control_world(storables, control_id, container) if control_id else None
+            if world is None:
+                continue
+            if control_state(storables, control_id) == ("Off", "Off"):
+                frame, start = world, index + 1
+            elif index == 0:
+                frame, start = world, 1
+        for name in chain[start:]:
+            local = self.local_matrix(name, storables, gender, posed=True)
+            control_id = CONTROL_FOR_BONE.get(name)
+            world = control_world(storables, control_id, container) if control_id else None
+            if world is not None and abs(np.linalg.norm(world[:3, 3] - frame[:3, 3])
+                                         - np.linalg.norm(local[:3, 3])) <= self.REACHED_TOLERANCE:
+                frame = world
+            else:
+                frame = frame @ local
+        return frame
 
 
 # FreeControllerV3 node that sits on a bone's joint (saved with localPosition /
@@ -1598,36 +1651,68 @@ CONTROL_FOR_BONE = {
     "lToe": "lToeControl", "rToe": "rToeControl",
 }
 
+# Controls VaM leaves On for a fresh person; every other person control
+# defaults to Off.  Scene JSON only stores states that differ from these
+# (inferred from the 46 persons in the local packages: hip/chest/head/hand/
+# foot controls never carry an explicit "On", the others never an "Off").
+CONTROLS_DEFAULT_ON = frozenset(("hipControl", "chestControl", "headControl",
+                                 "lHandControl", "rHandControl", "lFootControl",
+                                 "rFootControl"))
+
+
+def control_state(storables, control_id):
+    """(positionState, rotationState) of a person control, defaults applied."""
+    control = storables.get(control_id) or {}
+    default = "On" if control_id in CONTROLS_DEFAULT_ON else "Off"
+    return (str(control.get("positionState") or default),
+            str(control.get("rotationState") or default))
+
+
+def person_container(storables):
+    """World 4x4 of the atom root (the person's ``control`` storable)."""
+    person = storables.get("control", {}) or {}
+    return trs_matrix(storable_vec3(person, "position"),
+                      _vec_or_zero(storable_vec3(person, "rotation")))
+
+
+def control_world(storables, control_id, container=None):
+    """World 4x4 of a control node from its saved ``localPosition`` /
+    ``localRotation`` (relative to the atom root; every scene here has them)
+    or, failing that, a saved world ``position``.  None when absent."""
+    control = storables.get(control_id) or {}
+    local = storable_vec3(control, "localPosition")
+    if local is not None:
+        if container is None:
+            container = person_container(storables)
+        return container @ trs_matrix(local, _vec_or_zero(storable_vec3(control, "localRotation")))
+    pos = storable_vec3(control, "position")
+    if pos is not None:
+        return trs_matrix(pos, _vec_or_zero(storable_vec3(control, "rotation")))
+    return None
+
 
 def attachment_rest_transform(rig, gender, storables, link_target, control_storable,
                               scale=1.0):
     """Where a person-linked CustomUnityAsset sits once the person is unposed.
 
-    ``link_target`` is the part after ``Person:`` in ``linkTo`` (``head``,
-    ``rHandControl``, ``control``).  The asset's saved transform is world
-    space; the posed joint comes from the matching control node's
-    ``localPosition``/``localRotation`` (relative to the atom container),
-    falling back to bone forward kinematics when a bone has no control.
-    Returns the 4x4 in VaM coordinates.
+    ``link_target`` is the part after ``Person:`` in ``linkTo``: a bone
+    (``head`` -- the asset followed the bone's rigidbody), a control node
+    (``rHandControl`` -- it followed that node, wherever the user left it) or
+    ``control`` (the atom root).  The asset's saved transform is world space;
+    it is carried from the posed frame of whatever it followed to that
+    frame's rest pose.  Returns the 4x4 in VaM coordinates.
     """
-    target = link_target[:-len("Control")] if link_target.endswith("Control") else link_target
+    is_control = link_target.endswith("Control")
+    target = link_target[:-len("Control")] if is_control else link_target
     cua = trs_matrix(storable_vec3(control_storable, "position"),
                      _vec_or_zero(storable_vec3(control_storable, "rotation")), scale)
-    person = storables.get("control", {})
-    container = trs_matrix(storable_vec3(person, "position"),
-                           _vec_or_zero(storable_vec3(person, "rotation")))
+    container = person_container(storables)
     if target in ("control", "") or not rig.has(target):
         return np.linalg.inv(container) @ cua
-    control = storables.get(CONTROL_FOR_BONE.get(target, target + "Control")) or {}
-    local_pos = storable_vec3(control, "localPosition")
-    if local_pos is not None:
-        posed = container @ trs_matrix(local_pos,
-                                       _vec_or_zero(storable_vec3(control, "localRotation")))
-        rest_pos = rig.transform(target, storables, gender, posed=False)[:3, 3]
-        rest = trs_matrix(rest_pos, rot=rig.rest_world(target, gender)[1])
-    else:
-        posed = rig.transform(target, storables, gender, posed=True)
-        rest = rig.transform(target, storables, gender, posed=False)
+    posed = control_world(storables, link_target, container) if is_control else None
+    if posed is None:
+        posed = rig.posed_world(target, storables, gender)
+    rest = rig.transform(target, storables, gender, posed=False)
     return rest @ np.linalg.inv(posed) @ cua
 
 

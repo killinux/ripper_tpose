@@ -47,6 +47,13 @@
   `localPosition/localRotation`（相对人物容器；46 个场景全有），静止关节位置来自 `a_per` 的 `DAZBone`；
   无控制点的骨骼退回正向运动学（存的骨骼旋转是相对静止朝向的增量）。`-NoAttachments` 关闭。
   xnpvv Tifa 的头发就是这种 CUA——之前"没有头发"的原因。
+- **CUA 附件摆放修正**（同日）：之前把关节控制点当成骨骼位置，而控制点只是用户放的目标，只有 Off
+  状态的控制点才跟着骨骼（xnpvv 头部控制点离头骨 10 cm / 5.6°，头发因此歪）。现在从链上最深的 Off
+  控制点锚定（JSON 只写非默认状态；默认 On 的是 hip / chest / head / 手 / 脚），往下每段：控制点离上一帧
+  正好一段骨长（±3 cm）就当物理追到了、采用控制点，否则用场景里存的骨骼旋转（Unity 欧拉表示的完整局部
+  旋转，179 对 Off 父子控制点验证 0.2°）推一步——maiden_queen 全 On 的链存的骨骼角度是陈旧的预设值，
+  只能信控制点。`linkTo` 指向控制点时仍跟控制点。之前"存的骨骼旋转是相对静止朝向的增量"的结论是错的，
+  已改回。
 
 ### 用户如何操作
 
@@ -76,7 +83,8 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
   全部 PASS，预览逐张看过；`-List`、`-ValidateOnly` 经 `.ps1` 走通。
 - 21 个 Tifa Look（含头发重导）+ 上述 4 个 Look 带头发重导，全部 PASS，预览拼图核对。
 - CUA 附件：xnpvv Tifa（网格头发落在头上）、JackyCracky Tifa/7thHeaven（耳环）、maiden_queen
-  （头发/王冠/项链/腰链/手镯）、Cloud（大剑在右手）重导核对。
+  （头发/王冠/项链/腰链/手镯）、Cloud（大剑在右手）重导核对；摆放修正后这 5 个 Look 再次重导核对，
+  xnpvv 头发正 / 侧 / 顶视贴合头皮，maiden_queen 原本偏 10 cm 的右手镯落回手腕。
 
 ---
 
