@@ -14,7 +14,36 @@
 
 ---
 
-## 2026-09-05 — DOA5LR：换服装批量导出（19 人 270 套 COS/DLC/DLCU）
+## 2026-09-05 — FF7 Remake：36 个 Player 主模型批量导出 + 画廊
+
+### 新增与修复
+
+- **新增 `scripts/final/export_ff7remake_models.ps1`**：按 `docs/ff7remake-player-model-files.txt`
+  的 36 个包循环「`ff7remake_export.ps1` umodel 提取 → `validate_ff7remake_model.py` 材质化」，
+  支持 `-Only`、`-SkipExtract`、`-Force`、`-Lane/-Lanes`、`-List`；所有包共用
+  `D:\ff7remake_exports\player\` 一个根。`enable_psk_addon.py` 负责在无头 Blender 里启用 PSK 导入器。
+- **`validate_ff7remake_model.py` 两处修复**：同名 `_A` 遮罩只在材质 `.mat` 引用它时才接 Alpha
+  （否则 Tifa 的衬衫/袖套/丝袜被 99% 全黑的 `BodyA_A` 透掉）；`.mat` 本包找不到时到整个导出根找
+  （Yuffie 莫古利装引用 `PC0005_00` 基础包的材质，原来缺 24/34 张贴图）。预览灯光由面光改太阳光。
+- **新增 `scripts/final/html/{collect_manifest.py, make_gallery.py}`**：FF7 Remake 画廊，
+  manifest 直接从各包报告 JSON 汇总（不开 Blender），按角色下拉 + 主服装/贴片/蛤蟆筛选。
+
+### 用户如何操作
+
+见 `docs/final-fantasy-vii-remake-extraction.md`「批量导出全部 Player 主模型」。
+
+### 本批结果
+
+36/36 成功、缺贴图 0，每包材质化 2–8 s。完整人物 22 个；`_90/_91` 的 7 个是泪痕/血迹叠加贴片
+（约 1000 顶点，不是完整人物）；Toad 7 个。产物在 `D:\ff7remake_exports\player\_blends\`。
+
+### 验证
+
+- Tifa 标准装修复前后对比：衬衫/丝袜回来，报告 `alpha` 只剩 Earring/Hair/Eyebrow 三个材质。
+- Yuffie Moogle 修复后 `missing_preview_textures=[]`。
+- 36 张预览拼图逐一目视。
+
+（19 人 270 套 COS/DLC/DLCU）
 
 ### 新增与修复
 

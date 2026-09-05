@@ -64,14 +64,21 @@ def clear_scene():
 
 
 def parse_material(path: str) -> dict[str, str]:
+    """读 UE Viewer 写的 .mat：Diffuse/Normal 直接取，Other[n] 全部收进 "_refs"（材质实际引用的贴图名集合）。"""
     values: dict[str, str] = {}
+    refs: set[str] = set()
     if not os.path.isfile(path):
         return values
     with open(path, "r", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             key, separator, value = line.strip().partition("=")
-            if separator and key in {"Diffuse", "Normal"}:
-                values[key] = value.strip()
+            if not separator:
+                continue
+            value = value.strip()
+            if key in {"Diffuse", "Normal"}:
+                values[key] = value
+            refs.add(value.lower())
+    values["_refs"] = refs  # type: ignore[assignment]
     return values
 
 
@@ -83,6 +90,17 @@ def image_index(asset_root: str) -> dict[str, list[str]]:
                 continue
             stem = os.path.splitext(filename)[0].lower()
             index.setdefault(stem, []).append(os.path.join(root, filename))
+    return index
+
+
+def material_index(asset_root: str) -> dict[str, str]:
+    """整个导出根下的 .mat：变体包（如 Yuffie Moogle）会直接引用基础包（Yuffie Standard）的材质，
+    自己的 Material 目录里没有对应 .mat，要到别的包目录去找。"""
+    index: dict[str, str] = {}
+    for root, _dirs, files in os.walk(asset_root):
+        for filename in files:
+            if filename.lower().endswith(".mat"):
+                index.setdefault(filename[:-4].lower(), os.path.join(root, filename))
     return index
 
 
@@ -130,6 +148,7 @@ def material_basename(name: str) -> str:
 
 def wire_materials(meshes, material_dir: str, asset_root: str):
     index = image_index(asset_root)
+    mat_index = material_index(asset_root)
     wired = []
     missing = []
     handled = set()
@@ -140,13 +159,21 @@ def wire_materials(meshes, material_dir: str, asset_root: str):
                 continue
             handled.add(material.name)
             base_name = material_basename(material.name)
-            properties = parse_material(os.path.join(material_dir, base_name + ".mat"))
+            mat_path = os.path.join(material_dir, base_name + ".mat")
+            if not os.path.isfile(mat_path):
+                mat_path = mat_index.get(base_name.lower(), mat_path)
+            properties = parse_material(mat_path)
             diffuse = resolve_image(index, properties.get("Diffuse", ""))
             normal = resolve_image(index, properties.get("Normal", ""))
+            # 同名 _A 遮罩只在该材质的 .mat 确实引用它时才接 Alpha：
+            # 同一张 BodyA_A 常常只被耳环/头发这类 Coverage 材质引用，
+            # 而 BodyA 本体不用它——盲目按名字配对会把衣服、丝袜整片透掉（Tifa 踩过）。
             alpha_name = ""
             diffuse_name = properties.get("Diffuse", "")
             if diffuse_name.endswith("_C"):
-                alpha_name = diffuse_name[:-2] + "_A"
+                candidate = diffuse_name[:-2] + "_A"
+                if candidate.lower() in properties.get("_refs", set()):
+                    alpha_name = candidate
             alpha = resolve_image(index, alpha_name) if alpha_name else ""
 
             material.use_nodes = True
@@ -218,10 +245,10 @@ def create_preview_scene(meshes, render_path: str):
     scene.world.use_nodes = True
     background = scene.world.node_tree.nodes.get("Background")
     if background is not None:
-        background.inputs["Color"].default_value = (0.045, 0.045, 0.045, 1.0)
-        background.inputs["Strength"].default_value = 0.45
-    scene.view_settings.exposure = 1.0
-    scene.view_settings.look = "Medium High Contrast"
+        background.inputs["Color"].default_value = (0.62, 0.62, 0.65, 1.0)
+        background.inputs["Strength"].default_value = 1.0
+    scene.view_settings.exposure = 0.0
+    scene.view_settings.look = "None"
 
     camera_data = bpy.data.cameras.new("ValidationCamera")
     camera = bpy.data.objects.new("ValidationCamera", camera_data)
@@ -232,15 +259,16 @@ def create_preview_scene(meshes, render_path: str):
     camera.location = Vector((maximum.x + max(extent.z, 200.0) * 2.2, center.y, center.z))
     look_at(camera, center)
 
+    # 场景单位是厘米（人物 ~170 高），面光在 250cm 外要几万瓦才够；改用太阳光，强度与距离无关
     lights = [
-        ("Key", (250.0, -180.0, 260.0), 4200.0, 180.0),
-        ("Fill", (180.0, 220.0, 150.0), 2600.0, 200.0),
-        ("Rim", (-160.0, 20.0, 250.0), 3200.0, 160.0),
+        ("Key", (250.0, -180.0, 260.0), 2.6),
+        ("Fill", (180.0, 220.0, 150.0), 1.2),
+        ("Rim", (-160.0, 20.0, 250.0), 1.4),
     ]
-    for name, location, energy, size in lights:
-        light_data = bpy.data.lights.new(name, "AREA")
+    for name, location, energy in lights:
+        light_data = bpy.data.lights.new(name, "SUN")
         light_data.energy = energy
-        light_data.size = size
+        light_data.angle = math.radians(12.0)
         light = bpy.data.objects.new(name, light_data)
         scene.collection.objects.link(light)
         light.location = Vector(location)

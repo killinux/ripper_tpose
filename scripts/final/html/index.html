@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FF7 Remake 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --mod: #7a3fa0; --mod-bg: #f1e7f8; --shot: #d9dbe2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --mod: #c99ae6; --mod-bg: #33203d; --shot: #2a2d34;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header { padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* 作者写的 display 会盖过 UA 的 [hidden] 规则，筛选必须显式声明 */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg { padding: 46px 0; text-align: center; color: var(--muted); font-size: 12px; }
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.titlerow h3 { margin: 0; font-size: 15px; font-family: Consolas, monospace; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-mod { color: var(--mod); background: var(--mod-bg); cursor: default; }
+.badge-code { color: var(--accent); background: var(--bg); cursor: default; font-family: Consolas, monospace; }
+#chr { padding: 6px 8px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; }
+dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code, p code { font-family: Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>FF7 Remake INTERGRADE 模型导出总览</h1>
+  <div class="sub">生成于 2026-09-05 15:51 · 导出根目录 <code>D:\ff7remake_exports\player</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>36</b><span>已转模型</span></div>
+    <div class="stat"><b>8</b><span>覆盖角色</span></div>
+    <div class="stat"><b>14</b><span>贴片/蛤蟆变体</span></div>
+    <div class="stat"><b>790.0 MB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>0</b><span>有告警</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索角色、服装名、包编号或路径…（按 / 聚焦）">
+  <select id="chr"><option value="">全部角色</option><option value="Aerith">Aerith (5)</option><option value="Barret">Barret (1)</option><option value="Cloud">Cloud (8)</option><option value="RedXIII">RedXIII (1)</option><option value="Sonon">Sonon (3)</option><option value="Tifa">Tifa (7)</option><option value="Toad">Toad (7)</option><option value="Yuffie">Yuffie (4)</option></select>
+  <button class="chip on" data-kind="">全部</button>
+  <button class="chip" data-kind="official">主服装</button><button class="chip" data-kind="variant">泪痕/血迹贴片</button><button class="chip" data-kind="toad">蛤蟆形态</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="pc0000_00_cloud_standard cloud standard pc0000_00 d:\ff7remake_exports\player\_blends\pc0000_00_cloud_standard.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_00_Cloud_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_00_Cloud_Standard.jpg" alt="PC0000_00_Cloud_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_00_Cloud_Standard</h3><span class="badge badge-code">PC0000_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 96040 顶点 · 547 骨骼 · 12 材质（3 透明） · 29.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_00_Cloud_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0000_00_Cloud_Standard.blend">D:\ff7remake_exports\player\_blends\PC0000_00_Cloud_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_00_Cloud_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_01_cloud_poordress cloud poordress pc0000_01 d:\ff7remake_exports\player\_blends\pc0000_01_cloud_poordress.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_01_Cloud_PoorDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_01_Cloud_PoorDress.jpg" alt="PC0000_01_Cloud_PoorDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_01_Cloud_PoorDress</h3><span class="badge badge-code">PC0000_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · PoorDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 98144 顶点 · 593 骨骼 · 9 材质（3 透明） · 30.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_01_Cloud_PoorDress.blend" title="D:\ff7remake_exports\player\_blends\PC0000_01_Cloud_PoorDress.blend">D:\ff7remake_exports\player\_blends\PC0000_01_Cloud_PoorDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_01_Cloud_PoorDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_02_cloud_ordinarydress cloud ordinarydress pc0000_02 d:\ff7remake_exports\player\_blends\pc0000_02_cloud_ordinarydress.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_02_Cloud_OrdinaryDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_02_Cloud_OrdinaryDress.jpg" alt="PC0000_02_Cloud_OrdinaryDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_02_Cloud_OrdinaryDress</h3><span class="badge badge-code">PC0000_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · OrdinaryDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 98206 顶点 · 615 骨骼 · 10 材质（4 透明） · 30.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_02_Cloud_OrdinaryDress.blend" title="D:\ff7remake_exports\player\_blends\PC0000_02_Cloud_OrdinaryDress.blend">D:\ff7remake_exports\player\_blends\PC0000_02_Cloud_OrdinaryDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_02_Cloud_OrdinaryDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_03_cloud_gorgeousdress cloud gorgeousdress pc0000_03 d:\ff7remake_exports\player\_blends\pc0000_03_cloud_gorgeousdress.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_03_Cloud_GorgeousDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_03_Cloud_GorgeousDress.jpg" alt="PC0000_03_Cloud_GorgeousDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_03_Cloud_GorgeousDress</h3><span class="badge badge-code">PC0000_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · GorgeousDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 107268 顶点 · 874 骨骼 · 10 材质（4 透明） · 34.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_03_Cloud_GorgeousDress.blend" title="D:\ff7remake_exports\player\_blends\PC0000_03_Cloud_GorgeousDress.blend">D:\ff7remake_exports\player\_blends\PC0000_03_Cloud_GorgeousDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_03_Cloud_GorgeousDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_04_cloud_zackcostume cloud zackcostume pc0000_04 d:\ff7remake_exports\player\_blends\pc0000_04_cloud_zackcostume.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_04_Cloud_ZackCostume_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_04_Cloud_ZackCostume.jpg" alt="PC0000_04_Cloud_ZackCostume"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_04_Cloud_ZackCostume</h3><span class="badge badge-code">PC0000_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · ZackCostume</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 91460 顶点 · 550 骨骼 · 11 材质（2 透明） · 28.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_04_Cloud_ZackCostume.blend" title="D:\ff7remake_exports\player\_blends\PC0000_04_Cloud_ZackCostume.blend">D:\ff7remake_exports\player\_blends\PC0000_04_Cloud_ZackCostume.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_04_Cloud_ZackCostume.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_05_cloud_naked cloud naked pc0000_05 d:\ff7remake_exports\player\_blends\pc0000_05_cloud_naked.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_05_Cloud_Naked_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_05_Cloud_Naked.jpg" alt="PC0000_05_Cloud_Naked"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_05_Cloud_Naked</h3><span class="badge badge-code">PC0000_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · Naked</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 91515 顶点 · 547 骨骼 · 11 材质（3 透明） · 28.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_05_Cloud_Naked.blend" title="D:\ff7remake_exports\player\_blends\PC0000_05_Cloud_Naked.blend">D:\ff7remake_exports\player\_blends\PC0000_05_Cloud_Naked.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_05_Cloud_Naked.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_90_cloud_teasertmpsweat cloud teasertmpsweat pc0000_90 d:\ff7remake_exports\player\_blends\pc0000_90_cloud_teasertmpsweat.blend" data-kind="variant" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_90_Cloud_TeaserTmpSweat_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_90_Cloud_TeaserTmpSweat.jpg" alt="PC0000_90_Cloud_TeaserTmpSweat"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_90_Cloud_TeaserTmpSweat</h3><span class="badge badge-mod">泪痕/血迹贴片</span><span class="badge badge-code">PC0000_90</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · TeaserTmpSweat</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 93455 顶点 · 547 骨骼 · 13 材质（3 透明） · 29.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_90_Cloud_TeaserTmpSweat.blend" title="D:\ff7remake_exports\player\_blends\PC0000_90_Cloud_TeaserTmpSweat.blend">D:\ff7remake_exports\player\_blends\PC0000_90_Cloud_TeaserTmpSweat.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_90_Cloud_TeaserTmpSweat.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_91_cloud_tearslu5b1490 cloud tearslu5b1490 pc0000_91 d:\ff7remake_exports\player\_blends\pc0000_91_cloud_tearslu5b1490.blend" data-kind="variant" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0000_91_Cloud_TearSLU5B1490_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0000_91_Cloud_TearSLU5B1490.jpg" alt="PC0000_91_Cloud_TearSLU5B1490"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_91_Cloud_TearSLU5B1490</h3><span class="badge badge-mod">泪痕/血迹贴片</span><span class="badge badge-code">PC0000_91</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · TearSLU5B1490</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 1001 顶点 · 547 骨骼 · 1 材质（0 透明） · 2.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0000_91_Cloud_TearSLU5B1490.blend" title="D:\ff7remake_exports\player\_blends\PC0000_91_Cloud_TearSLU5B1490.blend">D:\ff7remake_exports\player\_blends\PC0000_91_Cloud_TearSLU5B1490.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0000_91_Cloud_TearSLU5B1490.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0001_00_barret_standard barret standard pc0001_00 d:\ff7remake_exports\player\_blends\pc0001_00_barret_standard.blend" data-kind="official" data-chr="Barret" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0001_00_Barret_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0001_00_Barret_Standard.jpg" alt="PC0001_00_Barret_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0001_00_Barret_Standard</h3><span class="badge badge-code">PC0001_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Barret · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 94088 顶点 · 406 骨骼 · 10 材质（3 透明） · 28.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0001_00_Barret_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0001_00_Barret_Standard.blend">D:\ff7remake_exports\player\_blends\PC0001_00_Barret_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0001_00_Barret_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_00_tifa_standard tifa standard pc0002_00 d:\ff7remake_exports\player\_blends\pc0002_00_tifa_standard.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0002_00_Tifa_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0002_00_Tifa_Standard.jpg" alt="PC0002_00_Tifa_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_00_Tifa_Standard</h3><span class="badge badge-code">PC0002_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 82059 顶点 · 481 骨骼 · 10 材质（3 透明） · 26.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0002_00_Tifa_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0002_00_Tifa_Standard.blend">D:\ff7remake_exports\player\_blends\PC0002_00_Tifa_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0002_00_Tifa_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_01_tifa_purpledress tifa purpledress pc0002_01 d:\ff7remake_exports\player\_blends\pc0002_01_tifa_purpledress.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0002_01_Tifa_PurpleDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0002_01_Tifa_PurpleDress.jpg" alt="PC0002_01_Tifa_PurpleDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_01_Tifa_PurpleDress</h3><span class="badge badge-code">PC0002_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · PurpleDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 82509 顶点 · 410 骨骼 · 9 材质（3 透明） · 27.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0002_01_Tifa_PurpleDress.blend" title="D:\ff7remake_exports\player\_blends\PC0002_01_Tifa_PurpleDress.blend">D:\ff7remake_exports\player\_blends\PC0002_01_Tifa_PurpleDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0002_01_Tifa_PurpleDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_02_tifa_chinadress tifa chinadress pc0002_02 d:\ff7remake_exports\player\_blends\pc0002_02_tifa_chinadress.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0002_02_Tifa_ChinaDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0002_02_Tifa_ChinaDress.jpg" alt="PC0002_02_Tifa_ChinaDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_02_Tifa_ChinaDress</h3><span class="badge badge-code">PC0002_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · ChinaDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 83168 顶点 · 520 骨骼 · 9 材质（3 透明） · 27.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0002_02_Tifa_ChinaDress.blend" title="D:\ff7remake_exports\player\_blends\PC0002_02_Tifa_ChinaDress.blend">D:\ff7remake_exports\player\_blends\PC0002_02_Tifa_ChinaDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0002_02_Tifa_ChinaDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_03_tifa_wutaidress tifa wutaidress pc0002_03 d:\ff7remake_exports\player\_blends\pc0002_03_tifa_wutaidress.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0002_03_Tifa_WutaiDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0002_03_Tifa_WutaiDress.jpg" alt="PC0002_03_Tifa_WutaiDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_03_Tifa_WutaiDress</h3><span class="badge badge-code">PC0002_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · WutaiDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 83621 顶点 · 682 骨骼 · 9 材质（3 透明） · 29.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0002_03_Tifa_WutaiDress.blend" title="D:\ff7remake_exports\player\_blends\PC0002_03_Tifa_WutaiDress.blend">D:\ff7remake_exports\player\_blends\PC0002_03_Tifa_WutaiDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0002_03_Tifa_WutaiDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_04_tifa_noglove tifa noglove pc0002_04 d:\ff7remake_exports\player\_blends\pc0002_04_tifa_noglove.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0002_04_Tifa_NoGlove_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0002_04_Tifa_NoGlove.jpg" alt="PC0002_04_Tifa_NoGlove"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_04_Tifa_NoGlove</h3><span class="badge badge-code">PC0002_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · NoGlove</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 77097 顶点 · 481 骨骼 · 11 材质（3 透明） · 25.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0002_04_Tifa_NoGlove.blend" title="D:\ff7remake_exports\player\_blends\PC0002_04_Tifa_NoGlove.blend">D:\ff7remake_exports\player\_blends\PC0002_04_Tifa_NoGlove.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0002_04_Tifa_NoGlove.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_90_tifa_tearslum74582 tifa tearslum74582 pc0002_90 d:\ff7remake_exports\player\_blends\pc0002_90_tifa_tearslum74582.blend" data-kind="variant" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0002_90_Tifa_TearSLUM74582_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0002_90_Tifa_TearSLUM74582.jpg" alt="PC0002_90_Tifa_TearSLUM74582"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_90_Tifa_TearSLUM74582</h3><span class="badge badge-mod">泪痕/血迹贴片</span><span class="badge badge-code">PC0002_90</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · TearSLUM74582</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 1265 顶点 · 481 骨骼 · 1 材质（0 透明） · 2.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0002_90_Tifa_TearSLUM74582.blend" title="D:\ff7remake_exports\player\_blends\PC0002_90_Tifa_TearSLUM74582.blend">D:\ff7remake_exports\player\_blends\PC0002_90_Tifa_TearSLUM74582.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0002_90_Tifa_TearSLUM74582.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_91_tifa_tearslu5b4550 tifa tearslu5b4550 pc0002_91 d:\ff7remake_exports\player\_blends\pc0002_91_tifa_tearslu5b4550.blend" data-kind="variant" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0002_91_Tifa_TearSLU5B4550_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0002_91_Tifa_TearSLU5B4550.jpg" alt="PC0002_91_Tifa_TearSLU5B4550"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_91_Tifa_TearSLU5B4550</h3><span class="badge badge-mod">泪痕/血迹贴片</span><span class="badge badge-code">PC0002_91</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · TearSLU5B4550</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 1265 顶点 · 481 骨骼 · 1 材质（0 透明） · 2.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0002_91_Tifa_TearSLU5B4550.blend" title="D:\ff7remake_exports\player\_blends\PC0002_91_Tifa_TearSLU5B4550.blend">D:\ff7remake_exports\player\_blends\PC0002_91_Tifa_TearSLU5B4550.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0002_91_Tifa_TearSLU5B4550.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_00_aerith_standard aerith standard pc0003_00 d:\ff7remake_exports\player\_blends\pc0003_00_aerith_standard.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0003_00_Aerith_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0003_00_Aerith_Standard.jpg" alt="PC0003_00_Aerith_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_00_Aerith_Standard</h3><span class="badge badge-code">PC0003_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 100865 顶点 · 769 骨骼 · 10 材质（2 透明） · 33.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0003_00_Aerith_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0003_00_Aerith_Standard.blend">D:\ff7remake_exports\player\_blends\PC0003_00_Aerith_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0003_00_Aerith_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_01_aerith_cheapdress aerith cheapdress pc0003_01 d:\ff7remake_exports\player\_blends\pc0003_01_aerith_cheapdress.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0003_01_Aerith_CheapDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0003_01_Aerith_CheapDress.jpg" alt="PC0003_01_Aerith_CheapDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_01_Aerith_CheapDress</h3><span class="badge badge-code">PC0003_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · CheapDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 101511 顶点 · 758 骨骼 · 8 材质（3 透明） · 32.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0003_01_Aerith_CheapDress.blend" title="D:\ff7remake_exports\player\_blends\PC0003_01_Aerith_CheapDress.blend">D:\ff7remake_exports\player\_blends\PC0003_01_Aerith_CheapDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0003_01_Aerith_CheapDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_02_aerith_ordinarydress aerith ordinarydress pc0003_02 d:\ff7remake_exports\player\_blends\pc0003_02_aerith_ordinarydress.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0003_02_Aerith_OrdinaryDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0003_02_Aerith_OrdinaryDress.jpg" alt="PC0003_02_Aerith_OrdinaryDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_02_Aerith_OrdinaryDress</h3><span class="badge badge-code">PC0003_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · OrdinaryDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 102904 顶点 · 544 骨骼 · 9 材质（3 透明） · 32.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0003_02_Aerith_OrdinaryDress.blend" title="D:\ff7remake_exports\player\_blends\PC0003_02_Aerith_OrdinaryDress.blend">D:\ff7remake_exports\player\_blends\PC0003_02_Aerith_OrdinaryDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0003_02_Aerith_OrdinaryDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_03_aerith_sexydress aerith sexydress pc0003_03 d:\ff7remake_exports\player\_blends\pc0003_03_aerith_sexydress.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0003_03_Aerith_SexyDress_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0003_03_Aerith_SexyDress.jpg" alt="PC0003_03_Aerith_SexyDress"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_03_Aerith_SexyDress</h3><span class="badge badge-code">PC0003_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · SexyDress</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 97519 顶点 · 495 骨骼 · 9 材质（4 透明） · 31.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0003_03_Aerith_SexyDress.blend" title="D:\ff7remake_exports\player\_blends\PC0003_03_Aerith_SexyDress.blend">D:\ff7remake_exports\player\_blends\PC0003_03_Aerith_SexyDress.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0003_03_Aerith_SexyDress.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_04_aerith_dirty aerith dirty pc0003_04 d:\ff7remake_exports\player\_blends\pc0003_04_aerith_dirty.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0003_04_Aerith_Dirty_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0003_04_Aerith_Dirty.jpg" alt="PC0003_04_Aerith_Dirty"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_04_Aerith_Dirty</h3><span class="badge badge-code">PC0003_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · Dirty</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 100865 顶点 · 769 骨骼 · 11 材质（2 透明） · 33.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0003_04_Aerith_Dirty.blend" title="D:\ff7remake_exports\player\_blends\PC0003_04_Aerith_Dirty.blend">D:\ff7remake_exports\player\_blends\PC0003_04_Aerith_Dirty.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0003_04_Aerith_Dirty.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0004_00_redxiii_standard redxiii standard pc0004_00 d:\ff7remake_exports\player\_blends\pc0004_00_redxiii_standard.blend" data-kind="official" data-chr="RedXIII" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0004_00_RedXIII_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0004_00_RedXIII_Standard.jpg" alt="PC0004_00_RedXIII_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0004_00_RedXIII_Standard</h3><span class="badge badge-code">PC0004_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>RedXIII · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 118196 顶点 · 318 骨骼 · 13 材质（6 透明） · 33.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0004_00_RedXIII_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0004_00_RedXIII_Standard.blend">D:\ff7remake_exports\player\_blends\PC0004_00_RedXIII_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0004_00_RedXIII_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_00_yuffie_standard yuffie standard pc0005_00 d:\ff7remake_exports\player\_blends\pc0005_00_yuffie_standard.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0005_00_Yuffie_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0005_00_Yuffie_Standard.jpg" alt="PC0005_00_Yuffie_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_00_Yuffie_Standard</h3><span class="badge badge-code">PC0005_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 94735 顶点 · 527 骨骼 · 13 材质（5 透明） · 33.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0005_00_Yuffie_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0005_00_Yuffie_Standard.blend">D:\ff7remake_exports\player\_blends\PC0005_00_Yuffie_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0005_00_Yuffie_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_01_yuffie_moogle yuffie moogle pc0005_01 d:\ff7remake_exports\player\_blends\pc0005_01_yuffie_moogle.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0005_01_Yuffie_Moogle_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0005_01_Yuffie_Moogle.jpg" alt="PC0005_01_Yuffie_Moogle"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_01_Yuffie_Moogle</h3><span class="badge badge-code">PC0005_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · Moogle</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 123008 顶点 · 790 骨骼 · 18 材质（7 透明） · 48.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0005_01_Yuffie_Moogle.blend" title="D:\ff7remake_exports\player\_blends\PC0005_01_Yuffie_Moogle.blend">D:\ff7remake_exports\player\_blends\PC0005_01_Yuffie_Moogle.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0005_01_Yuffie_Moogle.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_02_yuffie_mooglehoodoff yuffie mooglehoodoff pc0005_02 d:\ff7remake_exports\player\_blends\pc0005_02_yuffie_mooglehoodoff.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0005_02_Yuffie_MoogleHoodOff_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0005_02_Yuffie_MoogleHoodOff.jpg" alt="PC0005_02_Yuffie_MoogleHoodOff"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_02_Yuffie_MoogleHoodOff</h3><span class="badge badge-code">PC0005_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · MoogleHoodOff</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 122278 顶点 · 790 骨骼 · 18 材质（7 透明） · 48.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0005_02_Yuffie_MoogleHoodOff.blend" title="D:\ff7remake_exports\player\_blends\PC0005_02_Yuffie_MoogleHoodOff.blend">D:\ff7remake_exports\player\_blends\PC0005_02_Yuffie_MoogleHoodOff.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0005_02_Yuffie_MoogleHoodOff.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_90_yuffie_tearpsbl00910 yuffie tearpsbl00910 pc0005_90 d:\ff7remake_exports\player\_blends\pc0005_90_yuffie_tearpsbl00910.blend" data-kind="variant" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0005_90_Yuffie_TearPSBL00910_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0005_90_Yuffie_TearPSBL00910.jpg" alt="PC0005_90_Yuffie_TearPSBL00910"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_90_Yuffie_TearPSBL00910</h3><span class="badge badge-mod">泪痕/血迹贴片</span><span class="badge badge-code">PC0005_90</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · TearPSBL00910</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 5323 顶点 · 527 骨骼 · 2 材质（0 透明） · 3.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0005_90_Yuffie_TearPSBL00910.blend" title="D:\ff7remake_exports\player\_blends\PC0005_90_Yuffie_TearPSBL00910.blend">D:\ff7remake_exports\player\_blends\PC0005_90_Yuffie_TearPSBL00910.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0005_90_Yuffie_TearPSBL00910.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0006_00_sonon_standard sonon standard pc0006_00 d:\ff7remake_exports\player\_blends\pc0006_00_sonon_standard.blend" data-kind="official" data-chr="Sonon" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0006_00_Sonon_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0006_00_Sonon_Standard.jpg" alt="PC0006_00_Sonon_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0006_00_Sonon_Standard</h3><span class="badge badge-code">PC0006_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sonon · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 99398 顶点 · 588 骨骼 · 10 材质（3 透明） · 33.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0006_00_Sonon_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0006_00_Sonon_Standard.blend">D:\ff7remake_exports\player\_blends\PC0006_00_Sonon_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0006_00_Sonon_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0006_90_sonon_tearpsbl00910 sonon tearpsbl00910 pc0006_90 d:\ff7remake_exports\player\_blends\pc0006_90_sonon_tearpsbl00910.blend" data-kind="variant" data-chr="Sonon" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0006_90_Sonon_TearPSBL00910_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0006_90_Sonon_TearPSBL00910.jpg" alt="PC0006_90_Sonon_TearPSBL00910"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0006_90_Sonon_TearPSBL00910</h3><span class="badge badge-mod">泪痕/血迹贴片</span><span class="badge badge-code">PC0006_90</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sonon · TearPSBL00910</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 5326 顶点 · 588 骨骼 · 1 材质（0 透明） · 3.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0006_90_Sonon_TearPSBL00910.blend" title="D:\ff7remake_exports\player\_blends\PC0006_90_Sonon_TearPSBL00910.blend">D:\ff7remake_exports\player\_blends\PC0006_90_Sonon_TearPSBL00910.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0006_90_Sonon_TearPSBL00910.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0006_91_sonon_bloodpsbl00910 sonon bloodpsbl00910 pc0006_91 d:\ff7remake_exports\player\_blends\pc0006_91_sonon_bloodpsbl00910.blend" data-kind="variant" data-chr="Sonon" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0006_91_Sonon_BloodPSBL00910_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0006_91_Sonon_BloodPSBL00910.jpg" alt="PC0006_91_Sonon_BloodPSBL00910"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0006_91_Sonon_BloodPSBL00910</h3><span class="badge badge-mod">泪痕/血迹贴片</span><span class="badge badge-code">PC0006_91</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sonon · BloodPSBL00910</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 6736 顶点 · 588 骨骼 · 2 材质（0 透明） · 4.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0006_91_Sonon_BloodPSBL00910.blend" title="D:\ff7remake_exports\player\_blends\PC0006_91_Sonon_BloodPSBL00910.blend">D:\ff7remake_exports\player\_blends\PC0006_91_Sonon_BloodPSBL00910.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0006_91_Sonon_BloodPSBL00910.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_00_toad_standard toad standard pc0099_00 d:\ff7remake_exports\player\_blends\pc0099_00_toad_standard.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0099_00_Toad_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0099_00_Toad_Standard.jpg" alt="PC0099_00_Toad_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_00_Toad_Standard</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 5774 顶点 · 176 骨骼 · 3 材质（0 透明） · 3.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0099_00_Toad_Standard.blend" title="D:\ff7remake_exports\player\_blends\PC0099_00_Toad_Standard.blend">D:\ff7remake_exports\player\_blends\PC0099_00_Toad_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0099_00_Toad_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_01_toad_cloud toad cloud pc0099_01 d:\ff7remake_exports\player\_blends\pc0099_01_toad_cloud.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0099_01_Toad_Cloud_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0099_01_Toad_Cloud.jpg" alt="PC0099_01_Toad_Cloud"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_01_Toad_Cloud</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Cloud</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 12167 顶点 · 175 骨骼 · 4 材质（0 透明） · 5.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0099_01_Toad_Cloud.blend" title="D:\ff7remake_exports\player\_blends\PC0099_01_Toad_Cloud.blend">D:\ff7remake_exports\player\_blends\PC0099_01_Toad_Cloud.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0099_01_Toad_Cloud.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_02_toad_barret toad barret pc0099_02 d:\ff7remake_exports\player\_blends\pc0099_02_toad_barret.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0099_02_Toad_Barret_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0099_02_Toad_Barret.jpg" alt="PC0099_02_Toad_Barret"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_02_Toad_Barret</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Barret</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 8458 顶点 · 176 骨骼 · 4 材质（1 透明） · 4.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0099_02_Toad_Barret.blend" title="D:\ff7remake_exports\player\_blends\PC0099_02_Toad_Barret.blend">D:\ff7remake_exports\player\_blends\PC0099_02_Toad_Barret.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0099_02_Toad_Barret.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_03_toad_tifa toad tifa pc0099_03 d:\ff7remake_exports\player\_blends\pc0099_03_toad_tifa.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0099_03_Toad_Tifa_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0099_03_Toad_Tifa.jpg" alt="PC0099_03_Toad_Tifa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_03_Toad_Tifa</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Tifa</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 8173 顶点 · 228 骨骼 · 2 材质（0 透明） · 4.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0099_03_Toad_Tifa.blend" title="D:\ff7remake_exports\player\_blends\PC0099_03_Toad_Tifa.blend">D:\ff7remake_exports\player\_blends\PC0099_03_Toad_Tifa.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0099_03_Toad_Tifa.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_04_toad_aerith toad aerith pc0099_04 d:\ff7remake_exports\player\_blends\pc0099_04_toad_aerith.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0099_04_Toad_Aerith_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0099_04_Toad_Aerith.jpg" alt="PC0099_04_Toad_Aerith"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_04_Toad_Aerith</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Aerith</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 6309 顶点 · 191 骨骼 · 3 材质（0 透明） · 3.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0099_04_Toad_Aerith.blend" title="D:\ff7remake_exports\player\_blends\PC0099_04_Toad_Aerith.blend">D:\ff7remake_exports\player\_blends\PC0099_04_Toad_Aerith.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0099_04_Toad_Aerith.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_05_toad_yuffie toad yuffie pc0099_05 d:\ff7remake_exports\player\_blends\pc0099_05_toad_yuffie.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0099_05_Toad_Yuffie_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0099_05_Toad_Yuffie.jpg" alt="PC0099_05_Toad_Yuffie"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_05_Toad_Yuffie</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Yuffie</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 16080 顶点 · 176 骨骼 · 4 材质（0 透明） · 6.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0099_05_Toad_Yuffie.blend" title="D:\ff7remake_exports\player\_blends\PC0099_05_Toad_Yuffie.blend">D:\ff7remake_exports\player\_blends\PC0099_05_Toad_Yuffie.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0099_05_Toad_Yuffie.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_06_toad_sonon toad sonon pc0099_06 d:\ff7remake_exports\player\_blends\pc0099_06_toad_sonon.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7remake_exports/player/_blends/PC0099_06_Toad_Sonon_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7remake_exports/player/_gallery/thumbs/PC0099_06_Toad_Sonon.jpg" alt="PC0099_06_Toad_Sonon"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_06_Toad_Sonon</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_06</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Sonon</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 18657 顶点 · 185 骨骼 · 4 材质（0 透明） · 7.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7remake_exports/player/_blends/PC0099_06_Toad_Sonon.blend" title="D:\ff7remake_exports\player\_blends\PC0099_06_Toad_Sonon.blend">D:\ff7remake_exports\player\_blends\PC0099_06_Toad_Sonon.blend</a>
+                <button class="copy" data-copy="D:\ff7remake_exports\player\_blends\PC0099_06_Toad_Sonon.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+  <section class="appendix">
+    <h2>附录 · 导出脚本用法</h2>
+    <p>脚本在 <code>scripts\final\</code>，需在装有游戏的机器上运行，并且要有 pak 的 AES key
+      （只放本机环境变量，仓库里没有）。完整说明见 <code>docs\final-fantasy-vii-remake-extraction.md</code>。</p>
+
+    <h3>两段流程</h3>
+    <table>
+      <tr><th>步骤</th><th>脚本</th><th>做什么</th></tr>
+      <tr><td>① 提取</td><td><code>ff7remake_export.ps1</code></td><td>UE Viewer（umodel）按包路径解 pak：PSKX 网格 + PNG 贴图 + .mat；自动隔离 <code>~mods</code></td></tr>
+      <tr><td>② 材质化</td><td><code>validate_ff7remake_model.py</code>（Blender 3.6 无头）</td><td>导入 PSKX，按 .mat 接 Diffuse/Normal/Alpha，渲预览，写报告 JSON</td></tr>
+      <tr><td>批量</td><td><code>export_ff7remake_models.ps1</code></td><td>按 <code>docs\ff7remake-player-model-files.txt</code>（36 个 Player 包）把①②串起来</td></tr>
+    </table>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\final
+$env:FF7REMAKE_AES_KEY = '&lt;key&gt;'
+.\export_ff7remake_models.ps1                 # 全部 36 个包
+.\export_ff7remake_models.ps1 -Only PC0002     # 只要 Tifa 系
+.\export_ff7remake_models.ps1 -SkipExtract -Force   # 只重做材质化
+Remove-Item Env:FF7REMAKE_AES_KEY</pre>
+    <p>产物 <code>_blends\&lt;包目录名&gt;.blend</code>（贴图外链到 <code>GameContents\</code>，不打包）、
+      <code>_preview.png</code>、<code>.json</code> 报告。</p>
+
+    <h3>命名规律</h3>
+    <table>
+      <tr><th>编号</th><th>含义</th></tr>
+      <tr><td><code>PC0000</code>~<code>PC0006</code></td><td>Cloud / Barret / Tifa / Aerith / Red XIII / Yuffie / Sonon</td></tr>
+      <tr><td><code>_00</code>~<code>_05</code></td><td>服装变体（标准装、礼服、Zack 装、浴场版…）</td></tr>
+      <tr><td><code>_90</code> / <code>_91</code></td><td>过场用的泪痕 / 汗渍 / 血迹贴片：只有一千来个顶点的叠加网格 + 一张遮罩，不是完整人物</td></tr>
+      <tr><td><code>PC0099</code></td><td>蛤蟆（Toad）状态，7 个角色各一个</td></tr>
+    </table>
+    <div class="note"><b>官方没有 nude</b>：<code>PC0000_05_Cloud_Naked</code> 是浴场剧情的围浴巾版。
+      Tifa 裸模来自 <code>~mods</code> 的社区 mod，见 <code>docs\ff7remake-mod-manual-export.md</code>。</div>
+
+    <h3>已知坑</h3>
+    <table>
+      <tr><th>症状</th><th>原因 / 处理</th></tr>
+      <tr><td>衣服、丝袜整片透明</td><td>同名 <code>_A</code> 遮罩只在 .mat 引用它时才接 Alpha（BodyA_A 往往只给耳环/头发用）——脚本已按此处理</td></tr>
+      <tr><td>Tifa 手指与手套分离</td><td>皮手套是独立的武器包 <code>WE0002_00</code>，用 <code>fix_ff7remake_tifa_gloves.py</code> 合并</td></tr>
+      <tr><td>Blender 报没有 PSK 导入器</td><td>无头启动不加载用户插件，批量脚本用 <code>enable_psk_addon.py</code> 前置启用 <code>io_scene_psk_psa</code></td></tr>
+      <tr><td>umodel 报错找不到 key</td><td><code>$env:FF7REMAKE_AES_KEY</code> 没设；key 不在仓库里</td></tr>
+    </table>
+
+    <h3>重新生成本页</h3>
+    <pre>python scripts\final\html\collect_manifest.py
+python scripts\final\html\make_gallery.py</pre>
+    <p>缩略图写在 <code>_gallery\thumbs\</code>，<b>刻意不进仓库</b>。</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var chrSel = document.getElementById('chr');
+  var kind = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!kind || card.dataset.kind === kind)
+        && (!chrSel.value || card.dataset.chr === chrSel.value)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  chrSel.addEventListener('change', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      kind = chip.dataset.kind || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard 需要安全上下文，file:// 不是
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

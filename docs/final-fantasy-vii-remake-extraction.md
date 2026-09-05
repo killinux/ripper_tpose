@@ -21,6 +21,51 @@ Steam 版 `FINAL FANTASY VII REMAKE` 使用传统 UE4 `.pak`，但 Intergrade �
 > `-save` 原始包和 32 位索引 glTF 转换；完整实操见
 > [`ff7remake-mod-manual-export.md`](ff7remake-mod-manual-export.md)。
 
+## 批量导出全部 Player 主模型（2026-09-05）
+
+`scripts\final\export_ff7remake_models.ps1` 把「umodel 逐包提取」和「Blender 材质化」串成一条命令，
+按 [`ff7remake-player-model-files.txt`](ff7remake-player-model-files.txt) 的 36 个包循环：
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\final
+$env:FF7REMAKE_AES_KEY = '<key>'            # 只放本机环境变量，仓库里没有
+.\export_ff7remake_models.ps1                 # 全部 36 个；已有 .blend 的跳过
+.\export_ff7remake_models.ps1 -Only PC0002    # 只要 Tifa 系
+.\export_ff7remake_models.ps1 -SkipExtract -Force   # 提取物已在，只重做材质化
+.\export_ff7remake_models.ps1 -List
+Remove-Item Env:FF7REMAKE_AES_KEY
+```
+
+- 所有包共用一个输出根 `D:\ff7remake_exports\player\`，`Common` 的眼/口贴图只提取一次；
+  产物 `_blends\<包目录名>.blend`、`_preview.png`、`.json` 报告（贴图外链到 `GameContents\`，不打包）。
+- 无头 Blender 不加载用户插件，脚本用 `enable_psk_addon.py` 前置启用 `io_scene_psk_psa`。
+- 材质化每包 2–8 s，umodel 提取 36 个包约 3 分钟。本批 **36/36 成功、缺贴图 0**。
+
+**画廊**：`python scripts\final\html\collect_manifest.py`（直接读报告 JSON，不开 Blender）+
+`python scripts\final\html\make_gallery.py` → `scripts\final\html\index.html`，
+可按角色下拉、按「主服装 / 泪痕贴片 / 蛤蟆」筛选。
+
+### 这批发现并修掉的两处 `validate_ff7remake_model.py` 问题
+
+| 症状 | 原因 | 处理 |
+|---|---|---|
+| Tifa 标准装的衬衫、袖套、丝袜整片消失 | 脚本按名字把 `BodyA_C` 配上同名 `BodyA_A` 当 Alpha，但这张遮罩 99% 全黑，只有耳环材质真的用它 | `_A` 只在该材质 `.mat` 的 `Other[n]` 里引用它时才接 Alpha |
+| Yuffie 莫古利装 24/34 张贴图缺失 | 变体包直接引用基础包（`PC0005_00`）的材质，自己的 `Material\` 没有那些 `.mat` | `.mat` 本目录找不到就到整个导出根去找 |
+
+另把预览灯光从 250 cm 外的面光（几乎全黑）换成太阳光 + 中性灰背景。
+
+### 36 个包的实际内容
+
+| 编号 | 内容 | 顶点数量级 |
+|---|---|---|
+| `PC0000_00`~`_05` Cloud、`PC0001_00` Barret、`PC0002_00`~`_04` Tifa、`PC0003_00`~`_04` Aerith、`PC0004_00` Red XIII、`PC0005_00`~`_02` Yuffie、`PC0006_00` Sonon | 完整人物 + 服装 | 8–12 万 |
+| `*_90` / `*_91`（泪痕、汗渍、血迹） | **只是叠加贴片**：一千来个顶点的面部/眼部网格 + `_A` 遮罩 + 法线，没有颜色贴图，不是完整人物 | ~1000 |
+| `PC0099_00`~`_06` Toad | 蛤蟆形态，7 个角色各一套服装贴图 | ~1–2 万 |
+
+`PC0000_05_Cloud_Naked` 是浴场剧情的版本，网格与标准装一致（预览看起来相同）。
+Tifa 各套的手指与皮手套仍是分离的（手套是独立武器包 `WE0002_00`），合并方法见上文
+「Tifa 默认皮手套」。
+
 ## Tifa 验证结果
 
 验证使用的是原版资源，不是 `End\Content\Paks\~mods` 中的替换包：

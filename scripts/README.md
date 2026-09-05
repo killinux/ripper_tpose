@@ -22,6 +22,10 @@ Blender 插件也彼此独立：
 - FFVII Rebirth：`scripts\final\ff7rebirth_tools.py`，侧边栏 **FF7RB**；
 - Stellar Blade：`scripts\stellarblade\validate_eve.py`，Blender 3.6 后台组合验证。
 
+FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
+按清单批量「提取 + Blender 材质化」36 个 Player 包，画廊在 `final\html\`；
+步骤见 [`docs/final-fantasy-vii-remake-extraction.md`](../docs/final-fantasy-vii-remake-extraction.md)。
+
 FFVII Rebirth 不能调用 AssetStudio：它的模型先由 FModel 从 Unreal IoStore 导出，再由
 Blender 插件从导出目录导入；已保存的 Player 变体可用
 `final\export_ff7rb_models.ps1` 无头批量材质化为 Blend/FBX/GLB。完整步骤见
