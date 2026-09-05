@@ -12,6 +12,7 @@ manifest 只存本机路径与统计，不含任何游戏素材——和其它�
 import bpy
 import json
 import os
+import re
 import sys
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
@@ -37,10 +38,22 @@ def classify_mesh(name):
     return "other"
 
 
-def count_part_textures(root, char_code):
+# 文件名约定：<角色>_<显示名>.blend 是默认服装 COS_001；
+# 换装批量出的是 <角色>_<显示名>_<COS|DLC>_<NNN>.blend
+COSTUME_RE = re.compile(r"^([A-Z0-9]+)_[A-Za-z0-9]+_(COS|DLC)_(\d+)$")
+
+
+def costume_of(label):
+    m = COSTUME_RE.match(label)
+    if m:
+        return "%s_%s_%s" % (m.group(1), m.group(2), m.group(3))
+    return label.split("_")[0] + "_COS_001"
+
+
+def count_part_textures(root, char_code, costume):
     """按约定的部件目录数贴图（DDS），拿不到就返回 0。"""
     total = {}
-    for suffix in ("COS_001", "FACE", "HAIR_001"):
+    for suffix in (costume[len(char_code) + 1:], "FACE", "HAIR_001"):
         d = os.path.join(root, "%s_%s" % (char_code, suffix))
         if os.path.isdir(d):
             n = 0
@@ -60,6 +73,7 @@ def main():
         path = os.path.join(BLEND_DIR, fname)
         label = os.path.splitext(fname)[0]
         char_code = label.split("_")[0]
+        costume = costume_of(label)
         preview = os.path.join(BLEND_DIR, label + "_preview.png")
 
         bpy.ops.wm.open_mainfile(filepath=path)
@@ -92,6 +106,7 @@ def main():
         results.append({
             "label": label,
             "char": char_code,
+            "costume": costume,
             "blend": path,
             "preview": preview if os.path.isfile(preview) else "",
             "blendSize": os.path.getsize(path),
@@ -100,7 +115,7 @@ def main():
             "materials": len(bpy.data.materials),
             "alphaMaterials": alpha_mats,
             "images": len(images),
-            "partTextures": count_part_textures(ROOT, char_code),
+            "partTextures": count_part_textures(ROOT, char_code, costume),
             "warnings": warnings,
         })
         print("[%d/%d] %s meshes=%d mats=%d alpha=%d imgs=%d %s"

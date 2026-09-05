@@ -28,7 +28,7 @@ PAGE_NAME = "index.html"
 DEFAULT_GAME = r"D:\Program Files (x86)\Steam\steamapps\common\Dead or Alive 5 Last Round"
 # 只扫这两个封包：常规服装/发型都在里面（其余是场景/过场，与本页无关）
 ARCHIVES = ("chara_common", "chara_initial")
-COS001_RE = re.compile(r"^([A-Z0-9]+)_COS_001\.TMC$")
+COSTUME_TMC_RE = re.compile(r"^([A-Z0-9]+_(?:COS|DLC)_\d+)\.TMC$")
 
 
 def parse_args():
@@ -80,7 +80,7 @@ def build_thumb(preview_path, thumb_path, force):
 
 
 def map_archives(game_root):
-    """角色前缀 -> 所在封包。拿不到游戏目录就返回空表（页面自动隐藏该 facet）。"""
+    """服装条目（KASUMI_COS_002）-> 所在封包。拿不到游戏目录就返回空表（页面自动隐藏该 facet）。"""
     if not game_root or not os.path.isdir(game_root):
         return {}
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -103,9 +103,9 @@ def map_archives(game_root):
             continue
         for enc in entries:
             real = names.get(enc, ("", None))[0]
-            # 必须精确匹配 <角色>_COS_001.TMC —— 松散地用 "in" 会被
+            # 必须整名精确匹配 <角色>_COS_NNN.TMC —— 松散地用 "in" 会被
             # KASUMI_BOSS_COS_001.TMC 之类命中，把霞误标成 chara_common
-            m = COS001_RE.match(real)
+            m = COSTUME_TMC_RE.match(real)
             if m:
                 mapping.setdefault(m.group(1), archive)
     return mapping
@@ -120,10 +120,13 @@ def collect(manifest_path, thumb_dir, force, archives):
         label = entry.get("label") or ""
         thumb = build_thumb(entry.get("preview"), os.path.join(thumb_dir, label + ".jpg"), force)
         parts = entry.get("parts") or {}
+        char_code = entry.get("char") or ""
+        costume = entry.get("costume") or (char_code + "_COS_001")
         models.append({
             "label": label,
-            "char": entry.get("char") or "",
-            "archive": archives.get(entry.get("char") or "", ""),
+            "char": char_code,
+            "costume": costume,
+            "archive": archives.get(costume, ""),
             "blend": entry.get("blend") or "",
             "preview": entry.get("preview") or "",
             "thumb": thumb or "",
@@ -152,6 +155,8 @@ def render_card(model):
             esc("; ".join(model["warnings"])), len(model["warnings"]))
     if model["archive"]:
         badges += '<span class="badge badge-arc">%s</span>' % esc(model["archive"])
+    if model["costume"]:
+        badges += '<span class="badge badge-cos">%s</span>' % esc(model["costume"].split("_", 1)[1])
 
     parts = model["parts"]
     part_txt = " · ".join(
@@ -162,10 +167,10 @@ def render_card(model):
     if other:
         part_txt += " · 其它 %d" % other
 
-    search_blob = esc(" ".join([model["label"], model["char"], model["blend"]]).lower())
+    search_blob = esc(" ".join([model["label"], model["char"], model["costume"], model["blend"]]).lower())
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["label"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
-    return """      <article class="card" data-search="{search}" data-arc="{arc}" data-warn="{warn}">
+    return """      <article class="card" data-search="{search}" data-arc="{arc}" data-chr="{chr}" data-warn="{warn}">
         <a class="shot" href="{preview}" target="_blank" rel="noopener"
            title="点击查看原图">{figure}</a>
         <div class="body">
@@ -182,7 +187,7 @@ def render_card(model):
           </dl>
         </div>
       </article>
-""".format(search=search_blob, arc=esc(model["archive"]),
+""".format(search=search_blob, arc=esc(model["archive"]), chr=esc(model["char"]),
            warn="1" if model["warnings"] else "0",
            preview=esc(preview_uri), figure=figure, label=esc(model["label"]),
            badges=badges, parts=esc(part_txt or "-"),
@@ -201,11 +206,16 @@ def render(models, source_root):
 
     chips = "".join('<button class="chip" data-arc="%s">%s</button>' % (esc(a), esc(a))
                     for a in archives)
+    per_char = {}
+    for m in models:
+        per_char[m["char"]] = per_char.get(m["char"], 0) + 1
+    chr_options = "".join('<option value="%s">%s (%d)</option>' % (esc(c), esc(c), n)
+                          for c, n in sorted(per_char.items()))
     cards = "".join(render_card(m) for m in models)
     return PAGE_TEMPLATE.format(
         generated=esc(generated), source_root=esc(source_root),
         total=len(models), characters=characters, size=human_size(total_bytes),
-        warned=warned, chips=chips, cards=cards)
+        warned=warned, chips=chips, chr_options=chr_options, cards=cards)
 
 
 PAGE_TEMPLATE = """<!DOCTYPE html>
@@ -271,6 +281,8 @@ main {{ padding: 22px 32px 48px; }}
 .badge {{ font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }}
 .badge-warn {{ color: var(--warn); background: var(--warn-bg); }}
 .badge-arc {{ color: var(--arc); background: var(--arc-bg); cursor: default; }}
+.badge-cos {{ background: #eef2ff; color: #3730a3; }}
+#chr {{ padding: 6px 8px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }}
 dl {{ margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }}
 dt {{ color: var(--muted); font-size: 12px; }}
 dd {{ margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }}
@@ -312,8 +324,9 @@ td code, li code, p code {{ font-family: Consolas, monospace; }}
 </header>
 
 <div class="toolbar">
-  <input id="q" type="search" placeholder="搜索角色名或路径…（按 / 聚焦）">
-  <button class="chip on" data-arc="">全部</button>
+  <input id="q" type="search" placeholder="搜索角色名/服装号或路径…（按 / 聚焦）">
+  <select id="chr"><option value="">全部角色</option>{chr_options}</select>
+  <button class="chip on" data-arc="">全部封包</button>
   {chips}
   <button class="toggle" id="warnOnly">只看告警</button>
   <span class="count" id="count"></span>
@@ -393,6 +406,7 @@ python scripts\\doa5lr\\html\\make_gallery.py</pre>
   var empty = document.getElementById('empty');
   var warnOnly = document.getElementById('warnOnly');
   var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var chrSel = document.getElementById('chr');
   var arc = '';
 
   function apply() {{
@@ -402,6 +416,7 @@ python scripts\\doa5lr\\html\\make_gallery.py</pre>
     cards.forEach(function (card) {{
       var ok = (!term || card.dataset.search.indexOf(term) !== -1)
         && (!arc || card.dataset.arc === arc)
+        && (!chrSel.value || card.dataset.chr === chrSel.value)
         && (!onlyWarn || card.dataset.warn === '1');
       card.hidden = !ok;
       if (ok) shown++;
@@ -411,6 +426,7 @@ python scripts\\doa5lr\\html\\make_gallery.py</pre>
   }}
 
   q.addEventListener('input', apply);
+  chrSel.addEventListener('change', apply);
   warnOnly.addEventListener('click', function () {{
     warnOnly.classList.toggle('on');
     apply();

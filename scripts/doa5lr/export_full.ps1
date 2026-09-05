@@ -1,8 +1,9 @@
 ﻿# DOA5LR 一键出带材质 .blend：TMC（封包内或外部 mod 文件）→ FBX+DDS → Blender 组装 + 预览
 #
 # 用法：
-#   # A 官方内容：按名字从封包提取
-#   .\export_full.ps1 KASUMI_DLC_011 -Archive chara_initial -Hair 001
+#   # A 官方内容：按名字从封包提取（-Archive 缺省 auto：自动查条目在哪个封包）
+#   .\export_full.ps1 KASUMI_DLC_011 -Face auto -Hair 001
+#   已经提取过的部件（脸、发型）直接复用，不重复解包；-Force 才重提。
 #   .\export_full.ps1 HONOKA_COS_001 -Hair HONOKA_HAIR_002 -Label Honoka_战衣
 #
 #   # B 外部 mod：直接喂 .TMC 文件（同目录需有同名 .TMCL 贴图库）
@@ -24,7 +25,7 @@ param(
     [string] $HairTmc = "",
     [string] $FaceTmc = "",
     [string] $Face = "",
-    [string] $Archive = "chara_common",
+    [string] $Archive = "auto",
     [string] $Label = "",
     [string] $Hair = "",
     [string] $GameRoot = "D:\Program Files (x86)\Steam\steamapps\common\Dead or Alive 5 Last Round",
@@ -85,12 +86,47 @@ function New-PartFromTmc([string] $tmcPath) {
     return $pd
 }
 
+# --- 条目名 -> 封包 索引（-Archive auto 用；扫全部 .bin 一次，缓存到 <OutRoot>\_archive_index.txt）---
+$script:archiveIndex = $null
+function Get-ArchiveFor([string] $entryName) {
+    if ($Archive -ne "auto") { return $Archive }
+    if (-not $script:archiveIndex) {
+        $idxFile = Join-Path $OutRoot "_archive_index.txt"
+        if (-not (Test-Path $idxFile)) {
+            Write-Host "建立封包索引（首次，扫 $GameRoot\*.bin）..." -ForegroundColor DarkGray
+            $lines = @()
+            foreach ($bin in (Get-ChildItem $GameRoot -Filter "*.bin" -File)) {
+                $arc = $bin.BaseName
+                & $PythonExe (Join-Path $scriptDir "extract_lnk.py") $bin.FullName --list 2>$null | ForEach-Object {
+                    $f = ($_ -split '\s+') | Where-Object { $_ }
+                    if ($f.Count -ge 2 -and $f[1] -match '\.TMC$') { $lines += ($f[1].Substring(0, $f[1].Length - 4) + " " + $arc) }
+                }
+            }
+            $lines | Set-Content $idxFile -Encoding ASCII
+        }
+        $script:archiveIndex = @{}
+        foreach ($l in (Get-Content $idxFile)) {
+            $kv = $l -split ' '
+            # 同名多封包时优先 chara_initial > chara_common > 其它
+            if (-not $script:archiveIndex.ContainsKey($kv[0]) -or $kv[1] -eq "chara_initial") { $script:archiveIndex[$kv[0]] = $kv[1] }
+        }
+    }
+    $arc = $script:archiveIndex[$entryName.ToUpper()]
+    if (-not $arc) { throw "封包索引里没有 $entryName.TMC（删掉 $OutRoot\_archive_index.txt 可重建索引）" }
+    return $arc
+}
+
 # --- 部件来源：封包内按名字提取 ---
 function New-PartFromArchive([string] $entryName) {
-    # 注意：内部脚本的 stdout 必须消费掉，否则会混进本函数的返回值（$partDirs 会脏）
-    & (Join-Path $scriptDir "export_character.ps1") $entryName -Archive $Archive -OutputRoot $OutRoot -Force |
-        ForEach-Object { Write-Host $_ }
     $pd = Join-Path $OutRoot "$entryName\$entryName"
+    if ((Test-Path (Join-Path $pd "$entryName.fbx")) -and -not $Force) {
+        Write-Host "部件目录: $pd（已存在，复用）" -ForegroundColor DarkGray
+        return $pd
+    }
+    $arc = Get-ArchiveFor $entryName
+    # 注意：内部脚本的 stdout 必须消费掉，否则会混进本函数的返回值（$partDirs 会脏）
+    & (Join-Path $scriptDir "export_character.ps1") $entryName -Archive $arc -OutputRoot $OutRoot -Force |
+        ForEach-Object { Write-Host $_ }
     if (-not (Test-Path (Join-Path $pd "$entryName.fbx"))) {
         # export_character.ps1 按 TMC 名建子目录；名字匹配多套时取第一个含 FBX 的
         $cand = Get-ChildItem (Join-Path $OutRoot $entryName) -Directory -ErrorAction SilentlyContinue |

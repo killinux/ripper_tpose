@@ -26,17 +26,22 @@
 ```powershell
 cd E:\code\othercode\ripper_tpose\scripts\doa5lr
 
-# 标准三部件（推荐写法）：-Face auto 会自动用 <角色>_FACE
-.\export_full.ps1 KASUMI_COS_001 -Archive chara_initial -Face auto -Hair 001 -Label KASUMI_Kasumi
+# 标准三部件（推荐写法）：-Face auto 会自动用 <角色>_FACE；
+# -Archive 缺省 auto，自动查条目在哪个封包（首次扫全部 .bin 建索引 _archive_index.txt）
+.\export_full.ps1 KASUMI_COS_001 -Face auto -Hair 001 -Label KASUMI_Kasumi
 .\export_full.ps1 MARIE_COS_001 -Face auto -Hair 001 -Label MARIE_MarieRose
 
-# 换服装编号；自带头部的 DLC 服装可以不加 -Face
-.\export_full.ps1 KASUMI_DLC_011 -Archive chara_initial -Hair 001
+# 换服装编号：脸和发型已经提取过就直接复用，只解包新服装
+.\export_full.ps1 KASUMI_COS_002 -Face auto -Hair 001 -Label KASUMI_Kasumi_COS_002
+.\export_full.ps1 KASUMI_DLC_011 -Face auto -Hair 001 -Label KASUMI_Kasumi_DLC_011
 ```
 
-> 19 名女性角色的成品已批量导出在 `D:\doa5lr_exports\_blends\`（见该目录 README）。
+> 19 名女性角色的默认服装 + **全部 223 套换装（COS/DLC）** 已批量导出在
+> `D:\doa5lr_exports\_blends\`（见该目录 README §1）。换装批量就是上面那条命令
+> 按清单循环：`python extract_lnk.py <bin> --list` 抓 `<角色>_(COS|DLC)_NNN.TMC`，
+> 三路并行，每套 5–16 s。
 
-**先查名字和封包**（DOA5LR 模型分散在 36 个封包里，`-Archive` 要选对）：
+**查名字**（DOA5LR 模型分散在 36 个封包里；`-Archive auto` 会自己找，手动指定时要选对）：
 
 ```powershell
 python extract_lnk.py "D:\Program Files (x86)\Steam\steamapps\common\Dead or Alive 5 Last Round\chara_initial.bin" `
@@ -51,7 +56,11 @@ python extract_lnk.py "D:\Program Files (x86)\Steam\steamapps\common\Dead or Ali
 | `patch_XX_catalog` | 后期 DLC |
 | `stage_*` | 场景 |
 
-服装命名是**纯编号**（`COS_001` / `DLC_011`），名字看不出款式，只能导出后看预览挑。
+服装命名是**纯编号**（`COS_001` / `DLC_011`），名字看不出款式，只能导出后看预览挑——
+画廊页（`html\index.html`）可按角色下拉筛选、搜服装号。`DLCU_NNN`（47 套）是 DLC 的
+变体位，本批未导；`MILA_COS_008 / SARAH_DLC_002 / PAI_DLC_002` 是 10KB 占位条目，跳过。
+头发一律用 `HAIR_001`；官方每套服装的默认发型无法从条目名得知，需要别的发型用
+`-Hair 003` 重导。
 
 ---
 

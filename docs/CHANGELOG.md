@@ -14,6 +14,49 @@
 
 ---
 
+## 2026-09-05 — DOA5LR：换服装批量导出（19 人 223 套 COS/DLC）
+
+### 新增与修复
+
+- **`scripts/doa5lr/export_full.ps1`**：`-Archive` 缺省改为 `auto`——首次扫游戏目录全部
+  36 个 `.bin` 建 `<OutRoot>\_archive_index.txt`（条目名 → 封包），之后每个部件各自查
+  封包；以前一个 `-Archive` 管三个部件，服装在 `chara_common` 而脸/发型在 `chara_initial`
+  的角色（霞、绫音）换装时会解不出脸。已提取过的部件目录（`<OutRoot>\<条目>\<条目>\*.fbx`）
+  直接复用，不再每次 `-Force` 重解包——这也是三路并行不互相踩脸/发型目录的前提。
+- **`scripts/doa5lr/build_blend.py` 就位判据放宽**：脸/头发「顶端够到身体顶端」的余量
+  由身体高度 5% 放宽到 25%。兔女郎类 DLC（`AYANE_DLC_006/007` 等 11 套）的兔耳把身体
+  包围盒顶端撑高约 15%，脸和头发被误判为未就位而整体上移 ~25 cm。真正未就位的头发
+  （用自己原点、悬在腰腹，顶端只到 0.6）仍能判出。
+- **`scripts/doa5lr/html/collect_manifest.py` / `make_gallery.py`**：从文件名解析服装条目
+  （`<角色>_<名>_<COS|DLC>_<NNN>`，无后缀即 `COS_001`），封包徽标按整个服装条目名查
+  （原来只认 `_COS_001`），卡片加服装号徽标，工具栏加**按角色下拉筛选**，搜索框也搜服装号。
+
+### 用户如何操作
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\doa5lr
+.\export_full.ps1 KASUMI_COS_002 -Face auto -Hair 001 -Label KASUMI_Kasumi_COS_002   # 单套
+# 批量：python extract_lnk.py <bin> --list 抓 <角色>_(COS|DLC)_NNN.TMC 做清单后循环上面这条
+blender --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py --force
+```
+
+### 本批结果
+
+19 名女性角色在 `chara_common` / `chara_initial` 里共 245 个 `COS/DLC` 条目：19 个 COS_001
+早已导出，3 个是 10 KB 占位（`MILA_COS_008`、`SARAH_DLC_002`、`PAI_DLC_002`），其余
+**223 套全部出 .blend**（三路并行，每套 5–16 s），在 `D:\doa5lr_exports\_blends\`，
+对照表见该目录 README §1。头发统一 `HAIR_001`（官方每套服装的默认发型无法从条目名得知）。
+`DLCU_NNN`（47 套）未导。
+
+### 验证
+
+- `KASUMI_COS_002`：84 材质重建、135 贴图打包、脸/发型复用无重解包。
+- 223 套预览拼图逐一目视：Alpha-152 通体白色仍是素材本身；兔耳装修复前后对比
+  脸/头发回到颈部；无其它对齐或材质异常。
+
+---
+
 ## 2026-09-05 — DOA6：mod 导出支持发型/脸部件，批量转出 45 个社区 mod 变体
 
 ### 新增与修复
