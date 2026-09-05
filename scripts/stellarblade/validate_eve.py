@@ -359,18 +359,118 @@ def set_principled_color(shader, color, roughness=0.48, metallic=0.0):
     shader.inputs["Metallic"].default_value = metallic
 
 
-def find_material_albedo(directory: str, material_name: str) -> str | None:
-    """Match a UE material instance name to an exported *_A albedo PNG.
+_EXPORT_INDEX: dict[str, dict[str, str]] = {}
+# Texture names that are never an outfit albedo: engine/detail/utility maps and
+# the "del" placeholder of MI_CH_Delete stub materials.
+_GENERIC_DIFFUSE = re.compile(
+    r"^(T_|Default|Base_|BaseFlat|Grunge|HeatmapGradient|BlendFunc|Good64|baseMaterial|FlatNormal|"
+    r"CASC_|Black$|White$|BayerMatrix|del$|skin_n$|MicroNormal|NylonTricot)", re.I
+)
+# Non-colour channels by suffix (normal, roughness/metal packs, masks, emissive, alpha...).
+_NON_COLOUR_SUFFIX = re.compile(
+    r"_(n|nm|nrm|normal|orm|orss|dmse|mask\d*|e|emi|emissive|alpha|op|opacity|m|r|s|h|ao|id|"
+    r"spec|specular|ml|mr|mra|rma|disp|height|flow|tint)(_[a-z0-9-]+)?$", re.I
+)
+_COLOUR_SUFFIX = re.compile(r"_(a|d|basecolor|albedo|diffuse|color|col|adir)(_[a-z0-9-]+)?$", re.I)
+_VARIANT_TOKENS = {"typeb", "typec", "type", "b", "c", "orangered", "02", "var01", "nh", "a1"}
 
-    MI_CH_P_EVE_Nikke_06_UV2 -> CH_P_EVE_Nikke_06_UV2_A.png, falling back to
-    the albedo sharing the most name tokens, then to the largest albedo.
+
+def _export_root(directory: str) -> str:
+    """Walk up from an outfit texture folder to the UE Viewer export root (parent of the Art folder)."""
+    cur = os.path.abspath(directory)
+    while True:
+        parent, leaf = os.path.split(cur)
+        if not leaf:
+            return cur
+        if leaf.lower() == "art":
+            # DLC outfits sit under <root>\DLC_2\Art\... but reference the base
+            # game's ReferenceBody materials under <root>\Art\..., so index from
+            # the level above the DLC_N folder.
+            if re.match(r"^DLC_\d+$", os.path.basename(parent), re.I):
+                return os.path.dirname(parent)
+            return parent
+        cur = parent
+
+
+def _export_index(root: str) -> dict[str, str]:
+    """name.lower() -> path for every .png/.mat under the export root (cached per root)."""
+    if root not in _EXPORT_INDEX:
+        index: dict[str, str] = {}
+        for walk_root, _dirs, files in os.walk(root):
+            for name in files:
+                low = name.lower()
+                if low.endswith((".png", ".mat")):
+                    index.setdefault(low, os.path.join(walk_root, name))
+        _EXPORT_INDEX[root] = index
+    return _EXPORT_INDEX[root]
+
+
+def _usable_colour_texture(name: str, index: dict[str, str]) -> str | None:
+    """Return the PNG path if ``name`` looks like a colour texture that was exported."""
+    if not name or _GENERIC_DIFFUSE.match(name):
+        return None
+    stem = name.lower()
+    if _NON_COLOUR_SUFFIX.search(stem) and not _COLOUR_SUFFIX.search(stem):
+        return None
+    path = index.get(stem + ".png")
+    if not path or "/engine/" in path.replace('\\', "/").lower():
+        return None
+    return path
+
+
+def material_diffuse_from_mat(directory: str, material_name: str) -> str | None:
+    """Authoritative albedo: the textures listed in the material's UE Viewer .mat file.
+
+    Outfits 01-06 share ScanCloth_*_D textures that live under whichever outfit
+    exported them first and never match the *_A naming heuristic; the .mat file
+    written next to each material instance names the real diffuse texture.
+    ``Diffuse=`` wins when it is a real colour map; otherwise the first colour-
+    looking entry among the other texture slots (e.g. hair *_ADIR) is used.
     """
+    base = material_base_name(material_name)
+    index = _export_index(_export_root(directory))
+    mat = index.get((base + ".mat").lower())
+    if not mat:
+        return None
+    diffuse = ""
+    others: list[str] = []
+    with open(mat, "r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            key, sep, value = line.strip().partition("=")
+            if not sep:
+                continue
+            value = value.strip()
+            if key == "Diffuse":
+                diffuse = value
+            elif key not in ("Normal", "Opacity", "Emissive", "SpecPower"):
+                others.append(value)
+    path = _usable_colour_texture(diffuse, index)
+    if path:
+        return path
+    for name in others:
+        if _COLOUR_SUFFIX.search(name.lower()):
+            path = _usable_colour_texture(name, index)
+            if path:
+                return path
+    return None
+
+
+def find_material_albedo(directory: str, material_name: str) -> str | None:
+    """Match a UE material instance name to an exported albedo PNG.
+
+    Order: the material's own .mat Diffuse= texture (searched across the whole
+    export root), then MI_CH_P_EVE_Nikke_06_UV2 -> CH_P_EVE_Nikke_06_UV2_A.png,
+    then the albedo sharing the most name tokens, then the largest albedo.
+    """
+    from_mat = material_diffuse_from_mat(directory, material_name)
+    if from_mat:
+        return from_mat
     albedos = []
     for root, _dirs, files in os.walk(directory):
         for name in files:
             if name.lower().endswith(".png") and re.search(
-                r"_a(_type_[a-z0-9]+)?(_\d+)?\.png$", name.lower()
-            ):
+                r"_(a|d|basecolor)(_type_[a-z0-9]+)?(_\d+)?\.png$", name.lower()
+            ) and not _GENERIC_DIFFUSE.match(name):
                 albedos.append(os.path.join(root, name))
     if not albedos:
         return None
@@ -385,7 +485,11 @@ def find_material_albedo(directory: str, material_name: str) -> str | None:
 
     def score(path: str) -> tuple:
         stem_tokens = set(os.path.splitext(os.path.basename(path))[0].lower().split("_"))
-        return (len(tokens & stem_tokens), os.path.getsize(path))
+        # A recolour's albedo (TypeB/TypeC/_02...) must not win for the base
+        # material: MI_CH_EVE_01_UV01 should get CH_P_EVE_01_Body_D, not
+        # CH_EVE_01_TypeB_UV01_A, even though the latter shares one more token.
+        stray_variant = len((stem_tokens & _VARIANT_TOKENS) - tokens)
+        return (len(tokens & stem_tokens) - 2 * stray_variant, os.path.getsize(path))
 
     return max(albedos, key=score)
 

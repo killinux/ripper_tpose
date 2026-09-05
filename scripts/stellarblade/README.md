@@ -97,6 +97,29 @@ Monster 390 / Etc 610 / Generic 209 / Weapon 18），其中已导出 6 个 Eve �
 依赖 `export_eve.ps1` 已跑过一次（共享的脸/发型/贴图与 UEFormat 快照、
 `--alignment-reference` 用的标准验证 JSON 都来自它）。
 
+## 全部服装批量（2026-09-05：146 套，含 10 套联动 DLC）
+
+`export_outfit.ps1` 按包名循环即可；清单来自 `list_models.py`：本体
+`--glob 'CH_P_EVE_*'`，DLC 加 `--path-filter 'SB/Content/DLC'`，去掉 `CtlRig / IKDefo /
+LODSettings / Physics / Shadow / _sample / Test / Taper / NoHair / Clothdata` 和脸、发、牙的
+部件包，再去掉 `CH_P_EVE_39_TYPE-A / A1`（四个材质槽全是 `MI_CH_Delete` 占位、贴图叫 `del`
+的废弃开发网格），剩 146 个服装包（编号 01–63 及变体、7 个特殊目录、Nier 4 + Nikke 6）。
+三路并行每套 7–16 s，PSK 已在时 6 s。
+
+这一批修掉的三个问题（都在 `export_outfit.ps1` / `validate_eve.py` 里）：
+
+| 症状 | 原因 | 处理 |
+|---|---|---|
+| 79 套报「UE Viewer produced no *.psk」 | 顶点多 / 多 UV 的网格 UE Viewer 写的是 `.pskx` | 查找时 `.psk` 与 `.pskx` 都认 |
+| 20 / 26 装上头发时报 `Ab-TL-HairB01 is missing` | 目录下还有 `Temp\CH_P_EVE_20` 同名子包，按名导出只出了它，且它的骨架没有马尾锚点 | 查找排除 `\Temp\`；按名导不出网格时用 `list_models.py` 查出完整包路径再按路径导 |
+| 01–06 系整身灰白、部分服装皮肤贴成布料 | 贴图只按 `*_A.png` 猜名；01–06 用共享的 `ScanCloth_*_D`，还导在别的服装目录下 | `find_material_albedo` 先读材质自己的 `.mat`：`Diffuse=` 是真颜色图就用它，是 `T_*` / 引擎图标 / `del` 之类就在其它槽位里找 `_D/_A/_BaseColor/_ADIR`，整个导出根（含 DLC_N 上一级）去找；猜名只作兜底，且猜名时惩罚材质名里没有的 TypeB/TypeC 换色标记（01_Body 原来会拿到 TypeB 的贴图） |
+| 11_1（Raven 变体）头上两套头发 | 这个包自带 NA_53 的发型网格，管线又照常装上 Eve 默认发型/马尾 | 未处理，属已知局限；它自己的头发贴图已按 `.mat` 的 `_ADIR` 正确接上 |
+
+画廊：`python html\collect_manifest.py`（读 `validation\*.json`，不开 Blender）+
+`python html\make_gallery.py` → `html\index.html`；亮预览由
+`..\final\html\render_blend_preview.py -- D:\stellarblade_exports\blender --suffix _gallery` 补渲
+（`validate_eve.py` 自己的渲染偏暗，仍保留在 `validation\`）。
+
 ## 裸模（EveOriginalProportions Mod）
 
 原版没有 nude 资产；裸模来自本机安装的 EveOriginalProportions Mod（覆盖

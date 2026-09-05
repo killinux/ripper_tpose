@@ -130,6 +130,13 @@ Eve 服装资产清单。编号→名称映射来自
 局限：个别服装的最终颜色由材质实例的调色参数决定而非贴图本身
 （灰度底图 + tint），此类贴图统计会偏低；目检未发现因此漏掉的粉色整装。
 
+## 4.5 全部已导出（2026-09-05）
+
+上表全部 146 个服装包（含变体、NH 版与联动 DLC；`39_TYPE-A/A1` 是占位删除材质的废弃网格，未导）都已用 `scripts\stellarblade\export_outfit.ps1`
+出成带贴图的 `.blend` + 预览，在 `D:\stellarblade_exports\blender\Eve_<包名>.blend`；
+画廊 `scripts\stellarblade\html\index.html` 可按编号筛选、搜服装名。批量方法与踩坑见
+`scripts\stellarblade\README.md`「全部服装批量」。
+
 ## 5. 怎么导出某套服装（简单示例）
 
 最快的方式是专用 UE Viewer 命令行，**直接用包名**（不用写完整路径，

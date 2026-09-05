@@ -77,8 +77,19 @@ if (-not (Test-Path -LiteralPath $UEFormatSource)) {
 Write-Host ""
 Write-Host "[1/2] Outfit PSK: $Package" -ForegroundColor Cyan
 function Find-OutfitPsk {
-    @(Get-ChildItem -LiteralPath $outfitRoot -Recurse -Filter ($Package + '.psk') `
-        -File -ErrorAction SilentlyContinue) | Select-Object -First 1
+    # UE Viewer writes .pskx (extended PSK) for meshes with >64k vertices or
+    # extra UV sets; io_scene_psk_psa imports both, so accept either.
+    # Some outfits also carry a Temp\ sub-package with the same object name
+    # (CH_P_EVE_20\Temp\CH_P_EVE_20) whose skeleton lacks the ponytail anchor;
+    # prefer the shallowest, non-Temp hit.
+    foreach ($ext in @('.psk', '.pskx')) {
+        $hit = @(Get-ChildItem -LiteralPath $outfitRoot -Recurse -Filter ($Package + $ext) `
+            -File -ErrorAction SilentlyContinue) |
+            Where-Object { $_.FullName -notmatch '\\Temp\\' } |
+            Sort-Object { $_.FullName.Length } | Select-Object -First 1
+        if ($hit) { return $hit }
+    }
+    return $null
 }
 $psk = $null
 if (Test-Path -LiteralPath $outfitRoot) { $psk = Find-OutfitPsk }
@@ -95,7 +106,28 @@ if (-not $psk) {
         Select-Object -Last 4 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkGray }
     $psk = Find-OutfitPsk
     if (-not $psk) {
-        Write-Error ("UE Viewer produced no " + $Package + ".psk. Check the package name " +
+        # Export-by-object-name can silently skip the mesh when another package
+        # shares the name (Temp\ copies) or when the object list is ambiguous;
+        # resolve the real package path from the .utoc index and export by path.
+        $listPy = Join-Path $scriptDir 'list_models.py'
+        # list_models.py prints per-utoc counts on stderr; with $ErrorActionPreference=Stop
+        # a native stderr line becomes a terminating error, so route through cmd and drop it.
+        $pkgPath = @(cmd /c ('python "' + $listPy + '" --glob "' + $Package + '.uasset" --all-files 2>nul')) |
+            Where-Object { $_ -match ('/' + [regex]::Escape($Package) + '\.uasset$') -and $_ -notmatch '/Temp/' } |
+            Select-Object -First 1
+        if ($pkgPath) {
+            $pkgPath = ($pkgPath.Trim() -replace '\.uasset$', '')
+            Write-Host ("  Retrying by package path: " + $pkgPath) -ForegroundColor Yellow
+            $umodelCmd = ('"{0}" -export "-path={1}" -game=ue4.26 -noanim -psk -png "-out={2}" "{3}" 2>&1' `
+                -f $UmodelExe, $GameRoot, $outfitRoot, $pkgPath)
+            $umodelOutput = @(cmd /c $umodelCmd)
+            $umodelOutput | Where-Object { $_ -match 'Exporting SkeletalMesh|Exported \d+/\d+|ERROR' } |
+                Select-Object -Last 3 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkGray }
+            $psk = Find-OutfitPsk
+        }
+    }
+    if (-not $psk) {
+        Write-Error ("UE Viewer produced no " + $Package + ".psk/.pskx. Check the package name " +
             "(see docs/stellar-blade-eve-outfits.md or list_models.py --glob '" + $Package + "*').")
         exit 1
     }
