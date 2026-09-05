@@ -10,6 +10,7 @@
 用法:
   python mod_matmap.py <mod.g1m> <Material目录> <输出matmap.json>
   python mod_matmap.py ... --assign "3=body,5=f01"   # 材质号=部位 手动覆盖
+  python mod_matmap.py ... --key PHFCOS037            # 多部件 mod：只认这个部件的 g1t
 """
 import argparse
 import json
@@ -27,12 +28,18 @@ def main():
     ap.add_argument("mat_dir")
     ap.add_argument("out")
     ap.add_argument("--assign", default=None, help='手动 "材质号=部位,..." 覆盖启发式')
+    ap.add_argument("--key", default=None, help="只用文件名含 _<KEY>_ 的 g1t（如 PHFCOS037）；没匹配则退回全部")
     args = ap.parse_args()
 
     mats, subs = parse_g1m(args.g1m)
 
+    files = sorted(os.listdir(args.mat_dir))
+    if args.key:
+        keyed = [fn for fn in files if ("_%s_" % args.key.upper()) in fn.upper()]
+        if keyed:
+            files = keyed
     parts = {}
-    for fn in os.listdir(args.mat_dir):
+    for fn in files:
         m = re.match(r"MPR_Muscle_Character_[A-Z0-9]+_(\w+?)_kids(\w+)\.g1t$", fn)
         if m and os.path.getsize(os.path.join(args.mat_dir, fn)) > 200:
             parts.setdefault(m.group(1), {})[m.group(2)] = fn

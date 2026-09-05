@@ -14,6 +14,62 @@
 
 ---
 
+## 2026-09-05 — DOA6：mod 导出支持发型/脸部件，批量转出 45 个社区 mod 变体
+
+### 新增与修复
+
+- **`scripts/doa6/export_nude_mod.ps1` 重写为按部件驱动**：以前只认 mod 里的服装 g1m，
+  现在按 `<CHR>_<COS|HAIR|FACE>_<NNN>` 把 mod 的 g1m 分类，mod 给什么就换什么，
+  缺的部件用官方 `COS_001 / FACE_001 / HAIR_001` 补齐（`-Cos/-Face/-Hair` 改编号）。
+  `-Chr` 可省略（按 g1m 名推断），`-Label` 缺省由 zip 名生成，新增 `-NoPreview`。
+  `-Cos/-Face/-Hair` 除编号外也接受完整部件名（`-Face AYA_FACE_001`，body-swap 类 mod
+  用别的角色的脸），官方件本机没导出过时自动调 `export_character.ps1` 现场导。
+- **mod 自带 `<id>.ktid` 优先于原版**：Yor Forger 的发型 mod 把贴图槽位从 6 个扩成
+  13 个，用原版 ktid 解析时 44 个 submesh 全部无贴图（渲成白发）。现在先找 g1m 旁边
+  的 ktid；另加兜底——路线 A 若留下有顶点却无 albedo 的 submesh，自动改走启发式。
+- **mod 若带官方部件的贴图（如 `PHFFACE001_face_kidsalb`）**，把官方部件复制一份叠上
+  mod 贴图再组装，不再丢弃这些贴图。
+- **`mod_matmap.py --key <部件键>`**：多部件 mod 的 Material 目录混着几套贴图，
+  启发式只看本部件的 g1t（无匹配时退回全部）。
+- **`html/collect_manifest.py`**：mod 变体的判定从「服装目录是 `<Label>_cos`」放宽到
+  `_cos/_face/_hair` 任一，贴图计数同样覆盖三个目录；否则发型 mod 会被标成官方。
+- 两处老坑再次踩到并修掉：PowerShell 函数里 python 的 stdout 会混进返回值
+  （`$partDirs` 变脏 → "blend 未生成"），全部改成 `| ForEach-Object { Write-Host }`；
+  Blender 输出改写到 `_blends\<Label>.log`，失败时打印尾部而不是静默。
+
+### 用户如何操作
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\doa6
+.\export_nude_mod.ps1 D:\doa_mods\doa6\_zips\<mod>.zip -Label MOM_Momiji_LooseHair   # 发型 mod
+.\export_nude_mod.ps1 <zip> -Label PHF_YorForger_Bikini                              # 服装+发型 mod
+.\export_nude_mod.ps1 <已解压目录> -Chr AYA -Label AYA_Ayane_Fachan2 -Assign "5=body"  # 纠正启发式
+```
+
+产物 `D:\doa6_exports\_blends\<Label>.blend` + `_preview.png`，部件暂存目录
+`<Label>_cos / _face / _hair`。全部 mod 的对照表与已知缺陷见 `D:\doa6_exports\README.md` §1.5。
+
+### 本批结果
+
+`D:\doa_mods\doa6\_zips\` 里 39 个 zip：2 个是重复文件；Rosario+Vampire Moka（108 MB）
+首次下载被 GameBanana 截断到 18 MB，`curl -sL --retry 3` 重下后是 10 个子 mod 的合集包，
+出了 7 个可用的（白发 Moka × Kokoro 服装 5 个、粉发 Honoka 校服 2 个）。其余 36 个 +
+早先 5 个，共 **45 个 .blend 全部成功**（三路并行，每个 11–32 s）。人工看预览后处理了：
+
+- `SKD_Tamaki_*`（5 个）：Tamaki 是未装 DLC，本机没有脸/发型，只出身体（脚本警告而非报错）。
+- `SKD_Tamaki_NudeMicroBikini`、`AYA_Ayane_Fachan2` 原 mod 不带皮肤 albedo，
+  从同角色其它 mod 借了 `*_body_kidsalb/nmh` 放进 `D:\doa_mods\doa6\_patched\` 副本重跑。
+- `AYA_Ayane_TropicalTune2`：g1m 里身体的三角面被删光（顶点还在），是 mod 本身如此。
+
+### 验证
+
+- Yor Forger：修复前预览白发，修复后黑发+金饰，`matmap.json` 里 43 个有顶点 submesh 全部有 alb。
+- 45 个预览拼图逐一目视：无皮肤/衣物互换；黑色「Buckle Up」紧身衣与 NSFW1 湿衬衫经
+  贴图均值/alpha 统计确认是 mod 设计。
+- `mod_matmap.py --key` 对 Yor（27 个 g1t 混三部件）只取 `PHFCOS037` 的 3 个部位。
+
+---
+
 ## 2026-08-30 — Rise of Eros：只打包用到的贴图，清理导出目录冗余
 
 ### 新增与修复

@@ -39,22 +39,40 @@ python extract_rdb.py "D:\Program Files (x86)\Steam\steamapps\common\Dead or Ali
 
 ## 二、nude / mod 变体
 
-需要先有该角色的官方发型和脸（即先跑过 `export_full.ps1 <CHR>`）。
+mod 里给什么部件就换什么，其余用官方 `COS_001 / FACE_001 / HAIR_001` 补齐
+（`-Cos/-Face/-Hair` 可改编号，或给完整部件名如 `-Face AYA_FACE_001`；官方件本机没导过会自动现场导）。
 
 ```powershell
-# zip 直接喂，或已解压目录也行
-.\export_nude_mod.ps1 D:\doa_mods\doa6\_zips\xxx_nude_helena.zip -Chr HEL -Label HEL_Helena_Nude
+# zip 直接喂，或已解压目录也行；-Chr 可省略（按 g1m 名 <CHR>_COS_xxx 推断）
+.\export_nude_mod.ps1 D:\doa_mods\doa6\_zips\xxx_nude_helena.zip -Label HEL_Helena_Nude
+
+# 发型 mod / 脸+发型 mod：自动接官方服装
+.\export_nude_mod.ps1 D:\doa_mods\doa6\_zips\397318_hair_loose_hair_momiji_1.zip -Label MOM_Momiji_LooseHair
+
+# 合集包（如 Moka Pack）：解压后把 REDELBE\Layer2\<子目录> 逐个喂；mod.ini 的 work=KOK_COS_030 /
+# [Face] work=AYA_FACE_001 对应 -Cos 030 -Face AYA_FACE_001
+.\export_nude_mod.ps1 "D:\doa_mods\doa6\_extract\541850_moka\...\Moka (Inner) Bikini Lisa Body Swap" -Chr KOK -Label KOK_MokaInner_Bikini -Cos 030 -Face AYA_FACE_001
 
 # 启发式路线猜错时（预览里皮肤和衣服贴图互换），按提示的材质号纠正后重跑
-.\export_nude_mod.ps1 D:\mods\ayane_malf.zip -Chr AYA -Label AYA_Malf -Assign "3=f01,5=body"
+.\export_nude_mod.ps1 D:\mods\ayane_malf.zip -Label AYA_Malf -Assign "3=f01,5=body"
 ```
 
-脚本会自动选路线并在输出里标明：
+mod 部件组合与处理方式：
+
+| mod 内容 | 结果 |
+|---|---|
+| 只有 `*_COS_*`（最常见） | mod 服装 + 官方脸/发型 |
+| 只有 `*_HAIR_*`，或 `FACE`+`HAIR` | 官方服装 + mod 发型(/脸) |
+| `COS`+`HAIR`（如 Yor Forger） | 两件都用 mod，脸用官方 |
+| 另带官方部件的贴图（如 `PHFFACE001_face_kidsalb`） | 复制一份官方件叠上 mod 贴图 |
+| 角色本机没有（`SKD` Tamaki 等未装 DLC） | 只出 mod 自带部件，无头，脚本警告 |
+
+每个部件各自选材质路线并在输出里标明：
 
 | 路线 | 触发条件 | 材质映射 | 可靠性 |
 |---|---|---|---|
-| **A 精确** | mod 替换的服装编号本机有（如 `HEL_COS_001`） | 原版 ktid 链（`g1m_matmap.py`） | 一次到位 |
-| **B 启发式** | 替换未安装的 DLC 位（如 `MOM_COS_105`） | 按网格大小猜部位（`mod_matmap.py`） | 多数一次对，偶尔需 `-Assign` |
+| **A 精确** | 部件编号本机有（`HEL_COS_001`、`MOM_HAIR_005`…） | 原版 ktid 链（`g1m_matmap.py`）；mod 自带 `<id>.ktid` 时优先用它 | 一次到位 |
+| **B 启发式** | 编号是未安装 DLC 位（`MOM_COS_105`…），或路线 A 留下了无贴图的网格 | 按网格大小猜部位（`mod_matmap.py --key`） | 多数一次对，偶尔需 `-Assign` |
 
 **路线 B 怎么纠正**：看生成的预览图。若躯干皮肤上出现衣服花纹（或反之），
 把脚本打印的 `assign: {3: 'body', 5: 'f01'}` 里两个部位对调，作为
@@ -77,7 +95,7 @@ python extract_rdb.py "D:\Program Files (x86)\Steam\steamapps\common\Dead or Ali
 | 脚本 | 作用 |
 |---|---|
 | `export_full.ps1` | **官方角色一键**：三部件 → 材质映射 → PNG → .blend + 预览 |
-| `export_nude_mod.ps1` | **mod 变体一键**：mod 服装 + 官方发型/脸 → .blend + 预览 |
+| `export_nude_mod.ps1` | **mod 变体一键**：mod 的服装/发型/脸任意组合 + 官方件补齐 → .blend + 预览 |
 | `export_character.ps1` | 单部件提取（模型+贴图+FBX），上面两个的底层 |
 | `extract_rdb.py` | RDB 解包器（自研，修复了 Cethleann 的 zlib 截断 bug） |
 | `g1m_matmap.py` | 精确材质映射（g1m → ktid → kidssingletondb → g1t） |

@@ -23,9 +23,10 @@ BLEND_DIR = os.path.join(ROOT, "_blends")
 
 # build_blend.py 组装时把网格重命名成 <部件目录名>_sm<N>，所以名字自带语义：
 #   MOM_COS_001_sm3 / MOM_FACE_001_sm5 / MOM_HAIR_001_sm0
-#   mod 变体的服装部件目录是 <Label>_cos → HEL_Helena_Nude_cos_sm1
+#   mod 变体的部件目录是 <Label>_cos / _face / _hair（小写）→ HEL_Helena_Nude_cos_sm1
 OFFICIAL_COS_RE = re.compile(r"_COS_\d+_sm\d+$", re.I)
 MOD_COS_RE = re.compile(r"_cos_sm\d+$")
+MOD_PART_RE = re.compile(r"_(cos|face|hair)_sm\d+$")
 
 
 def classify_mesh(name):
@@ -39,13 +40,13 @@ def classify_mesh(name):
 
 
 def is_mod_variant(names):
-    """服装部件来自 <Label>_cos 暂存目录 → 这是社区 mod 变体，不是官方内容。"""
-    return any(MOD_COS_RE.search(n) for n in names)
+    """任一部件来自 <Label>_cos/_face/_hair 暂存目录 → 这是社区 mod 变体，不是官方内容。"""
+    return any(MOD_PART_RE.search(n) for n in names)
 
 
 def count_part_textures(root, label, char_code):
     total = {}
-    candidates = [("%s_cos" % label, "MOD_COS")]
+    candidates = [("%s_cos" % label, "MOD_COS"), ("%s_face" % label, "MOD_FACE"), ("%s_hair" % label, "MOD_HAIR")]
     for suffix in ("COS_001", "FACE_001", "HAIR_001"):
         candidates.append(("%s_%s" % (char_code, suffix), suffix))
     for dirname, key in candidates:
