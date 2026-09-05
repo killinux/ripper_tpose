@@ -88,6 +88,132 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 
 ---
 
+---
+
+## 2026-09-05 — Stellar Blade：Eve 全部 146 套服装批量导出 + 画廊
+
+### 新增与修复
+
+- **`scripts/stellarblade/export_outfit.ps1`**：找网格时 `.psk` 与 `.pskx` 都认（顶点多的服装
+  UE Viewer 写 `.pskx`，原来 79 套直接失败）；排除 `\Temp\` 同名子包（20/26 的 Temp 版没有
+  马尾锚点骨）；按名导不出网格时用 `list_models.py` 解析出完整包路径再按路径导（52 系）。
+- **`scripts/stellarblade/validate_eve.py`**：`find_material_albedo` 先读材质的 UE Viewer `.mat`——
+  `Diffuse=` 是真颜色图就用，是 `T_*`/引擎图标/`del` 占位就在其它槽位找 `_D/_A/_BaseColor/_ADIR`，
+  在整个导出根（DLC 从 `DLC_N` 上一级算）找贴图；猜 `*_A.png` 只作兜底，并惩罚材质名里没有的
+  TypeB/TypeC 换色标记。01–06 系用共享的 `ScanCloth_*_D` 且导在别的服装目录下，原来整身灰白；
+  01_Body 原来拿到 TypeB 的换色贴图；11_1（Raven 变体）的自带头发原来贴成引擎图标。
+- **新增 `scripts/stellarblade/html/{collect_manifest.py, make_gallery.py}`**：Stellar Blade 画廊，
+  manifest 直接读 `validation\*.json`；卡片显示服装名（对照表烘进脚本）、包名徽标、表情数；
+  按编号下拉，本体 / DLC / 裸模筛选。
+
+### 本批结果
+
+146 套（本体 136 + DLC 10）全部出 `.blend`（`39_TYPE-A/A1` 是 `MI_CH_Delete` 占位的废弃网格，
+剔除），加标准 Eve、裸模、Face 探针共 149 个，
+6.9 GB，在 `D:\stellarblade_exports\blender\`。三路并行每套 7–16 s。
+预览逐一目视 + 两轮多代理对抗复核（第一轮抓出 01–06 灰白与 Nikke_01 未匹配，第二轮抓出 01_Body
+换色错拿、11_1 头发贴成引擎图标、39_TYPE-A 占位网格）。已知局限：11_1 自带头发，管线又装了默认发型。
+
+ + 71 个 Player 变体材质化 + 画廊
+
+### 新增与修复
+
+- **新增 `scripts/final/fmodel_export_player.py`**：pywinauto 驱动 FModel（备份/改写 AppSettings
+  指向 Rebirth、经典浏览器、ActorX；启动、Load、展开树、`Shift+F10` 触发
+  「Save Folder's Packages Models」、轮询到 3 分钟无新文件、还原设置）。以前 Rebirth 只能
+  在 FModel 里逐个手点 Save Model，所以只导过 9 个 Tifa。
+- **新增 `scripts/final/html/render_blend_preview.py`**：给不带预览的 .blend 补渲正面预览
+  （UE/ActorX 人物正面朝 +X）。
+- **新增 `scripts/final/html_rebirth/{collect_manifest.py, make_gallery.py}`**：Rebirth 画廊，
+  manifest 由 `export_ff7rb_models.ps1` 的 manifest 转换，按角色下拉 + 主服装/过场/蛤蟆筛选。
+
+### 本批结果
+
+85 个 Player 主模型包 → FModel 写出 72 个 PSKX → 材质化 PASS 71 / FAIL 1；
+13 个包 FModel 读 SkeletalMesh 失败且不可恢复（Cloud 血迹版 ×4、Aerith/Sonon 血迹版、
+Toad_Standard、6 个 PC7xxx 过场版），清单见 `docs/ff7rebirth-player-export-inventory.md` §0。
+产物 `D:\ff7rebirth_exports\materialized\`（7.3 GB）。
+
+### 踩坑
+
+FModel 全局 Mesh Format 被切成 UEFormat（另一款游戏的配置）时整目录导出写的是 `.uemodel`；
+新浏览器模式没有目录右键菜单；高 DPI 下 pywinauto 鼠标坐标偏移——脚本已全部规避。
+
+
+
+### 新增与修复
+
+- **新增 `scripts/final/export_ff7remake_models.ps1`**：按 `docs/ff7remake-player-model-files.txt`
+  的 36 个包循环「`ff7remake_export.ps1` umodel 提取 → `validate_ff7remake_model.py` 材质化」，
+  支持 `-Only`、`-SkipExtract`、`-Force`、`-Lane/-Lanes`、`-List`；所有包共用
+  `D:\ff7remake_exports\player\` 一个根。`enable_psk_addon.py` 负责在无头 Blender 里启用 PSK 导入器。
+- **`validate_ff7remake_model.py` 两处修复**：同名 `_A` 遮罩只在材质 `.mat` 引用它时才接 Alpha
+  （否则 Tifa 的衬衫/袖套/丝袜被 99% 全黑的 `BodyA_A` 透掉）；`.mat` 本包找不到时到整个导出根找
+  （Yuffie 莫古利装引用 `PC0005_00` 基础包的材质，原来缺 24/34 张贴图）。预览灯光由面光改太阳光。
+- **新增 `scripts/final/html/{collect_manifest.py, make_gallery.py}`**：FF7 Remake 画廊，
+  manifest 直接从各包报告 JSON 汇总（不开 Blender），按角色下拉 + 主服装/贴片/蛤蟆筛选。
+
+### 用户如何操作
+
+见 `docs/final-fantasy-vii-remake-extraction.md`「批量导出全部 Player 主模型」。
+
+### 本批结果
+
+36/36 成功、缺贴图 0，每包材质化 2–8 s。完整人物 22 个；`_90/_91` 的 7 个是泪痕/血迹叠加贴片
+（约 1000 顶点，不是完整人物）；Toad 7 个。产物在 `D:\ff7remake_exports\player\_blends\`。
+
+### 验证
+
+- Tifa 标准装修复前后对比：衬衫/丝袜回来，报告 `alpha` 只剩 Earring/Hair/Eyebrow 三个材质。
+- Yuffie Moogle 修复后 `missing_preview_textures=[]`。
+- 36 张预览拼图逐一目视。
+
+（19 人 270 套 COS/DLC/DLCU）
+
+### 新增与修复
+
+- **`scripts/doa5lr/export_full.ps1`**：`-Archive` 缺省改为 `auto`——首次扫游戏目录全部
+  36 个 `.bin` 建 `<OutRoot>\_archive_index.txt`（条目名 → 封包），之后每个部件各自查
+  封包；以前一个 `-Archive` 管三个部件，服装在 `chara_common` 而脸/发型在 `chara_initial`
+  的角色（霞、绫音）换装时会解不出脸。已提取过的部件目录（`<OutRoot>\<条目>\<条目>\*.fbx`）
+  直接复用，不再每次 `-Force` 重解包——这也是三路并行不互相踩脸/发型目录的前提。
+- **`scripts/doa5lr/build_blend.py` 就位判据放宽**：脸/头发「顶端够到身体顶端」的余量
+  由身体高度 5% 放宽到 25%。兔女郎类 DLC（`AYANE_DLC_006/007` 等 11 套）的兔耳把身体
+  包围盒顶端撑高约 15%，脸和头发被误判为未就位而整体上移 ~25 cm。真正未就位的头发
+  （用自己原点、悬在腰腹，顶端只到 0.6）仍能判出。
+- **`scripts/doa5lr/html/collect_manifest.py` / `make_gallery.py`**：从文件名解析服装条目
+  （`<角色>_<名>_<COS|DLC|DLCU>_<NNN>`，无后缀即 `COS_001`），封包徽标按整个服装条目名查
+  （原来只认 `_COS_001`），卡片加服装号徽标，工具栏加**按角色下拉筛选**，搜索框也搜服装号。
+
+### 用户如何操作
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\doa5lr
+.\export_full.ps1 KASUMI_COS_002 -Face auto -Hair 001 -Label KASUMI_Kasumi_COS_002   # 单套
+# 批量：python extract_lnk.py <bin> --list 抓 <角色>_(COS|DLC)_NNN.TMC 做清单后循环上面这条
+blender --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py --force
+```
+
+### 本批结果
+
+19 名女性角色在 `chara_common` / `chara_initial` 里共 245 个 `COS/DLC` 条目：19 个 COS_001
+早已导出，3 个是 10 KB 占位（`MILA_COS_008`、`SARAH_DLC_002`、`PAI_DLC_002`），其余
+**223 套全部出 .blend**（三路并行，每套 5–16 s）；随后 `DLCU_NNN`（「Ultimate」系 DLC 位，
+14 人 47 套，与同号 DLC 不是同一套衣服）也全部出 .blend。共 270 套 / 4.6 GB，在
+`D:\doa5lr_exports\_blends\`，对照表见该目录 README §1。头发统一 `HAIR_001`
+（官方每套服装的默认发型无法从条目名得知）。画廊 291 个模型。
+
+### 验证
+
+- `KASUMI_COS_002`：84 材质重建、135 贴图打包、脸/发型复用无重解包。
+- 270 套预览拼图逐一目视：Alpha-152 通体白色仍是素材本身；兔耳装修复前后对比
+  脸/头发回到颈部；无其它对齐或材质异常。
+
+---
+
+---
+
 ## 2026-09-05 — FF7 Rebirth：FModel 整目录自动导出 + 71 个 Player 变体材质化 + 画廊
 
 ### 新增与修复
@@ -186,6 +312,129 @@ python html\make_gallery.py --force
 
 ---
 
+---
+
+## 2026-09-05 — FF7 Remake：36 个 Player 主模型批量导出 + 画廊
+
+### 新增与修复
+
+- **新增 `scripts/final/export_ff7remake_models.ps1`**：按 `docs/ff7remake-player-model-files.txt`
+  的 36 个包循环「`ff7remake_export.ps1` umodel 提取 → `validate_ff7remake_model.py` 材质化」，
+  支持 `-Only`、`-SkipExtract`、`-Force`、`-Lane/-Lanes`、`-List`；所有包共用
+  `D:\ff7remake_exports\player\` 一个根。`enable_psk_addon.py` 负责在无头 Blender 里启用 PSK 导入器。
+- **`validate_ff7remake_model.py` 两处修复**：同名 `_A` 遮罩只在材质 `.mat` 引用它时才接 Alpha
+  （否则 Tifa 的衬衫/袖套/丝袜被 99% 全黑的 `BodyA_A` 透掉）；`.mat` 本包找不到时到整个导出根找
+  （Yuffie 莫古利装引用 `PC0005_00` 基础包的材质，原来缺 24/34 张贴图）。预览灯光由面光改太阳光。
+- **新增 `scripts/final/html/{collect_manifest.py, make_gallery.py}`**：FF7 Remake 画廊，
+  manifest 直接从各包报告 JSON 汇总（不开 Blender），按角色下拉 + 主服装/贴片/蛤蟆筛选。
+
+### 用户如何操作
+
+见 `docs/final-fantasy-vii-remake-extraction.md`「批量导出全部 Player 主模型」。
+
+### 本批结果
+
+36/36 成功、缺贴图 0，每包材质化 2–8 s。完整人物 22 个；`_90/_91` 的 7 个是泪痕/血迹叠加贴片
+（约 1000 顶点，不是完整人物）；Toad 7 个。产物在 `D:\ff7remake_exports\player\_blends\`。
+
+### 验证
+
+- Tifa 标准装修复前后对比：衬衫/丝袜回来，报告 `alpha` 只剩 Earring/Hair/Eyebrow 三个材质。
+- Yuffie Moogle 修复后 `missing_preview_textures=[]`。
+- 36 张预览拼图逐一目视。
+
+（19 人 270 套 COS/DLC/DLCU）
+
+### 新增与修复
+
+- **`scripts/doa5lr/export_full.ps1`**：`-Archive` 缺省改为 `auto`——首次扫游戏目录全部
+  36 个 `.bin` 建 `<OutRoot>\_archive_index.txt`（条目名 → 封包），之后每个部件各自查
+  封包；以前一个 `-Archive` 管三个部件，服装在 `chara_common` 而脸/发型在 `chara_initial`
+  的角色（霞、绫音）换装时会解不出脸。已提取过的部件目录（`<OutRoot>\<条目>\<条目>\*.fbx`）
+  直接复用，不再每次 `-Force` 重解包——这也是三路并行不互相踩脸/发型目录的前提。
+- **`scripts/doa5lr/build_blend.py` 就位判据放宽**：脸/头发「顶端够到身体顶端」的余量
+  由身体高度 5% 放宽到 25%。兔女郎类 DLC（`AYANE_DLC_006/007` 等 11 套）的兔耳把身体
+  包围盒顶端撑高约 15%，脸和头发被误判为未就位而整体上移 ~25 cm。真正未就位的头发
+  （用自己原点、悬在腰腹，顶端只到 0.6）仍能判出。
+- **`scripts/doa5lr/html/collect_manifest.py` / `make_gallery.py`**：从文件名解析服装条目
+  （`<角色>_<名>_<COS|DLC|DLCU>_<NNN>`，无后缀即 `COS_001`），封包徽标按整个服装条目名查
+  （原来只认 `_COS_001`），卡片加服装号徽标，工具栏加**按角色下拉筛选**，搜索框也搜服装号。
+
+### 用户如何操作
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\doa5lr
+.\export_full.ps1 KASUMI_COS_002 -Face auto -Hair 001 -Label KASUMI_Kasumi_COS_002   # 单套
+# 批量：python extract_lnk.py <bin> --list 抓 <角色>_(COS|DLC)_NNN.TMC 做清单后循环上面这条
+blender --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py --force
+```
+
+### 本批结果
+
+19 名女性角色在 `chara_common` / `chara_initial` 里共 245 个 `COS/DLC` 条目：19 个 COS_001
+早已导出，3 个是 10 KB 占位（`MILA_COS_008`、`SARAH_DLC_002`、`PAI_DLC_002`），其余
+**223 套全部出 .blend**（三路并行，每套 5–16 s）；随后 `DLCU_NNN`（「Ultimate」系 DLC 位，
+14 人 47 套，与同号 DLC 不是同一套衣服）也全部出 .blend。共 270 套 / 4.6 GB，在
+`D:\doa5lr_exports\_blends\`，对照表见该目录 README §1。头发统一 `HAIR_001`
+（官方每套服装的默认发型无法从条目名得知）。画廊 291 个模型。
+
+### 验证
+
+- `KASUMI_COS_002`：84 材质重建、135 贴图打包、脸/发型复用无重解包。
+- 270 套预览拼图逐一目视：Alpha-152 通体白色仍是素材本身；兔耳装修复前后对比
+  脸/头发回到颈部；无其它对齐或材质异常。
+
+---
+
+---
+
+## 2026-09-05 — DOA5LR：换服装批量导出（19 人 270 套 COS/DLC/DLCU）
+
+### 新增与修复
+
+- **`scripts/doa5lr/export_full.ps1`**：`-Archive` 缺省改为 `auto`——首次扫游戏目录全部
+  36 个 `.bin` 建 `<OutRoot>\_archive_index.txt`（条目名 → 封包），之后每个部件各自查
+  封包；以前一个 `-Archive` 管三个部件，服装在 `chara_common` 而脸/发型在 `chara_initial`
+  的角色（霞、绫音）换装时会解不出脸。已提取过的部件目录（`<OutRoot>\<条目>\<条目>\*.fbx`）
+  直接复用，不再每次 `-Force` 重解包——这也是三路并行不互相踩脸/发型目录的前提。
+- **`scripts/doa5lr/build_blend.py` 就位判据放宽**：脸/头发「顶端够到身体顶端」的余量
+  由身体高度 5% 放宽到 25%。兔女郎类 DLC（`AYANE_DLC_006/007` 等 11 套）的兔耳把身体
+  包围盒顶端撑高约 15%，脸和头发被误判为未就位而整体上移 ~25 cm。真正未就位的头发
+  （用自己原点、悬在腰腹，顶端只到 0.6）仍能判出。
+- **`scripts/doa5lr/html/collect_manifest.py` / `make_gallery.py`**：从文件名解析服装条目
+  （`<角色>_<名>_<COS|DLC|DLCU>_<NNN>`，无后缀即 `COS_001`），封包徽标按整个服装条目名查
+  （原来只认 `_COS_001`），卡片加服装号徽标，工具栏加**按角色下拉筛选**，搜索框也搜服装号。
+
+### 用户如何操作
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\doa5lr
+.\export_full.ps1 KASUMI_COS_002 -Face auto -Hair 001 -Label KASUMI_Kasumi_COS_002   # 单套
+# 批量：python extract_lnk.py <bin> --list 抓 <角色>_(COS|DLC)_NNN.TMC 做清单后循环上面这条
+blender --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py --force
+```
+
+### 本批结果
+
+19 名女性角色在 `chara_common` / `chara_initial` 里共 245 个 `COS/DLC` 条目：19 个 COS_001
+早已导出，3 个是 10 KB 占位（`MILA_COS_008`、`SARAH_DLC_002`、`PAI_DLC_002`），其余
+**223 套全部出 .blend**（三路并行，每套 5–16 s）；随后 `DLCU_NNN`（「Ultimate」系 DLC 位，
+14 人 47 套，与同号 DLC 不是同一套衣服）也全部出 .blend。共 270 套 / 4.6 GB，在
+`D:\doa5lr_exports\_blends\`，对照表见该目录 README §1。头发统一 `HAIR_001`
+（官方每套服装的默认发型无法从条目名得知）。画廊 291 个模型。
+
+### 验证
+
+- `KASUMI_COS_002`：84 材质重建、135 贴图打包、脸/发型复用无重解包。
+- 270 套预览拼图逐一目视：Alpha-152 通体白色仍是素材本身；兔耳装修复前后对比
+  脸/头发回到颈部；无其它对齐或材质异常。
+
+---
+
+---
+
 ## 2026-09-05 — DOA6：mod 导出支持发型/脸部件，批量转出 45 个社区 mod 变体
 
 ### 新增与修复
@@ -242,6 +491,8 @@ cd E:\code\othercode\ripper_tpose\scripts\doa6
 
 ---
 
+---
+
 ## 2026-08-30 — Rise of Eros：只打包用到的贴图，清理导出目录冗余
 
 ### 新增与修复
@@ -291,6 +542,8 @@ FBX 导入时 Blender 会**按 FBX 同级目录**为文件里提到的每张贴�
 
 ---
 
+---
+
 ## 2026-08-30 — Rise of Eros：修复 a00 眼球（头身合一、无 Eyeball 骨骼组）
 
 ### 新增与修复
@@ -321,6 +574,8 @@ g06 等角色一致。它们拿到了身体图集，满 0–1 的 UV 去采样�
   `pc_a_nk_eye_iris_rgbx_Albedo.png` 进入 textures；特写渲染确认蓝色虹膜、瞳孔、
   眼白都正常。
 - 守卫只在完全找不到独立 head 网格时触发，120 个模型里只有 a00 属于这种情况。
+
+---
 
 ---
 
@@ -359,6 +614,8 @@ g01/g04/g06 都有独立 eyes 槽，所以不受影响。
 **都是正常的**：f11 眼部整个被金色面罩盖住、k06 戴眼罩且刘海遮眉、i 体型的眉毛本来
 就烘进 face 图（坑 #13 已有记载）。因此硬告警只覆盖 `face` 与 `eye` 两个"为 0 必错"
 的槽，其余留在 `headSlots` 供人工判读，避免噪音淹没真问题。
+
+---
 
 ---
 
@@ -404,6 +661,8 @@ terminator`），六个分片全部空跑，还把 manifest 覆盖成空的。**
 破坏解析**。仓库既有 ps1 的中文一律只在注释里，字符串全 ASCII——这条现在写进了文件
 注释。教训：改完 ps1 先跑
 `[System.Management.Automation.Language.Parser]::ParseFile()` 验证再批量执行。
+
+---
 
 ---
 
@@ -490,6 +749,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 
 ---
 
+---
+
 ## 2026-08-30 — Venus Vacation PRISM：素体排查结论与完整裸模组装
 
 ### 新增与修复
@@ -522,6 +783,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   关节越界导入失败项）；840 组件三件套 FBX 回读六项验证全过；脸部近景
   目检：虹膜/睫毛/眼影正常，发型对位无露皮。
 
+---
+
 ## 2026-08-30 — Venus Vacation PRISM：export_model.ps1 按需浏览候选模型
 
 ### 新增与修复
@@ -549,6 +812,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 
 ---
 
+---
+
 ## 2026-08-30 — DOA6 / Throne of Desire：补齐导出总览画廊
 
 三个游戏现在都有和 `riseoferos/html/` 同款的画廊（manifest → 缩略图 → 自包含单页），
@@ -573,6 +838,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - DOA6：24 卡片 / 24 缩略图 / 页面 37.0KB，官方与 mod 变体分类正确。
 - ToD：17 卡片 / 17 缩略图 / 页面 30.3KB，批量与单独导出分组正确。
 
+---
+
 ## 2026-08-30 — DOA5LR：新增导出总览画廊（对齐 riseoferos/html）
 
 ### 新增
@@ -594,6 +861,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 21 张卡片、21 张缩略图（共 0.9MB）、页面 35.5KB；霞/绫音正确标注
   `chara_initial`，其余 `chara_common`；两条告警均属实（Alpha-152 素材本身仅 5 张
   贴图、`KASUMI_DLC_011` 是未加 `-Hair` 的光头对照件）。
+
+---
 
 ## 2026-08-30 — DOA5LR：修正部件对齐与 Alpha 判据（用户反馈的 4 个缺陷）
 
@@ -621,6 +890,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 19 个 blend 全部用修正后的逻辑重建，红叶/女天狗/穗香的头部特写渲染确认正常
   （脸可见、头发在头后、皮肤实心），Marie/霞等原本正常的未被改坏。
 
+---
+
 ## 2026-08-30 — DOA5LR：19 名女性角色批量导出 + 三部件对齐 + Alpha 语义修正
 
 ### 新增与修复
@@ -646,6 +917,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   ALPHA_MATERIALS=0）。
 - 产物索引见 `D:\doa5lr_exports\README.md`，操作见 `scripts\doa5lr\EXPORT_GUIDE.md`。
 
+---
+
 ## 2026-08-30 — DOA5LR：export_full.ps1 支持外部 mod TMC（-TmcFile / -HairTmc）
 
 ### 新增与修复
@@ -665,6 +938,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 
 - 外部 TMC（拷官方 TMC/TMCL 到独立目录模拟 mod）+ 官方 `KASUMI_HAIR_001` 混用：
   产物统计与直接从封包导出完全一致（59 材质 / 82 贴图 / 13.7MB），路径正确。
+
+---
 
 ## 2026-08-30 — DOA5LR：补齐 .blend 组装链路 + 全封包可解析
 
@@ -689,6 +964,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - `KASUMI_DLC_011` + `KASUMI_HAIR_001` → 13.7MB .blend（59 材质、82 贴图打包、
   头发对齐 dz=0.005），渲染正常。
 
+---
+
 ## 2026-08-30 — DOA6：19 名女性角色批量导出 + nude/mod 变体管线
 
 ### 新增与修复
@@ -711,6 +988,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   MOM_Momiji_Malf / LIS_Lisa_Malf（路线 B 一次到位）、
   AYA_Ayane_Malf（路线 B + `-Assign` 纠正皮肤/衣物互换）。
 
+---
+
 ## 2026-08-30 — DOA6：材质链解析 + 一键组装带贴图 Blend（Momiji 验证）
 
 ### 新增与修复
@@ -729,6 +1008,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - Momiji 完整角色：`MOM_COS_001`+`MOM_HAIR_001`+`MOM_FACE_001` 三部件导出、
   30 张 alb/nmh PNG、组装为 `D:\doa6_exports\MOMIJI_COS001.blend`（54.8MB，贴图内嵌）
   并渲出正确预览（脸/马尾/服装纹样/alpha 均正常）。流程见 doa6/README §3.5。
+
+---
 
 ## 2026-08-30 — 新增 DOA5LR 与 DOA6 提取管线（自研解包器 + Noesis 转换）
 
@@ -768,6 +1049,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - DOA6：HON_COS_001.g1m 尺寸==头部声明；HON_COS_002 全链路 FBX 2.6MB + 154/154 DDS；
   `*HONCOS001_*` 定向抽 MaterialEditor 83 个 g1t 零失败（含 22MB 4K 图）。
 
+---
+
 ## 2026-08-30 — Venus Vacation PRISM：export_character.ps1 对齐 ROE 操作方式
 
 ### 新增与修复
@@ -787,6 +1070,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 实测四种模式：`-List`（6 名角色状态正确）、`Fiona -Plan`（默认游戏目录/
   输出/工具链解析正确）、`-ListModels`（1,527 个 G1M 清单写出）、
   `--list-characters` 透传（exit 0）。
+
+---
 
 ## 2026-08-30 — Stellar Blade：合并为单一主骨骼（可整体 pose）
 
@@ -814,6 +1099,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   骨头位置/朝向/roll，蒙皮与局部轴不受影响。三个 blend 重建后骨长中位数
   1.0cm → 约 4.35cm，报告新增 `bone_display` 字段记录前后值。
 
+---
+
 ## 2026-08-30 — Stellar Blade：眼部预览材质优化
 
 ### 新增与修复
@@ -836,6 +1123,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 二次微调（同日）：反馈眼仁偏小，可视虹膜半径 0.055→0.07（约放大 27%），
   HSV 提亮 1.8→2.6、饱和度 0.95 让虹膜纹理透出；A/B 渲染对比后定稿，
   三个 blend 再次重建，正面近景虹膜大小与游戏内观感一致。
+
+---
 
 ## 2026-08-29 — Stellar Blade：export_outfit.ps1 任意服装一键出 Blender
 
@@ -861,6 +1150,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   221 骨，三个材质分别匹配到 UV1_A/UV2_A/Decal_A，渲染目检粉色连体衣、
   外套、SUPER 贴片、球鞋与共享脸/发型全部正确。
 
+---
+
 ## 2026-08-29 — Stellar Blade：Eve 服装清单与粉色判定文档
 
 ### 新增与修复
@@ -873,6 +1164,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 勘误：本机安装包含 `SB/Content/DLC_1/`（NieR）与 `DLC_2/`（NIKKE）两个联动
   DLC；`list_models.py` 默认过滤 `SB/Content/Art/Character/` 不含 DLC 挂载，
   统计 DLC 需另用 `--path-filter`。
+
+---
 
 ## 2026-08-29 — Stellar Blade：修正主发型 180° 朝向（刘海朝后）
 
@@ -892,6 +1185,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   编发冠与侧发正确环绕面部；后脑马尾高扎、发量完整覆盖，无裸露带。
   组件数量与顶点/骨骼统计不变（5 网格 / 346 骨）。
 
+---
+
 ## 2026-08-29 — Stellar Blade：补齐缺失的后颈短发束 EVE_HR_Tail_Short
 
 ### 新增与修复
@@ -910,6 +1205,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 标准装与裸模均已重建：5 网格；标准装 114,589 顶点 / 141,084 面 / 346 骨。
   后脑视角渲染目检：短发束正确垂落在脑后与背部，原空缺被覆盖（余下发际
   边缘为发型本身的紧贴侧区，位于编发之下）。
+
+---
 
 ## 2026-08-29 — Stellar Blade：EveOriginalProportions 裸模导出与组装
 
@@ -936,6 +1233,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   107,424 面、159 骨、材质 `SkinEve`），马尾锚点误差 ≈1.1e-6，渲染目检
   脸/发型/马尾对位正确、赤足贴地。游戏与 Mod 资产仍不入仓库。
 
+---
+
 ## 2026-08-29 — Stellar Blade：list_models.py 模型清单与未导出差集
 
 ### 新增与修复
@@ -960,6 +1259,8 @@ python scripts\stellarblade\list_models.py --include-exported  # 全表带状态
   UE Viewer 报告的 228,867 同量级，后者含 .pak 内文件）；角色树筛出 1,957 个
   模型包候选，已导出 6 个（与实际状态一致：身体、Face_001/003、Teeth_001、
   主发型、马尾，且逐个列出对应本地文件路径），未导出 1,951 个。
+
+---
 
 ## 2026-08-29 — Stellar Blade：一键封装脚本 export_eve.ps1
 
@@ -993,6 +1294,8 @@ python scripts\stellarblade\list_models.py --include-exported  # 全表带状态
   53 源 Morph → 54 Shape Keys、发型插槽误差 0、马尾锚点误差 ≈2.1e-6，
   渲染图目检正常。
 
+---
+
 ## 2026-08-29 — Operation LOVECRAFT: Fallen Doll 提取调研与脚本骨架
 
 ### 新增与修复
@@ -1025,6 +1328,8 @@ python scripts\fallendoll\probe_pak.py         # 探测（不需要 key）
   处 FAIL 并写 validate 快照 manifest——证明扫描/委派/错误传播/manifest 全部工作，真实
   带贴图导出时即 PASS。
 - 待办：AES key 到位后进行真实导出与裸模结构判定。
+
+---
 
 ---
 
@@ -1062,6 +1367,8 @@ cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
   `tests/test_batch_export_female_manifest.py` 5/5 通过（合并、幂等、规范排序、损坏
   manifest 容错）。
 - 沿用限制不变：产物为静态网格 + 未蒙皮静止骨架（蒙皮/动画尚未恢复），XPS 不支持。
+
+---
 
 ---
 
@@ -1109,6 +1416,8 @@ cd E:\code\othercode\ripper_tpose\scripts\final
   连上 `PC0002_00_*_C` 共享 atlas（EEVEE 渲染确认服装/皮肤/头发正确），九个变体的眼
   睛全部转为 sclera+iris 分层混合（此前仅 PC0002_00），`missingBase` 仅剩 PC0002_05
   的发光材质（本就无 Base Color）。语义索引覆盖 179 张已导出贴图。
+
+---
 
 ---
 
@@ -1186,6 +1495,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   alpha 槽）与 FBX bind 兼容测试共 5 项 PASS（3 个需真实 HD 素材参数的矩阵测试未随
   本次运行）。
 
+---
+
 ## 2026-08-09 — Venus Vacation PRISM 角色名称对应表
 
 ### 新增
@@ -1208,6 +1519,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 实际按 `--name FACE_FON_000` 成功导出索引 860 / `0xa359e61c`，并通过 9 项单元测试；
   名称哈希测试同时覆盖公开的 `HON_HAIR_033.GRP` 向量和 PRISM 的 `COS_MIS_001.G1M`。
 
+---
+
 ## 2026-08-08 — Venus Vacation PRISM 原始 RDB/FDATA 解包
 
 ### 新增
@@ -1227,6 +1540,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 实际导出索引 836、KTID `0x7ce546e8`：G1M 5,252,712 字节、924 个骨骼节点、
   17 个网格。glTF 转换及 Blender 3.6.15 后台导入/渲染通过，几何为完整女性基础身体。
 - 新增 6 项单元测试，覆盖多块解压、尾部/尺寸损坏、G1M 元数据和 FDATA 实际读取。
+
+---
 
 ## 2026-08-02 — ROE XPS Tools v1.1.12 / i03、i04 脸部贴图兼容
 
@@ -1257,6 +1572,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 4. 两个角色均通过“单独修脸不改身体”、旧的一键流程、XPS 导出和全新场景重导入。
    新增 `test_i_family_materials_blender.py`；F10、G09、e06、b02、g07、g02 既有回归
    同时通过。
+
+---
 
 ## 2026-08-02 — ROE XPS Tools v1.1.11 / F10 脸部材质与分区修复按钮
 
@@ -1295,6 +1612,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
    重新修身体。新导入角色仍可继续使用原来的“一键准备材质”。
 3. 以后只有单一区域异常时优先点对应按钮；不确定或首次导入时仍点完整准备按钮。
 
+---
+
 ## 2026-08-02 — ROE XPS Tools v1.1.10 / e06 FBX 缺失绑定兼容
 
 ### 修复与兼容性
@@ -1323,6 +1642,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
    调用幂等、临时补丁恢复和 e06 完整导入/材质准备。既有 G07、B02、G02、G09 四组
    Blender 回归测试同时通过。
 
+---
+
 ## 2026-08-02 — ROE XPS Tools v1.1.9 / g09 Blender 3.6 翅膀视口修复
 
 ### 修复与兼容性
@@ -1341,6 +1662,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 1. 覆盖安装插件并彻底重启 Blender 3.6，确认版本为 `1.1.9`。
 2. 对已经打开的旧 g09 场景重新执行“2. 检查并准备材质”；旧材质数据不会仅靠导入
    插件文件自动刷新。之后再执行“3. 导出 XPS(.mesh)”。
+
+---
 
 ## 2026-08-02 — ROE XPS Tools v1.1.8 / g09 翅膀透明材质
 
@@ -1364,6 +1687,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 1. 覆盖安装 `scripts/riseoferos/roe_xps_addon.py` 并重启 Blender，版本应为 `1.1.8`。
 2. 现有 g09 场景无需重新导入；重新执行“2. 检查并准备材质”，再执行
    “3. 导出 XPS(.mesh)”。
+
+---
 
 ## 2026-08-02 — Throne of Desire X-Legend NFS/Gamebryo 调研与样本验证
 
@@ -1399,6 +1724,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   `h001.kfm` 62,650 字节，输出大小与 FileList 清单一致，SHA-256 已写入 manifest。
 - Python 语法检查、完整索引扫描和两个 `extract-model` 回归命令均通过；游戏目录保持
   只读，未改动原始 NFS 或索引。
+
+---
 
 ## 2026-08-01 — Stellar Blade PC 导出分析与 Eve Blender 3.6 验证
 
@@ -1445,6 +1772,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 输出 `Eve_Standard_validation.blend`、全身/脸部 PNG 和 JSON 均已生成并视觉检查；游戏
   `.pak/.utoc/.ucas` 名称未改动。已安装 Eve Mod 当前仍在隔离目录，启动游戏前恢复。
 
+---
+
 ## 2026-08-01 — FF7 Remake / Rebirth Player 主模型清单复核
 
 ### 新增与修正
@@ -1473,6 +1802,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - Remake 清单 `36` 行、`36` 个唯一值，与现有详细清单逐项一致。
 - Rebirth 清单 `85` 行、`85` 个唯一值，与全部 IoStore 目录索引逐项比较差异为 `0`。
 - 两份清单均通过完整路径格式检查，`git diff --check` 无错误。
+
+---
 
 ## 2026-07-26 — ROE XPS Tools v1.1.7 / g07 身体贴图与手动材质修复
 
@@ -1517,6 +1848,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   `pc_g07_body2_rgbx_Albedo.png`。
 - Blender 合成回归同时覆盖插件与独立脚本的 g07 LOD 省略命名；b02 头部语义和
   非 head tear 透明槽、g02 `Albedo/Abedo` 回归继续通过。
+
+---
 
 ## 2026-07-26 — ROE XPS Tools v1.1.6 / b02 下睫毛与左眼透明片
 
@@ -1565,6 +1898,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 新增 Blender 合成网格测试，同时验证插件与独立脚本的脸、眼球、上下睫毛、眉毛、
   tear 罩层语义；与 g02 `Albedo/Abedo` 回归测试均通过。
 
+---
+
 ## 2026-07-26 — ROE g03 白脸 / 旧导出贴图补全
 
 ### 问题与修复
@@ -1611,6 +1946,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - Blender 3.6 当前场景材质准备返回 `FINISHED`：3 个网格，恢复 1 个头部原始分区，
   未恢复 0，缺贴图 0；头部恢复为 face、eye、lash、brow、eye_overlay 五个材质槽。
 
+---
+
 ## 2026-07-26 — `scripts` 根目录清理与开发工具归档
 
 ### 整理内容
@@ -1648,6 +1985,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 重新检查仓库引用与 Markdown 相对链接，确认没有指向已删除的一次性脚本。
 - ROE `Abedo` 回归测试与 FF7 Rebirth helper 测试仍位于各自游戏目录。
 
+---
+
 ## 2026-07-26 — ROE XPS Tools v1.1.4 / g02 `Abedo` 材质兼容
 
 ### 新增与修正
@@ -1682,6 +2021,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
   `Albedo`，其他共享脸/眼/眉/发贴图命名一致。
 - Blender 3.6 回归脚本覆盖插件和独立材质脚本：只有 `Abedo` 时能够回退命中；同时
   存在 `Albedo` 与 `Abedo` 时仍选择标准 `Albedo`。
+
+---
 
 ## 2026-07-26 — FF7 Rebirth Player 待导出清单与手动流程
 
@@ -1727,6 +2068,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 对 109 项与磁盘 14 项取差集得到 95 项，分组复算
   `20+8+17+7+8+3+3+4+4+3+3+9+6=95`。
 - 9 个 PSK/PSKX 均验证以 `ACTRHEAD` 开始。
+
+---
 
 ## 2026-07-26 — FF7 Rebirth Tools v0.3.0 / 材质、法线与同骨架配件
 
@@ -1860,6 +2203,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 
 ---
 
+---
+
 ## 2026-07-26 — FF7 Rebirth Tifa 导出验证 / ActorX workaround
 
 ### 新增与修正
@@ -1966,6 +2311,8 @@ FModel 离线读取 `.pak/.utoc/.ucas`，不需要游戏继续运行；后续游
 
 ---
 
+---
+
 ## 2026-07-25 — FF7 Rebirth Tools v0.1.0 / 脚本按游戏分目录
 
 ### 新增与调整
@@ -2044,6 +2391,8 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 - 已安装到本机 Blender 3.6 用户插件目录并保存启用状态；当时 MCP 端口未监听，因此
   已打开的旧 Blender 窗口需要重启后显示 **FF7RB** 页签。
 - ROE 正式脚本内容迁移后进行哈希/语法检查；旧 PowerShell 入口转发参数测试通过。
+
+---
 
 ---
 
@@ -2156,3 +2505,4 @@ AssetStudioModCLI。
   `pc_a_nk_eye_iris_rgbx_Albedo.png`。
 - a08 原始 FBX 可不先准备材质，直接点击“修复眼睛”生成完整五槽头部材质。
 - 通用模型材质保留、旧场景缓存恢复、损坏缓存恢复和手工头部区域覆盖测试通过。
+
