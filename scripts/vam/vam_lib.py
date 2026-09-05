@@ -411,9 +411,11 @@ class Catalog:
         display = meta.get("displayName") or posixpath.basename(base)
         uid = meta.get("uid") or ("%s:%s" % (meta.get("creatorName", ""), display))
         exportable = False
-        if vab is not None and kind == "clothing":
+        if vab is not None:
             try:
-                exportable = is_dazmesh_vab(package.read(vab)[:64])
+                head = package.read(vab)[:96]
+                exportable = is_dazmesh_vab(head) or (kind == "hair"
+                                                      and is_runtime_hair_vab(head))
             except (OSError, KeyError):
                 exportable = False
         add(Entry(kind, make_key(package.id, display), package, member, display,
@@ -604,6 +606,151 @@ def parse_dazmesh_vab(data):
         raise ValueError("UV map count %d != %d" % (num_mapped, num_uv_verts - num_verts))
     return DazMesh(name, materials, verts.copy(), poly_mat, poly_len, poly_idx,
                    uv_idx, uvs.copy(), ids)
+
+
+HAIR_STORE = "RuntimeHairGeometryCreator"
+
+
+def is_runtime_hair_vab(head):
+    try:
+        reader = _Reader(head)
+        if reader.string() != "DynamicStore" or reader.string() != "1.0":
+            return False
+        reader.pos += 1                     # store-count byte (always 1)
+        return reader.string() == HAIR_STORE
+    except (IndexError, UnicodeDecodeError, struct.error):
+        return False
+
+
+class HairGuides:
+    """VaM strand hair: one styled guide curve per scalp vertex.
+
+    ``strands`` holds the guides that actually exist (VaM keeps a slot per
+    scalp vertex; masked-out vertices have zero points).  Points are in metres
+    in the same space as the base body, i.e. the unmorphed default figure.
+    """
+
+    def __init__(self, scalp, version, segments, segment_length, scalp_verts, mask,
+                 roots, strands):
+        self.scalp = scalp
+        self.version = version
+        self.segments = segments
+        self.segment_length = segment_length
+        self.scalp_verts = scalp_verts
+        self.mask = mask
+        self.roots = roots
+        self.strands = strands
+
+    @property
+    def scalp_token(self):
+        """'UdaneScalp' -> 'udane', the substring that names the scalp mesh."""
+        return re.sub(r"scalp$", "", self.scalp.lower()).strip(" _-") or self.scalp.lower()
+
+
+def parse_hair_vab(data):
+    """Parse a ``RuntimeHairGeometryCreator`` DynamicStore (VaM sim hair).
+
+    Layout:
+      "DynamicStore" "1.0" byte 1 "RuntimeHairGeometryCreator" version scalpName
+      int segments, float segmentLength, byte, int numScalpVerts, byte[num] mask
+      int numScalpVerts, {int vertexIndex, int numPoints, Vector3[numPoints]}[num]
+      ... style / rigidity data (not needed)
+    """
+    reader = _Reader(data)
+    if reader.string() != "DynamicStore":
+        raise ValueError("not a DynamicStore")
+    reader.string()
+    reader.pos += 1
+    if reader.string() != HAIR_STORE:
+        raise ValueError("not a RuntimeHairGeometryCreator store")
+    version = reader.string()
+    scalp = reader.string()
+    segments = reader.int32()
+    segment_length = struct.unpack_from("<f", data, reader.pos)[0]
+    reader.pos += 4
+    reader.pos += 1
+    count = reader.int32()
+    if not 0 < count < 200000 or not 0 < segments < 1000:
+        raise ValueError("implausible hair header (%d scalp verts, %d segments)"
+                         % (count, segments))
+    mask = np.frombuffer(data, dtype=np.uint8, count=count, offset=reader.pos).copy()
+    reader.pos += count
+    if reader.int32() != count:
+        raise ValueError("hair strand table count mismatch")
+    roots, strands = [], []
+    for k in range(count):
+        index = reader.int32()
+        points = reader.int32()
+        if index != k or points < 0 or points > 4096:
+            raise ValueError("hair strand %d malformed (index %d, %d points)"
+                             % (k, index, points))
+        if points:
+            strands.append(reader.floats(points * 3).reshape(-1, 3).copy())
+            roots.append(k)
+        # zero-point slots carry no data
+    return HairGuides(scalp, version, segments, segment_length, count, mask,
+                      np.asarray(roots, dtype=np.int32), strands)
+
+
+def drop_unstyled_guides(strands, segment_length, min_length=0.15, straightness=0.985,
+                         hanging=-0.6):
+    """Remove guides that are still VaM's initial straight line.
+
+    A guide the creator never styled is a perfectly straight run along the
+    scalp normal; in VaM the simulation drags it into the hair, in a static
+    export it sticks out of the head like a wire.  Long hanging hair is also
+    nearly straight, so a straight strand is only dropped when it does not
+    point mostly down (tip-root y component above ``hanging`` x its length).
+    """
+    kept, dropped = [], 0
+    for strand in strands:
+        strand = np.asarray(strand, dtype=np.float32)
+        if strand.shape[0] < 3:
+            kept.append(strand)
+            continue
+        path = float(np.linalg.norm(np.diff(strand, axis=0), axis=1).sum())
+        delta = strand[-1] - strand[0]
+        span = float(np.linalg.norm(delta))
+        straight = path >= min_length and span / max(path, 1e-9) >= straightness
+        points_down = delta[1] / max(span, 1e-9) <= hanging
+        if straight and not points_down:
+            dropped += 1
+            continue
+        kept.append(strand)
+    return kept, dropped
+
+
+def hair_children(strands, count, spread, seed=0):
+    """Fan each guide out into ``count`` strands (guide + offset copies).
+
+    VaM multiplies guides at render time (hairMultiplier x curveDensity) with
+    random spread; this cheap stand-in offsets copies within ``spread`` metres
+    around the root, widening slightly toward the tip so clumps read as hair
+    rather than as a comb of parallel wires.
+    """
+    rng = np.random.default_rng(seed)
+    out = []
+    for guide in strands:
+        guide = np.asarray(guide, dtype=np.float32)
+        out.append(guide)
+        if count <= 1 or guide.shape[0] < 2:
+            continue
+        axis = guide[-1] - guide[0]
+        norm = np.linalg.norm(axis)
+        axis = axis / norm if norm > 1e-9 else np.asarray([0, 1, 0], np.float32)
+        helper = np.asarray([1, 0, 0], np.float32) if abs(axis[0]) < 0.9 \
+            else np.asarray([0, 0, 1], np.float32)
+        u = np.cross(axis, helper)
+        u /= max(np.linalg.norm(u), 1e-9)
+        v = np.cross(axis, u)
+        t = np.linspace(0.0, 1.0, guide.shape[0], dtype=np.float32)[:, None]
+        widen = 0.6 + 0.8 * t
+        for _ in range(count - 1):
+            angle = rng.uniform(0, 2 * np.pi)
+            radius = spread * np.sqrt(rng.uniform(0.05, 1.0))
+            offset = (np.cos(angle) * u + np.sin(angle) * v) * radius
+            out.append(guide + offset[None, :] * widen)
+    return out
 
 
 def parse_vmb(data):
@@ -984,14 +1131,19 @@ class VamCache:
                 json.dump(characters, handle, ensure_ascii=False, indent=1, sort_keys=True)
             components = {}
             merged = {}
+            scalps = []
             for name in files:
                 if name.startswith("DAZMesh @"):
                     header = _dump_header(os.path.join(tmp, name))
                     components[header.get("geometryId", "")] = int(
                         header.get("_numBaseVertices", 0))
+                    if int(header.get("_numBaseVertices", 0)) < 5000 \
+                            and "genital" not in header.get("geometryId", "").lower():
+                        scalps.append(os.path.join(tmp, name))
                 elif name.startswith("DAZMergedMesh @"):
                     header = _dump_header(os.path.join(tmp, name))
                     merged[header.get("geometryId", "")] = os.path.join(tmp, name)
+            self._save_scalps(scalps)
             for gender, spec in self.GENDER_BUNDLES.items():
                 target = None
                 for geometry_id, path in merged.items():
@@ -1023,6 +1175,51 @@ class VamCache:
                     "textureGroups": groups,
                     "materialNames": mesh.material_names,
                 })
+
+    def _save_scalps(self, paths):
+        """Hair scalp caps (Soleil/Udane/Krayon/Leyton/Omri/pubic): small
+        DAZMesh objects whose only material is 'scalp'.  Strand hair files
+        name their scalp, and the cap hides the skin between strands."""
+        table = []
+        seen = set()
+        for path in paths:
+            try:
+                mesh, header = parse_dump_mesh(path)
+            except ValueError:
+                continue
+            materials = [m.lower() for m in mesh.material_names]
+            if not materials or any(m not in ("scalp", "default") for m in materials):
+                continue
+            key = (header.get("nodeId", ""), mesh.num_verts)
+            if key in seen:
+                continue
+            seen.add(key)
+            index = len(table)
+            np.savez_compressed(os.path.join(self.dir, "scalp_%d.npz" % index),
+                                verts=mesh.verts, poly_mat=mesh.poly_mat,
+                                poly_len=mesh.poly_len, poly_idx=mesh.poly_idx,
+                                uv_poly_idx=mesh.uv_poly_idx, uvs=mesh.uvs)
+            table.append({"nodeId": header.get("nodeId", ""),
+                          "geometryId": header.get("geometryId", ""),
+                          "vertices": mesh.num_verts, "file": "scalp_%d.npz" % index,
+                          "materialNames": mesh.material_names})
+        with open(os.path.join(self.dir, "scalps.json"), "w", encoding="utf-8") as handle:
+            json.dump(table, handle, ensure_ascii=False, indent=1)
+
+    def scalp_mesh(self, token, vertex_count):
+        """DazMesh of the scalp cap a strand-hair file refers to, or None."""
+        path = os.path.join(self.dir, "scalps.json")
+        if not os.path.isfile(path):
+            self.prepare_person()
+        table = json.load(open(path, encoding="utf-8"))
+        token = token.lower()
+        for entry in table:
+            if entry["vertices"] == vertex_count and token in entry["nodeId"].lower():
+                data = np.load(os.path.join(self.dir, entry["file"]))
+                return DazMesh(entry["geometryId"], entry["materialNames"], data["verts"],
+                               data["poly_mat"], data["poly_len"], data["poly_idx"],
+                               data["uv_poly_idx"], data["uvs"])
+        return None
 
     def _texture_groups(self, skin_bundle):
         with tempfile.TemporaryDirectory(prefix="vam_skin_") as tmp:
@@ -1311,7 +1508,7 @@ def material_spec(name, **kw):
     spec = {"name": name, "diffuse": None, "normal": None, "specular": None,
             "gloss": None, "alpha": None, "decal": None, "color": None,
             "alphaAdjust": 0.0, "transparent": False, "glass": False,
-            "layer": False, "backface": True, "roughness": 0.55}
+            "layer": False, "hair": False, "backface": True, "roughness": 0.55}
     spec.update(kw)
     return spec
 
@@ -1382,6 +1579,19 @@ class ModelBundle:
         self.objects.append({"name": name, "prefix": prefix, "role": role,
                              "materials": materials, "faces": len(faces),
                              "vertices": int(verts.shape[0])})
+
+    def add_curves(self, name, strands_vam, material, radius, role="hair"):
+        """Polyline strands (VaM coords) -> one curve object with a bevel."""
+        index = len(self.objects)
+        prefix = "o%d_" % index
+        lengths = np.asarray([len(s) for s in strands_vam], dtype=np.int32)
+        points = np.concatenate([np.asarray(s, dtype=np.float32) for s in strands_vam]) \
+            if strands_vam else np.zeros((0, 3), dtype=np.float32)
+        self.arrays[prefix + "points"] = to_blender(points)
+        self.arrays[prefix + "strand_len"] = lengths
+        self.objects.append({"name": name, "prefix": prefix, "role": role, "curve": True,
+                             "materials": [material], "strands": int(lengths.size),
+                             "vertices": int(points.shape[0]), "radius": float(radius)})
 
     def write(self):
         np.savez_compressed(os.path.join(self.out_dir, "model.npz"), **self.arrays)

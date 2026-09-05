@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  List and export Virt-A-Mate (VaM) looks and clothing to .blend + preview PNG.
+  List and export Virt-A-Mate (VaM) looks, clothing and hair to .blend + preview PNG.
 
 .DESCRIPTION
   Thin wrapper around export_vam_models.py (which does the real work with
@@ -11,7 +11,8 @@
                       preset), clothing item and hair item with a # index
     -Only <keys>      export the named entries (exact key or unique substring)
     -Index <numbers>  export by the # shown in -List
-    -All              export every look and every clothing item with a mesh
+    -All              export every look, clothing item and hair item with data
+    -NoHair           leave the strand hair out of a look
 
   Outputs land in <OutRoot>\looks\<key>\blend\ and
   <OutRoot>\clothings\<key>\blend\ next to the assembled model.json,
@@ -49,6 +50,7 @@ param(
     [string]$ManifestPath,
     [switch]$IncludePoseMorphs,
     [switch]$NoClothing,
+    [switch]$NoHair,
     [switch]$NoPreview,
     [switch]$ValidateOnly,
     [switch]$Force,
@@ -117,6 +119,7 @@ try {
     if ($All) { $exportArgs += '--all' }
     if ($IncludePoseMorphs) { $exportArgs += '--include-pose-morphs' }
     if ($NoClothing) { $exportArgs += '--no-clothing' }
+    if ($NoHair) { $exportArgs += '--no-hair' }
     if ($NoPreview) { $exportArgs += '--no-preview' }
     if ($ValidateOnly) { $exportArgs += '--validate' }
     if ($Force) { $exportArgs += '--force' }

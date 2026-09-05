@@ -83,6 +83,27 @@ def make_vab(name="Dress", materials=("mat-a", "mat-b")):
     return buf.getvalue(), verts, polys, uvs
 
 
+def make_hair_vab(scalp="UdaneScalp", scalp_verts=4, segments=3):
+    """Two guides (slots 0 and 2), slots 1 and 3 empty."""
+    buf = io.BytesIO()
+    w_str(buf, "DynamicStore"); w_str(buf, "1.0"); buf.write(b"\x01")
+    w_str(buf, "RuntimeHairGeometryCreator"); w_str(buf, "1.1"); w_str(buf, scalp)
+    buf.write(struct.pack("<if", segments, 0.02))
+    buf.write(b"\x00")
+    buf.write(struct.pack("<i", scalp_verts))
+    buf.write(bytes([0, 1, 0, 1]))
+    buf.write(struct.pack("<i", scalp_verts))
+    for slot in range(scalp_verts):
+        if slot in (0, 2):
+            buf.write(struct.pack("<ii", slot, segments))
+            for k in range(segments):
+                buf.write(struct.pack("<3f", slot * 0.1, 1.7 - 0.02 * k, 0.0))
+        else:
+            buf.write(struct.pack("<ii", slot, 0))
+    buf.write(b"\x00" * 16)
+    return buf.getvalue()
+
+
 def make_vmb(records):
     buf = io.BytesIO()
     buf.write(struct.pack("<i", len(records)))
@@ -134,7 +155,7 @@ def build_install(root):
         "Custom/Clothing/Female/Maker/Dress/tex/Dress.png": b"\x89PNG",
         "Custom/Hair/Female/Maker/Bob/Bob.vam":
             '{ "itemType" : "HairFemale", "uid" : "Maker:Bob", "displayName" : "Bob" }',
-        "Custom/Hair/Female/Maker/Bob/Bob.vab": b"\x0cDynamicStore\x031.0\x01\x1aRuntimeHairGeometryCreator",
+        "Custom/Hair/Female/Maker/Bob/Bob.vab": make_hair_vab(),
     })
     write_var(os.path.join(addon, "Look.Scene.3.var"), {
         "meta.json": "{}",
@@ -206,6 +227,36 @@ def test_vab_and_vmb():
         raise AssertionError("truncated vmb accepted")
 
 
+def test_hair():
+    data = make_hair_vab()
+    assert vl.is_runtime_hair_vab(data[:96]) and not vl.is_dazmesh_vab(data[:64])
+    guides = vl.parse_hair_vab(data)
+    assert guides.scalp == "UdaneScalp" and guides.scalp_token == "udane"
+    assert guides.segments == 3 and abs(guides.segment_length - 0.02) < 1e-6
+    assert guides.scalp_verts == 4 and guides.mask.tolist() == [0, 1, 0, 1]
+    assert guides.roots.tolist() == [0, 2] and len(guides.strands) == 2
+    assert np.allclose(guides.strands[1][0], [0.2, 1.7, 0.0])
+    fanned = vl.hair_children(guides.strands, 4, 0.01, seed=1)
+    assert len(fanned) == 8 and all(s.shape == (3, 3) for s in fanned)
+    assert np.array_equal(fanned[0], guides.strands[0])            # guide kept verbatim
+    assert np.all(np.linalg.norm(fanned[1] - guides.strands[0], axis=1) <= 0.01 * 1.4 + 1e-6)
+    assert vl.hair_children(guides.strands, 1, 0.01) == guides.strands
+    straight = np.stack([np.zeros(30), 1.7 - 0.02 * np.arange(30), np.zeros(30)], axis=1)
+    curved = straight.copy()
+    curved[:, 2] = 0.1 * np.sin(np.linspace(0, 3, 30))
+    kept, dropped = vl.drop_unstyled_guides([straight, curved, straight[:5]], 0.02)
+    assert dropped == 0 and len(kept) == 3, (dropped, len(kept))    # hanging straight hair stays
+    sideways = np.stack([0.02 * np.arange(30), np.full(30, 1.7), np.zeros(30)], axis=1)
+    kept, dropped = vl.drop_unstyled_guides([sideways, curved], 0.02)
+    assert dropped == 1 and len(kept) == 1 and kept[0] is not sideways, (dropped, len(kept))
+    try:
+        vl.parse_hair_vab(data[:-40])
+    except (ValueError, IndexError, struct.error):
+        pass
+    else:
+        raise AssertionError("truncated hair file accepted")
+
+
 def test_index_and_catalog(root):
     index = vl.PackageIndex(root)
     ids = sorted(p.id for p in index.packages)
@@ -241,7 +292,7 @@ def test_index_and_catalog(root):
     dress = keys["Maker.Pack.2~Dress"]
     assert dress.kind == "clothing" and dress.extra["exportable"] is True
     bob = keys["Maker.Pack.2~Bob"]
-    assert bob.kind == "hair" and bob.extra["exportable"] is False
+    assert bob.kind == "hair" and bob.extra["exportable"] is True
     assert catalog.by_uid("maker:dress").kind == "clothing"
 
     chosen, unknown = catalog.select(["Look.Scene.3~Angel~Person", "preset_angel"])
@@ -555,6 +606,13 @@ def test_model_bundle(tmp):
     assert arrays["o0_face_len"].tolist() == [4, 3]
     assert arrays["o0_loop_uv"].shape == (7, 2)
     assert arrays["o0_verts"][1].tolist() == [-1.0, 0.0, 0.0]   # mirrored X
+    bundle.add_curves("Hair", [np.zeros((3, 3)), np.ones((2, 3))],
+                      vl.material_spec("Hair", hair=True), 0.0007)
+    bundle.write()
+    arrays = np.load(os.path.join(tmp, "out", "model.npz"))
+    payload = json.load(open(path, encoding="utf-8"))
+    assert payload["objects"][1]["curve"] and payload["objects"][1]["strands"] == 2
+    assert arrays["o1_strand_len"].tolist() == [3, 2] and arrays["o1_points"].shape == (5, 3)
 
 
 def main():
@@ -562,6 +620,7 @@ def main():
     try:
         test_json_and_colours()
         test_vab_and_vmb()
+        test_hair()
         test_index_and_catalog(build_install(os.path.join(tmp, "install")))
         test_dump_parsers(tmp)
         test_texture_names()

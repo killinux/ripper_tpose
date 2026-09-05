@@ -34,6 +34,13 @@
   皆为 ~1e-5 噪声，丢弃）、内置 morph 用 displayName 引用且 `isPoseControl` 对 CTRL 系不可靠
   （改按分组名 `Pose Controls`）。全部写在 `scripts/vam/README.md` §5。
 - `tests/test_vam_lib.py`：合成 `.var`/`.vab`/`.vmb`/AssetStudio dump fixture 的纯 Python 回归。
+- **头发**（同日追加）：`RuntimeHairGeometryCreator` `.vab` 逆向——每个头皮顶点一条造型后的引导线
+  （`int segments, float segLen, byte, int N, byte[N] 掩码, int N, {int idx, int count, Vector3[count]}[N]`，
+  后接索引表与点的重复副本）。导成 Blender 曲线（引导线 + ≤7 条随机偏移子发丝，bevel 0.5–1.2 mm，
+  颜色 = rootColor/tipColor 均值），加 `a_per` 里同名头皮帽（Soleil/Udane/Krayon/Leyton/Omri），
+  随 morph 位移；从未造型的直线引导线（横伸出头的"铁丝"）按「≥15 cm、笔直、不向下垂」丢弃。
+  Look 缺省带头发（`-NoHair` 关），头发也能单独导（`-Type hair`）。预览取景只按网格算包围盒
+  （后台模式曲线包围盒不可靠）。
 
 ### 用户如何操作
 
@@ -51,7 +58,7 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 ### 实现原理与兼容性
 
 - 坐标 `(x, y, z) → (-x, -z, y)`（镜像，面序反转）；+X 为角色右侧用脚尖朝向与脸部 UV 验证。
-- 姿势 morph 缺省跳过（`-IncludePoseMorphs` 保留）；头发是发丝数据不转；无骨架；Decal 按 alpha 叠在漫反射上（有创作者把整套皮肤放 Decal 槽）；
+- 姿势 morph 缺省跳过（`-IncludePoseMorphs` 保留）；头发是引导线近似（无密度/物理）；无骨架；Decal 按 alpha 叠在漫反射上（有创作者把整套皮肤放 Decal 槽）；
   依赖包缺失的衣服/morph 记进 manifest 后继续。
 - `.ps1` 字符串全 ASCII（PS 5.1 OEM 码页规则），中文包名通过参数传递没问题，`-List` 里正常显示。
 
@@ -61,6 +68,7 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 - 集成：Angela（Female Custom，4 件皮肤层）、Cloud（Male 4，6 件衣服）、Preset_Alivia（Kayla
   默认皮肤，148 morph）、瑶瑶（Lexi，女仆装 5 件 + 3 皮肤层，中文子串选择）、单件 Cheongsam set，
   全部 PASS，预览逐张看过；`-List`、`-ValidateOnly` 经 `.ps1` 走通。
+- 21 个 Tifa Look（含头发重导）+ 上述 4 个 Look 带头发重导，全部 PASS，预览拼图核对。
 
 ---
 

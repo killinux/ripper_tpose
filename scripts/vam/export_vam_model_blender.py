@@ -75,6 +75,12 @@ def build_material(spec, texture_dir, stats):
     else:
         rgb = [1.0, 1.0, 1.0]
 
+    if spec.get("hair"):
+        bsdf.inputs["Base Color"].default_value = (rgb[0], rgb[1], rgb[2], 1.0)
+        bsdf.inputs["Roughness"].default_value = float(spec.get("roughness", 0.45))
+        bsdf.inputs["Specular"].default_value = 0.5
+        material.blend_method = "OPAQUE"
+        return material
     if spec.get("glass"):
         # Cornea / eye reflection / tear film: clear coat over the eye.
         bsdf.inputs["Base Color"].default_value = (1.0, 1.0, 1.0, 1.0)
@@ -131,7 +137,7 @@ def build_material(spec, texture_dir, stats):
         stats["textured"] += 1
     else:
         bsdf.inputs["Base Color"].default_value = (rgb[0], rgb[1], rgb[2], 1.0)
-        if not spec.get("_unused"):
+        if not spec.get("_unused") and not spec.get("_quiet"):
             stats["untextured"].append(spec.get("name") or "?")
     y -= 300
 
@@ -260,6 +266,46 @@ def build_object(entry, arrays, texture_dir, stats):
     return obj
 
 
+def build_curve_object(entry, arrays, texture_dir, stats):
+    prefix = entry["prefix"]
+    points = arrays[prefix + "points"]
+    lengths = arrays[prefix + "strand_len"]
+    curve = bpy.data.curves.new(entry["name"], type="CURVE")
+    curve.dimensions = "3D"
+    curve.bevel_depth = float(entry.get("radius", 0.0006))
+    curve.bevel_resolution = 1
+    curve.use_fill_caps = False
+    curve.resolution_u = 1
+    cursor = 0
+    for length in lengths.tolist():
+        block = points[cursor:cursor + length]
+        cursor += length
+        if length < 2:
+            continue
+        spline = curve.splines.new("POLY")
+        spline.points.add(length - 1)
+        flat = np.concatenate([block, np.ones((length, 1), dtype=np.float32)], axis=1)
+        spline.points.foreach_set("co", flat.ravel().tolist())
+        spline.use_smooth = True
+    for spec in entry["materials"]:
+        curve.materials.append(build_material(spec, texture_dir, stats))
+    obj = bpy.data.objects.new(entry["name"], curve)
+    bpy.context.scene.collection.objects.link(obj)
+    return obj
+
+
+def curves_to_meshes(objects):
+    """glTF ignores curve objects; convert them in place before exporting."""
+    curves = [o for o in objects if o.type == "CURVE"]
+    if not curves:
+        return
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in curves:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = curves[0]
+    bpy.ops.object.convert(target="MESH")
+
+
 def materials_images(objects):
     images = set()
     for obj in objects:
@@ -314,8 +360,11 @@ def setup_preview_world():
 
 
 def mesh_bounds(objects):
+    # Frame on meshes only: a curve object's bound_box is not evaluated in
+    # background mode and a stray strand would otherwise widen the shot.
+    meshes = [obj for obj in objects if obj.type == "MESH"] or list(objects)
     points = [obj.matrix_world @ Vector(corner)
-              for obj in objects for corner in obj.bound_box]
+              for obj in meshes for corner in obj.bound_box]
     low = Vector((min(p.x for p in points), min(p.y for p in points),
                   min(p.z for p in points)))
     high = Vector((max(p.x for p in points), max(p.y for p in points),
@@ -433,8 +482,10 @@ def main():
         arrays = np.load(os.path.join(model_dir, "model.npz"))
         texture_dir = os.path.join(model_dir, model.get("textureDir", "_textures"))
         stats = {"textured": 0, "untextured": []}
-        objects = [build_object(entry, arrays, texture_dir, stats)
+        objects = [build_curve_object(entry, arrays, texture_dir, stats)
+                   if entry.get("curve") else build_object(entry, arrays, texture_dir, stats)
                    for entry in model["objects"]]
+        strands = sum(int(entry.get("strands", 0)) for entry in model["objects"])
         has_body = any(entry.get("role") == "body" for entry in model["objects"])
         material_count = sum(len(obj.material_slots) for obj in objects)
         packed, pack_failed = pack_images(objects)
@@ -444,7 +495,9 @@ def main():
             "objects": len(objects), "materials": material_count,
             "textures": stats["textured"], "packed_images": len(packed),
             "untextured_slots": stats["untextured"],
-            "polygons": sum(len(obj.data.polygons) for obj in objects),
+            "polygons": sum(len(obj.data.polygons) for obj in objects
+                            if obj.type == "MESH"),
+            "strands": strands,
         }
         if mode == "validate":
             result("PASS", **details)
@@ -469,6 +522,7 @@ def main():
             os.makedirs(glb_dir, exist_ok=True)
             glb_path = os.path.join(glb_dir, os.path.splitext(os.path.basename(out_blend))[0]
                                     + ".glb")
+            curves_to_meshes(objects)
             bpy.ops.object.select_all(action="SELECT")
             bpy.ops.export_scene.gltf(filepath=glb_path, export_format="GLB",
                                       use_selection=True, export_apply=True)

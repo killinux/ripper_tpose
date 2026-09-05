@@ -209,6 +209,112 @@ def add_clothing_object(ctx, bundle, name, mesh, specs, hidden, verts=None):
                       mesh.uvs[loop_uv_idx], face_mat, specs, role="clothing")
 
 
+# ------------------------------------------------------------------------
+# Hair
+# ------------------------------------------------------------------------
+
+HAIR_CHILDREN_MAX = 8
+HAIR_RADIUS_MIN, HAIR_RADIUS_MAX = 0.0005, 0.0012
+
+
+def hair_sim_storable(vaj, overrides):
+    """The '<uid>Sim' storable (colours, width, multiplier) with scene overrides."""
+    storable = {}
+    for s in vaj.get("storables", []):
+        if str(s.get("id", "")).endswith("Sim"):
+            storable = dict(s)
+            break
+    for sid, scene_storable in (overrides or {}).items():
+        if storable.get("id") and sid == storable.get("id"):
+            storable.update(scene_storable)
+    return storable
+
+
+def hair_material(name, sim):
+    root = vl.storable_color(sim.get("rootColor")) or [0.05, 0.03, 0.02]
+    tip = vl.storable_color(sim.get("tipColor")) or root
+    color = [(r + t) * 0.5 for r, t in zip(root, tip)]
+    return vl.material_spec(name, color=color, roughness=0.45, hair=True, _quiet=True)
+
+
+def scalp_material(vaj, overrides, uid):
+    for sid, s in list(_material_storables(vaj).items()) + list((overrides or {}).items()):
+        if "Scalp" in sid and "Material" in sid:
+            color = vl.storable_color(s.get("Diffuse Color"))
+            if color is not None:
+                return vl.material_spec("Scalp", color=color, roughness=0.6, layer=True)
+    return vl.material_spec("Scalp", color=[0.06, 0.04, 0.03], roughness=0.6, layer=True)
+
+
+def add_hair_item(ctx, bundle, package, vam_member, name, overrides, base_verts,
+                  morphed_verts, missing):
+    """Strand hair -> curves (+ scalp cap); mesh hair -> clothing-style object.
+
+    Returns a short description for the notes.
+    """
+    base = vam_member[:-4]
+    vab = package.find(base + ".vab")
+    if vab is None:
+        raise FileNotFoundError("no .vab beside %s" % vam_member)
+    data = package.read(vab)
+    vaj_member = package.find(base + ".vaj")
+    vaj = vl.lenient_json_loads(package.read(vaj_member)) if vaj_member else {}
+    item_dir = posixpath.dirname(vam_member)
+    if vl.is_dazmesh_vab(data[:64]):
+        mesh = vl.parse_dazmesh_vab(data)
+        specs, hidden = clothing_materials(ctx, mesh, vaj, package, item_dir, bundle,
+                                           overrides=overrides, missing=missing)
+        verts = mesh.verts
+        if morphed_verts is not None:
+            verts = vl.transfer_displacement(mesh.verts, base_verts, morphed_verts)
+            verts, _layer = mark_skin_layer(mesh, specs, morphed_verts, verts)
+        add_clothing_object(ctx, bundle, name, mesh, specs, hidden, verts)
+        return "%s (mesh)" % name
+    guides = vl.parse_hair_vab(data)
+    sim = hair_sim_storable(vaj, overrides)
+    children = max(1, min(HAIR_CHILDREN_MAX, int(vl.as_float(sim.get("hairMultiplier"), 4))))
+    spread = guides.segment_length * 0.45
+    strands, dropped = vl.drop_unstyled_guides(guides.strands, guides.segment_length)
+    if morphed_verts is not None and strands:
+        lengths = [len(s) for s in strands]
+        moved = vl.transfer_displacement(np.concatenate(strands), base_verts, morphed_verts)
+        strands, cursor = [], 0
+        for length in lengths:
+            strands.append(moved[cursor:cursor + length])
+            cursor += length
+    fanned = vl.hair_children(strands, children, spread, seed=len(name))
+    width = vl.as_float(sim.get("width"), 0.0002)
+    radius = min(HAIR_RADIUS_MAX, max(HAIR_RADIUS_MIN, width * 4.0))
+    bundle.add_curves(name, fanned, hair_material(name, sim), radius)
+    scalp = ctx.cache.scalp_mesh(guides.scalp_token, guides.scalp_verts)
+    if scalp is not None:
+        verts = scalp.verts
+        if morphed_verts is not None:
+            verts = vl.transfer_displacement(scalp.verts, base_verts, morphed_verts)
+        normals = vl.vertex_normals(verts, scalp.poly_len, scalp.poly_idx)
+        verts = verts + normals * SKIN_LAYER_PUSH
+        faces, loop_uv_idx, face_mat = vl.clean_polygons(
+            scalp.poly_len, scalp.poly_idx, scalp.uv_poly_idx, scalp.poly_mat)
+        specs = [dict(scalp_material(vaj, overrides, name), _quiet=True)
+                 for _ in scalp.material_names]
+        bundle.add_object(name + " scalp", verts, faces, scalp.uvs[loop_uv_idx], face_mat,
+                          specs, role="scalp")
+    return "%s (%d guides x%d%s%s)" % (
+        name, len(strands), children,
+        ", %d unstyled dropped" % dropped if dropped else "",
+        "" if scalp is not None else ", no scalp cap")
+
+
+def build_hair_bundle(ctx, entry, out_dir):
+    bundle = vl.ModelBundle(out_dir, entry.key, "hair", entry.display)
+    missing = []
+    info = add_hair_item(ctx, bundle, entry.package, entry.member, entry.display, None,
+                         None, None, missing)
+    bundle.notes.update({"package": entry.package.id, "uid": entry.extra.get("uid"),
+                         "hair": [info], "missingTextures": missing})
+    return bundle.write(), bundle.notes
+
+
 def build_clothing_bundle(ctx, entry, out_dir):
     bundle = vl.ModelBundle(out_dir, entry.key, "clothing", entry.display)
     mesh, vaj, item_dir = load_item(ctx, entry.package, entry.member)
@@ -402,7 +508,8 @@ def body_materials(ctx, bundle, base_mesh, base_meta, storables, package, defaul
     return specs, hidden, table, used_defaults
 
 
-def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=True):
+def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=True,
+                      include_hair=True):
     bundle = vl.ModelBundle(out_dir, entry.key, "look", entry.display)
     atom = load_person(entry)
     storables = vl.person_storables(atom)
@@ -465,15 +572,35 @@ def build_look_bundle(ctx, entry, out_dir, include_pose=False, include_clothing=
             add_clothing_object(ctx, bundle, name, mesh, item_specs, item_hidden, fitted)
             clothing_done.append(name + (" (skin layer)" if is_layer else ""))
 
-    hair = [h.get("internalId") or h.get("id") for h in geometry.get("hair", []) or []
-            if vl.as_bool(h.get("enabled"), True)]
+    hair_done, hair_missing = [], []
+    for item in geometry.get("hair", []) or []:
+        if not vl.as_bool(item.get("enabled"), True):
+            continue
+        label = item.get("internalId") or item.get("id") or "hair"
+        if not include_hair:
+            hair_missing.append("%s (skipped: --no-hair)" % label)
+            continue
+        uid = item.get("id") or ""
+        pkg, member = ctx.index.resolve(uid, entry.package)
+        if member is None:
+            found = ctx.catalog.by_uid(item.get("internalId") or "")
+            if found is not None and found.kind == "hair":
+                pkg, member = found.package, found.member
+        if member is None or not member.lower().endswith(".vam"):
+            hair_missing.append(label)
+            continue
+        try:
+            hair_done.append(add_hair_item(ctx, bundle, pkg, member, label, storables,
+                                           base_mesh.verts, verts, missing))
+        except (ValueError, FileNotFoundError, KeyError) as exc:
+            hair_missing.append("%s (%s)" % (label, exc))
     bundle.notes.update({
         "package": entry.package.id, "source": entry.member,
         "person": entry.extra.get("person"), "character": character, "gender": gender,
         "skinBundle": info.get("bundle"), "morphs": morph_report,
         "skinTextures": table, "defaultTexturesUsed": used_defaults,
         "clothing": clothing_done, "clothingMissing": clothing_missing,
-        "hairSkipped": hair, "missingTextures": missing,
+        "hair": hair_done, "hairMissing": hair_missing, "missingTextures": missing,
     })
     return bundle.write(), bundle.notes
 
@@ -539,10 +666,13 @@ def cmd_list(ctx, args):
                 "yes" if x.get("exportable") else "-", entry.display))
     if hair:
         log("")
-        log("Hair (%d) - listed only; VaM hair is a strand format, not converted:"
-            % len(hair))
+        exportable = sum(1 for e in hair if e.extra.get("exportable"))
+        log("Hair (%d, %d with strand/mesh data) - guides fanned out into curves:"
+            % (len(hair), exportable))
         for entry in hair:
-            log("  %5d  %-58s %s" % (numbering[id(entry)], entry.key[:58], entry.display))
+            log("  %5d  %-58s %-4s %s" % (numbering[id(entry)], entry.key[:58],
+                                          "yes" if entry.extra.get("exportable") else "-",
+                                          entry.display))
     log("")
     log("Select with --only <key or unique substring> or --index <#>.")
     return 0
@@ -586,15 +716,10 @@ def cmd_export(ctx, args):
     for number, entry in enumerate(entries, 1):
         log("")
         log("[%d/%d] %s: %s" % (number, len(entries), entry.key, entry.display))
-        if entry.kind == "hair":
-            log("  SKIP: hair is not convertible (strand data)")
-            results.append({"model": entry.key, "kind": "hair", "status": "NOMESH",
-                            "reason": "hair strands are not a mesh"})
-            continue
-        if entry.kind == "clothing" and not entry.extra.get("exportable"):
-            log("  NOMESH: no DAZMesh .vab beside the .vam")
-            results.append({"model": entry.key, "kind": "clothing", "status": "NOMESH",
-                            "reason": "no .vab mesh"})
+        if entry.kind in ("clothing", "hair") and not entry.extra.get("exportable"):
+            log("  NOMESH: no usable .vab beside the .vam")
+            results.append({"model": entry.key, "kind": entry.kind, "status": "NOMESH",
+                            "reason": "no .vab mesh/strand data"})
             continue
         model_dir = os.path.join(ctx.out_root, entry.kind + "s", entry.key)
         blend_dir = os.path.join(model_dir, "blend")
@@ -612,7 +737,10 @@ def cmd_export(ctx, args):
             if entry.kind == "look":
                 _path, notes = build_look_bundle(ctx, entry, model_dir,
                                                  include_pose=args.include_pose_morphs,
-                                                 include_clothing=not args.no_clothing)
+                                                 include_clothing=not args.no_clothing,
+                                                 include_hair=not args.no_hair)
+            elif entry.kind == "hair":
+                _path, notes = build_hair_bundle(ctx, entry, model_dir)
             else:
                 _path, notes = build_clothing_bundle(ctx, entry, model_dir)
         except Exception as exc:  # noqa: BLE001 - report and continue
@@ -632,9 +760,9 @@ def cmd_export(ctx, args):
         record.update(payload)
         results.append(record)
         if payload.get("status") == "PASS":
-            log("  PASS: %s objects / %s materials / %s textures packed (%.1fs)" % (
+            log("  PASS: %s objects / %s materials / %s textures packed / %s strands (%.1fs)" % (
                 payload.get("objects"), payload.get("materials"),
-                payload.get("packed_images"), record["seconds"]))
+                payload.get("packed_images"), payload.get("strands", 0), record["seconds"]))
             if payload.get("untextured_slots"):
                 log("    untextured: %s" % "; ".join(payload["untextured_slots"]))
             if not args.validate:
@@ -668,11 +796,15 @@ def describe_notes(entry, notes):
         if notes.get("clothingMissing"):
             log("    clothing not found (dependency missing?): %s"
                 % ", ".join(notes["clothingMissing"]))
-        if notes.get("hairSkipped"):
-            log("  hair skipped: %s" % ", ".join(str(h) for h in notes["hairSkipped"]))
+        if notes.get("hair"):
+            log("  hair: %s" % ", ".join(notes["hair"]))
+        if notes.get("hairMissing"):
+            log("    hair not found: %s" % ", ".join(str(h) for h in notes["hairMissing"]))
         if notes.get("defaultTexturesUsed"):
             log("  default skin textures used for: %s"
                 % ", ".join(notes["defaultTexturesUsed"]))
+    elif entry.kind == "hair":
+        log("  hair: %s" % ", ".join(notes.get("hair", [])))
     else:
         log("  %d vertices, %d polygons, materials: %s" % (
             notes.get("vertices", 0), notes.get("polygons", 0),
@@ -731,6 +863,7 @@ def main(argv=None):
     p_export.add_argument("--validate", action="store_true")
     p_export.add_argument("--include-pose-morphs", action="store_true")
     p_export.add_argument("--no-clothing", action="store_true")
+    p_export.add_argument("--no-hair", action="store_true")
     p_export.add_argument("--manifest")
 
     args = parser.parse_args(argv)
