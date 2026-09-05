@@ -259,6 +259,30 @@ PSKX 的各 chunk 边界已逐项检查，末尾偏移与文件长度完全相�
 不提供或抓取密钥。FModel 导出阶段只读取磁盘上的 `.pak/.utoc/.ucas` 和 mapping，
 不需要游戏进程。
 
+## 5.4 批量：整目录一次导出（2026-09-05）
+
+FModel 没有命令行，但目录右键菜单里有 **Save Folder's Packages Models**，对
+`End/Content/Character/Player` 用一次就是全部 109 个变体（85 个有主模型）。
+`scripts\final\fmodel_export_player.py` 用 pywinauto 把这一步自动化：
+
+```powershell
+pip install pywinauto
+python scripts\final\fmodel_export_player.py            # 备份并改写 FModel 设置 -> 启动 -> Load -> 导出 -> 轮询到静默 -> 还原设置
+.\scripts\final\export_ff7rb_models.ps1                 # 材质化所有有 PSKX 的变体
+blender --background --python scripts\final\html\render_blend_preview.py -- D:\ff7rebirth_exports\materialized
+python scripts\final\html_rebirth\collect_manifest.py; python scripts\final\html_rebirth\make_gallery.py
+```
+
+踩到的坑：
+
+- **Mesh Format 必须是 ActorX**。FModel 的设置是全局的，另一款游戏把它切成 UEFormat 后，
+  整目录导出写的是 `.uemodel`，材质化脚本不认；脚本会强制改回 `MeshExportFormat=0`。
+- **「Preview New Explorer System」下目录没有右键菜单**，要用经典浏览器。
+- **高 DPI 下 pywinauto 的鼠标坐标会偏**，脚本只用 UIA 的 Select/Invoke + `Shift+F10` 弹菜单，不点坐标。
+- 85 个主模型包里 **13 个** FModel 读 SkeletalMesh 失败且网格不可恢复（tangent 字节数不符），
+  清单见 `ff7rebirth-player-export-inventory.md` §0。其余 72 个都写出 PSKX，
+  材质化 71 成功、1 失败。整目录导出耗时约 1 小时 45 分（每包 30–60 s，多数时间在贴图）。
+
 ## 6. 安装 Blender 插件
 
 1. Blender 3.6 → `Edit > Preferences > Add-ons > Install...`。

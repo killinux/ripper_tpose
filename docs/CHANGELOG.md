@@ -80,7 +80,32 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 
 ---
 
-## 2026-09-05 — FF7 Remake：36 个 Player 主模型批量导出 + 画廊
+## 2026-09-05 — FF7 Rebirth：FModel 整目录自动导出 + 71 个 Player 变体材质化 + 画廊
+
+### 新增与修复
+
+- **新增 `scripts/final/fmodel_export_player.py`**：pywinauto 驱动 FModel（备份/改写 AppSettings
+  指向 Rebirth、经典浏览器、ActorX；启动、Load、展开树、`Shift+F10` 触发
+  「Save Folder's Packages Models」、轮询到 3 分钟无新文件、还原设置）。以前 Rebirth 只能
+  在 FModel 里逐个手点 Save Model，所以只导过 9 个 Tifa。
+- **新增 `scripts/final/html/render_blend_preview.py`**：给不带预览的 .blend 补渲正面预览
+  （UE/ActorX 人物正面朝 +X）。
+- **新增 `scripts/final/html_rebirth/{collect_manifest.py, make_gallery.py}`**：Rebirth 画廊，
+  manifest 由 `export_ff7rb_models.ps1` 的 manifest 转换，按角色下拉 + 主服装/过场/蛤蟆筛选。
+
+### 本批结果
+
+85 个 Player 主模型包 → FModel 写出 72 个 PSKX → 材质化 PASS 71 / FAIL 1；
+13 个包 FModel 读 SkeletalMesh 失败且不可恢复（Cloud 血迹版 ×4、Aerith/Sonon 血迹版、
+Toad_Standard、6 个 PC7xxx 过场版），清单见 `docs/ff7rebirth-player-export-inventory.md` §0。
+产物 `D:\ff7rebirth_exports\materialized\`（7.3 GB）。
+
+### 踩坑
+
+FModel 全局 Mesh Format 被切成 UEFormat（另一款游戏的配置）时整目录导出写的是 `.uemodel`；
+新浏览器模式没有目录右键菜单；高 DPI 下 pywinauto 鼠标坐标偏移——脚本已全部规避。
+
+
 
 ### 新增与修复
 

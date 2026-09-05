@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FF7 Rebirth 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --mod: #7a3fa0; --mod-bg: #f1e7f8; --shot: #d9dbe2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --mod: #c99ae6; --mod-bg: #33203d; --shot: #2a2d34;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header { padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* 作者写的 display 会盖过 UA 的 [hidden] 规则，筛选必须显式声明 */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg { padding: 46px 0; text-align: center; color: var(--muted); font-size: 12px; }
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.titlerow h3 { margin: 0; font-size: 15px; font-family: Consolas, monospace; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-mod { color: var(--mod); background: var(--mod-bg); cursor: default; }
+.badge-code { color: var(--accent); background: var(--bg); cursor: default; font-family: Consolas, monospace; }
+#chr { padding: 6px 8px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; }
+dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code, p code { font-family: Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>FF7 Rebirth 模型导出总览</h1>
+  <div class="sub">生成于 2026-09-05 19:14 · 导出根目录 <code>D:\ff7rebirth_exports\materialized</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>71</b><span>已转模型</span></div>
+    <div class="stat"><b>14</b><span>覆盖角色</span></div>
+    <div class="stat"><b>9</b><span>过场/蛤蟆变体</span></div>
+    <div class="stat"><b>6.8 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>7</b><span>有告警</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索角色、服装名、包编号或路径…（按 / 聚焦）">
+  <select id="chr"><option value="">全部角色</option><option value="Aerith">Aerith (12)</option><option value="Barret">Barret (5)</option><option value="CaitSith">CaitSith (2)</option><option value="Cid">Cid (1)</option><option value="Cloud">Cloud (12)</option><option value="Debumoogle">Debumoogle (4)</option><option value="RedXIII">RedXIII (4)</option><option value="Sephiroth">Sephiroth (2)</option><option value="Sonon">Sonon (1)</option><option value="Tifa">Tifa (8)</option><option value="Toad">Toad (9)</option><option value="Vincent">Vincent (1)</option><option value="Yuffie">Yuffie (7)</option><option value="Zack">Zack (3)</option></select>
+  <button class="chip on" data-kind="">全部</button>
+  <button class="chip" data-kind="official">主服装</button><button class="chip" data-kind="toad">蛤蟆形态</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="pc0000_00_cloud_standard cloud standard pc0000_00 d:\ff7rebirth_exports\materialized\pc0000_00_cloud_standard.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_00_Cloud_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_00_Cloud_Standard.jpg" alt="PC0000_00_Cloud_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_00_Cloud_Standard</h3><span class="badge badge-code">PC0000_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 196160 顶点 · 595 骨骼 · 14 材质（0 透明） · 125.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_00_Cloud_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0000_00_Cloud_Standard.blend">D:\ff7rebirth_exports\materialized\PC0000_00_Cloud_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_00_Cloud_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_04_cloud_zackcostume cloud zackcostume pc0000_04 d:\ff7rebirth_exports\materialized\pc0000_04_cloud_zackcostume.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_04_Cloud_ZackCostume_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_04_Cloud_ZackCostume.jpg" alt="PC0000_04_Cloud_ZackCostume"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_04_Cloud_ZackCostume</h3><span class="badge badge-code">PC0000_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · ZackCostume</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 191145 顶点 · 659 骨骼 · 13 材质（0 透明） · 141.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_04_Cloud_ZackCostume.blend" title="D:\ff7rebirth_exports\materialized\PC0000_04_Cloud_ZackCostume.blend">D:\ff7rebirth_exports\materialized\PC0000_04_Cloud_ZackCostume.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_04_Cloud_ZackCostume.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_06_cloud_soldier cloud soldier pc0000_06 d:\ff7rebirth_exports\materialized\pc0000_06_cloud_soldier.blend" data-kind="official" data-chr="Cloud" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_06_Cloud_Soldier_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_06_Cloud_Soldier.jpg" alt="PC0000_06_Cloud_Soldier"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_06_Cloud_Soldier</h3><span class="badge badge-warn" title="缺底色贴图 1：PC0000_06_Emissive">告警 1</span><span class="badge badge-code">PC0000_06</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · Soldier</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 69344 顶点 · 458 骨骼 · 11 材质（0 透明） · 94.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_06_Cloud_Soldier.blend" title="D:\ff7rebirth_exports\materialized\PC0000_06_Cloud_Soldier.blend">D:\ff7rebirth_exports\materialized\PC0000_06_Cloud_Soldier.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_06_Cloud_Soldier.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_07_cloud_soldiersenior cloud soldiersenior pc0000_07 d:\ff7rebirth_exports\materialized\pc0000_07_cloud_soldiersenior.blend" data-kind="official" data-chr="Cloud" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_07_Cloud_SoldierSenior_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_07_Cloud_SoldierSenior.jpg" alt="PC0000_07_Cloud_SoldierSenior"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_07_Cloud_SoldierSenior</h3><span class="badge badge-warn" title="缺底色贴图 1：PC0000_07_Emissive">告警 1</span><span class="badge badge-code">PC0000_07</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · SoldierSenior</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 70888 顶点 · 458 骨骼 · 12 材质（0 透明） · 103.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_07_Cloud_SoldierSenior.blend" title="D:\ff7rebirth_exports\materialized\PC0000_07_Cloud_SoldierSenior.blend">D:\ff7rebirth_exports\materialized\PC0000_07_Cloud_SoldierSenior.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_07_Cloud_SoldierSenior.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_08_cloud_soldiernohelmet cloud soldiernohelmet pc0000_08 d:\ff7rebirth_exports\materialized\pc0000_08_cloud_soldiernohelmet.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_08_Cloud_SoldierNoHelmet_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_08_Cloud_SoldierNoHelmet.jpg" alt="PC0000_08_Cloud_SoldierNoHelmet"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_08_Cloud_SoldierNoHelmet</h3><span class="badge badge-code">PC0000_08</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · SoldierNoHelmet</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 176209 顶点 · 574 骨骼 · 11 材质（0 透明） · 133.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_08_Cloud_SoldierNoHelmet.blend" title="D:\ff7rebirth_exports\materialized\PC0000_08_Cloud_SoldierNoHelmet.blend">D:\ff7rebirth_exports\materialized\PC0000_08_Cloud_SoldierNoHelmet.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_08_Cloud_SoldierNoHelmet.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_09_cloud_costaclothing cloud costaclothing pc0000_09 d:\ff7rebirth_exports\materialized\pc0000_09_cloud_costaclothing.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_09_Cloud_CostaClothing_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_09_Cloud_CostaClothing.jpg" alt="PC0000_09_Cloud_CostaClothing"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_09_Cloud_CostaClothing</h3><span class="badge badge-code">PC0000_09</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · CostaClothing</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 177594 顶点 · 512 骨骼 · 11 材质（0 透明） · 132.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_09_Cloud_CostaClothing.blend" title="D:\ff7rebirth_exports\materialized\PC0000_09_Cloud_CostaClothing.blend">D:\ff7rebirth_exports\materialized\PC0000_09_Cloud_CostaClothing.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_09_Cloud_CostaClothing.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_10_cloud_costaclothing2 cloud costaclothing2 pc0000_10 d:\ff7rebirth_exports\materialized\pc0000_10_cloud_costaclothing2.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_10_Cloud_CostaClothing2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_10_Cloud_CostaClothing2.jpg" alt="PC0000_10_Cloud_CostaClothing2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_10_Cloud_CostaClothing2</h3><span class="badge badge-code">PC0000_10</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · CostaClothing2</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 177569 顶点 · 551 骨骼 · 10 材质（0 透明） · 125.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_10_Cloud_CostaClothing2.blend" title="D:\ff7rebirth_exports\materialized\PC0000_10_Cloud_CostaClothing2.blend">D:\ff7rebirth_exports\materialized\PC0000_10_Cloud_CostaClothing2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_10_Cloud_CostaClothing2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_11_cloud_loveless cloud loveless pc0000_11 d:\ff7rebirth_exports\materialized\pc0000_11_cloud_loveless.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_11_Cloud_Loveless_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_11_Cloud_Loveless.jpg" alt="PC0000_11_Cloud_Loveless"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_11_Cloud_Loveless</h3><span class="badge badge-code">PC0000_11</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · Loveless</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 191763 顶点 · 593 骨骼 · 11 材质（0 透明） · 143.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_11_Cloud_Loveless.blend" title="D:\ff7rebirth_exports\materialized\PC0000_11_Cloud_Loveless.blend">D:\ff7rebirth_exports\materialized\PC0000_11_Cloud_Loveless.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_11_Cloud_Loveless.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_12_cloud_zackcostumedirty cloud zackcostumedirty pc0000_12 d:\ff7rebirth_exports\materialized\pc0000_12_cloud_zackcostumedirty.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_12_Cloud_ZackCostumeDirty_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_12_Cloud_ZackCostumeDirty.jpg" alt="PC0000_12_Cloud_ZackCostumeDirty"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_12_Cloud_ZackCostumeDirty</h3><span class="badge badge-code">PC0000_12</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · ZackCostumeDirty</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 191145 顶点 · 655 骨骼 · 13 材质（0 透明） · 118.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_12_Cloud_ZackCostumeDirty.blend" title="D:\ff7rebirth_exports\materialized\PC0000_12_Cloud_ZackCostumeDirty.blend">D:\ff7rebirth_exports\materialized\PC0000_12_Cloud_ZackCostumeDirty.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_12_Cloud_ZackCostumeDirty.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_17_cloud_lovelessnomask cloud lovelessnomask pc0000_17 d:\ff7rebirth_exports\materialized\pc0000_17_cloud_lovelessnomask.blend" data-kind="official" data-chr="Cloud" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_17_Cloud_LovelessNoMask_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_17_Cloud_LovelessNoMask.jpg" alt="PC0000_17_Cloud_LovelessNoMask"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_17_Cloud_LovelessNoMask</h3><span class="badge badge-warn" title="缺底色贴图 9：PC0000_11_BodyA; PC0000_11_BodyB; PC0000_11_Cloak; PC0000_11_Eyebrow">告警 1</span><span class="badge badge-code">PC0000_17</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · LovelessNoMask</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 189956 顶点 · 593 骨骼 · 11 材质（0 透明） · 54.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_17_Cloud_LovelessNoMask.blend" title="D:\ff7rebirth_exports\materialized\PC0000_17_Cloud_LovelessNoMask.blend">D:\ff7rebirth_exports\materialized\PC0000_17_Cloud_LovelessNoMask.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_17_Cloud_LovelessNoMask.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_18_cloud_zackcostumeage21 cloud zackcostumeage21 pc0000_18 d:\ff7rebirth_exports\materialized\pc0000_18_cloud_zackcostumeage21.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_18_Cloud_ZackCostumeAge21_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_18_Cloud_ZackCostumeAge21.jpg" alt="PC0000_18_Cloud_ZackCostumeAge21"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_18_Cloud_ZackCostumeAge21</h3><span class="badge badge-code">PC0000_18</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · ZackCostumeAge21</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 191145 顶点 · 655 骨骼 · 13 材质（0 透明） · 132.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_18_Cloud_ZackCostumeAge21.blend" title="D:\ff7rebirth_exports\materialized\PC0000_18_Cloud_ZackCostumeAge21.blend">D:\ff7rebirth_exports\materialized\PC0000_18_Cloud_ZackCostumeAge21.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_18_Cloud_ZackCostumeAge21.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_19_cloud_zackcostumedirtyage21 cloud zackcostumedirtyage21 pc0000_19 d:\ff7rebirth_exports\materialized\pc0000_19_cloud_zackcostumedirtyage21.blend" data-kind="official" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0000_19_Cloud_ZackCostumeDirtyAge21_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_19_Cloud_ZackCostumeDirtyAge21.jpg" alt="PC0000_19_Cloud_ZackCostumeDirtyAge21"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_19_Cloud_ZackCostumeDirtyAge21</h3><span class="badge badge-code">PC0000_19</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · ZackCostumeDirtyAge21</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 191145 顶点 · 655 骨骼 · 13 材质（0 透明） · 134.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_19_Cloud_ZackCostumeDirtyAge21.blend" title="D:\ff7rebirth_exports\materialized\PC0000_19_Cloud_ZackCostumeDirtyAge21.blend">D:\ff7rebirth_exports\materialized\PC0000_19_Cloud_ZackCostumeDirtyAge21.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_19_Cloud_ZackCostumeDirtyAge21.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0001_00_barret_standard barret standard pc0001_00 d:\ff7rebirth_exports\materialized\pc0001_00_barret_standard.blend" data-kind="official" data-chr="Barret" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0001_00_Barret_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0001_00_Barret_Standard.jpg" alt="PC0001_00_Barret_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0001_00_Barret_Standard</h3><span class="badge badge-code">PC0001_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Barret · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 119140 顶点 · 523 骨骼 · 13 材质（0 透明） · 150.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0001_00_Barret_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0001_00_Barret_Standard.blend">D:\ff7rebirth_exports\materialized\PC0001_00_Barret_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0001_00_Barret_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0001_02_barret_corel barret corel pc0001_02 d:\ff7rebirth_exports\materialized\pc0001_02_barret_corel.blend" data-kind="official" data-chr="Barret" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0001_02_Barret_Corel_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0001_02_Barret_Corel.jpg" alt="PC0001_02_Barret_Corel"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0001_02_Barret_Corel</h3><span class="badge badge-code">PC0001_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Barret · Corel</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 97131 顶点 · 397 骨骼 · 13 材质（0 透明） · 148.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0001_02_Barret_Corel.blend" title="D:\ff7rebirth_exports\materialized\PC0001_02_Barret_Corel.blend">D:\ff7rebirth_exports\materialized\PC0001_02_Barret_Corel.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0001_02_Barret_Corel.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0001_03_barret_sailor barret sailor pc0001_03 d:\ff7rebirth_exports\materialized\pc0001_03_barret_sailor.blend" data-kind="official" data-chr="Barret" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0001_03_Barret_Sailor_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0001_03_Barret_Sailor.jpg" alt="PC0001_03_Barret_Sailor"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0001_03_Barret_Sailor</h3><span class="badge badge-code">PC0001_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Barret · Sailor</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 55512 顶点 · 358 骨骼 · 10 材质（0 透明） · 51.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0001_03_Barret_Sailor.blend" title="D:\ff7rebirth_exports\materialized\PC0001_03_Barret_Sailor.blend">D:\ff7rebirth_exports\materialized\PC0001_03_Barret_Sailor.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0001_03_Barret_Sailor.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0001_04_barret_loveless barret loveless pc0001_04 d:\ff7rebirth_exports\materialized\pc0001_04_barret_loveless.blend" data-kind="official" data-chr="Barret" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0001_04_Barret_Loveless_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0001_04_Barret_Loveless.jpg" alt="PC0001_04_Barret_Loveless"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0001_04_Barret_Loveless</h3><span class="badge badge-code">PC0001_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Barret · Loveless</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 132685 顶点 · 546 骨骼 · 12 材质（0 透明） · 134.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0001_04_Barret_Loveless.blend" title="D:\ff7rebirth_exports\materialized\PC0001_04_Barret_Loveless.blend">D:\ff7rebirth_exports\materialized\PC0001_04_Barret_Loveless.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0001_04_Barret_Loveless.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0001_05_barret_bandage barret bandage pc0001_05 d:\ff7rebirth_exports\materialized\pc0001_05_barret_bandage.blend" data-kind="official" data-chr="Barret" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0001_05_Barret_Bandage_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0001_05_Barret_Bandage.jpg" alt="PC0001_05_Barret_Bandage"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0001_05_Barret_Bandage</h3><span class="badge badge-code">PC0001_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Barret · Bandage</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 94913 顶点 · 381 骨骼 · 13 材质（0 透明） · 148.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0001_05_Barret_Bandage.blend" title="D:\ff7rebirth_exports\materialized\PC0001_05_Barret_Bandage.blend">D:\ff7rebirth_exports\materialized\PC0001_05_Barret_Bandage.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0001_05_Barret_Bandage.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_00_tifa_standard tifa standard pc0002_00 d:\ff7rebirth_exports\materialized\pc0002_00_tifa_standard.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_00_Tifa_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_00_Tifa_Standard.jpg" alt="PC0002_00_Tifa_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_00_Tifa_Standard</h3><span class="badge badge-code">PC0002_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 188921 顶点 · 536 骨骼 · 12 材质（0 透明） · 134.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_00_Tifa_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0002_00_Tifa_Standard.blend">D:\ff7rebirth_exports\materialized\PC0002_00_Tifa_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_00_Tifa_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_04_tifa_noglove tifa noglove pc0002_04 d:\ff7rebirth_exports\materialized\pc0002_04_tifa_noglove.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_04_Tifa_NoGlove_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_04_Tifa_NoGlove.jpg" alt="PC0002_04_Tifa_NoGlove"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_04_Tifa_NoGlove</h3><span class="badge badge-code">PC0002_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · NoGlove</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 180779 顶点 · 536 骨骼 · 11 材质（0 透明） · 121.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_04_Tifa_NoGlove.blend" title="D:\ff7rebirth_exports\materialized\PC0002_04_Tifa_NoGlove.blend">D:\ff7rebirth_exports\materialized\PC0002_04_Tifa_NoGlove.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_04_Tifa_NoGlove.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_05_tifa_soldier tifa soldier pc0002_05 d:\ff7rebirth_exports\materialized\pc0002_05_tifa_soldier.blend" data-kind="official" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_05_Tifa_Soldier_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_05_Tifa_Soldier.jpg" alt="PC0002_05_Tifa_Soldier"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_05_Tifa_Soldier</h3><span class="badge badge-warn" title="缺底色贴图 1：PC0002_05_Emissive">告警 1</span><span class="badge badge-code">PC0002_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Soldier</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 71501 顶点 · 447 骨骼 · 11 材质（0 透明） · 89.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_05_Tifa_Soldier.blend" title="D:\ff7rebirth_exports\materialized\PC0002_05_Tifa_Soldier.blend">D:\ff7rebirth_exports\materialized\PC0002_05_Tifa_Soldier.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_05_Tifa_Soldier.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_06_tifa_soldiernohelmet tifa soldiernohelmet pc0002_06 d:\ff7rebirth_exports\materialized\pc0002_06_tifa_soldiernohelmet.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_06_Tifa_SoldierNoHelmet_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_06_Tifa_SoldierNoHelmet.jpg" alt="PC0002_06_Tifa_SoldierNoHelmet"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_06_Tifa_SoldierNoHelmet</h3><span class="badge badge-code">PC0002_06</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · SoldierNoHelmet</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 166259 顶点 · 495 骨骼 · 13 材质（0 透明） · 135.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_06_Tifa_SoldierNoHelmet.blend" title="D:\ff7rebirth_exports\materialized\PC0002_06_Tifa_SoldierNoHelmet.blend">D:\ff7rebirth_exports\materialized\PC0002_06_Tifa_SoldierNoHelmet.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_06_Tifa_SoldierNoHelmet.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_08_tifa_costaclothing tifa costaclothing pc0002_08 d:\ff7rebirth_exports\materialized\pc0002_08_tifa_costaclothing.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_08_Tifa_CostaClothing_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_08_Tifa_CostaClothing.jpg" alt="PC0002_08_Tifa_CostaClothing"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_08_Tifa_CostaClothing</h3><span class="badge badge-code">PC0002_08</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · CostaClothing</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 192945 顶点 · 595 骨骼 · 11 材质（0 透明） · 133.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_08_Tifa_CostaClothing.blend" title="D:\ff7rebirth_exports\materialized\PC0002_08_Tifa_CostaClothing.blend">D:\ff7rebirth_exports\materialized\PC0002_08_Tifa_CostaClothing.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_08_Tifa_CostaClothing.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_09_tifa_costaclothing2 tifa costaclothing2 pc0002_09 d:\ff7rebirth_exports\materialized\pc0002_09_tifa_costaclothing2.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_09_Tifa_CostaClothing2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_09_Tifa_CostaClothing2.jpg" alt="PC0002_09_Tifa_CostaClothing2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_09_Tifa_CostaClothing2</h3><span class="badge badge-code">PC0002_09</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · CostaClothing2</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 177865 顶点 · 638 骨骼 · 10 材质（0 透明） · 116.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_09_Tifa_CostaClothing2.blend" title="D:\ff7rebirth_exports\materialized\PC0002_09_Tifa_CostaClothing2.blend">D:\ff7rebirth_exports\materialized\PC0002_09_Tifa_CostaClothing2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_09_Tifa_CostaClothing2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_10_tifa_loveless tifa loveless pc0002_10 d:\ff7rebirth_exports\materialized\pc0002_10_tifa_loveless.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_10_Tifa_Loveless_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_10_Tifa_Loveless.jpg" alt="PC0002_10_Tifa_Loveless"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_10_Tifa_Loveless</h3><span class="badge badge-code">PC0002_10</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Loveless</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 180211 顶点 · 521 骨骼 · 11 材质（0 透明） · 116.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_10_Tifa_Loveless.blend" title="D:\ff7rebirth_exports\materialized\PC0002_10_Tifa_Loveless.blend">D:\ff7rebirth_exports\materialized\PC0002_10_Tifa_Loveless.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_10_Tifa_Loveless.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0002_11_tifa_changingclothes tifa changingclothes pc0002_11 d:\ff7rebirth_exports\materialized\pc0002_11_tifa_changingclothes.blend" data-kind="official" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0002_11_Tifa_ChangingClothes_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0002_11_Tifa_ChangingClothes.jpg" alt="PC0002_11_Tifa_ChangingClothes"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0002_11_Tifa_ChangingClothes</h3><span class="badge badge-code">PC0002_11</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · ChangingClothes</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 172865 顶点 · 536 骨骼 · 11 材质（0 透明） · 118.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0002_11_Tifa_ChangingClothes.blend" title="D:\ff7rebirth_exports\materialized\PC0002_11_Tifa_ChangingClothes.blend">D:\ff7rebirth_exports\materialized\PC0002_11_Tifa_ChangingClothes.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0002_11_Tifa_ChangingClothes.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_00_aerith_standard aerith standard pc0003_00 d:\ff7rebirth_exports\materialized\pc0003_00_aerith_standard.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_00_Aerith_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_00_Aerith_Standard.jpg" alt="PC0003_00_Aerith_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_00_Aerith_Standard</h3><span class="badge badge-code">PC0003_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 189382 顶点 · 718 骨骼 · 9 材质（0 透明） · 129.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_00_Aerith_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0003_00_Aerith_Standard.blend">D:\ff7rebirth_exports\materialized\PC0003_00_Aerith_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_00_Aerith_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_04_aerith_dirty aerith dirty pc0003_04 d:\ff7rebirth_exports\materialized\pc0003_04_aerith_dirty.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_04_Aerith_Dirty_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_04_Aerith_Dirty.jpg" alt="PC0003_04_Aerith_Dirty"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_04_Aerith_Dirty</h3><span class="badge badge-code">PC0003_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · Dirty</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 203458 顶点 · 685 骨骼 · 9 材质（0 透明） · 142.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_04_Aerith_Dirty.blend" title="D:\ff7rebirth_exports\materialized\PC0003_04_Aerith_Dirty.blend">D:\ff7rebirth_exports\materialized\PC0003_04_Aerith_Dirty.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_04_Aerith_Dirty.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_05_aerith_soldier aerith soldier pc0003_05 d:\ff7rebirth_exports\materialized\pc0003_05_aerith_soldier.blend" data-kind="official" data-chr="Aerith" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_05_Aerith_Soldier_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_05_Aerith_Soldier.jpg" alt="PC0003_05_Aerith_Soldier"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_05_Aerith_Soldier</h3><span class="badge badge-warn" title="缺底色贴图 1：PC0003_05_Emissive">告警 1</span><span class="badge badge-code">PC0003_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · Soldier</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 87463 顶点 · 439 骨骼 · 10 材质（0 透明） · 90.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_05_Aerith_Soldier.blend" title="D:\ff7rebirth_exports\materialized\PC0003_05_Aerith_Soldier.blend">D:\ff7rebirth_exports\materialized\PC0003_05_Aerith_Soldier.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_05_Aerith_Soldier.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_06_aerith_soldiernohelmet aerith soldiernohelmet pc0003_06 d:\ff7rebirth_exports\materialized\pc0003_06_aerith_soldiernohelmet.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_06_Aerith_SoldierNoHelmet_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_06_Aerith_SoldierNoHelmet.jpg" alt="PC0003_06_Aerith_SoldierNoHelmet"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_06_Aerith_SoldierNoHelmet</h3><span class="badge badge-code">PC0003_06</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · SoldierNoHelmet</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 165984 顶点 · 491 骨骼 · 10 材质（0 透明） · 125.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_06_Aerith_SoldierNoHelmet.blend" title="D:\ff7rebirth_exports\materialized\PC0003_06_Aerith_SoldierNoHelmet.blend">D:\ff7rebirth_exports\materialized\PC0003_06_Aerith_SoldierNoHelmet.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_06_Aerith_SoldierNoHelmet.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_07_aerith_costaclothing aerith costaclothing pc0003_07 d:\ff7rebirth_exports\materialized\pc0003_07_aerith_costaclothing.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_07_Aerith_CostaClothing_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_07_Aerith_CostaClothing.jpg" alt="PC0003_07_Aerith_CostaClothing"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_07_Aerith_CostaClothing</h3><span class="badge badge-code">PC0003_07</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · CostaClothing</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 185968 顶点 · 590 骨骼 · 11 材质（0 透明） · 130.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_07_Aerith_CostaClothing.blend" title="D:\ff7rebirth_exports\materialized\PC0003_07_Aerith_CostaClothing.blend">D:\ff7rebirth_exports\materialized\PC0003_07_Aerith_CostaClothing.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_07_Aerith_CostaClothing.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_08_aerith_costaclothing2 aerith costaclothing2 pc0003_08 d:\ff7rebirth_exports\materialized\pc0003_08_aerith_costaclothing2.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_08_Aerith_CostaClothing2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_08_Aerith_CostaClothing2.jpg" alt="PC0003_08_Aerith_CostaClothing2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_08_Aerith_CostaClothing2</h3><span class="badge badge-code">PC0003_08</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · CostaClothing2</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 181082 顶点 · 465 骨骼 · 9 材质（0 透明） · 119.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_08_Aerith_CostaClothing2.blend" title="D:\ff7rebirth_exports\materialized\PC0003_08_Aerith_CostaClothing2.blend">D:\ff7rebirth_exports\materialized\PC0003_08_Aerith_CostaClothing2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_08_Aerith_CostaClothing2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_09_aerith_loveless aerith loveless pc0003_09 d:\ff7rebirth_exports\materialized\pc0003_09_aerith_loveless.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_09_Aerith_Loveless_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_09_Aerith_Loveless.jpg" alt="PC0003_09_Aerith_Loveless"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_09_Aerith_Loveless</h3><span class="badge badge-code">PC0003_09</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · Loveless</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 184087 顶点 · 521 骨骼 · 11 材质（0 透明） · 122.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_09_Aerith_Loveless.blend" title="D:\ff7rebirth_exports\materialized\PC0003_09_Aerith_Loveless.blend">D:\ff7rebirth_exports\materialized\PC0003_09_Aerith_Loveless.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_09_Aerith_Loveless.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_10_aerith_noribbon aerith noribbon pc0003_10 d:\ff7rebirth_exports\materialized\pc0003_10_aerith_noribbon.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_10_Aerith_NoRibbon_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_10_Aerith_NoRibbon.jpg" alt="PC0003_10_Aerith_NoRibbon"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_10_Aerith_NoRibbon</h3><span class="badge badge-code">PC0003_10</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · NoRibbon</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 183052 顶点 · 753 骨骼 · 9 材质（0 透明） · 128.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_10_Aerith_NoRibbon.blend" title="D:\ff7rebirth_exports\materialized\PC0003_10_Aerith_NoRibbon.blend">D:\ff7rebirth_exports\materialized\PC0003_10_Aerith_NoRibbon.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_10_Aerith_NoRibbon.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_11_aerith_cutnojacket aerith cutnojacket pc0003_11 d:\ff7rebirth_exports\materialized\pc0003_11_aerith_cutnojacket.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_11_Aerith_CutNoJacket_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_11_Aerith_CutNoJacket.jpg" alt="PC0003_11_Aerith_CutNoJacket"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_11_Aerith_CutNoJacket</h3><span class="badge badge-code">PC0003_11</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · CutNoJacket</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 168678 顶点 · 548 骨骼 · 8 材质（0 透明） · 109.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_11_Aerith_CutNoJacket.blend" title="D:\ff7rebirth_exports\materialized\PC0003_11_Aerith_CutNoJacket.blend">D:\ff7rebirth_exports\materialized\PC0003_11_Aerith_CutNoJacket.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_11_Aerith_CutNoJacket.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_12_aerith_changingclothes aerith changingclothes pc0003_12 d:\ff7rebirth_exports\materialized\pc0003_12_aerith_changingclothes.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_12_Aerith_ChangingClothes_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_12_Aerith_ChangingClothes.jpg" alt="PC0003_12_Aerith_ChangingClothes"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_12_Aerith_ChangingClothes</h3><span class="badge badge-code">PC0003_12</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · ChangingClothes</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 184656 顶点 · 684 骨骼 · 9 材质（0 透明） · 127.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_12_Aerith_ChangingClothes.blend" title="D:\ff7rebirth_exports\materialized\PC0003_12_Aerith_ChangingClothes.blend">D:\ff7rebirth_exports\materialized\PC0003_12_Aerith_ChangingClothes.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_12_Aerith_ChangingClothes.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_14_aerith_nojacketnoribbon aerith nojacketnoribbon pc0003_14 d:\ff7rebirth_exports\materialized\pc0003_14_aerith_nojacketnoribbon.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_14_Aerith_NoJacketNoRibbon_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_14_Aerith_NoJacketNoRibbon.jpg" alt="PC0003_14_Aerith_NoJacketNoRibbon"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_14_Aerith_NoJacketNoRibbon</h3><span class="badge badge-code">PC0003_14</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · NoJacketNoRibbon</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 162348 顶点 · 640 骨骼 · 8 材质（0 透明） · 108.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_14_Aerith_NoJacketNoRibbon.blend" title="D:\ff7rebirth_exports\materialized\PC0003_14_Aerith_NoJacketNoRibbon.blend">D:\ff7rebirth_exports\materialized\PC0003_14_Aerith_NoJacketNoRibbon.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_14_Aerith_NoJacketNoRibbon.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_19_aerith_lovelesssing aerith lovelesssing pc0003_19 d:\ff7rebirth_exports\materialized\pc0003_19_aerith_lovelesssing.blend" data-kind="official" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0003_19_Aerith_LovelessSing_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_19_Aerith_LovelessSing.jpg" alt="PC0003_19_Aerith_LovelessSing"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_19_Aerith_LovelessSing</h3><span class="badge badge-code">PC0003_19</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · LovelessSing</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 200945 顶点 · 641 骨骼 · 10 材质（0 透明） · 127.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_19_Aerith_LovelessSing.blend" title="D:\ff7rebirth_exports\materialized\PC0003_19_Aerith_LovelessSing.blend">D:\ff7rebirth_exports\materialized\PC0003_19_Aerith_LovelessSing.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_19_Aerith_LovelessSing.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0004_00_redxiii_standard redxiii standard pc0004_00 d:\ff7rebirth_exports\materialized\pc0004_00_redxiii_standard.blend" data-kind="official" data-chr="RedXIII" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0004_00_RedXIII_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0004_00_RedXIII_Standard.jpg" alt="PC0004_00_RedXIII_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0004_00_RedXIII_Standard</h3><span class="badge badge-code">PC0004_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>RedXIII · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 129090 顶点 · 361 骨骼 · 13 材质（0 透明） · 58.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0004_00_RedXIII_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0004_00_RedXIII_Standard.blend">D:\ff7rebirth_exports\materialized\PC0004_00_RedXIII_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0004_00_RedXIII_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0004_04_redxiii_once2 redxiii once2 pc0004_04 d:\ff7rebirth_exports\materialized\pc0004_04_redxiii_once2.blend" data-kind="official" data-chr="RedXIII" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0004_04_RedXIII_Once2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0004_04_RedXIII_Once2.jpg" alt="PC0004_04_RedXIII_Once2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0004_04_RedXIII_Once2</h3><span class="badge badge-code">PC0004_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>RedXIII · Once2</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 129503 顶点 · 361 骨骼 · 13 材质（0 透明） · 65.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0004_04_RedXIII_Once2.blend" title="D:\ff7rebirth_exports\materialized\PC0004_04_RedXIII_Once2.blend">D:\ff7rebirth_exports\materialized\PC0004_04_RedXIII_Once2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0004_04_RedXIII_Once2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0004_05_redxiii_soldier redxiii soldier pc0004_05 d:\ff7rebirth_exports\materialized\pc0004_05_redxiii_soldier.blend" data-kind="official" data-chr="RedXIII" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0004_05_RedXIII_Soldier_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0004_05_RedXIII_Soldier.jpg" alt="PC0004_05_RedXIII_Soldier"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0004_05_RedXIII_Soldier</h3><span class="badge badge-warn" title="缺底色贴图 1：PC0004_05_Emissive">告警 1</span><span class="badge badge-code">PC0004_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>RedXIII · Soldier</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 70490 顶点 · 305 骨骼 · 14 材质（0 透明） · 81.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0004_05_RedXIII_Soldier.blend" title="D:\ff7rebirth_exports\materialized\PC0004_05_RedXIII_Soldier.blend">D:\ff7rebirth_exports\materialized\PC0004_05_RedXIII_Soldier.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0004_05_RedXIII_Soldier.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0004_08_redxiii_dirty redxiii dirty pc0004_08 d:\ff7rebirth_exports\materialized\pc0004_08_redxiii_dirty.blend" data-kind="official" data-chr="RedXIII" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0004_08_RedXIII_Dirty_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0004_08_RedXIII_Dirty.jpg" alt="PC0004_08_RedXIII_Dirty"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0004_08_RedXIII_Dirty</h3><span class="badge badge-code">PC0004_08</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>RedXIII · Dirty</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 129141 顶点 · 361 骨骼 · 13 材质（0 透明） · 77.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0004_08_RedXIII_Dirty.blend" title="D:\ff7rebirth_exports\materialized\PC0004_08_RedXIII_Dirty.blend">D:\ff7rebirth_exports\materialized\PC0004_08_RedXIII_Dirty.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0004_08_RedXIII_Dirty.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_00_yuffie_standard yuffie standard pc0005_00 d:\ff7rebirth_exports\materialized\pc0005_00_yuffie_standard.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0005_00_Yuffie_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0005_00_Yuffie_Standard.jpg" alt="PC0005_00_Yuffie_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_00_Yuffie_Standard</h3><span class="badge badge-code">PC0005_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 138247 顶点 · 590 骨骼 · 15 材质（0 透明） · 118.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0005_00_Yuffie_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0005_00_Yuffie_Standard.blend">D:\ff7rebirth_exports\materialized\PC0005_00_Yuffie_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0005_00_Yuffie_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_01_yuffie_moogle yuffie moogle pc0005_01 d:\ff7rebirth_exports\materialized\pc0005_01_yuffie_moogle.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0005_01_Yuffie_Moogle_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0005_01_Yuffie_Moogle.jpg" alt="PC0005_01_Yuffie_Moogle"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_01_Yuffie_Moogle</h3><span class="badge badge-code">PC0005_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · Moogle</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 188752 顶点 · 828 骨骼 · 20 材质（0 透明） · 178.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0005_01_Yuffie_Moogle.blend" title="D:\ff7rebirth_exports\materialized\PC0005_01_Yuffie_Moogle.blend">D:\ff7rebirth_exports\materialized\PC0005_01_Yuffie_Moogle.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0005_01_Yuffie_Moogle.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_03_yuffie_costaclothing yuffie costaclothing pc0005_03 d:\ff7rebirth_exports\materialized\pc0005_03_yuffie_costaclothing.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0005_03_Yuffie_CostaClothing_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0005_03_Yuffie_CostaClothing.jpg" alt="PC0005_03_Yuffie_CostaClothing"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_03_Yuffie_CostaClothing</h3><span class="badge badge-code">PC0005_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · CostaClothing</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 101738 顶点 · 526 骨骼 · 10 材质（0 透明） · 93.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0005_03_Yuffie_CostaClothing.blend" title="D:\ff7rebirth_exports\materialized\PC0005_03_Yuffie_CostaClothing.blend">D:\ff7rebirth_exports\materialized\PC0005_03_Yuffie_CostaClothing.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0005_03_Yuffie_CostaClothing.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_04_yuffie_welcomedance yuffie welcomedance pc0005_04 d:\ff7rebirth_exports\materialized\pc0005_04_yuffie_welcomedance.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0005_04_Yuffie_WelcomeDance_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0005_04_Yuffie_WelcomeDance.jpg" alt="PC0005_04_Yuffie_WelcomeDance"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_04_Yuffie_WelcomeDance</h3><span class="badge badge-code">PC0005_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · WelcomeDance</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 109234 顶点 · 836 骨骼 · 11 材质（0 透明） · 99.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0005_04_Yuffie_WelcomeDance.blend" title="D:\ff7rebirth_exports\materialized\PC0005_04_Yuffie_WelcomeDance.blend">D:\ff7rebirth_exports\materialized\PC0005_04_Yuffie_WelcomeDance.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0005_04_Yuffie_WelcomeDance.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_05_yuffie_blackmantle yuffie blackmantle pc0005_05 d:\ff7rebirth_exports\materialized\pc0005_05_yuffie_blackmantle.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0005_05_Yuffie_BlackMantle_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0005_05_Yuffie_BlackMantle.jpg" alt="PC0005_05_Yuffie_BlackMantle"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_05_Yuffie_BlackMantle</h3><span class="badge badge-code">PC0005_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · BlackMantle</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 121403 顶点 · 880 骨骼 · 15 材质（0 透明） · 182.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0005_05_Yuffie_BlackMantle.blend" title="D:\ff7rebirth_exports\materialized\PC0005_05_Yuffie_BlackMantle.blend">D:\ff7rebirth_exports\materialized\PC0005_05_Yuffie_BlackMantle.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0005_05_Yuffie_BlackMantle.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_06_yuffie_standardavatar yuffie standardavatar pc0005_06 d:\ff7rebirth_exports\materialized\pc0005_06_yuffie_standardavatar.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0005_06_Yuffie_StandardAvatar_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0005_06_Yuffie_StandardAvatar.jpg" alt="PC0005_06_Yuffie_StandardAvatar"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_06_Yuffie_StandardAvatar</h3><span class="badge badge-code">PC0005_06</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · StandardAvatar</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 11187 顶点 · 110 骨骼 · 2 材质（0 透明） · 26.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0005_06_Yuffie_StandardAvatar.blend" title="D:\ff7rebirth_exports\materialized\PC0005_06_Yuffie_StandardAvatar.blend">D:\ff7rebirth_exports\materialized\PC0005_06_Yuffie_StandardAvatar.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0005_06_Yuffie_StandardAvatar.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0005_08_yuffie_loveless yuffie loveless pc0005_08 d:\ff7rebirth_exports\materialized\pc0005_08_yuffie_loveless.blend" data-kind="official" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0005_08_Yuffie_Loveless_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0005_08_Yuffie_Loveless.jpg" alt="PC0005_08_Yuffie_Loveless"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0005_08_Yuffie_Loveless</h3><span class="badge badge-code">PC0005_08</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · Loveless</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 105528 顶点 · 599 骨骼 · 11 材质（0 透明） · 95.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0005_08_Yuffie_Loveless.blend" title="D:\ff7rebirth_exports\materialized\PC0005_08_Yuffie_Loveless.blend">D:\ff7rebirth_exports\materialized\PC0005_08_Yuffie_Loveless.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0005_08_Yuffie_Loveless.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0006_00_sonon_standard sonon standard pc0006_00 d:\ff7rebirth_exports\materialized\pc0006_00_sonon_standard.blend" data-kind="official" data-chr="Sonon" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0006_00_Sonon_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0006_00_Sonon_Standard.jpg" alt="PC0006_00_Sonon_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0006_00_Sonon_Standard</h3><span class="badge badge-code">PC0006_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sonon · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 108106 顶点 · 614 骨骼 · 10 材质（0 透明） · 77.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0006_00_Sonon_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0006_00_Sonon_Standard.blend">D:\ff7rebirth_exports\materialized\PC0006_00_Sonon_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0006_00_Sonon_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0007_00_caitsith_standard caitsith standard pc0007_00 d:\ff7rebirth_exports\materialized\pc0007_00_caitsith_standard.blend" data-kind="official" data-chr="CaitSith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0007_00_CaitSith_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0007_00_CaitSith_Standard.jpg" alt="PC0007_00_CaitSith_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0007_00_CaitSith_Standard</h3><span class="badge badge-code">PC0007_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>CaitSith · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 107525 顶点 · 323 骨骼 · 5 材质（0 透明） · 51.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0007_00_CaitSith_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0007_00_CaitSith_Standard.blend">D:\ff7rebirth_exports\materialized\PC0007_00_CaitSith_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0007_00_CaitSith_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0007_01_caitsith_loveless caitsith loveless pc0007_01 d:\ff7rebirth_exports\materialized\pc0007_01_caitsith_loveless.blend" data-kind="official" data-chr="CaitSith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0007_01_CaitSith_Loveless_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0007_01_CaitSith_Loveless.jpg" alt="PC0007_01_CaitSith_Loveless"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0007_01_CaitSith_Loveless</h3><span class="badge badge-code">PC0007_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>CaitSith · Loveless</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 120815 顶点 · 368 骨骼 · 5 材质（0 透明） · 53.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0007_01_CaitSith_Loveless.blend" title="D:\ff7rebirth_exports\materialized\PC0007_01_CaitSith_Loveless.blend">D:\ff7rebirth_exports\materialized\PC0007_01_CaitSith_Loveless.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0007_01_CaitSith_Loveless.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0008_00_debumoogle_standard debumoogle standard pc0008_00 d:\ff7rebirth_exports\materialized\pc0008_00_debumoogle_standard.blend" data-kind="official" data-chr="Debumoogle" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0008_00_Debumoogle_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0008_00_Debumoogle_Standard.jpg" alt="PC0008_00_Debumoogle_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0008_00_Debumoogle_Standard</h3><span class="badge badge-code">PC0008_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Debumoogle · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 407559 顶点 · 244 骨骼 · 6 材质（0 透明） · 102.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0008_00_Debumoogle_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0008_00_Debumoogle_Standard.blend">D:\ff7rebirth_exports\materialized\PC0008_00_Debumoogle_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0008_00_Debumoogle_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0008_01_debumoogle_cutl debumoogle cutl pc0008_01 d:\ff7rebirth_exports\materialized\pc0008_01_debumoogle_cutl.blend" data-kind="official" data-chr="Debumoogle" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0008_01_Debumoogle_CutL_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0008_01_Debumoogle_CutL.jpg" alt="PC0008_01_Debumoogle_CutL"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0008_01_Debumoogle_CutL</h3><span class="badge badge-code">PC0008_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Debumoogle · CutL</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 407559 顶点 · 221 骨骼 · 4 材质（0 透明） · 101.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0008_01_Debumoogle_CutL.blend" title="D:\ff7rebirth_exports\materialized\PC0008_01_Debumoogle_CutL.blend">D:\ff7rebirth_exports\materialized\PC0008_01_Debumoogle_CutL.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0008_01_Debumoogle_CutL.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0008_02_debumoogle_cutm debumoogle cutm pc0008_02 d:\ff7rebirth_exports\materialized\pc0008_02_debumoogle_cutm.blend" data-kind="official" data-chr="Debumoogle" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0008_02_Debumoogle_CutM_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0008_02_Debumoogle_CutM.jpg" alt="PC0008_02_Debumoogle_CutM"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0008_02_Debumoogle_CutM</h3><span class="badge badge-code">PC0008_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Debumoogle · CutM</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 407559 顶点 · 221 骨骼 · 4 材质（0 透明） · 101.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0008_02_Debumoogle_CutM.blend" title="D:\ff7rebirth_exports\materialized\PC0008_02_Debumoogle_CutM.blend">D:\ff7rebirth_exports\materialized\PC0008_02_Debumoogle_CutM.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0008_02_Debumoogle_CutM.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0008_03_debumoogle_cuts debumoogle cuts pc0008_03 d:\ff7rebirth_exports\materialized\pc0008_03_debumoogle_cuts.blend" data-kind="official" data-chr="Debumoogle" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0008_03_Debumoogle_CutS_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0008_03_Debumoogle_CutS.jpg" alt="PC0008_03_Debumoogle_CutS"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0008_03_Debumoogle_CutS</h3><span class="badge badge-code">PC0008_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Debumoogle · CutS</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 407559 顶点 · 221 骨骼 · 4 材质（0 透明） · 101.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0008_03_Debumoogle_CutS.blend" title="D:\ff7rebirth_exports\materialized\PC0008_03_Debumoogle_CutS.blend">D:\ff7rebirth_exports\materialized\PC0008_03_Debumoogle_CutS.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0008_03_Debumoogle_CutS.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0009_00_zack_standard zack standard pc0009_00 d:\ff7rebirth_exports\materialized\pc0009_00_zack_standard.blend" data-kind="official" data-chr="Zack" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0009_00_Zack_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0009_00_Zack_Standard.jpg" alt="PC0009_00_Zack_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0009_00_Zack_Standard</h3><span class="badge badge-code">PC0009_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Zack · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 127091 顶点 · 678 骨骼 · 13 材质（0 透明） · 83.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0009_00_Zack_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0009_00_Zack_Standard.blend">D:\ff7rebirth_exports\materialized\PC0009_00_Zack_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0009_00_Zack_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0009_01_zack_aerithribbon zack aerithribbon pc0009_01 d:\ff7rebirth_exports\materialized\pc0009_01_zack_aerithribbon.blend" data-kind="official" data-chr="Zack" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0009_01_Zack_AerithRibbon_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0009_01_Zack_AerithRibbon.jpg" alt="PC0009_01_Zack_AerithRibbon"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0009_01_Zack_AerithRibbon</h3><span class="badge badge-code">PC0009_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Zack · AerithRibbon</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 129280 顶点 · 686 骨骼 · 14 材质（0 透明） · 103.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0009_01_Zack_AerithRibbon.blend" title="D:\ff7rebirth_exports\materialized\PC0009_01_Zack_AerithRibbon.blend">D:\ff7rebirth_exports\materialized\PC0009_01_Zack_AerithRibbon.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0009_01_Zack_AerithRibbon.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0009_02_zack_dirty zack dirty pc0009_02 d:\ff7rebirth_exports\materialized\pc0009_02_zack_dirty.blend" data-kind="official" data-chr="Zack" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0009_02_Zack_Dirty_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0009_02_Zack_Dirty.jpg" alt="PC0009_02_Zack_Dirty"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0009_02_Zack_Dirty</h3><span class="badge badge-code">PC0009_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Zack · Dirty</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 128107 顶点 · 678 骨骼 · 13 材质（0 透明） · 82.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0009_02_Zack_Dirty.blend" title="D:\ff7rebirth_exports\materialized\PC0009_02_Zack_Dirty.blend">D:\ff7rebirth_exports\materialized\PC0009_02_Zack_Dirty.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0009_02_Zack_Dirty.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0010_00_sephiroth_standard sephiroth standard pc0010_00 d:\ff7rebirth_exports\materialized\pc0010_00_sephiroth_standard.blend" data-kind="official" data-chr="Sephiroth" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0010_00_Sephiroth_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0010_00_Sephiroth_Standard.jpg" alt="PC0010_00_Sephiroth_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0010_00_Sephiroth_Standard</h3><span class="badge badge-code">PC0010_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sephiroth · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 112936 顶点 · 818 骨骼 · 10 材质（0 透明） · 68.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0010_00_Sephiroth_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0010_00_Sephiroth_Standard.blend">D:\ff7rebirth_exports\materialized\PC0010_00_Sephiroth_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0010_00_Sephiroth_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0010_10_sephiroth_transform sephiroth transform pc0010_10 d:\ff7rebirth_exports\materialized\pc0010_10_sephiroth_transform.blend" data-kind="official" data-chr="Sephiroth" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0010_10_Sephiroth_Transform_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0010_10_Sephiroth_Transform.jpg" alt="PC0010_10_Sephiroth_Transform"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0010_10_Sephiroth_Transform</h3><span class="badge badge-warn" title="缺底色贴图 1：PC0010_00_Eyelash">告警 1</span><span class="badge badge-code">PC0010_10</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sephiroth · Transform</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 156511 顶点 · 828 骨骼 · 11 材质（0 透明） · 53.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0010_10_Sephiroth_Transform.blend" title="D:\ff7rebirth_exports\materialized\PC0010_10_Sephiroth_Transform.blend">D:\ff7rebirth_exports\materialized\PC0010_10_Sephiroth_Transform.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0010_10_Sephiroth_Transform.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0011_00_vincent_standard vincent standard pc0011_00 d:\ff7rebirth_exports\materialized\pc0011_00_vincent_standard.blend" data-kind="official" data-chr="Vincent" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0011_00_Vincent_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0011_00_Vincent_Standard.jpg" alt="PC0011_00_Vincent_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0011_00_Vincent_Standard</h3><span class="badge badge-code">PC0011_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Vincent · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 197383 顶点 · 650 骨骼 · 14 材质（0 透明） · 171.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0011_00_Vincent_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0011_00_Vincent_Standard.blend">D:\ff7rebirth_exports\materialized\PC0011_00_Vincent_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0011_00_Vincent_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0012_00_cid_standard cid standard pc0012_00 d:\ff7rebirth_exports\materialized\pc0012_00_cid_standard.blend" data-kind="official" data-chr="Cid" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0012_00_Cid_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0012_00_Cid_Standard.jpg" alt="PC0012_00_Cid_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0012_00_Cid_Standard</h3><span class="badge badge-code">PC0012_00</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cid · Standard</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 195630 顶点 · 453 骨骼 · 14 材质（0 透明） · 112.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0012_00_Cid_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0012_00_Cid_Standard.blend">D:\ff7rebirth_exports\materialized\PC0012_00_Cid_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0012_00_Cid_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_01_toad_cloud toad cloud pc0099_01 d:\ff7rebirth_exports\materialized\pc0099_01_toad_cloud.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_01_Toad_Cloud_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_01_Toad_Cloud.jpg" alt="PC0099_01_Toad_Cloud"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_01_Toad_Cloud</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_01</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Cloud</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 13898 顶点 · 200 骨骼 · 4 材质（0 透明） · 15.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_01_Toad_Cloud.blend" title="D:\ff7rebirth_exports\materialized\PC0099_01_Toad_Cloud.blend">D:\ff7rebirth_exports\materialized\PC0099_01_Toad_Cloud.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_01_Toad_Cloud.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_02_toad_barret toad barret pc0099_02 d:\ff7rebirth_exports\materialized\pc0099_02_toad_barret.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_02_Toad_Barret_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_02_Toad_Barret.jpg" alt="PC0099_02_Toad_Barret"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_02_Toad_Barret</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_02</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Barret</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 10422 顶点 · 200 骨骼 · 4 材质（0 透明） · 12.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_02_Toad_Barret.blend" title="D:\ff7rebirth_exports\materialized\PC0099_02_Toad_Barret.blend">D:\ff7rebirth_exports\materialized\PC0099_02_Toad_Barret.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_02_Toad_Barret.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_03_toad_tifa toad tifa pc0099_03 d:\ff7rebirth_exports\materialized\pc0099_03_toad_tifa.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_03_Toad_Tifa_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_03_Toad_Tifa.jpg" alt="PC0099_03_Toad_Tifa"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_03_Toad_Tifa</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_03</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Tifa</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 10368 顶点 · 252 骨骼 · 3 材质（0 透明） · 13.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_03_Toad_Tifa.blend" title="D:\ff7rebirth_exports\materialized\PC0099_03_Toad_Tifa.blend">D:\ff7rebirth_exports\materialized\PC0099_03_Toad_Tifa.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_03_Toad_Tifa.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_04_toad_aerith toad aerith pc0099_04 d:\ff7rebirth_exports\materialized\pc0099_04_toad_aerith.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_04_Toad_Aerith_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_04_Toad_Aerith.jpg" alt="PC0099_04_Toad_Aerith"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_04_Toad_Aerith</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_04</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Aerith</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 7751 顶点 · 215 骨骼 · 3 材质（0 透明） · 10.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_04_Toad_Aerith.blend" title="D:\ff7rebirth_exports\materialized\PC0099_04_Toad_Aerith.blend">D:\ff7rebirth_exports\materialized\PC0099_04_Toad_Aerith.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_04_Toad_Aerith.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_05_toad_yuffie toad yuffie pc0099_05 d:\ff7rebirth_exports\materialized\pc0099_05_toad_yuffie.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_05_Toad_Yuffie_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_05_Toad_Yuffie.jpg" alt="PC0099_05_Toad_Yuffie"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_05_Toad_Yuffie</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_05</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Yuffie</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 19363 顶点 · 200 骨骼 · 4 材质（0 透明） · 26.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_05_Toad_Yuffie.blend" title="D:\ff7rebirth_exports\materialized\PC0099_05_Toad_Yuffie.blend">D:\ff7rebirth_exports\materialized\PC0099_05_Toad_Yuffie.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_05_Toad_Yuffie.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_07_toad_redxiii toad redxiii pc0099_07 d:\ff7rebirth_exports\materialized\pc0099_07_toad_redxiii.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_07_Toad_RedXIII_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_07_Toad_RedXIII.jpg" alt="PC0099_07_Toad_RedXIII"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_07_Toad_RedXIII</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_07</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · RedXIII</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 6978 顶点 · 206 骨骼 · 2 材质（0 透明） · 15.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_07_Toad_RedXIII.blend" title="D:\ff7rebirth_exports\materialized\PC0099_07_Toad_RedXIII.blend">D:\ff7rebirth_exports\materialized\PC0099_07_Toad_RedXIII.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_07_Toad_RedXIII.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_08_toad_caitsith toad caitsith pc0099_08 d:\ff7rebirth_exports\materialized\pc0099_08_toad_caitsith.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_08_Toad_CaitSith_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_08_Toad_CaitSith.jpg" alt="PC0099_08_Toad_CaitSith"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_08_Toad_CaitSith</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_08</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · CaitSith</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 11017 顶点 · 247 骨骼 · 3 材质（0 透明） · 15.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_08_Toad_CaitSith.blend" title="D:\ff7rebirth_exports\materialized\PC0099_08_Toad_CaitSith.blend">D:\ff7rebirth_exports\materialized\PC0099_08_Toad_CaitSith.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_08_Toad_CaitSith.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_90_toad_mob toad mob pc0099_90 d:\ff7rebirth_exports\materialized\pc0099_90_toad_mob.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_90_Toad_Mob_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_90_Toad_Mob.jpg" alt="PC0099_90_Toad_Mob"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_90_Toad_Mob</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_90</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Mob</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 6904 顶点 · 201 骨骼 · 2 材质（0 透明） · 10.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_90_Toad_Mob.blend" title="D:\ff7rebirth_exports\materialized\PC0099_90_Toad_Mob.blend">D:\ff7rebirth_exports\materialized\PC0099_90_Toad_Mob.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_90_Toad_Mob.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_91_toad_finn toad finn pc0099_91 d:\ff7rebirth_exports\materialized\pc0099_91_toad_finn.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/materialized/PC0099_91_Toad_Finn_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_91_Toad_Finn.jpg" alt="PC0099_91_Toad_Finn"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_91_Toad_Finn</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_91</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Finn</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 8173 顶点 · 212 骨骼 · 3 材质（0 透明） · 15.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_91_Toad_Finn.blend" title="D:\ff7rebirth_exports\materialized\PC0099_91_Toad_Finn.blend">D:\ff7rebirth_exports\materialized\PC0099_91_Toad_Finn.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_91_Toad_Finn.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+  <section class="appendix">
+    <h2>附录 · 导出脚本用法</h2>
+    <p>脚本在 <code>scripts\final\</code>。完整说明见 <code>docs\final-fantasy-vii-rebirth-extraction.md</code>
+      与 <code>docs\ff7rebirth-player-export-inventory.md</code>。</p>
+
+    <h3>三段流程</h3>
+    <table>
+      <tr><th>步骤</th><th>工具</th><th>做什么</th></tr>
+      <tr><td>① 提取</td><td>FModel（GAME_FinalFantasy7Rebirth profile + usmap）</td><td>右键 <code>End/Content/Character/Player</code> →
+        <b>Save Folder's Packages Models</b>，一次导出全部变体的 ActorX PSKX + PNG + 材质 JSON。
+        网格格式必须是 <b>ActorX</b>（UEFormat 出来的 .uemodel 材质化脚本不认）。
+        可用 <code>scripts\final\fmodel_export_player.py</code>（pywinauto）代替手点。</td></tr>
+      <tr><td>② 材质化</td><td><code>export_ff7rb_models.ps1</code> + <code>export_ff7rb_model_blender.py</code></td><td>按材质 JSON 匹配贴图、DirectX→OpenGL 法线、ORM、分层眼球，出 .blend（可选 fbx/glb）</td></tr>
+      <tr><td>③ 预览</td><td><code>html\render_blend_preview.py</code></td><td>给每个 .blend 渲一张正面预览</td></tr>
+    </table>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\final
+.\export_ff7rb_models.ps1 -List
+.\export_ff7rb_models.ps1                    # 磁盘上所有有模型的变体 -> .blend
+blender --background --python html\render_blend_preview.py -- D:\ff7rebirth_exports\materialized
+python html_rebirth\collect_manifest.py
+python html_rebirth\make_gallery.py</pre>
+
+    <h3>命名规律</h3>
+    <table>
+      <tr><th>编号</th><th>含义</th></tr>
+      <tr><td><code>PC0000</code>~<code>PC0008</code></td><td>Cloud / Barret / Tifa / Aerith / Red XIII / Yuffie / Sonon / Cait Sith / Zack 等</td></tr>
+      <tr><td><code>_00</code>~<code>_2x</code></td><td>服装与状态变体（标准、Costa 泳装、Soldier、Loveless 舞台、换装中、无夹克…）</td></tr>
+      <tr><td><code>PC7xxx</code></td><td>过场专用版本</td></tr>
+      <tr><td><code>PC0099</code></td><td>蛤蟆（Toad）状态</td></tr>
+    </table>
+    <div class="note"><b>官方没有 nude</b>。只有材质/贴图的变体（湿身、眼泪、血迹、脏污、全息）没有独立网格，
+      不出现在本页。</div>
+
+    <h3>已知坑</h3>
+    <table>
+      <tr><th>症状</th><th>原因 / 处理</th></tr>
+      <tr><td>FModel 日志「Read incorrect amount of tangent bytes」</td><td>Rebirth 的 tangent 精度与 reader 假设不一致，FModel 记录错误后仍保留网格并完成 ActorX 导出；glTF 会失败，所以用 ActorX</td></tr>
+      <tr><td>导出目录里只有 .uemodel</td><td>FModel 的 Mesh Format 被切成了 UEFormat；改回 ActorX 重导</td></tr>
+      <tr><td>贴图缺失</td><td>变体常引用其它目录的贴图，worker 的贴图索引覆盖整个 Character 树；仍缺的记在 manifest <code>missingBase</code></td></tr>
+    </table>
+
+    <h3>重新生成本页</h3>
+    <pre>python scripts\final\html_rebirth\collect_manifest.py
+python scripts\final\html_rebirth\make_gallery.py</pre>
+    <p>缩略图写在 <code>_gallery\thumbs\</code>，<b>刻意不进仓库</b>。</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var chrSel = document.getElementById('chr');
+  var kind = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!kind || card.dataset.kind === kind)
+        && (!chrSel.value || card.dataset.chr === chrSel.value)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  chrSel.addEventListener('change', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      kind = chip.dataset.kind || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard 需要安全上下文，file:// 不是
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

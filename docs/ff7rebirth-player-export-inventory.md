@@ -6,6 +6,28 @@
 > 游戏虚拟目录：`End/Content/Character/Player`
 > 本机输出目录：`D:\ff7rebirth_exports\fmodel_exports\End\Content\Character\Player`
 
+## 0. 2026-09-05 批量结果（覆盖下文的「待导出」统计）
+
+用 `scripts\final\fmodel_export_player.py`（pywinauto 驱动 FModel 的 **Save Folder's Packages Models**）
+把 `Player` 整目录一次导出，再用 `export_ff7rb_models.ps1` 材质化：
+
+| 项目 | 数量 |
+|---:|---:|
+| Player 主模型包 | 85 |
+| FModel 成功写出 ActorX PSKX | 72 |
+| 材质化成 .blend（PASS） | 71 |
+| 材质化失败（FAIL） | 1：PC0004_06_RedXIII_OnceHologram |
+| FModel 无法导出（tangent 读取错误，网格不可恢复） | 13 |
+
+.blend 在 `D:\ff7rebirth_exports\materialized\`（7.3 GB，贴图外链），预览 `<变体>_preview.png`，
+画廊 `scripts\final\html_rebirth\index.html`。按角色：Cloud 12、Aerith 12、Toad 9、Tifa 8、Yuffie 7、Barret 5、RedXIII 4、Debumoogle 4、Zack 3、CaitSith 2、Sephiroth 2、Sonon 1、Vincent 1、Cid 1。
+
+FModel 无法导出的 13 个（都在读 SkeletalMesh 时报 `Read incorrect amount of tangent bytes`，
+且与其它包不同，网格没有被保留下来）：Cloud 的 4 个 CutBrood 血迹版、`PC0003_18_Aerith_NoRibbonBlood`、
+`PC0006_91_Sonon_BloodPSBL00910`、`PC0099_00_Toad_Standard`，以及 6 个 `PC7xxx_00_*_StandardCFEnd2`
+过场版（Cloud / Barret / Tifa / Yuffie / Debumoogle / Sephiroth）。需要 CUE4Parse 端按 tangent
+`itemSize` 选 8/16 字节精度的 reader 修复，本仓库不改 FModel。
+
 ## 1. 统计口径
 
 这里的“导出”是指 **FModel 从 FF7 Rebirth 的 IoStore 包读取资源并写到磁盘**，

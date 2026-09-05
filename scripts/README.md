@@ -28,8 +28,9 @@ FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\expor
 步骤见 [`docs/final-fantasy-vii-remake-extraction.md`](../docs/final-fantasy-vii-remake-extraction.md)。
 
 FFVII Rebirth 不能调用 AssetStudio：它的模型先由 FModel 从 Unreal IoStore 导出，再由
-Blender 插件从导出目录导入；已保存的 Player 变体可用
-`final\export_ff7rb_models.ps1` 无头批量材质化为 Blend/FBX/GLB。完整步骤见
+Blender 插件从导出目录导入；`final\fmodel_export_player.py` 可用 pywinauto 驱动 FModel 把
+`Player` 整目录一次导出，已保存的 Player 变体再用
+`final\export_ff7rb_models.ps1` 无头批量材质化为 Blend/FBX/GLB，画廊在 `final\html_rebirth\`。完整步骤见
 [`docs/final-fantasy-vii-rebirth-extraction.md`](../docs/final-fantasy-vii-rebirth-extraction.md)；
 Player 的已导出/待导出差集与逐项手动操作见
 [`docs/ff7rebirth-player-export-inventory.md`](../docs/ff7rebirth-player-export-inventory.md)。
