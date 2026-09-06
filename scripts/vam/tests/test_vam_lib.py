@@ -273,9 +273,20 @@ def test_vab_and_vmb():
     assert np.allclose(relaxed[21], raw[21] + [0.005, 0, 0.25], atol=1e-6), relaxed[21]
     fitted, how = vl.fit_clothing(mesh, mesh.verts, mesh.verts, np.zeros_like(mesh.verts))
     assert how == "idw" and np.allclose(fitted, mesh.verts)
-    # A metre of surface offset (an accident creators ship) is too long a
-    # lever for the wrap frame: displacement transfer instead.
-    assert vl.fit_clothing(wrapped, body, body, up, surface_offset=-1.0)[1] == "idw"
+    # Coefficients within a triangle width or so mean the item lies on the
+    # skin and the wrap frame is meaningful; a hat floating over the hair
+    # stores tens of triangle widths and must fall back.
+    assert vl.wrap_is_usable(wrapped, body) is True
+    floating = (wrapped.wrap[0], wrapped.wrap[1] * [1.0, 20.0, 20.0])
+    assert vl.wrap_is_usable(floating, body, verts=wrapped.verts) is False
+    assert vl.wrap_is_usable(wrapped, body[:2]) is False
+    assert vl.wrap_is_usable(None, body) is False
+    # A floating accessory whose stored position is nowhere near the body
+    # (hoop earrings ship a metre out) still has to come from the wrap.
+    assert vl.wrap_is_usable(floating, body, verts=wrapped.verts + [0, 0, 2.0]) is True
+    mesh.wrap = floating
+    assert vl.fit_clothing(mesh, body, body, up)[1] == "idw"
+    mesh.wrap = None
     vaj = {"storables": [{"id": "X:ItemWrapControl", "surfaceOffset": "0.002"}]}
     assert np.isclose(vl.wrap_surface_offset(vaj), 0.002)
     assert np.isclose(vl.wrap_surface_offset(vaj, {"X:ItemWrapControl": {"surfaceOffset": "-0.001"}},
@@ -810,6 +821,21 @@ def test_transforms_and_rig(tmp):
     # Rz(90) maps +y to -x: the head sits 10 cm to -x of the neck.
     head = rig.posed_world("head", all_on, "female")
     assert np.allclose(head[:3, 3], [0.4, 1.5, 0], atol=1e-6), head[:3, 3]
+    # A CustomUnityAsset picks one prefab out of its bundle; importing every
+    # object would stack the creator's whole jewellery set on the head.
+    assert vl.asset_prefab_stem({"assetName": "assets/prefabs/crown 2.prefab"}) == "crown 2"
+    # A .unity scene means the whole bundle, an empty one means nothing chosen.
+    assert vl.asset_prefab_stem({"assetName": "Assets/Sword/x.unity"}) == vl.ASSET_WHOLE_BUNDLE
+    assert vl.asset_prefab_stem({}) is None
+    files = ["a/arm_band 1/arm_band 1.fbx", "a/crown 2/crown 2.fbx", "a/necklace 1.fbx"]
+    assert vl.select_prefab_files(files, "crown 2") == ["a/crown 2/crown 2.fbx"]
+    assert vl.select_prefab_files(files, "Crown_2") == ["a/crown 2/crown 2.fbx"]
+    # AssetStudio hands back Windows paths.
+    assert vl.select_prefab_files([r"a\crown 2\crown 2.fbx", r"a\ring.fbx"], "crown 2") \
+        == [r"a\crown 2\crown 2.fbx"]
+    assert vl.select_prefab_files(files, "hair 24") == files      # no match -> keep all
+    assert vl.select_prefab_files(files, vl.ASSET_WHOLE_BUNDLE) == files
+    assert vl.select_prefab_files(files, None) == files
     # Root-linked assets just lose the person's own transform.
     moved = {"control": {"position": {"x": "1", "y": "0", "z": "0"}}}
     placed = vl.attachment_rest_transform(rig, "female", moved, "control",

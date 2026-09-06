@@ -1718,6 +1718,49 @@ def control_state(storables, control_id):
             str(control.get("rotationState") or default))
 
 
+# What a CustomUnityAsset's ``assetName`` selects out of its bundle.
+ASSET_WHOLE_BUNDLE = ""      # a .unity scene: VaM loads every object in it
+
+
+def asset_prefab_stem(asset_storable):
+    """The object a CustomUnityAsset picks out of its bundle.
+
+    ``assetName`` is a path inside the bundle: one prefab
+    (``assets/prefabs/crown 2.prefab``, and a bundle usually holds several)
+    or a whole scene (``Assets/hairtie.unity``).  Returns the prefab's bare
+    name, ``ASSET_WHOLE_BUNDLE`` for a scene, or None when the atom never
+    picked anything.
+    """
+    name = str((asset_storable or {}).get("assetName") or "").strip()
+    if not name:
+        return None
+    if not name.lower().endswith(".prefab"):
+        return ASSET_WHOLE_BUNDLE
+    return _file_stem(name)
+
+
+def _file_stem(path):
+    return os.path.splitext(os.path.basename(str(path).replace("\\", "/")))[0]
+
+
+def select_prefab_files(files, stem):
+    """The split-object files belonging to prefab ``stem``.
+
+    AssetStudio writes one file per object in the bundle, so importing them
+    all stacks every crown and bracelet the creator shipped on top of each
+    other.  Falls back to everything when nothing matches (a scene, or a name
+    the exporter mangled)."""
+    if not stem:
+        return list(files)
+
+    def norm(text):
+        return "".join(ch for ch in text.lower() if ch.isalnum())
+
+    wanted = norm(stem)
+    hits = [f for f in files if norm(_file_stem(f)) == wanted]
+    return hits or list(files)
+
+
 def person_container(storables):
     """World 4x4 of the atom root (the person's ``control`` storable)."""
     person = storables.get("control", {}) or {}
@@ -1933,22 +1976,58 @@ def relax_loose_parts(raw_verts, placed, distance, tight=0.01, loose=0.04, k=8):
     return out
 
 
-# Beyond this the saved normal offset is a metre-long lever (creators leave
-# surfaceOffset = -1 behind): any difference between the authoring body and
-# this one smears the item, so such items use the displacement transfer.
-WRAP_MAX_SURFACE_OFFSET = 0.01
+# The wrap frame is one skin triangle, a few millimetres across, so its
+# tangent coefficients are in units of that triangle.  A garment lying on the
+# skin stays under ~1; a hat floating over the hair, a hoop earring or a
+# ribbon reaches 5-16, and there the frame is meaningless -- a hair's
+# difference in the triangle swings the vertex centimetres and the item comes
+# out mangled.  Measured over the 328 local items the two groups are far
+# apart (garments <= 0.8, floating accessories >= 4.7), so anything above
+# this uses the displacement transfer instead.
+WRAP_MAX_COEFFICIENT = 3.0
+
+# ... unless the authored mesh is nowhere near the body: hoop earrings sit a
+# metre away in their own file, belly piercings and shoe parts a third of a
+# metre, and only the wrap knows where they belong.  Accessories whose stored
+# position is sane stay put instead (measured: stray items 0.28-0.94 m from
+# the skin, sane ones under 0.09 m).
+WRAP_STRAY_DISTANCE = 0.15
+
+
+def wrap_is_usable(mesh_or_wrap, body_verts, verts=None):
+    """Whether to rebuild this item from its skin-wrap store.
+
+    Ordinary garments hug the skin and their coefficients stay within a
+    triangle width, where the wrap is exact.  A floating accessory's frame is
+    meaningless, so its stored position is used as authored -- unless that
+    position is not on the body at all.
+    """
+    wrap = getattr(mesh_or_wrap, "wrap", mesh_or_wrap)
+    if verts is None:
+        verts = getattr(mesh_or_wrap, "verts", None)
+    if wrap is None:
+        return False
+    tris, coeffs = wrap
+    if tris.size == 0 or int(tris.max()) >= len(body_verts):
+        return False
+    typical = float(np.median(np.abs(np.asarray(coeffs)[:, 1:3]).max(axis=1)))
+    if typical <= WRAP_MAX_COEFFICIENT:
+        return True
+    if verts is None or len(verts) == 0:
+        return False
+    sample = np.asarray(verts)[::max(1, len(verts) // 1500)]
+    return float(np.median(nearest_distance(sample, body_verts))) > WRAP_STRAY_DISTANCE
 
 
 def fit_clothing(mesh, base_verts, body_verts, body_outward_normals, surface_offset=0.0):
     """Clothing vertices on ``body_verts``: the item's skin-wrap store when it
     has one that fits the body (VaM's own behaviour, right even for items
     wrapped on a morphed figure; loose parts keep their authored shape, see
-    ``relax_loose_parts``), else -- no store, or a surface offset past
-    ``WRAP_MAX_SURFACE_OFFSET`` -- the base->body displacement transfer.
-    Returns (verts, "wrap" | "idw")."""
+    ``relax_loose_parts``), else -- no store, or an accessory floating free of
+    the skin with a sane stored position (``wrap_is_usable``) -- the
+    base->body displacement transfer.  Returns (verts, "wrap" | "idw")."""
     wrap = getattr(mesh, "wrap", None)
-    if (wrap is not None and int(wrap[0].max()) < len(body_verts)
-            and abs(float(surface_offset)) <= WRAP_MAX_SURFACE_OFFSET):
+    if wrap_is_usable(mesh, body_verts):
         placed, distance = wrap_to_body(wrap[0], wrap[1], body_verts, body_outward_normals,
                                         surface_offset, with_distance=True)
         return relax_loose_parts(mesh.verts, placed, distance), "wrap"

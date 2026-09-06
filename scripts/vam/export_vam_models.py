@@ -583,6 +583,14 @@ def add_cua_attachments(ctx, bundle, entry, atoms, person_id, storables, gender,
         if not fbx_files:
             skipped.append("%s (no mesh in bundle)" % name)
             continue
+        stem = vl.asset_prefab_stem(asset)
+        if stem is None and len(fbx_files) > 1:
+            # The atom never picked an object and the bundle holds several
+            # (a wig library, say): VaM shows one, we cannot tell which.
+            skipped.append("%s (bundle has %d objects, scene names none)"
+                           % (name, len(fbx_files)))
+            continue
+        fbx_files = vl.select_prefab_files(fbx_files, stem)
         if rig is None:
             rig = ctx.cache.rig()
         scale_storable = atom_storables.get("scale", {})
@@ -590,7 +598,8 @@ def add_cua_attachments(ctx, bundle, entry, atoms, person_id, storables, gender,
             else 1.0
         matrix = vl.attachment_rest_transform(rig, gender, storables, target, control, scale)
         bundle.add_attachment(name, fbx_files, matrix)
-        done.append("%s -> %s (%d fbx)" % (name, target, len(fbx_files)))
+        done.append("%s -> %s (%s, %d fbx)" % (name, target, stem or "whole bundle",
+                                               len(fbx_files)))
     return done, skipped
 
 
