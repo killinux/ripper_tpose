@@ -3,8 +3,9 @@
 Blender-side worker for ``export_character_models.ps1``.  It drives the same
 importer and material operators as the interactive ROE add-on, then writes a
 packed .blend plus a single side-by-side preview PNG (3/4, front, head), and
-optionally a GLB, a materialised XPS (.mesh with PNG sidecars) and/or a PMX
-(mmd_tools, textures copied beside the file).
+optionally a GLB, a materialised XPS (.mesh with PNG sidecars) and/or an
+MMD-ready PMX (Convert_to_MMD5 skeleton conversion + mmd_tools export, textures
+copied beside the file).
 
 Unlike ``export_nude_model_blender.py`` this worker makes no assumption that the
 body is a single combined nude mesh: it neither splits the body into six slots
@@ -23,6 +24,7 @@ reports status NOMESH, which is a property of the bundles rather than a failure.
 
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -31,7 +33,7 @@ import traceback
 
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Quaternion, Vector
 
 RESULT_PREFIX = "ROE_CHAR_EXPORT="
 
@@ -311,33 +313,841 @@ def bake_portable_eye(module, head, out_dir):
     return {"status": "baked", "path": baked_path}
 
 
-def export_pmx(path, meshes, armatures):
-    """Convert the rig to an MMD model in place and write a PMX.
+# ---------------------------------------------------------------------------
+# PMX through Convert_to_MMD5 (the user's XPS->MMD skeleton engine, a Blender
+# add-on that sits on top of mmd_tools).  A plain mmd_tools export keeps the
+# game's Biped bone names and has no IK / semi-standard bones, so MMD motion
+# data cannot drive it; the add-on renames, completes, adds IK / D-bones /
+# twist / shoulder-P, grants, bone groups and optional physics.
+# ---------------------------------------------------------------------------
 
-    mmd_tools rebuilds the armature, so this must be the last export of the
-    scene.  Textures are copied beside the .pmx by the exporter.
+# MMD rest pose: upper arm this far below horizontal (measured from a reference
+# PMX, see the add-on's presets/canonical_arm_dirs.json: atan2(0.605, 0.796)).
+MMD_ARM_DOWN_DEG = 37.0
+
+def _first_bone(bones, *names):
+    """First of `names` present in `bones`, matched case-insensitively.
+
+    ROE rigs disagree on capitalisation between characters (``Eyeball_L`` and
+    ``eyeball_L``, ``Breast_L`` and ``chest_L``), so an exact lookup silently
+    drops the eye and chest bones on most of the roster.
     """
+    folded = {bone.name.lower(): bone.name for bone in bones}
+    for name in names:
+        if not name:
+            continue
+        hit = folded.get(name.lower())
+        if hit:
+            return hit
+    return ""
+
+
+def resolve_roe_slots(arm):
+    """Map Convert_to_MMD5's bone slots onto this character's Biped rig.
+
+    Every ROE character is a 3ds Max Biped, so a name table beats the add-on's
+    topology auto-identify (tuned for XPS rigs), but the rigs are not uniform:
+    the male base is ``Bip000``, some outfits drop the spaces (``LUpArm``,
+    ``LThigh``, ``LCalf``), and one names the calf after its twist helper
+    (thigh -> ``LCalfTwist`` -> foot).  So the prefix is detected, each joint
+    tries its spellings, and a joint still missing is taken from the parent of
+    the next joint down the chain.  The pelvis becomes 下半身 so its hip weights
+    survive; センター is left empty and rebuilt by the add-on.
+
+    Returns (slots, missing) where ``missing`` lists the optional roles that
+    could not be resolved (eyes, chest, toes, finger segments).
+    """
+    bones = arm.data.bones
+    prefix = ""
+    for bone in bones:
+        match = re.match(r"^(Bip\d+) Pelvis$", bone.name)
+        if match:
+            prefix = match.group(1)
+            break
+    if not prefix:
+        raise RuntimeError("no Biped pelvis bone (Bip### Pelvis) in the rig")
+    p = prefix
+
+    def parent_of(name, grandparent=""):
+        bone = bones.get(name)
+        if bone is None or bone.parent is None:
+            return ""
+        if grandparent and (bone.parent.parent is None
+                            or bone.parent.parent.name != grandparent):
+            return ""
+        return bone.parent.name
+
+    slots = {
+        "all_parents_bone": _first_bone(bones, p),
+        "center_bone": "",
+        "lower_body_bone": p + " Pelvis",
+        "upper_body_bone": _first_bone(bones, p + " Spine"),
+        "upper_body2_bone": _first_bone(bones, p + " Spine1"),
+        "upper_body3_bone": _first_bone(bones, p + " Spine2"),
+        "neck_bone": _first_bone(bones, p + " Neck"),
+        "head_bone": _first_bone(bones, p + " Head"),
+    }
+    for side, s in (("left", "L"), ("right", "R")):
+        slots["%s_eye_bone" % side] = _first_bone(
+            bones, "%s eyeball_%s" % (p, s), "%s eye_%s" % (p, s),
+            "%s %s Eye" % (p, s), "%s %sEye" % (p, s))
+        slots["%s_chest_bone" % side] = _first_bone(
+            bones, "%s chest_%s" % (p, s), "%s breast_%s" % (p, s),
+            "%s %s Breast" % (p, s))
+        clavicle = _first_bone(bones, "%s %s Clavicle" % (p, s), "%s %sClavicle" % (p, s))
+        upper = _first_bone(bones, "%s %s UpperArm" % (p, s), "%s %sUpArm" % (p, s),
+                            "%s %sUpperArm" % (p, s), "%s %s UpArm" % (p, s))
+        fore = _first_bone(bones, "%s %s Forearm" % (p, s), "%s %sForearm" % (p, s),
+                           "%s %s ForeArm" % (p, s))
+        hand = _first_bone(bones, "%s %s Hand" % (p, s), "%s %sHand" % (p, s))
+        thigh = _first_bone(bones, "%s %s Thigh" % (p, s), "%s %sThigh" % (p, s))
+        calf = _first_bone(bones, "%s %s Calf" % (p, s), "%s %sCalf" % (p, s))
+        foot = _first_bone(bones, "%s %s Foot" % (p, s), "%s %sFoot" % (p, s))
+        toe = _first_bone(bones, "%s %s Toe0" % (p, s), "%s %sToe0" % (p, s))
+        # Structural fallbacks, innermost joint first so each one can feed the next.
+        fore = fore or parent_of(hand)
+        upper = upper or parent_of(fore)
+        clavicle = clavicle or parent_of(upper)
+        calf = calf or parent_of(foot, grandparent=thigh)
+        thigh = thigh or parent_of(calf)
+        slots.update({
+            "%s_shoulder_bone" % side: clavicle,
+            "%s_upper_arm_bone" % side: upper,
+            "%s_lower_arm_bone" % side: fore,
+            "%s_hand_bone" % side: hand,
+            "%s_thigh_bone" % side: thigh,
+            "%s_calf_bone" % side: calf,
+            "%s_foot_bone" % side: foot,
+            "%s_toe_bone" % side: toe,
+        })
+        for digit, finger in (("0", "thumb"), ("1", "index"), ("2", "middle"),
+                              ("3", "ring"), ("4", "pinky")):
+            # Biped: Finger0 / Finger01 / Finger02; MMD thumb 0/1/2, others 1/2/3.
+            segments = ("0", "1", "2") if digit == "0" else ("1", "2", "3")
+            for index, segment in enumerate(segments):
+                suffix = "Finger%s%s" % (digit, "" if index == 0 else index)
+                slots["%s_%s_%s" % (side, finger, segment)] = _first_bone(
+                    bones, "%s %s %s" % (p, s, suffix), "%s %s%s" % (p, s, suffix))
+    missing = sorted(k for k, v in slots.items() if not v and k != "center_bone")
+    return slots, missing
+
+
+# Slots the add-on cannot do without (its complete/IK steps abort otherwise).
+ROE_MMD_REQUIRED_SLOTS = (
+    "upper_body_bone", "neck_bone", "head_bone",
+    "left_shoulder_bone", "right_shoulder_bone", "left_upper_arm_bone",
+    "right_upper_arm_bone", "left_lower_arm_bone", "right_lower_arm_bone",
+    "left_hand_bone", "right_hand_bone", "left_thigh_bone", "right_thigh_bone",
+    "left_calf_bone", "right_calf_bone", "left_foot_bone", "right_foot_bone",
+)
+
+
+def enable_addon(name):
     try:
-        bpy.ops.preferences.addon_enable(module="mmd_tools")
-    except Exception:
-        pass
-    if not hasattr(bpy.ops, "mmd_tools") or not hasattr(bpy.ops.mmd_tools, "export_pmx"):
-        raise RuntimeError("mmd_tools add-on is not available")
+        bpy.ops.preferences.addon_enable(module=name)
+    except Exception as exc:
+        raise RuntimeError("%s add-on is not available: %s" % (name, exc))
+
+
+def bake_rig_transforms(arm, meshes):
+    """Make armature space Z-up by baking the FBX importer's parent transform.
+
+    The importer leaves the armature Y-up under an empty rotated 90 degrees
+    about X.  Convert_to_MMD5 reads ``head_local`` (armature space) and assumes
+    Z-up like an XPS import; on the raw rig its geometry heuristics read the
+    legs as arms.  Clearing the parent with the transform kept and applying
+    rotation/scale fixes that without moving anything in world space.
+    """
+    bpy.ops.object.mode_set(mode="OBJECT")
+    objects = [arm] + list(meshes)
+    bpy.ops.object.select_all(action="DESELECT")
+    reparent = [obj for obj in objects
+                if obj.parent is not None and obj.parent.type != "ARMATURE"]
+    if reparent:
+        for obj in reparent:
+            obj.hide_set(False)
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = reparent[0]
+        bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in objects:
+        obj.hide_set(False)
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    for obj in list(bpy.data.objects):
+        if obj.type == "EMPTY" and not obj.children:
+            bpy.data.objects.remove(obj, do_unlink=True)
+    heads = [bone.head_local for bone in arm.data.bones]
+    span_z = max(h.z for h in heads) - min(h.z for h in heads)
+    span_y = max(h.y for h in heads) - min(h.y for h in heads)
+    if span_z < span_y:
+        raise RuntimeError("armature is still not Z-up after applying transforms")
+
+
+def edge_lengths(meshes):
+    """Local-space edge lengths per mesh, for the geometry-integrity check."""
+    snapshot = {}
+    for mesh in meshes:
+        data = mesh.data
+        verts = data.vertices
+        snapshot[mesh.name] = [
+            (verts[e.vertices[0]].co - verts[e.vertices[1]].co).length
+            for e in data.edges]
+    return snapshot
+
+
+def mesh_distortion(before, meshes, ratio_limit=3.0, growth_fraction=0.008):
+    """Compare edge lengths against `before` and report torn geometry.
+
+    Everything the conversion does to the rest pose is a rigid rotation of a
+    bone sub-tree, so an edge only changes length when its two vertices are
+    driven by bones that moved differently.  Some of that is honest skinning —
+    the armpit fold opens when the arm comes down — so an edge counts as torn
+    only when it both multiplies (>3x) and grows by a visible fraction of the
+    model (>0.8% of the bounding-box diagonal).  Measured on the ROE male base:
+    the wrist rip scored 7.0x / +33 mm, the armpit fold 2.4x / +8 mm.
+    Ratios are normalised by their median so a uniform rescale reads as 1.0.
+    """
+    low = [1e9] * 3
+    high = [-1e9] * 3
+    for mesh in meshes:
+        for corner in mesh.bound_box:
+            for axis in range(3):
+                low[axis] = min(low[axis], corner[axis])
+                high[axis] = max(high[axis], corner[axis])
+    size = max(math.dist(low, high), 1e-6)
+    growth_limit = size * growth_fraction
+
+    worst_ratio = 1.0
+    worst_growth = 0.0
+    worst_mesh = ""
+    torn = 0
+    stretched = 0
+    compared = 0
+    for mesh in meshes:
+        old = before.get(mesh.name)
+        if not old:
+            continue
+        new = edge_lengths([mesh])[mesh.name]
+        if len(new) != len(old):
+            continue
+        pairs = [(n, o) for n, o in zip(new, old) if o > 1e-9]
+        if not pairs:
+            continue
+        median = sorted(n / o for n, o in pairs)[len(pairs) // 2] or 1.0
+        for new_len, old_len in pairs:
+            scaled = old_len * median
+            ratio = new_len / scaled
+            growth = new_len - scaled
+            compared += 1
+            if abs(ratio - 1.0) > 0.25:
+                stretched += 1
+            if ratio > ratio_limit and growth > growth_limit:
+                torn += 1
+            if ratio > worst_ratio:
+                worst_ratio = ratio
+                worst_growth = growth
+                worst_mesh = mesh.name
+    return {"edges": compared, "stretched": stretched, "torn": torn,
+            "worst_ratio": round(worst_ratio, 2),
+            "worst_growth_mm": round(worst_growth * 1000, 1),
+            "growth_limit_mm": round(growth_limit * 1000, 1),
+            "worst_mesh": worst_mesh}
+
+
+# 3ds Max Biped names its limb helpers by convention, and ROE follows it:
+# ``ForeTwist`` / ``UpArmTwist`` / ``ThighTwist`` / ``CalfTwist`` for the twist
+# correctives, ``Point_elbow`` / ``AC elbow`` / ``knee_`` / ``Point_ankle`` for
+# the joint pads.  Matching the convention (then checking the geometry) is what
+# keeps garment bones — buttocks, skirts, pauldrons — out of the limb chains.
+LIMB_HELPER_NAME = re.compile(r"twist|elbow|knee|ankle|muscle\s*strand", re.IGNORECASE)
+
+
+def weight_centroids(meshes, names):
+    """Weighted centroid of the skin each named vertex group drives, in world space."""
+    totals = {name: [Vector(), 0.0] for name in names}
+    for mesh in meshes:
+        index_to_name = {}
+        for name in names:
+            group = mesh.vertex_groups.get(name)
+            if group is not None:
+                index_to_name[group.index] = name
+        if not index_to_name:
+            continue
+        matrix = mesh.matrix_world
+        for vertex in mesh.data.vertices:
+            position = None
+            for entry in vertex.groups:
+                name = index_to_name.get(entry.group)
+                if name is None or entry.weight <= 0.05:
+                    continue
+                if position is None:
+                    position = matrix @ vertex.co
+                slot = totals[name]
+                slot[0] += position * entry.weight
+                slot[1] += entry.weight
+    return {name: (acc / weight) for name, (acc, weight) in totals.items() if weight > 0.0}
+
+
+def plan_joint_helper_moves(arm, meshes, slots):
+    """Decide which limb helpers hang off the wrong bone.  Returns (plans, report).
+
+    ``plans`` is a list of (bone name, joint name) to re-parent; ``report`` holds
+    one dict per candidate so a diagnostic tool can show its reasoning.
+
+    ROE Biped rigs hang limb helpers off whatever was convenient: ``ForeTwist``
+    under the UPPER ARM as a sibling of the forearm, ``ThighTwist`` under the
+    SPINE as a sibling of the thigh.  They carry a lot of skin, so the limb they
+    belong to moves and that skin stays behind — the wrist tore open during the
+    rest-pose bake, and the thigh stepped at the knee under animation.
+
+    Two signals must agree before a bone is moved.  Its NAME has to match
+    Biped's limb-helper convention, and the SKIN it actually drives has to lie
+    along a limb: the weighted centroid of its vertices is projected onto each
+    limb segment and the limbs are scored by how squarely the skin sits inside
+    them.  The name test is what keeps ``butt_*``, ``skirt_*`` and
+    ``Pauldrons_*`` — just as close to the thigh and shoulder heads — out of the
+    limb chains.  A bone already carried by the limb it belongs to is left alone.
+    """
+    mapped = {name for name in slots.values() if name}
+    # A limb segment: (joint that must carry the skin, bone ending the segment).
+    limbs = (("left_upper_arm_bone", "left_lower_arm_bone"),
+             ("right_upper_arm_bone", "right_lower_arm_bone"),
+             ("left_lower_arm_bone", "left_hand_bone"),
+             ("right_lower_arm_bone", "right_hand_bone"),
+             ("left_thigh_bone", "left_calf_bone"),
+             ("right_thigh_bone", "right_calf_bone"),
+             ("left_calf_bone", "left_foot_bone"),
+             ("right_calf_bone", "right_foot_bone"))
+
+    bones = arm.data.bones
+
+    def descends_from(bone, ancestor_name):
+        while bone is not None:
+            if bone.name == ancestor_name:
+                return True
+            bone = bone.parent
+        return False
+
+    joints = []
+    matrix = arm.matrix_world
+    for role, end_role in limbs:
+        joint = bones.get(slots.get(role) or "")
+        end = bones.get(slots.get(end_role) or "")
+        if joint is None or end is None:
+            continue
+        start = matrix @ joint.head_local
+        segment = (matrix @ end.head_local) - start
+        if segment.length_squared > 1e-9:
+            joints.append((joint, start, segment))
+
+    # Candidates: Biped's own limb helpers (their names are a convention, not a
+    # per-model guess) plus anything sitting exactly on a joint.
+    candidates = []
+    for bone in bones:
+        if bone.name in mapped:
+            continue
+        named = LIMB_HELPER_NAME.search(bone.name) is not None
+        coincident = any((bone.head_local - joint.head_local).length < 1e-4
+                         for joint, _s, _v in joints)
+        if named or coincident:
+            candidates.append(bone)
+    centroids = weight_centroids(meshes, [b.name for b in candidates]) if candidates else {}
+
+    chosen = {}
+    report = []
+    for bone in candidates:
+        centroid = centroids.get(bone.name)
+        entry = {"bone": bone.name,
+                 "parent": bone.parent.name if bone.parent else "",
+                 "skin": centroid is not None,
+                 "belongs_to": "", "t": None, "lateral_ratio": None,
+                 "verdict": "no skin"}
+        report.append(entry)
+        if centroid is None:          # drives no skin, so nothing can tear
+            continue
+        best = None
+        for joint, start, segment in joints:
+            length = segment.length
+            t = (centroid - start).dot(segment) / (length * length)
+            lateral = (centroid - (start + segment * max(0.0, min(1.0, t)))).length
+            if lateral > 0.35 * length or not -0.25 <= t <= 1.25:
+                continue
+            # Prefer the limb the skin sits *within*: an elbow helper hangs off
+            # the far end of the upper arm (t>1) but lives on the forearm (t~0.3),
+            # and this keeps the other leg — the same distance away sideways —
+            # from ever winning.  The last term breaks the tie for a pad sitting
+            # right on a joint in favour of the distal bone, which is the one
+            # that turns during the bake and would otherwise leave it behind.
+            score = (lateral + max(0.0, -t, t - 1.0) * length
+                     + 0.15 * length * max(0.0, t - 0.5))
+            if best is None or score < best[0]:
+                best = (score, joint.name, t, lateral / length)
+        if best is None:
+            entry["verdict"] = "skin not on any limb"
+            continue
+        entry.update({"belongs_to": best[1], "t": round(best[2], 3),
+                      "lateral_ratio": round(best[3], 3)})
+        # Only a move to a *different* limb is a fix; a helper already carried by
+        # the limb its skin belongs to (``knee_L`` under the thigh) is left alone.
+        if descends_from(bone, best[1]):
+            entry["verdict"] = "ok"
+        else:
+            entry["verdict"] = "misparented"
+            chosen[bone.name] = best[1]
+
+    # A helper whose own parent is being moved travels with it.
+    carried = {name for name in chosen
+               if any(other != name and descends_from(bones[name].parent, other)
+                      for other in chosen)}
+    for entry in report:
+        if entry["bone"] in carried:
+            entry["verdict"] = "carried by its parent"
+    plans = [(name, joint) for name, joint in chosen.items() if name not in carried]
+    return plans, report
+
+
+def reparent_joint_helpers(arm, meshes, slots):
+    """Apply :func:`plan_joint_helper_moves`.  Rest geometry is untouched
+    (head/tail/roll are preserved), so re-parenting does not move the mesh."""
+    plans, _report = plan_joint_helper_moves(arm, meshes, slots)
+    return apply_joint_helper_moves(arm, plans)
+
+
+def apply_joint_helper_moves(arm, plans):
+    if not plans:
+        return []
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit_bones = arm.data.edit_bones
+    moved = []
+    try:
+        for child_name, joint_name in plans:
+            child = edit_bones.get(child_name)
+            joint = edit_bones.get(joint_name)
+            if child is None or joint is None:
+                continue
+            head, tail, roll = child.head.copy(), child.tail.copy(), child.roll
+            child.use_connect = False
+            child.parent = joint
+            child.head, child.tail, child.roll = head, tail, roll
+            moved.append("%s -> %s" % (child_name, joint_name))
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    return moved
+
+
+def arm_down_angle(arm, upper_name, lower_name):
+    """Degrees the upper arm points below horizontal (world space)."""
+    upper = arm.data.bones[upper_name]
+    lower = arm.data.bones[lower_name]
+    v = arm.matrix_world.to_3x3() @ (lower.head_local - upper.head_local)
+    return math.degrees(math.atan2(-v.z, math.hypot(v.x, v.y)))
+
+
+def relax_shoulder_weights(arm, slots):
+    """Relax the shoulder/arm weight boundaries before the A-pose bake.
+
+    Lowering the upper arm ~13-47 degrees shears the skin wherever the torso's
+    weight meets the arm's abruptly — the armpit fold on a bare body, the seam
+    between a stiff collar and the sleeve on a costume.  Relaxing the groups
+    involved spreads the transition so the bake deforms smoothly; the add-on
+    does the same before its own arm bakes.
+    """
+    from Convert_to_MMD5.convert.align import _smooth_group_weights
+
+    names = []
+    for side in ("left", "right"):
+        for role in ("shoulder_bone", "upper_arm_bone", "lower_arm_bone"):
+            name = slots.get("%s_%s" % (side, role))
+            if name:
+                names.append(name)
+    if not names:
+        return 0
+    try:
+        # Gentler than the add-on's own default (0.5 / 8): enough to take the
+        # edge off the bake without turning a crisp shoulder into mush.
+        return _smooth_group_weights(bpy.context, arm, names, factor=0.35, repeat=4)
+    except Exception as exc:
+        print("[roe pmx] shoulder weight relax skipped: %s" % exc)
+        return 0
+
+
+def apose_arms(arm, meshes, slots, target_deg=MMD_ARM_DOWN_DEG):
+    """Lower the upper arms from the T-pose to the MMD A-pose and bake it as rest.
+
+    VMD rotations are relative to the model's rest pose, so a T-pose rig would
+    hold every arm ~37 degrees too high under MMD motion.  Each upper arm is
+    rotated about the world front/back axis by exactly the missing amount; the
+    add-on's ``_bake_pose_delta_to_rest`` then bakes the pose into the meshes
+    (via a duplicated armature modifier) and applies it as the new rest pose.
+    Returns the resulting (left, right) down angles.
+    """
+    from Convert_to_MMD5.convert.align import _bake_pose_delta_to_rest
+
+    chains = tuple((slots["%s_upper_arm_bone" % side], slots["%s_lower_arm_bone" % side],
+                    slots["%s_hand_bone" % side], sign)
+                   for side, sign in (("left", 1.0), ("right", -1.0)))
+    for chain in chains:
+        for name in chain[:3]:
+            if not name or name not in arm.data.bones:
+                raise RuntimeError("arm bone missing for the A-pose: %r" % (chain[:3],))
+    # Point the arm bones at their child joints: the FBX importer picks an
+    # arbitrary tail for a bone with several children (UpperArm has the twist
+    # helper too), and the add-on measures arm direction from the tails.
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit_bones = arm.data.edit_bones
+    for upper, lower, hand, _sign in chains:
+        edit_bones[upper].tail = edit_bones[lower].head
+        edit_bones[lower].tail = edit_bones[hand].head
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    plans = []
+    axis = Vector((0.0, 1.0, 0.0))
+    for upper, lower, _hand, sign in chains:
+        current = arm_down_angle(arm, upper, lower)
+        delta = target_deg - current
+        if abs(delta) < 0.5:
+            continue
+        pivot = arm.matrix_world @ arm.data.bones[upper].head_local
+        plans.append((upper, pivot, axis, math.radians(delta) * sign))
+    if plans:
+        bpy.context.view_layer.objects.active = arm
+        if _bake_pose_delta_to_rest(bpy.context, arm, plans, "roe apose") != "FINISHED":
+            raise RuntimeError("A-pose bake failed")
+    return tuple(round(arm_down_angle(arm, chain[0], chain[1]), 1) for chain in chains)
+
+
+def add_both_eyes_bone(arm):
+    """Create MMD's 両目 control bone and drive 左目/右目 from it.
+
+    MMD motions steer the gaze through 両目.  The add-on renames the game's
+    eyeball bones to 左目/右目 but never creates their parent control, so the
+    eye keys in a VMD (the test dance has them) drive nothing.  両目 carries no
+    skin; the eyes inherit its rotation through the standard 付与 at rate 1.0.
+    """
+    bones = arm.data.bones
+    if "両目" in bones or "左目" not in bones or "右目" not in bones:
+        return False
+    left = bones["左目"].head_local.copy()
+    right = bones["右目"].head_local.copy()
+    spacing = max((left - right).length, 1e-3)
+    middle = (left + right) * 0.5
+
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit_bones = arm.data.edit_bones
+    eyes = edit_bones.new("両目")
+    # Above the eyes, pointing the way the character faces (-Y once the rig is
+    # Z-up); placement is display-only since the bone does not deform.
+    eyes.head = middle + Vector((0.0, 0.0, spacing * 1.4))
+    eyes.tail = eyes.head + Vector((0.0, -spacing * 1.2, 0.0))
+    eyes.use_deform = False
+    eyes.parent = edit_bones.get("頭")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    for name in ("左目", "右目"):
+        pose_bone = arm.pose.bones.get(name)
+        if pose_bone is None:
+            continue
+        mmd_bone = pose_bone.mmd_bone
+        mmd_bone.has_additional_rotation = True
+        mmd_bone.has_additional_location = False
+        mmd_bone.additional_transform_bone = "両目"
+        mmd_bone.additional_transform_influence = 1.0
+    try:
+        bpy.ops.mmd_tools.apply_additional_transform()
+    except Exception as exc:
+        print("[roe pmx] apply_additional_transform after 両目: %s" % exc)
+    return True
+
+
+# --- facial expressions -----------------------------------------------------
+# ROE characters have no shape keys; the face is driven by bones (eyelids, chin,
+# lip corners).  PMX can express exactly that as *bone morphs*, so the standard
+# MMD expressions a dance drives — a blink alone is 77 keys in the test motion —
+# are authored here as small bone poses.  Angles were calibrated by rendering
+# the eye and mouth through a sweep: the lid closes at ~33 degrees, the jaw
+# reads as "a" at 18 and as "i" at 6.
+BLINK_UPPER_DEG = 33.0
+BLINK_LOWER_RATIO = -0.45
+JAW_DEG = {"あ": 18.0, "い": 6.0, "う": 7.0, "え": 12.0, "お": 13.0}
+# Lip-corner slide along the model's left-right axis, as a fraction of the eye
+# spacing: positive spreads the mouth wide, negative purses it.
+LIP_CORNER = {"い": 0.22, "う": -0.18, "え": 0.10, "お": -0.12}
+
+
+def resolve_face_bones(arm, prefix):
+    """Find the eyelid / chin / lip-corner bones across the ROE naming styles.
+
+    Two conventions ship in the same game: ``eyelid_UL`` / ``lip_L`` / ``chin``
+    on one set of characters, ``Eyelid_LT`` / ``Lips_L`` / ``Chin`` on another.
+    ``AC``-prefixed duplicates carry no skin weight and are ignored.
+    """
+    bones = [b for b in arm.data.bones if not b.name.startswith("AC ")]
+    p = prefix
+    face = {
+        "upper_left": _first_bone(bones, "%s eyelid_UL" % p, "%s Eyelid_LT" % p,
+                                  "%s eyelid_UP_L" % p),
+        "upper_right": _first_bone(bones, "%s eyelid_UR" % p, "%s Eyelid_RT" % p,
+                                   "%s eyelid_UP_R" % p),
+        "lower_left": _first_bone(bones, "%s eyelid_BL" % p, "%s Eyelid_LB" % p,
+                                  "%s eyelid_DN_L" % p),
+        "lower_right": _first_bone(bones, "%s eyelid_BR" % p, "%s Eyelid_RB" % p,
+                                   "%s eyelid_DN_R" % p),
+        "chin": _first_bone(bones, "%s chin" % p, "%s jaw" % p),
+        "corner_left": _first_bone(bones, "%s lip_L" % p, "%s Lips_L" % p),
+        "corner_right": _first_bone(bones, "%s lip_R" % p, "%s Lips_R" % p),
+    }
+    return {role: name for role, name in face.items() if name}
+
+
+def _local_rotation(arm, bone_name, world_axis, degrees):
+    """Quaternion in the bone's local space for a rotation about a world axis."""
+    pose_bone = arm.pose.bones[bone_name]
+    rest = arm.matrix_world @ pose_bone.bone.matrix_local
+    axis = rest.to_3x3().inverted() @ world_axis
+    if axis.length < 1e-9:
+        return Quaternion((1.0, 0.0, 0.0, 0.0))
+    return Quaternion(axis.normalized(), math.radians(degrees))
+
+
+def _local_translation(arm, bone_name, world_vector):
+    pose_bone = arm.pose.bones[bone_name]
+    rest = arm.matrix_world @ pose_bone.bone.matrix_local
+    return rest.to_3x3().inverted() @ world_vector
+
+
+def add_face_morphs(root, arm):
+    """Author the standard MMD expression set as PMX bone morphs.
+
+    Returns the list of morph names created.
+    """
+    match = re.match(r"^(Bip\d+)", next((b.name for b in arm.data.bones
+                                         if b.name.startswith("Bip")), ""))
+    if not match:
+        return []
+    face = resolve_face_bones(arm, match.group(1))
+    lids = [role for role in ("upper_left", "upper_right", "lower_left", "lower_right")
+            if role in face]
+    if not lids and "chin" not in face:
+        return []
+
+    # model-scale reference for the lip slide
+    spacing = 0.03
+    left_eye = arm.data.bones.get("左目")
+    right_eye = arm.data.bones.get("右目")
+    if left_eye and right_eye:
+        spacing = max((left_eye.head_local - right_eye.head_local).length, 1e-3)
+
+    x_axis = Vector((1.0, 0.0, 0.0))
+    plans = []
+
+    def lid_pose(sides):
+        pose = []
+        for side in sides:
+            upper = face.get("upper_%s" % side)
+            lower = face.get("lower_%s" % side)
+            if upper:
+                pose.append((upper, None,
+                             _local_rotation(arm, upper, x_axis, BLINK_UPPER_DEG)))
+            if lower:
+                pose.append((lower, None,
+                             _local_rotation(arm, lower, x_axis,
+                                             BLINK_UPPER_DEG * BLINK_LOWER_RATIO)))
+        return pose
+
+    if lids:
+        plans.append(("まばたき", "blink", "EYE", lid_pose(("left", "right"))))
+        plans.append(("笑い", "smile", "EYE", lid_pose(("left", "right"))))
+        plans.append(("ウィンク", "wink", "EYE", lid_pose(("left",))))
+        plans.append(("ウィンク右", "wink_right", "EYE", lid_pose(("right",))))
+
+    chin = face.get("chin")
+    if chin:
+        for vowel, degrees in JAW_DEG.items():
+            pose = [(chin, None, _local_rotation(arm, chin, x_axis, degrees))]
+            slide = LIP_CORNER.get(vowel)
+            if slide:
+                for role, sign in (("corner_left", 1.0), ("corner_right", -1.0)):
+                    corner = face.get(role)
+                    if corner:
+                        offset = Vector((sign * slide * spacing, 0.0, 0.0))
+                        pose.append((corner, _local_translation(arm, corner, offset), None))
+            plans.append((vowel, vowel, "MOUTH", pose))
+
+    mmd_root = root.mmd_root
+    existing = {morph.name for morph in mmd_root.bone_morphs}
+    created = []
+    for name, name_e, category, pose in plans:
+        if name in existing or not pose:
+            continue
+        morph = mmd_root.bone_morphs.add()
+        morph.name = name
+        morph.name_e = name_e
+        morph.category = category
+        for bone_name, location, rotation in pose:
+            item = morph.data.add()
+            item.bone = bone_name
+            if location is not None:
+                item.location = location
+            if rotation is not None:
+                item.rotation = rotation
+        created.append(name)
+
+    if created:
+        # List them in the 表情 display frame, otherwise MMD's expression panel
+        # stays empty even though the morphs are in the file.
+        try:
+            from mmd_tools.operators.display_item import DisplayItemQuickSetup
+
+            DisplayItemQuickSetup.load_facial_items(mmd_root)
+        except Exception as exc:
+            print("[roe pmx] facial display frame: %s" % exc)
+    return created
+
+
+def convert_rig_to_mmd(arm, meshes, slots, missing_optional):
+    """Run Convert_to_MMD5's one-click pipeline with the resolved slots; add physics.
+
+    Returns (mmd_root_object, stats dict for the manifest).
+    """
+    from Convert_to_MMD5.presets import get_bones_list
+
+    scene = bpy.context.scene
+    for prop in get_bones_list():
+        setattr(scene, prop, "")
+    for prop, bone_name in slots.items():
+        if bone_name:
+            setattr(scene, prop, bone_name)
+
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
+    arm.select_set(True)
+    bpy.context.view_layer.objects.active = arm
+    converted = bpy.ops.object.one_click_convert(auto_identify=False)
+    if converted != {"FINISHED"}:
+        raise RuntimeError("Convert_to_MMD5 one-click conversion failed: %r" % (converted,))
+    # The add-on may have replaced the active object; find the live armature.
+    arm = next(obj for obj in bpy.data.objects
+               if obj.type == "ARMATURE" and "backup" not in obj.name.lower())
+    root = arm
+    while root.parent is not None:
+        root = root.parent
+    if getattr(root, "mmd_type", "") != "ROOT":
+        raise RuntimeError("no mmd root object after conversion")
+
+    both_eyes = add_both_eyes_bone(arm)
+    if both_eyes:
+        # so 両目 lands in the "体(上)" display frame the add-on defines
+        bpy.ops.object.select_all(action="DESELECT")
+        arm.select_set(True)
+        bpy.context.view_layer.objects.active = arm
+        try:
+            bpy.ops.object.create_bone_group()
+        except Exception as exc:
+            print("[roe pmx] regroup after 両目: %s" % exc)
+
+    try:
+        morphs = add_face_morphs(root, arm)
+    except Exception as exc:
+        print("[roe pmx] face morphs failed: %s" % exc)
+        morphs = []
+
+    bone_names = set(arm.data.bones.keys())
+    holes = 0
+    for mesh in meshes:
+        deform = {vg.index for vg in mesh.vertex_groups if vg.name in bone_names}
+        holes += sum(1 for v in mesh.data.vertices
+                     if sum(g.weight for g in v.groups if g.group in deform) < 0.05)
+    stats = {
+        "bones": len(arm.data.bones),
+        "relay_bones": sum(1 for b in arm.data.bones
+                           if b.name.startswith(("_dummy_", "_shadow_"))),
+        "weight_holes": holes,
+        "both_eyes_bone": both_eyes,
+        "face_morphs": morphs,
+        "unmapped_slots": missing_optional,
+    }
+
+    # Physics: kinematic body capsules first (cloth needs something to collide
+    # with), then rigid bodies + joints on skirt / cloak / hair bones.  Optional:
+    # a failure here is recorded, not fatal.
+    physics = {}
+    for label, op in (("body", bpy.ops.object.add_body_rigids),
+                      ("cloth", bpy.ops.object.add_skirt_physics)):
+        bpy.ops.object.select_all(action="DESELECT")
+        arm.select_set(True)
+        bpy.context.view_layer.objects.active = arm
+        try:
+            physics[label] = "ok" if op() == {"FINISHED"} else "cancelled"
+        except Exception as exc:
+            physics[label] = "failed: %s" % exc
+    physics["rigid_bodies"] = sum(1 for obj in bpy.data.objects
+                                  if getattr(obj, "mmd_type", "") == "RIGID_BODY")
+    physics["joints"] = sum(1 for obj in bpy.data.objects
+                            if getattr(obj, "mmd_type", "") == "JOINT")
+    stats["physics"] = physics
+    return root, stats
+
+
+def export_pmx(path, meshes, armatures):
+    """Write an MMD-ready PMX: Convert_to_MMD5 skeleton conversion + mmd_tools.
+
+    Rewrites the rig and bakes a new rest pose into the meshes, so this must be
+    the last export of the scene.  Textures are copied beside the .pmx.
+    Returns (path, stats).
+    """
+    enable_addon("mmd_tools")
+    enable_addon("Convert_to_MMD5")
+    if not hasattr(bpy.ops.object, "one_click_convert"):
+        raise RuntimeError("Convert_to_MMD5 did not register one_click_convert")
+    if not armatures:
+        raise RuntimeError("no armature to convert")
+    arm = armatures[0]
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if os.path.isfile(path):
         os.remove(path)
-    select_character_objects(meshes, armatures)
-    converted = bpy.ops.mmd_tools.convert_to_mmd_model()
-    if converted != {"FINISHED"}:
-        raise RuntimeError("cannot convert armature to an MMD model: %r" % (converted,))
-    select_character_objects(meshes, armatures)
+
+    slots, missing_optional = resolve_roe_slots(arm)
+    missing_required = [role for role in ROE_MMD_REQUIRED_SLOTS if not slots[role]]
+    if missing_required:
+        raise RuntimeError("rig lacks joints the MMD conversion needs: %s"
+                           % ", ".join(missing_required))
+    before = edge_lengths(meshes)
+    bake_rig_transforms(arm, meshes)
+    helpers = reparent_joint_helpers(arm, meshes, slots)
+    relaxed = relax_shoulder_weights(arm, slots)
+    apose = apose_arms(arm, meshes, slots)
+    root, stats = convert_rig_to_mmd(arm, meshes, slots, missing_optional)
+    stats["arm_down_deg"] = apose
+    stats["reparented_helpers"] = helpers
+    stats["relaxed_groups"] = relaxed
+    stats["distortion"] = mesh_distortion(before, meshes)
+    stats["biped_prefix"] = slots["lower_body_bone"].split(" ")[0]
+
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
+    stack = [root]
+    while stack:
+        obj = stack.pop()
+        try:
+            obj.hide_set(False)
+            obj.select_set(True)
+        except (ReferenceError, RuntimeError):
+            pass
+        stack.extend(obj.children)
+    bpy.context.view_layer.objects.active = root
     # mmd_tools multiplies by ``scale`` on export (PMX = Blender units * scale),
     # so 12.5 turns a 1.7 m character into the usual ~21 PMX units; 0.08 would
     # produce a 0.14-unit model.
-    bpy.ops.mmd_tools.export_pmx(filepath=path, scale=12.5, copy_textures=True)
+    bpy.ops.mmd_tools.export_pmx(filepath=path, scale=12.5, copy_textures=True,
+                                 log_level="ERROR")
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         raise RuntimeError("PMX not written: %s" % path)
-    return path
+    return path, stats
 
 
 def setup_preview_world():
@@ -616,6 +1426,7 @@ def main():
     preview_path = ""
     packed = []
     portable_eye = None
+    mmd_convert = None
     if mode == "export":
         output_root = os.path.dirname(output_path)
         os.makedirs(output_root, exist_ok=True)
@@ -657,7 +1468,7 @@ def main():
             # so the eye PNG is not duplicated at the root.
             portable_eye = bake_portable_eye(
                 module, head, os.path.join(pmx_dir, "textures"))
-            outputs["pmx"] = export_pmx(
+            outputs["pmx"], mmd_convert = export_pmx(
                 os.path.join(pmx_dir, stem + ".pmx"), meshes, armatures)
 
     result(
@@ -679,6 +1490,7 @@ def main():
         head_face_polygons=head_face_polygons,
         fused_head_eyes=fused_eyes,
         portable_eye=portable_eye,
+        mmd_convert=mmd_convert,
         diagnostic=bpy.context.scene.roe.diagnostic_report,
     )
 

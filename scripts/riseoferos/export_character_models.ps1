@@ -242,6 +242,7 @@ foreach ($entry in $entries) {
         headFacePolygons = $payload.head_face_polygons
         fusedHeadEyes = $payload.fused_head_eyes
         familyMismatches = $payload.family_mismatches
+        mmdConvert = $payload.mmd_convert
         diagnostic = $payload.diagnostic
         error = $payload.error
         traceback = $payload.traceback
@@ -296,6 +297,34 @@ foreach ($entry in $entries) {
             }
             if ($payload.outputs.pmx) {
                 Write-Host ("    PMX: " + $payload.outputs.pmx) -ForegroundColor DarkGreen
+                $mc = $payload.mmd_convert
+                if ($mc) {
+                    Write-Host ("      MMD rig: " + $mc.bones + " bones, arms down " +
+                        ($mc.arm_down_deg -join '/') + " deg, weight holes " + $mc.weight_holes +
+                        ", rigid bodies " + $mc.physics.rigid_bodies + ", joints " +
+                        $mc.physics.joints + ", morphs " + @($mc.face_morphs).Count) `
+                        -ForegroundColor DarkCyan
+                    if (-not @($mc.face_morphs).Count) {
+                        Write-Host "      !! no facial morphs (face bones not recognised)" `
+                            -ForegroundColor DarkYellow
+                    }
+                    foreach ($label in @('body', 'cloth')) {
+                        if ($mc.physics.$label -ne 'ok') {
+                            Write-Host ("      !! physics " + $label + ": " + $mc.physics.$label) `
+                                -ForegroundColor DarkYellow
+                        }
+                    }
+                    if ($mc.weight_holes -gt 0) {
+                        Write-Host ("      !! " + $mc.weight_holes + " vertices lost their weights") `
+                            -ForegroundColor Red
+                    }
+                    if ($mc.distortion -and $mc.distortion.torn -gt 0) {
+                        Write-Host ("      !! torn geometry: " + $mc.distortion.torn +
+                            " edges, worst x" + $mc.distortion.worst_ratio + " (+" +
+                            $mc.distortion.worst_growth_mm + " mm) in " +
+                            $mc.distortion.worst_mesh) -ForegroundColor Red
+                    }
+                }
             }
             if ($payload.preview) {
                 Write-Host ("    PREVIEW: " + $payload.preview) -ForegroundColor DarkGreen
