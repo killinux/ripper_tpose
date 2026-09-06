@@ -164,15 +164,24 @@ def render_card(model):
     search_blob = esc(" ".join([model["key"], os.path.basename(model["source"]),
                                 model["blend"], model["xps"], model["pmx"]]).lower())
     xps_row = ""
-    for label, path, note in (("XPS", model["xps"], ""),
-                              ("PMX", model["pmx"], model["pmx_note"]),
-                              ("跳舞", model["dance"], model["dance_note"])):
+    # The model rows point at the folder — you go there to open the file in a
+    # tool.  The dance preview is the one thing the browser can play itself, so
+    # it links to the mp4 and carries a player right in the card.
+    for label, path, note, link_file in (
+            ("XPS", model["xps"], "", False),
+            ("PMX", model["pmx"], model["pmx_note"], False),
+            ("跳舞", model["dance"], model["dance_note"], True)):
         if not path:
             continue
+        target = path if link_file else os.path.dirname(path)
         xps_row += ('<dt>%s</dt>\n            <dd><a href="%s" title="%s">%s</a>\n'
                     '                <button class="copy" data-copy="%s">复制</button>%s</dd>\n            '
-                    % (label, esc(file_uri(os.path.dirname(path))), esc(path), esc(path),
+                    % (label, esc(file_uri(target)), esc(path), esc(path),
                        esc(path), (' <span class="rigspec">%s</span>' % esc(note)) if note else ""))
+    if model["dance"]:
+        xps_row += ('<dd class="clip"><video controls preload="none" '
+                    'poster="%s" src="%s"></video></dd>\n            '
+                    % (esc(thumb_uri or ""), esc(file_uri(model["dance"]))))
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["key"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
     return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="{warn}">
@@ -309,6 +318,8 @@ dd a {{ color: var(--accent); text-decoration: none; }}
 dd a:hover {{ text-decoration: underline; }}
 .copy {{ padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }}
 .rigspec {{ display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }}
+dd.clip {{ grid-column: 1 / -1; margin: 6px 0 2px; }}
+dd.clip video {{ width: 100%; max-height: 260px; border-radius: 8px; background: #000; }}
 .empty {{ padding: 40px; text-align: center; color: var(--muted); }}
 section.appendix {{
   margin-top: 40px; padding: 24px 28px; background: var(--panel);
