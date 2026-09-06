@@ -596,6 +596,101 @@ def weight_samples(meshes, names):
     return samples
 
 
+def snapshot_skin(arm, meshes):
+    """Per-vertex bone weights, plus which bones exist and which drive skin.
+
+    Taken once the arms are already in the A-pose, so anything that changes
+    after this point changed because of the conversion; see
+    :func:`restore_stray_weight_transfers`.
+    """
+    bones = {bone.name for bone in arm.data.bones}
+    weights = {}
+    driven = set()
+    for mesh in meshes:
+        names = {group.index: group.name for group in mesh.vertex_groups
+                 if group.name in bones}
+        rows = {}
+        for vertex in mesh.data.vertices:
+            entry = []
+            for item in vertex.groups:
+                name = names.get(item.group)
+                if name is None or item.weight <= 0.0:
+                    continue
+                entry.append((name, item.weight))
+                driven.add(name)
+            if entry:
+                rows[vertex.index] = entry
+        weights[mesh.name] = rows
+    return {"weights": weights, "bones": bones, "driven": driven}
+
+
+def restore_stray_weight_transfers(arm, meshes, before):
+    """Undo weight the conversion handed to a bone that never drove any skin.
+
+    Convert_to_MMD5 redistributes a bone's weights when it retires one, and it
+    picks the recipient geometrically.  On a10 that put eleven backpack vertices
+    — weighted to ``backpack_D`` and ``backpack_all`` — onto ``Point_elbow_R``,
+    an elbow pad carrying no skin at all, so a flap of the pack stretched into a
+    spike reaching for the elbow whenever the arm moved.  The tear gate caught
+    it as 4 edges at 10.8x.
+
+    The test is narrow on purpose.  Bones the conversion *creates* are expected
+    to take weight — that is what the ``足D`` chain, ``上半身2`` and ``足先EX``
+    are for — and so is a bone that already drove skin.  Only a bone that came
+    with the source rig, drove nothing there, and drives something now has been
+    handed skin it was never meant to have; those vertices get their original
+    weights back.  A vertex whose own bones the conversion retired is left
+    where it was put — the transfer was the only option there, and that is how
+    e07's holster ends up riding ``AC_holster_L`` after ``holster_L`` is gone,
+    while the 381 body vertices swept onto the same bone go home.  Across the
+    120 characters this fires on 7, and every recipient is an accessory or
+    constraint bone.
+
+    Only the weights are put back.  The stray weight was already live while the
+    add-on baked its own re-poses, so those vertices also sit a couple of
+    centimetres from where they belong in the rest mesh — that residue is what
+    the gate still reports, and it is a small bump rather than the spike the
+    animation used to draw.  Re-deriving their rest position from the bones'
+    before/after matrices was tried and made it worse (30 torn edges instead of
+    4), so the geometry is left alone.
+    """
+    live = {bone.name for bone in arm.data.bones}
+    idle = (before["bones"] - before["driven"]) & live
+    if not idle:
+        return []
+
+    restored = []
+    for mesh in meshes:
+        rows = before["weights"].get(mesh.name)
+        if not rows:
+            continue
+        names = {group.index: group.name for group in mesh.vertex_groups}
+        strays = {}
+        for vertex in mesh.data.vertices:
+            for item in vertex.groups:
+                name = names.get(item.group)
+                if name in idle and item.weight > 0.0:
+                    strays.setdefault(name, []).append(vertex.index)
+                    break
+        for bone_name, indices in sorted(strays.items()):
+            put_back = 0
+            for index in indices:
+                original = rows.get(index)
+                if not original or any(name not in live for name, _w in original):
+                    continue
+                for group in mesh.vertex_groups:
+                    if group.name in live:
+                        group.remove([index])
+                for name, weight in original:
+                    group = mesh.vertex_groups.get(name) or mesh.vertex_groups.new(name=name)
+                    group.add([index], weight, "REPLACE")
+                put_back += 1
+            if put_back:
+                restored.append("%s: %d vertices off %s" % (mesh.name, put_back, bone_name))
+        mesh.data.update()
+    return restored
+
+
 def skin_rotation_share(points, start, segment):
     """How much of the distal bone's rotation this helper's skin should take.
 
@@ -1142,7 +1237,8 @@ def add_face_morphs(root, arm):
     return created
 
 
-def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=()):
+def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
+                       skin_before=None):
     """Run Convert_to_MMD5's one-click pipeline with the resolved slots; add physics.
 
     Returns (mmd_root_object, stats dict for the manifest).
@@ -1175,6 +1271,10 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=()):
     # Now that the rig has its MMD names and the legs their deform chain, hand
     # the partially-following helpers back to the joint they share.
     helper_grants = apply_helper_grants(arm, helper_plans)
+    stray_weights = (restore_stray_weight_transfers(arm, meshes, skin_before)
+                     if skin_before else [])
+    for line in stray_weights:
+        print("[roe pmx] stray weight transfer undone - %s" % line)
 
     both_eyes = add_both_eyes_bone(arm)
     if both_eyes:
@@ -1206,6 +1306,7 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=()):
         "weight_holes": holes,
         "both_eyes_bone": both_eyes,
         "helper_grants": helper_grants,
+        "stray_weights": stray_weights,
         "face_morphs": morphs,
         "unmapped_slots": missing_optional,
     }
@@ -1322,8 +1423,9 @@ def export_pmx(path, meshes, armatures):
     helpers = apply_joint_helper_moves(arm, helper_plans)
     relaxed = relax_shoulder_weights(arm, slots)
     apose = apose_arms(arm, meshes, slots)
+    skin_before = snapshot_skin(arm, meshes)
     root, stats = convert_rig_to_mmd(arm, meshes, slots, missing_optional,
-                                     helper_plans)
+                                     helper_plans, skin_before)
     stats["arm_down_deg"] = apose
     stats["reparented_helpers"] = helpers
     stats["relaxed_groups"] = relaxed

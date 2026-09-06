@@ -318,6 +318,10 @@ foreach ($entry in $entries) {
                                 -ForegroundColor DarkYellow
                         }
                     }
+                    if (@($mc.stray_weights).Count) {
+                        Write-Host ("      weight handed to a bone that drove none, put back: " +
+                            (@($mc.stray_weights) -join '; ')) -ForegroundColor DarkYellow
+                    }
                     if (@($mc.grant_order_violations).Count) {
                         Write-Host ("      !! rotation grants MMD will not honour: " +
                             (@($mc.grant_order_violations) -join '; ')) -ForegroundColor Red
