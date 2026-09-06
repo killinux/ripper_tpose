@@ -30,6 +30,7 @@ VaM 安装目录
 | `vam_lib.py` | 共享库：`.var` 索引与引用解析、`.vab`（网格 / 发丝）与 `.vmb` 解析、AssetStudio dump 解析、缓存 |
 | `export_vam_model_blender.py` | Blender 侧 worker（建网格、材质、打包、预览） |
 | `tests/test_vam_lib.py` | 纯 Python 合成 fixture 回归，标记 `VAM_LIB_TEST=PASS` |
+| `import_to_vam.ps1` + `vam_duf.py` + `blender_to_duf.py` | **反方向**：把 Blender 网格写成 VaM 能导入的 DAZ `.duf` / morph `.dsf`，见 [§8](#8-反向把-blender-模型导进-vam) |
 
 ---
 
@@ -296,7 +297,11 @@ VaM/Unity：米，Y 向上，+Z 朝前，+X 是角色的**右**（用脚尖方�
 ```powershell
 cd E:\code\othercode\ripper_tpose\scripts\vam
 python tests\test_vam_lib.py        # 纯 Python，合成 .var/.vab/.vmb/dump fixture，末行 VAM_LIB_TEST=PASS
+python tests\test_vam_duf.py        # 反方向的 DSON 写入器，末行 VAM_DUF_TEST=PASS
 ```
+
+`test_vam_duf.py` 除了合成 fixture，还会在能找到 VaM 安装时拿 `VL_13.Lashes_2.1` 里那对
+真实 DUF / VAB 复核坐标换算，并要求 `check_duf` 接受 VaM 自己接受过的文件。
 
 集成验证（2026-09-05，本机 119 个包）：`Angela`（Female Custom + 4 件皮肤层）、
 `Cloud`（Male 4 + 6 件衣服）、`Preset_Alivia`（Kayla 皮肤全默认贴图，148 个 morph）、
@@ -307,3 +312,93 @@ Tifa Look（JackyCracky 16 + mai 3 + xnpvv + Womb Fantussy；JackyCracky 的 4 �
 Cloud（右手大剑）核对过落点。xnpvv 的头发按头部控制点摆时偏了 4–10 cm，改成从 Off 控制点锚定的
 骨骼正向运动学后，正 / 侧 / 顶视图都贴合头皮。衣服贴合改用 DAZSkinWrapStore 后 Cloud 的上衣 / 裤子 /
 腰带贴身、生殖器按 `disableAnatomy` 隐藏，27 个条目全部重导并重建画廊。
+
+---
+
+## 8. 反向：把 Blender 模型导进 VaM
+
+VaM 自己没有网格导入，但游戏内带一个创作器 `DAZRuntimeCreator`（以一件特殊"衣服"/"头发"的形式
+挂到 Person 上，也就是 Clothing Creator / Hair Creator）。它**只吃 DAZ 的 `.duf` 场景文件**，导入后
+自己算贴身（`CreateDAZSkinWrap`，算出来的正是 [§5](#vab-里的-dazskinwrapstore) 那个 DAZSkinWrapStore），
+最后 Store 成 `.vam/.vaj/.vab`。所以从 Blender 进 VaM 的最短路径就是直接写 `.duf`——**不需要 DAZ
+Studio，也不需要 Unity**。
+
+### 三个入口
+
+| 想导的东西 | 入口 | 代价 |
+|---|---|---|
+| 贴身衣服、网格头发、跟着身体走的配件 | 游戏内 Clothing / Hair Creator ← `.duf` | `import_to_vam.ps1`，无额外依赖 |
+| 道具、场景物件、带自己动画或 shader 的东西 | CustomUnityAsset ← `.assetbundle` | 必须 Unity **2018.1.9f1**（从 `VaM_Data\globalgamemanagers` 读出的版本；本机未装） |
+| 体型 / 表情 morph | `Custom\Atom\Person\Morphs\<性别>\` ← `.dsf` | `import_to_vam.ps1 -Morph` |
+
+整个角色如果不是 Genesis 2 拓扑，VaM 里没有"换一具身体"这回事：要么整体当 CUA 摆件（需要 Unity），
+要么拆成"衣服 + 体型 morph"两部分走上面两条路。
+
+### 用法
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\vam
+
+# ① 先要参照人体：VaM 的贴身是对着"基础"Genesis 2 身体算的，衣服必须照它建模
+.\import_to_vam.ps1 -Reference
+#    -> D:\vam_imports\_reference\Genesis2Female.blend （23008 顶点，带 UV）
+#       D:\vam_imports\_reference\Genesis2Male.blend
+
+# ② 建好模后导出 .duf（默认把选中的物体合成一件；-Separate 则一物体一件）
+.\import_to_vam.ps1 -Source D:\work\jacket.blend -Name jacket
+.\import_to_vam.ps1 -Source D:\work\jacket.obj -Install clothing -Author me
+#    -Install 直接写进游戏目录 Custom\Clothing\Female\<Author>\，创作器的文件浏览器能看到
+
+# ③ 体型 morph：复制参照人体，只改顶点位置（不能增删顶点），然后
+.\import_to_vam.ps1 -Source D:\work\belly.blend -Morph "Belly Out" -Install morph
+#    -> Custom\Atom\Person\Morphs\female\<Author>\Belly Out.dsf，重启 VaM 后编译成 .vmi/.vmb
+```
+
+游戏里：给 Person 加上 Clothing Creator（或 Hair Creator）→ `dufFile` 浏览到这个 `.duf` →
+**Import** → 需要的话 `CreateClothSim` / `CreateHairSim` → 填 `storeFolderName` / `storeName` →
+**Store**（"Create New Item"）。创作器自己会提醒顶点数：**包裹 < 50000，布料模拟 < 25000**，
+`check_duf` 也会提前警告。
+
+### DSON 写了什么，怎么确定的
+
+不是猜的，是拿 VaM 自己吃过的文件标定的。`VL_13.Lashes_2.1` 这个包里，创作者把源文件
+`Lashes_Skin_subd.duf` 和它产出的 `.vab` 一起打包了，正好是一对输入输出（392 顶点 / 282 四边形）：
+
+```
+VaM 顶点 = ( -x, y, z ) * 0.01   ← DUF 里的顶点（DAZ 用厘米）
+```
+
+逐顶点比对最大误差 **1.5e-07**（float32 精度），**顶点顺序、面顺序、绕序、四边形、UV 全部 1:1 保留**。
+换算到 Blender 就是干净的右手 Z-up → Y-up 旋转 `DAZ = (100·bx, 100·bz, -100·by)`，**没有镜像，
+面朝向直接沿用**（DAZ 和 Blender 一样是从外看逆时针；VaM 自己的网格之所以是顺时针，就是上面那次
+镜像造成的）。整条链路做过闭环：缓存里的基础人体 → Blender → `.duf` → 换算回来，23008 个顶点最大
+误差 5e-07 米。
+
+一个自包含的 `.duf` 长这样（VaM 的 `DAZImport` 用 SimpleJSON 读，只认这几段；任何解析不到的
+`url` 都会变成运行时的 "Could not find ..." 报错，所以 `check_duf` 会先把引用全查一遍）：
+
+| 段 | 内容 |
+|---|---|
+| `geometry_library[0].vertices` | `{count, values:[[x,y,z],…]}`，厘米 |
+| `.polylist` | `{count, values:[[面组号, 材质组号, v0, v1, v2, (v3)],…]}`，5 项=三角形，6 项=四边形 |
+| `.polygon_material_groups` | 材质名列表，polylist 第二列索引它 |
+| `uv_set_library[0].uvs` | 前 `vertex_count` 个是每顶点默认 UV，接缝复制追加在后面 |
+| `.polygon_vertex_indices` | `[面号, 顶点号, uv号]`，**只给偏离默认的角点写一条** |
+| `node_library` / `scene.nodes` | 一个节点 + 它的实例，`#id` 本地引用 |
+| `material_library` / `scene.materials` | 每个材质组一个槽（`groups: ["名字"]`），贴图在 VaM 里再挂 |
+
+morph 的 `.dsf` 更简单，和装好的包里那些逐字段同构（比对过 `MacGruber.Life.13` 的
+`Breathing_Chest.dsf`）：`modifier_library[0].morph = {vertex_count: 21556, deltas: {values: [[顶点号,
+dx, dy, dz], …]}}`，`parent` 指向 `Genesis2Female.dsf#GenesisFemale-1`（男性是
+`Genesis2Male.dsf#Genesis2Male`），`group` 决定它在 VaM 形态列表里的位置。**21556 是身体顶点数，
+生殖器嫁接网格排在它后面、morph 管不到**，`-Morph` 会把落在嫁接区的改动数出来警告。
+
+### 这条路还缺什么
+
+- **贴图不写进 DUF**：`material_library` 只建材质槽，漫反射/法线在 VaM 的材质页里挂。多材质是支持的
+  （按 Blender 的材质槽分组），创作器的 `combineMaterials` 关掉就能分开调。
+- **布料模拟参数**要在游戏里设（`CreateClothSim`、`clothSimNearbyJointsDistance` 等），脚本不碰。
+- **发丝头发**（strand hair）走 Hair Creator：DUF 里给一块头皮网格，进游戏后刷选头皮顶点再
+  `CreateHairSim`，这一步是交互的，没法脚本化。
+- **n-gon 会被三角化**（DSON 最多四边形），会在结果里报数量。
+- CUA 那条路要 Unity 2018.1.9f1，本机没装，暂时没做。

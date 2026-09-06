@@ -14,6 +14,64 @@
 
 ---
 
+## 2026-09-06 — VaM：反方向的导入线（Blender → DAZ `.duf` / Genesis 2 morph `.dsf`）
+
+### 新增
+
+- **`scripts/vam/import_to_vam.ps1`**（+ `vam_duf.py`、`blender_to_duf.py`、
+  `tests/test_vam_duf.py`）：把 Blender 里的网格写成 VaM 1.22 游戏内创作器
+  `DAZRuntimeCreator`（Clothing Creator / Hair Creator）能导入的 DAZ `.duf` 场景，
+  以及 `Custom\Atom\Person\Morphs\` 下的 Genesis 2 morph `.dsf`。**不需要 DAZ Studio，
+  也不需要 Unity**——贴身（`CreateDAZSkinWrap`）和布料模拟由 VaM 自己算。
+- `-Reference` 生成建模参照：VaM 自己的基础 Genesis 2 人体（女 23008 顶点 / 男 22970，带 UV）
+  存成 Blender 坐标、米制的 `.blend`。衣服必须照这具身体建模，因为创作器是对着**基础**身体
+  算包裹的，不是对着某个角色的 morph 结果。
+
+### 用户如何操作
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\vam
+.\import_to_vam.ps1 -Reference                                   # 参照人体 -> D:\vam_imports\_reference\
+.\import_to_vam.ps1 -Source D:\work\jacket.blend -Install clothing -Author me
+.\import_to_vam.ps1 -Source D:\work\belly.blend -Morph "Belly Out" -Install morph
+```
+
+游戏内：Person 加 Clothing Creator → `dufFile` 选这个 `.duf` → Import →（可选
+`CreateClothSim`）→ 填 `storeName` → Store。morph 则重启 VaM，它会把 `.dsf` 编译成
+`.vmi/.vmb`。顶点数上限是创作器自己提示的：包裹 < 50000，布料模拟 < 25000，`check_duf` 会提前警告。
+
+### 实现原理与兼容性
+
+坐标换算不是猜的，是拿 VaM 吃过的文件标定的：`VL_13.Lashes_2.1` 这个包里创作者把源文件
+`Lashes_Skin_subd.duf` 和它产出的 `.vab` 一起打包了，正好是一对输入输出（392 顶点 / 282 四边形）。
+逐顶点比对得到 `VaM 顶点 = (-x, y, z) * 0.01`（DAZ 用厘米），最大误差 1.5e-07，即 float32 精度；
+**顶点顺序、面顺序、绕序、四边形、UV 全部 1:1 保留**。换算到 Blender 就是干净的右手 Z-up → Y-up
+旋转 `DAZ = (100·bx, 100·bz, -100·by)`，两次镜像相消，**面朝向直接沿用**（DAZ 与 Blender 同为
+从外看逆时针；实测一个封闭 DAZ 网格 88.7% 的面右手法线朝外）。
+
+写出的 DSON 是自包含的（全部 `#id` 本地引用），因为 VaM 的 `DAZImport` 会拿 `url` 去注册表
+`HKCU\Software\DAZ\Studio` 的内容目录里找外部文件，找不到就报 "could not found libraries"。
+`vam_duf.check_duf()` 在写文件前把所有引用、索引范围、UV 计数查一遍，把这类问题挡在游戏之外。
+UV 接缝按 DSON 的办法编码：`uvs` 前 `vertex_count` 个是每顶点默认值，接缝复制追加在后面，
+`polygon_vertex_indices` 只给偏离默认的角点写 `[面号, 顶点号, uv号]`。
+morph 的 `.dsf` 与装好的包里那些逐字段同构（比对了 `MacGruber.Life.13` 的 `Breathing_Chest.dsf`）：
+`vertex_count` 21556、`parent` 指向 `Genesis2Female.dsf#GenesisFemale-1`（男性
+`Genesis2Male.dsf#Genesis2Male`）。21556 是身体顶点数，生殖器嫁接网格排在其后、morph 管不到，
+落在那里的改动会被数出来警告。
+
+道具 / 场景物件那条路（CustomUnityAsset `.assetbundle`）需要 Unity **2018.1.9f1**
+（版本从 `VaM_Data\globalgamemanagers` 读出），本机没装，暂未实现。
+
+### 已执行的验证
+
+- `python tests\test_vam_duf.py` → `VAM_DUF_TEST=PASS`；除合成 fixture 外，还用上面那对真实
+  DUF / VAB 复核坐标换算，并要求 `check_duf` 接受 VaM 自己接受过的文件。`test_vam_lib.py` 仍 PASS。
+- 闭环：缓存里的基础人体 → Blender → `.duf` → 换算回 VaM 空间，23008 个顶点最大误差 5e-07 米，
+  绕序在 DAZ 空间为外向，22448/22506 个面保持四边形。
+- Blender 默认立方体、单四边形 OBJ、23008 顶点整具人体、577 顶点的测试 morph（3 cm 位移，
+  DAZ 空间读数正好 3.0 cm 且落在 +Z）四种输入跑通，PowerShell 入口的 `.blend` / `.obj` /
+  `-Morph` 三条分支均验证。
+
 ## 2026-09-06 — 六个画廊页面补「手工导出教程」附录
 
 ### 新增

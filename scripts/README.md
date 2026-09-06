@@ -66,8 +66,10 @@ Virt-A-Mate 没有传统意义的「角色模型文件」：一个 Look = 游戏
 `-Index` 按名字或序号转；发丝头发按造型引导线转成 Blender 曲线（近似），挂在骨骼上的
 CustomUnityAsset（网格头发/首饰/武器）拆包后按静止姿势重摆；衣服用 `.vab` 自带的
 DAZSkinWrapStore 在 morph 后的身体上重建（和 VaM 运行时一样）。`-Gallery` /
-`vam\html\make_gallery.py` 生成画廊 `vam\html\index.html`。格式细节见
-[`vam/README.md`](vam/README.md)。
+`vam\html\make_gallery.py` 生成画廊 `vam\html\index.html`。反方向有
+`vam\import_to_vam.ps1`：把 Blender 网格写成 VaM 游戏内 Clothing / Hair Creator 能导入的
+DAZ `.duf`（贴身由 VaM 自己算），以及 Genesis 2 体型 morph `.dsf`，不需要 DAZ Studio 或 Unity。
+格式细节见 [`vam/README.md`](vam/README.md)。
 
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
