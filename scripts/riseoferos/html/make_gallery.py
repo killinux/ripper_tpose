@@ -108,6 +108,17 @@ def collect(manifest_path, thumb_dir, force):
                 pmx_note += " · 权重孔洞 %s" % mmd["weight_holes"]
             if (mmd.get("distortion") or {}).get("torn"):
                 pmx_note += " · 拉伸边 %s" % mmd["distortion"]["torn"]
+        # The dance preview is rendered in a separate pass, so one left over from
+        # an earlier export shows defects the model no longer has.
+        dance = ""
+        dance_note = ""
+        if pmx:
+            candidate = os.path.join(os.path.dirname(os.path.dirname(pmx)),
+                                     os.path.splitext(os.path.basename(pmx))[0] + "_dance.mp4")
+            if os.path.isfile(candidate):
+                dance = candidate
+                if os.path.getmtime(candidate) < os.path.getmtime(pmx):
+                    dance_note = "已过期：比 PMX 旧，用 render_pmx_dance.ps1 -Stale 重渲"
         thumb = build_thumb(preview, os.path.join(thumb_dir, key + ".jpg"), force)
         warnings = []
         for label, values in (("缺贴图", entry.get("untexturedSlots")),
@@ -122,6 +133,8 @@ def collect(manifest_path, thumb_dir, force):
             "xps": xps,
             "pmx": pmx,
             "pmx_note": pmx_note,
+            "dance": dance,
+            "dance_note": dance_note,
             "preview": preview,
             "thumb": thumb or "",
             "blend_size": os.path.getsize(blend) if blend and os.path.isfile(blend) else 0,
@@ -151,7 +164,9 @@ def render_card(model):
     search_blob = esc(" ".join([model["key"], os.path.basename(model["source"]),
                                 model["blend"], model["xps"], model["pmx"]]).lower())
     xps_row = ""
-    for label, path, note in (("XPS", model["xps"], ""), ("PMX", model["pmx"], model["pmx_note"])):
+    for label, path, note in (("XPS", model["xps"], ""),
+                              ("PMX", model["pmx"], model["pmx_note"]),
+                              ("跳舞", model["dance"], model["dance_note"])):
         if not path:
             continue
         xps_row += ('<dt>%s</dt>\n            <dd><a href="%s" title="%s">%s</a>\n'
@@ -376,6 +391,7 @@ td code, li code {{ font-family: Consolas, monospace; }}
       <tr><td><code>-Format xps -NoPreview</code></td><td>给已有 blend 的角色补带材质 XPS 到 <code>blend\\xps\\&lt;stem&gt;\\</code>（.mesh + 同目录 PNG）</td></tr>
       <tr><td><code>-Format pmx -NoPreview</code></td><td>补 MMD 可用的 PMX 到 <code>blend\\pmx\\&lt;stem&gt;\\</code>：Convert_to_MMD5 插件转标准 MMD 骨架（IK / D 骨 / 捩骨 / 肩P / 付与）+ 身体刚体 + 裙发物理，A-pose 37°，可直接加载 VMD</td></tr>
       <tr><td><code>-NoPreview</code></td><td>不渲预览图（实测只快约 9%，一般没必要关）</td></tr>
+      <tr><td><code>render_pmx_dance.ps1 -Stale</code></td><td>另一个脚本：给 PMX 渲跳舞 mp4。骨骼问题只有动起来才看得见，改完导出流程务必重渲——卡片上标「已过期」的就是比 PMX 旧的视频</td></tr>
       <tr><td><code>-ValidateOnly</code></td><td>只检查材质不写文件，排查用</td></tr>
       <tr><td><code>-ManifestPath</code></td><td>自定义清单路径；<b>多进程分片并行时每个分片必须各给一个</b></td></tr>
     </table>

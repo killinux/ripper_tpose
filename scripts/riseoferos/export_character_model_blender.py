@@ -564,9 +564,17 @@ def mesh_distortion(before, meshes, ratio_limit=3.0, growth_fraction=0.008):
 LIMB_HELPER_NAME = re.compile(r"twist|elbow|knee|ankle|muscle\s*strand", re.IGNORECASE)
 
 
-def weight_centroids(meshes, names):
-    """Weighted centroid of the skin each named vertex group drives, in world space."""
-    totals = {name: [Vector(), 0.0] for name in names}
+# How far past a joint the skin blend from one bone to the next reaches, in
+# units of the distal bone's length.  Measured on the ROE rigs: ``knee_L``'s
+# skin runs from t=-0.21 to t=+0.26 around the knee, ``LCalfTwist``'s from
+# -0.07 to 0.62.  0.35 puts a pad straddling the joint at half the bend and a
+# twist bone a quarter of the way down the shin at about three quarters.
+GRANT_BLEND = 0.35
+
+
+def weight_samples(meshes, names):
+    """Every skinned vertex each named group drives: {name: [(world pos, weight)]}."""
+    samples = {name: [] for name in names}
     for mesh in meshes:
         index_to_name = {}
         for name in names:
@@ -584,31 +592,63 @@ def weight_centroids(meshes, names):
                     continue
                 if position is None:
                     position = matrix @ vertex.co
-                slot = totals[name]
-                slot[0] += position * entry.weight
-                slot[1] += entry.weight
-    return {name: (acc / weight) for name, (acc, weight) in totals.items() if weight > 0.0}
+                samples[name].append((position, entry.weight))
+    return samples
+
+
+def skin_rotation_share(points, start, segment):
+    """How much of the distal bone's rotation this helper's skin should take.
+
+    A helper bone is a rigid island inside a smoothly weighted limb, so the
+    question is not *which* bone it belongs to but *how much* of the joint it
+    should follow.  Each of its vertices is projected onto the distal bone; a
+    vertex sitting a full blend width past the joint follows that bone
+    completely, one a blend width before it not at all, and the weighted mean
+    over the island is the share the whole bone should take.  A pad straddling
+    the joint lands near 0.5, a twist bone well down the limb near 1.0.
+    """
+    length_sq = segment.length_squared
+    if length_sq <= 1e-12:
+        return 1.0
+    total = 0.0
+    taken = 0.0
+    for position, weight in points:
+        t = (position - start).dot(segment) / length_sq
+        taken += min(1.0, max(0.0, 0.5 + t / (2.0 * GRANT_BLEND))) * weight
+        total += weight
+    return taken / total if total > 0.0 else 1.0
 
 
 def plan_joint_helper_moves(arm, meshes, slots):
-    """Decide which limb helpers hang off the wrong bone.  Returns (plans, report).
+    """Work out how much of its limb each helper bone should follow.
 
-    ``plans`` is a list of (bone name, joint name) to re-parent; ``report`` holds
-    one dict per candidate so a diagnostic tool can show its reasoning.
+    Returns ``(plans, report)``.  ``plans`` is a list of
+    ``(bone name, limb bone name, share)``: the helper is re-parented onto that
+    limb bone and, once the conversion is done, given ``share`` of its rotation
+    as an MMD rotation grant.  ``report`` holds one dict per candidate so a
+    diagnostic tool can show the reasoning.
 
-    ROE Biped rigs hang limb helpers off whatever was convenient: ``ForeTwist``
+    ROE Biped rigs hang limb helpers off whatever was convenient — ``ForeTwist``
     under the UPPER ARM as a sibling of the forearm, ``ThighTwist`` under the
-    SPINE as a sibling of the thigh.  They carry a lot of skin, so the limb they
-    belong to moves and that skin stays behind — the wrist tore open during the
-    rest-pose bake, and the thigh stepped at the knee under animation.
+    SPINE as a sibling of the thigh — and correct them at runtime with
+    constraints that no exporter can carry.  The helpers hold a lot of skin, so
+    hanging them off the wrong bone leaves that skin behind: the wrist tore open
+    during the rest-pose bake, the thigh stepped at the knee under animation.
 
-    Two signals must agree before a bone is moved.  Its NAME has to match
-    Biped's limb-helper convention, and the SKIN it actually drives has to lie
-    along a limb: the weighted centroid of its vertices is projected onto each
-    limb segment and the limbs are scored by how squarely the skin sits inside
-    them.  The name test is what keeps ``butt_*``, ``skirt_*`` and
+    Simply re-parenting them onto the limb swaps one artefact for another.  A
+    helper is a rigid island in an otherwise smoothly weighted limb, so if it
+    takes *all* of the joint's rotation while the skin around it takes a blend,
+    the island shears out of the surface — that is the lump that appeared on the
+    knees.  ``knee_L`` is the clearest case: its 994 vertices straddle the knee
+    from t=-0.21 to t=+0.26, so neither the thigh (0%) nor the shin (100%) is
+    right and only half the bend looks like a knee.
+
+    So each helper is measured, not classified.  Its NAME has to match Biped's
+    limb-helper convention (which keeps ``butt_*``, ``skirt_*`` and
     ``Pauldrons_*`` — just as close to the thigh and shoulder heads — out of the
-    limb chains.  A bone already carried by the limb it belongs to is left alone.
+    limb chains), the SKIN it drives has to lie along one limb segment, and the
+    share of that segment's rotation it takes comes from where the skin actually
+    sits: see :func:`skin_rotation_share`.
     """
     mapped = {name for name in slots.values() if name}
     # A limb segment: (joint that must carry the skin, bone ending the segment).
@@ -653,20 +693,22 @@ def plan_joint_helper_moves(arm, meshes, slots):
                          for joint, _s, _v in joints)
         if named or coincident:
             candidates.append(bone)
-    centroids = weight_centroids(meshes, [b.name for b in candidates]) if candidates else {}
+    samples = weight_samples(meshes, [b.name for b in candidates]) if candidates else {}
 
-    chosen = {}
+    plans = []
     report = []
     for bone in candidates:
-        centroid = centroids.get(bone.name)
+        points = samples.get(bone.name) or []
+        total = sum(weight for _p, weight in points)
         entry = {"bone": bone.name,
                  "parent": bone.parent.name if bone.parent else "",
-                 "skin": centroid is not None,
-                 "belongs_to": "", "t": None, "lateral_ratio": None,
+                 "skin": bool(points),
+                 "belongs_to": "", "t": None, "lateral_ratio": None, "share": None,
                  "verdict": "no skin"}
         report.append(entry)
-        if centroid is None:          # drives no skin, so nothing can tear
+        if total <= 0.0:              # drives no skin, so nothing can tear
             continue
+        centroid = sum((p * w for p, w in points), Vector()) / total
         best = None
         for joint, start, segment in joints:
             length = segment.length
@@ -678,39 +720,41 @@ def plan_joint_helper_moves(arm, meshes, slots):
             # the far end of the upper arm (t>1) but lives on the forearm (t~0.3),
             # and this keeps the other leg — the same distance away sideways —
             # from ever winning.  The last term breaks the tie for a pad sitting
-            # right on a joint in favour of the distal bone, which is the one
-            # that turns during the bake and would otherwise leave it behind.
+            # right on a joint in favour of the distal bone, whose rotation the
+            # grant can then hand back in the right proportion.
             score = (lateral + max(0.0, -t, t - 1.0) * length
                      + 0.15 * length * max(0.0, t - 0.5))
             if best is None or score < best[0]:
-                best = (score, joint.name, t, lateral / length)
+                best = (score, joint.name, t, lateral / length, start, segment)
         if best is None:
             entry["verdict"] = "skin not on any limb"
             continue
-        entry.update({"belongs_to": best[1], "t": round(best[2], 3),
-                      "lateral_ratio": round(best[3], 3)})
-        # Only a move to a *different* limb is a fix; a helper already carried by
-        # the limb its skin belongs to (``knee_L`` under the thigh) is left alone.
-        if descends_from(bone, best[1]):
+        limb, t, lateral_ratio, start, segment = best[1:]
+        share = skin_rotation_share(points, start, segment)
+        entry.update({"belongs_to": limb, "t": round(t, 3),
+                      "lateral_ratio": round(lateral_ratio, 3),
+                      "share": round(share, 2)})
+        if share >= 0.97 and descends_from(bone, limb):
+            # Already rides the limb it belongs to and should follow it fully.
             entry["verdict"] = "ok"
-        else:
-            entry["verdict"] = "misparented"
-            chosen[bone.name] = best[1]
-
-    # A helper whose own parent is being moved travels with it.
-    carried = {name for name in chosen
-               if any(other != name and descends_from(bones[name].parent, other)
-                      for other in chosen)}
-    for entry in report:
-        if entry["bone"] in carried:
-            entry["verdict"] = "carried by its parent"
-    plans = [(name, joint) for name, joint in chosen.items() if name not in carried]
+            continue
+        entry["verdict"] = ("misparented" if not descends_from(bone, limb)
+                            else "over-following")
+        plans.append((bone.name, limb, share))
     return plans, report
 
 
 def reparent_joint_helpers(arm, meshes, slots):
     """Apply :func:`plan_joint_helper_moves`.  Rest geometry is untouched
-    (head/tail/roll are preserved), so re-parenting does not move the mesh."""
+    (head/tail/roll are preserved), so re-parenting does not move the mesh.
+
+    Every planned helper is hung directly off the limb bone, flattening the
+    twist chains, so that all of them follow the conversion's own re-posing —
+    the add-on straightens the forearm and this exporter drops the arms into the
+    A-pose, and a helper left behind by either tears the skin in the rest pose,
+    where it can never be corrected.  :func:`apply_helper_grants` hands the
+    partial followers back afterwards.
+    """
     plans, _report = plan_joint_helper_moves(arm, meshes, slots)
     return apply_joint_helper_moves(arm, plans)
 
@@ -723,10 +767,11 @@ def apply_joint_helper_moves(arm, plans):
     edit_bones = arm.data.edit_bones
     moved = []
     try:
-        for child_name, joint_name in plans:
+        for plan in plans:
+            child_name, joint_name = plan[0], plan[1]
             child = edit_bones.get(child_name)
             joint = edit_bones.get(joint_name)
-            if child is None or joint is None:
+            if child is None or joint is None or child is joint:
                 continue
             head, tail, roll = child.head.copy(), child.tail.copy(), child.roll
             child.use_connect = False
@@ -736,6 +781,87 @@ def apply_joint_helper_moves(arm, plans):
     finally:
         bpy.ops.object.mode_set(mode="OBJECT")
     return moved
+
+
+def apply_helper_grants(arm, plans):
+    """Give each partially-following helper an MMD rotation grant.
+
+    Run after the conversion, when the bones carry their MMD names and the rig
+    has grown the bones the conversion adds.  A helper that should take only
+    part of a joint's rotation is lifted one step up from wherever it now sits
+    and given ``share`` of that bone's rotation as a 付与.  One step is the right
+    step whichever bone the conversion moved it onto: a leg helper rides the
+    deform twin (``ひざD``, whose parent is ``足D``) and an arm helper rides an
+    inserted twist bone (``手捩``, whose parent is ``ひじ``), and in both cases
+    the grandparent is the proximal bone of that joint.  Re-parenting is
+    rest-neutral (head, tail and roll are kept), so nothing moves in the rest
+    pose; only the animation changes, from "all of the joint" to "the part this
+    island of skin actually sits in".
+
+    The grant is taken from that bone's own source when it is itself a full-rate
+    copy — the leg deform bones copy ``足``/``ひざ`` at 1.0 — so the chain stays
+    one level deep and PMX never has to resolve a grant of a grant.
+    """
+    partial = [(name, share) for name, _limb, share in plans if share < 0.97]
+    if not partial:
+        return []
+
+    sources = {}
+    for name, share in partial:
+        bone = arm.data.bones.get(name)
+        if bone is None or bone.parent is None or bone.parent.parent is None:
+            continue
+        distal = bone.parent
+        grandparent = distal.parent
+        pose_bone = arm.pose.bones.get(distal.name)
+        source = distal.name
+        if pose_bone is not None:
+            mmd_bone = pose_bone.mmd_bone
+            if (mmd_bone.has_additional_rotation
+                    and abs(mmd_bone.additional_transform_influence - 1.0) < 1e-3
+                    and mmd_bone.additional_transform_bone in arm.data.bones):
+                source = mmd_bone.additional_transform_bone
+        sources[name] = (grandparent.name, source, share)
+
+    if not sources:
+        return []
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit_bones = arm.data.edit_bones
+    try:
+        for name, (parent_name, _source, _share) in sources.items():
+            child = edit_bones.get(name)
+            parent = edit_bones.get(parent_name)
+            if child is None or parent is None:
+                continue
+            head, tail, roll = child.head.copy(), child.tail.copy(), child.roll
+            child.use_connect = False
+            child.parent = parent
+            child.head, child.tail, child.roll = head, tail, roll
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+    granted = []
+    for name, (parent_name, source, share) in sources.items():
+        pose_bone = arm.pose.bones.get(name)
+        if pose_bone is None:
+            continue
+        mmd_bone = pose_bone.mmd_bone
+        mmd_bone.has_additional_rotation = True
+        mmd_bone.has_additional_location = False
+        mmd_bone.additional_transform_bone = source
+        mmd_bone.additional_transform_influence = share
+        # MMD deforms by (transform layer, bone index) and a grant is only
+        # honoured when its source came first.  These helpers are pure leaves —
+        # nothing reads them back — so putting them one layer later makes the
+        # order correct whatever index the exporter happens to give them.
+        mmd_bone.transform_order = max(mmd_bone.transform_order, 1)
+        granted.append("%s under %s, %.2f x %s" % (name, parent_name, share, source))
+    try:
+        bpy.ops.mmd_tools.apply_additional_transform()
+    except Exception as exc:
+        print("[roe pmx] apply_additional_transform after helper grants: %s" % exc)
+    return granted
 
 
 def arm_down_angle(arm, upper_name, lower_name):
@@ -857,6 +983,13 @@ def add_both_eyes_bone(arm):
         mmd_bone.has_additional_location = False
         mmd_bone.additional_transform_bone = "両目"
         mmd_bone.additional_transform_influence = 1.0
+        # MMD deforms bones by (transform layer, bone index), and a grant only
+        # works if its source was deformed first.  両目 is appended at the end of
+        # the armature, well after the eyes it drives, so without a later layer
+        # the eyes read a stale 両目 and the gaze keys do nothing.  Blender hides
+        # this: mmd_tools drives the same relation with constraints, which
+        # resolve in dependency order whatever the bone indices say.
+        mmd_bone.transform_order = max(mmd_bone.transform_order, 1)
     try:
         bpy.ops.mmd_tools.apply_additional_transform()
     except Exception as exc:
@@ -1009,7 +1142,7 @@ def add_face_morphs(root, arm):
     return created
 
 
-def convert_rig_to_mmd(arm, meshes, slots, missing_optional):
+def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=()):
     """Run Convert_to_MMD5's one-click pipeline with the resolved slots; add physics.
 
     Returns (mmd_root_object, stats dict for the manifest).
@@ -1038,6 +1171,10 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional):
         root = root.parent
     if getattr(root, "mmd_type", "") != "ROOT":
         raise RuntimeError("no mmd root object after conversion")
+
+    # Now that the rig has its MMD names and the legs their deform chain, hand
+    # the partially-following helpers back to the joint they share.
+    helper_grants = apply_helper_grants(arm, helper_plans)
 
     both_eyes = add_both_eyes_bone(arm)
     if both_eyes:
@@ -1068,6 +1205,7 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional):
                            if b.name.startswith(("_dummy_", "_shadow_"))),
         "weight_holes": holes,
         "both_eyes_bone": both_eyes,
+        "helper_grants": helper_grants,
         "face_morphs": morphs,
         "unmapped_slots": missing_optional,
     }
@@ -1091,6 +1229,68 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional):
                             if getattr(obj, "mmd_type", "") == "JOINT")
     stats["physics"] = physics
     return root, stats
+
+
+def hide_transparent_materials(meshes):
+    """Carry Blender's invisible slots into PMX as alpha 0.
+
+    The head is split into face / eye / lash / brow / eye_overlay slots, and the
+    ones with nothing to draw are given a bare Transparent BSDF: ``eye_overlay``
+    always, plus lash and brow on the families whose face atlas already has the
+    strokes painted in (i, j).  PMX has no blend modes and mmd_tools writes a
+    material's ``mmd_material`` block, which defaults to opaque 0.8 grey — so
+    j10's 10 590 eyelash vertices came out as a pale patch across the eyes.
+    Setting the MMD alpha to 0 is how a PMX says "do not draw this".
+    """
+    hidden = []
+    seen = set()
+    for mesh in meshes:
+        for slot in mesh.material_slots:
+            material = slot.material
+            if material is None or material.name in seen:
+                continue
+            if not material.use_nodes or not material.node_tree:
+                continue
+            nodes = material.node_tree.nodes
+            if (any(node.type == "BSDF_TRANSPARENT" for node in nodes)
+                    and not any(node.type == "BSDF_PRINCIPLED" for node in nodes)):
+                seen.add(material.name)
+                material.mmd_material.alpha = 0.0
+                material.mmd_material.enabled_drop_shadow = False
+                material.mmd_material.enabled_self_shadow = False
+                material.mmd_material.enabled_self_shadow_map = False
+                material.mmd_material.enabled_toon_edge = False
+                hidden.append(material.name)
+    return hidden
+
+
+def verify_grant_order(path):
+    """Read the written PMX back and check every rotation grant resolves.
+
+    MMD deforms bones in order of (transform layer, bone index) and a grant is
+    only honoured when its source bone was deformed first.  Blender hides a
+    violation completely — mmd_tools drives the same relation with constraints,
+    which resolve in dependency order whatever the indices say — so this is
+    checked against the file rather than the scene.  It is how the 両目 control
+    was caught: appended at the end of the armature, it was deformed long after
+    the eyes it drives, and the VMD's gaze keys would have done nothing in MMD.
+    """
+    from mmd_tools.core import pmx as pmx_core
+
+    model = pmx_core.load(path)
+    names = [bone.name for bone in model.bones]
+    violations = []
+    for index, bone in enumerate(model.bones):
+        if not getattr(bone, "hasAdditionalRotate", False):
+            continue
+        transform = getattr(bone, "additionalTransform", None)
+        if not transform or transform[0] is None or transform[0] < 0:
+            continue
+        source = transform[0]
+        source_key = (getattr(model.bones[source], "transform_order", 0), source)
+        if source_key >= (getattr(bone, "transform_order", 0), index):
+            violations.append("%s <- %s" % (bone.name, names[source]))
+    return violations
 
 
 def export_pmx(path, meshes, armatures):
@@ -1118,15 +1318,18 @@ def export_pmx(path, meshes, armatures):
                            % ", ".join(missing_required))
     before = edge_lengths(meshes)
     bake_rig_transforms(arm, meshes)
-    helpers = reparent_joint_helpers(arm, meshes, slots)
+    helper_plans, _helper_report = plan_joint_helper_moves(arm, meshes, slots)
+    helpers = apply_joint_helper_moves(arm, helper_plans)
     relaxed = relax_shoulder_weights(arm, slots)
     apose = apose_arms(arm, meshes, slots)
-    root, stats = convert_rig_to_mmd(arm, meshes, slots, missing_optional)
+    root, stats = convert_rig_to_mmd(arm, meshes, slots, missing_optional,
+                                     helper_plans)
     stats["arm_down_deg"] = apose
     stats["reparented_helpers"] = helpers
     stats["relaxed_groups"] = relaxed
     stats["distortion"] = mesh_distortion(before, meshes)
     stats["biped_prefix"] = slots["lower_body_bone"].split(" ")[0]
+    stats["hidden_materials"] = hide_transparent_materials(meshes)
 
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.select_all(action="DESELECT")
@@ -1147,6 +1350,11 @@ def export_pmx(path, meshes, armatures):
                                  log_level="ERROR")
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         raise RuntimeError("PMX not written: %s" % path)
+    try:
+        stats["grant_order_violations"] = verify_grant_order(path)
+    except Exception as exc:
+        print("[roe pmx] grant order check skipped: %s" % exc)
+        stats["grant_order_violations"] = []
     return path, stats
 
 

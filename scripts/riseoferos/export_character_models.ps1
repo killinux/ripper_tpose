@@ -304,6 +304,10 @@ foreach ($entry in $entries) {
                         ", rigid bodies " + $mc.physics.rigid_bodies + ", joints " +
                         $mc.physics.joints + ", morphs " + @($mc.face_morphs).Count) `
                         -ForegroundColor DarkCyan
+                    Write-Host ("      helpers: " + @($mc.reparented_helpers).Count +
+                        " re-parented, " + @($mc.helper_grants).Count +
+                        " on a partial follow; hidden materials " +
+                        @($mc.hidden_materials).Count) -ForegroundColor DarkCyan
                     if (-not @($mc.face_morphs).Count) {
                         Write-Host "      !! no facial morphs (face bones not recognised)" `
                             -ForegroundColor DarkYellow
@@ -313,6 +317,10 @@ foreach ($entry in $entries) {
                             Write-Host ("      !! physics " + $label + ": " + $mc.physics.$label) `
                                 -ForegroundColor DarkYellow
                         }
+                    }
+                    if (@($mc.grant_order_violations).Count) {
+                        Write-Host ("      !! rotation grants MMD will not honour: " +
+                            (@($mc.grant_order_violations) -join '; ')) -ForegroundColor Red
                     }
                     if ($mc.weight_holes -gt 0) {
                         Write-Host ("      !! " + $mc.weight_holes + " vertices lost their weights") `
