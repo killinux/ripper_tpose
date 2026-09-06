@@ -329,6 +329,28 @@ D:\roe_exports\character_models_manifest.json   # 全量清单
 >   `ThighTwist` 89%，末端的 `*Twist1` 都是 99–100%。
 >   名字这一关是必需的：纯几何判据会把同样贴近大腿根/肩部的 `butt_*`、`skirt_*`、`Pauldrons_*` 一并挂到肢体上，
 >   横向容差放宽后甚至把 `knee_L` 挂到了右腿。
+> - **插件的布骨词表不认识 ROE 的叫法**（`cloth_chain_bones`）：插件按词表找布骨
+>   （`skirt|coat|cloak|cape|mantle|shawl|veil|scar[ft]|hangings|drape|apron|robe|frill|sash|ribbon`
+>   加头发另一套），通用性不错但不是 ROE 的用词。g12 的裙子叫 `Dress_F_*`/`Dress_B_*`，
+>   一个刚体都没拿到，同一个模型上的 `Cape*` 却建了 165 个；d09 的叫 `F_dress_*`，
+>   b13 的袖摆叫 `Sleeve_L1_*`，e10 的叫 `Streamer_*`/`Bowknot_*`，a12 的叫 `Rope_*`。
+>
+>   与其继续猜词，不如**认形状**：布骨 = 有实际蒙皮 + 还没有刚体 + 既不是 MMD 标准骨
+>   （日文名）、不是 Biped 骨（身体骨架保留 `Bip001` 前缀，这一条把下巴嘴唇挡在外面）、
+>   不是肢体辅助骨、也不在头部之下（脸在那儿，头发另有词表）。再把这些骨按父子关系分成
+>   连通块，**只保留 2 根以上的**——垂下来的布必然成链，而 `butt_L`、`shoulder_R`、
+>   单根的 `Armor_L1_01` 护板本来就该是硬的。
+>
+>   **手持道具要排除，Biped 自己就标好了**：手里拿的东西一律挂在 `Bip001 Prop1`/`Prop2` 下。
+>   那底下全是「有蒙皮的链」，不挡就会被当成布——e05 的伞是 60 根 `ribs`/`stretcher`，
+>   j10 手里 66 根 `wp_*` 武器，i01 一对 `Bone_Wep*`，全都不该软。加了这一条之后
+>   e05 从 105 个刚体回到 43、j10 从 302 回到 236（触手和翅膀留着，武器不动了）、
+>   i01 从 66 回到 32（只剩腰带）。剩下的都挂在身体上，那才是布该待的地方。
+>
+>   识别出来的骨名临时并进插件的 `CLOTH_RE` 再调它的算子，刚体和关节参数仍由插件出，
+>   调完还原。g12 实测 165→180 刚体、149→164 关节，多出来的正好是 `Dress_B_01..06`、
+>   `Dress_F_01..05`、`ChestTie_L/R_01..02` 这 15 根；渲图确认裙摆正常摆动没有爆炸。
+>   结果记进 manifest 的 `physics.cloth_chains`。
 > - **权重被转移到毫不相干的骨上**（`restore_stray_weight_transfers`）：插件退役一根骨时会把它的权重
 >   按几何最近分给别的骨。a10 上这把 11 个背包顶点（原本是 `backpack_D` 0.7 + `backpack_all` 0.3）
 >   分给了 `Point_elbow_R`——一根本来一点蒙皮都没有的肘部垫骨，于是手臂一动，背包上一片红皮革就被
@@ -568,6 +590,13 @@ a12 / b13 / c10 / d09 / e10 / f11 / g13 / h09 / i04 / j10 / k06 / l01 / m02。
 
 产物 `D:\roe_exports\<id>\blend\pmx\<stem>_dance.mp4`，同名 `.blend` 一起留下，
 方便回头从同一个场景补渲静帧、量骨骼。默认用 `来杯好茶摇一摇` 那套 VMD，`-Vmd` 可换。
+
+> **导入一定要带 `PHYSICS`。** mmd_tools 的 `import_model(types=...)` 不写 `PHYSICS` 就
+> 根本不导刚体和关节，裙子披肩触手全部只是硬跟着父骨走——**这样的预览既看不出布在飘，
+> 也看不出布炸了**，而预览的全部意义就在这两件事上。踩过一次：g12 的披肩明明有 165 个
+> dynamic 刚体，视频里四帧纹丝不动，一度以为是物理参数太硬。加上 `PHYSICS` 之后还要开
+> `scene.rigidbody_world.enabled` 并把 point cache 的帧范围铺满，Bullet 才会随着逐帧渲染推进。
+> worker 会打印 `physics: N rigid bodies`，为 0 或没有就是没导进来。
 一个角色目录里可能有两个 PMX（`a08` 同时放 `pc_a08_hd` 和 `pc_a08_outfit1_hd`），
 脚本按 **PMX 逐个**建任务，不是按目录，所以 outfit 变体不会被漏掉。
 

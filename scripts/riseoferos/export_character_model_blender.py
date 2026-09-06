@@ -1320,16 +1320,120 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
         bpy.ops.object.select_all(action="DESELECT")
         arm.select_set(True)
         bpy.context.view_layer.objects.active = arm
+        restore = None
+        if label == "cloth":
+            # Teach the add-on this model's own garment names for one call, so
+            # its calibrated rigid-body and joint parameters do the building.
+            from Convert_to_MMD5.convert import skirt
+
+            chains = cloth_chain_bones(arm, meshes,
+                                       slots.get("lower_body_bone", "").split(" ")[0])
+            # Only the ones its own vocabulary does not already reach.
+            missed = [name for name in chains
+                      if not skirt.CLOTH_RE.search(name)
+                      and not skirt.HAIR_RE.search(name)]
+            physics["cloth_chains"] = missed
+            if missed:
+                restore = skirt.CLOTH_RE
+                skirt.CLOTH_RE = re.compile(
+                    "(?:%s)|(?:%s)" % (restore.pattern,
+                                       "|".join(re.escape(n) for n in missed)),
+                    re.IGNORECASE)
         try:
             physics[label] = "ok" if op() == {"FINISHED"} else "cancelled"
         except Exception as exc:
             physics[label] = "failed: %s" % exc
+        finally:
+            if restore is not None:
+                skirt.CLOTH_RE = restore
     physics["rigid_bodies"] = sum(1 for obj in bpy.data.objects
                                   if getattr(obj, "mmd_type", "") == "RIGID_BODY")
     physics["joints"] = sum(1 for obj in bpy.data.objects
                             if getattr(obj, "mmd_type", "") == "JOINT")
     stats["physics"] = physics
     return root, stats
+
+
+def cloth_chain_bones(arm, meshes, biped_prefix=""):
+    """Garment chains the add-on's cloth word list does not know about.
+
+    Convert_to_MMD5 finds cloth by name — ``skirt|coat|cloak|cape|mantle|shawl|
+    veil|scarf|hangings|drape|apron|robe|frill|sash|ribbon`` — which is a good
+    generic list but not ROE's vocabulary.  g12's skirt is called ``Dress_F_*``
+    and gets nothing while its ``Cape*`` chains get 165 rigid bodies; d09's is
+    ``F_dress_*``, b13's sleeves ``Sleeve_L1_*``, e10's ``Streamer_*`` and
+    ``Bowknot_*``, a12's ``Rope_*``.
+
+    Rather than guess more words, find the shape.  A garment bone here is one
+    that drives real skin, carries no rigid body yet, and is none of: an MMD
+    standard bone (they are named in Japanese), a Biped bone (the body skeleton
+    keeps its ``Bip001`` prefix, which is what keeps chin and lip bones out), a
+    limb helper, or anything under the head — the face lives there, and hair
+    already has its own word list.
+
+    Those bones are then grouped into connected parent/child components and
+    only components of two or more survive: a hanging strip of cloth is always a
+    chain, while ``butt_L``, ``shoulder_R`` and a one-bone ``Armor_L1_01`` plate
+    are single bones that should stay rigid.
+
+    Held props are excluded, and Biped says which they are: it parks anything in
+    the character's hands under ``Bip001 Prop1``/``Prop2``.  Everything down
+    there is a chain that drives skin and would otherwise qualify — e05's parasol
+    is 60 bones of ``ribs`` and ``stretcher``, j10 carries 66 bones of ``wp_*``
+    weapon, i01 a pair of ``Bone_Wep*`` — and none of it should go floppy.  What
+    is left hangs off the body, which is what cloth does.
+
+    Returns the bone names to hand to the add-on.
+    """
+    if not meshes:
+        return []
+    names = {bone.name for bone in arm.data.bones}
+    total = {}
+    for mesh in meshes:
+        index_to_name = {group.index: group.name for group in mesh.vertex_groups
+                         if group.name in names}
+        for vertex in mesh.data.vertices:
+            for item in vertex.groups:
+                name = index_to_name.get(item.group)
+                if name and item.weight > 0.02:
+                    total[name] = total.get(name, 0.0) + item.weight
+
+    with_rigid = {obj.mmd_rigid.bone for obj in bpy.data.objects
+                  if getattr(obj, "mmd_type", "") == "RIGID_BODY"}
+    japanese = re.compile(r"[぀-ヿ一-鿿]")
+    biped = re.compile(r"^%s\b" % re.escape(biped_prefix)) if biped_prefix else None
+
+    prop = re.compile(r"^%s\s*Prop\d*$" % re.escape(biped_prefix), re.IGNORECASE) \
+        if biped_prefix else None
+
+    def carried_or_facial(bone):
+        while bone is not None:
+            if bone.name in ("頭", "首") or (prop and prop.match(bone.name)):
+                return True
+            bone = bone.parent
+        return False
+
+    free = set()
+    for bone in arm.data.bones:
+        if (bone.name not in with_rigid
+                and not japanese.search(bone.name)
+                and not (biped and biped.match(bone.name))
+                and not LIMB_HELPER_NAME.search(bone.name)
+                and total.get(bone.name, 0.0) >= 2.0
+                and not carried_or_facial(bone)):
+            free.add(bone.name)
+
+    # Connected components over the parent link; a strip of cloth is a chain.
+    parent_of = {bone.name: (bone.parent.name if bone.parent else None)
+                 for bone in arm.data.bones}
+    component = {}
+    for name in free:
+        root = name
+        while parent_of.get(root) in free:
+            root = parent_of[root]
+        component.setdefault(root, []).append(name)
+    return sorted(name for members in component.values() if len(members) > 1
+                  for name in members)
 
 
 def hide_transparent_materials(meshes):

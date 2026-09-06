@@ -32,8 +32,12 @@ def main():
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.preferences.addon_enable(module="mmd_tools")
+    # PHYSICS matters: without it the rigid bodies and joints are not imported at
+    # all and every skirt, cape and tentacle simply rides its parent bone.  A
+    # preview rendered that way cannot show cloth working *or* exploding, which
+    # is exactly what a preview is for.
     bpy.ops.mmd_tools.import_model(filepath=pmx_path, scale=SCALE,
-                                   types={"MESH", "ARMATURE", "MORPHS"})
+                                   types={"MESH", "ARMATURE", "MORPHS", "PHYSICS"})
     arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
     root = arm
     while root.parent:
@@ -63,6 +67,19 @@ def main():
         scene.frame_end = min(scene.frame_end, scene.frame_start + limit)
     print("VMD frames %d-%d at %d fps" % (scene.frame_start, scene.frame_end,
                                           scene.render.fps))
+
+    # Bullet only steps while the rigid body world is on and the frame is inside
+    # its cache range; rendering an animation walks the frames in order, which is
+    # what the solver needs.
+    world = scene.rigidbody_world
+    if world is not None:
+        world.enabled = True
+        world.point_cache.frame_start = scene.frame_start
+        world.point_cache.frame_end = scene.frame_end
+        print("physics: %d rigid bodies"
+              % (len(world.collection.objects) if world.collection else 0))
+    else:
+        print("physics: no rigid body world in this model")
 
     scene.render.engine = "BLENDER_EEVEE"
     scene.render.film_transparent = False
