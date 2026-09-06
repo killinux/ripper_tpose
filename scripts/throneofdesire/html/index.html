@@ -92,7 +92,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
 <body>
 <header>
   <h1>Throne of Desire 模型导出总览</h1>
-  <div class="sub">生成于 2026-08-30 21:40 · 导出根目录 <code>D:\throneofdesire_exports</code> ·
+  <div class="sub">生成于 2026-09-06 13:16 · 导出根目录 <code>D:\throneofdesire_exports</code> ·
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
     <div class="stat"><b>17</b><span>已转模型</span></div>
@@ -404,57 +404,248 @@ td code, li code, p code { font-family: Consolas, monospace; }
   </div>
   <div class="empty" id="empty" hidden>没有匹配的模型</div>
 
-  <section class="appendix">
-    <h2>附录 · 导出脚本用法</h2>
-    <p>脚本在 <code>scripts\throneofdesire\</code>，需在装有游戏的机器上运行。
-      完整说明见同目录 <code>README.md</code> 与
-      <code>docs\throne-of-desire-extraction.md</code>。</p>
+
+<section class="appendix">
+    <h2>附录 · 手工导出教程</h2>
+    <p>脚本都在 <code>scripts\throneofdesire\</code>，必须在<b>装有游戏的机器</b>上跑（只读游戏目录，产物写到导出根）。
+      流程：一次性编译两个贴图解码器 → 从 NFS 封包取 NIF/KFM → 解贴图 → Blender 3.6 无头导入建材质、打包、存 blend/FBX。
+      原理见 <code>docs\throne-of-desire-extraction.md</code> 与 <code>scripts\throneofdesire\README.md</code>。
+      下面所有命令都在 <b>PowerShell</b>（Windows 11 的 Windows Terminal 默认就是它，或开始菜单里的 Windows PowerShell）里执行，不要用 cmd：
+      反引号 <code>`</code> 是 PowerShell 的续行符，<code>&amp;</code> 是调用运算符，<code>.\export_nude_models.ps1</code> 只能在 PowerShell 里直接运行。</p>
 
     <h3>这游戏的特别之处</h3>
-    <p>不是 Unreal/Unity：X-Legend 自家的 NFS 封包 + Gamebryo 的 NIF/KFM 模型格式。
-      <b>女性 h 系模型本体就是裸模</b>，衣服是默认隐藏的附件，导 FBX 时被排除，
-      所以不需要额外的 nude 流程。</p>
+    <p>不是 Unreal/Unity：X-Legend 的 HyenaPC 封包层 + NFS 包 + Gamebryo 20.3.3.2 的 NIF/KFM。
+      FModel、UModel、AssetStudio 都不适用（通用 NifTools/Noesis 对 X-Legend 自定义块的兼容性也没验证过，本流程不依赖它们），
+      也不需要任何 AES 密钥或环境变量。
+      <b>女性 h 系模型本体就是裸模</b>：衣服是附件网格，导入时进默认隐藏的 <code>&lt;编号&gt;_Attachments</code>
+      集合，FBX 只带基础身体和骨架，不需要 mod 或剥离步骤（例外：导入器对 h997、h999 写死了一张装备表——he50002、he10000+he50000——
+      把它们当主体网格；h999 的躯体正是刻意裁掉一截、靠这些网格补全的，所以这两套的预览和 FBX 会连这些部件一起出）。</p>
 
-    <h3>一次性准备（build_codecs.py）</h3>
-    <pre>python scripts\throneofdesire\build_codecs.py</pre>
-    <p>编译 LZHAM 与 ETC 解码器（通过 WSL 的 g++）。封包和贴图都用这两种压缩，
-      不先编译后面会直接失败。</p>
-
-    <h3>批量导出裸模（export_nude_models.ps1）</h3>
-    <pre>cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
-
-.\export_nude_models.ps1              # 13 个 h 系女性基础体
-.\export_nude_models.ps1 -Only h005   # 只导一个</pre>
-    <p>内部包的是 <code>batch_export_female.py</code>；产物是
-      <code>&lt;导出根&gt;\female_all\&lt;model&gt;\&lt;model&gt;_blender36.blend</code>
-      与同名 FBX、预览图，同目录还留有 <code>source\</code>（原始 NIF/KFM）和
-      <code>textures\</code>。批量清单写在 <code>female_all\female_export_manifest.json</code>。</p>
-
-    <div class="note"><b>当前限制：静态网格 + 未绑定的静止骨架。</b>
-      蒙皮权重和动画还没做，导出的骨架只是摆在那里的 rest pose，不能直接摆姿势。
-      需要动作的话得另外处理 KFM。</div>
-
-    <h3>底层工具</h3>
+    <h3>前提</h3>
     <table>
-      <tr><th>脚本</th><th>作用</th></tr>
-      <tr><td><code>extract_nfs.py</code></td><td>读 <code>packageindex</code> 与
-        <code>FileListPC.txt</code>，从 NFS 封包取出 NIF/KFM</td></tr>
-      <tr><td><code>extract_model_textures.py</code></td><td>取模型对应贴图并解码</td></tr>
-      <tr><td><code>import_xlegend_nif36.py</code></td><td>Blender 3.6 的 NIF 导入器</td></tr>
-      <tr><td><code>xlegend_nif.py</code></td><td>NIF 解析核心</td></tr>
-      <tr><td><code>inspect_materials.py</code></td><td>排查材质/贴图对应关系</td></tr>
-      <tr><td><code>validate_female_exports36.py</code></td><td>校验产物完整性，
-        结果写 <code>female_export_validation.json</code></td></tr>
+      <tr><th>需要</th><th>脚本默认位置 / 说明</th></tr>
+      <tr><td>游戏本体</td><td><code>D:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire</code>（<code>-GameRoot</code> / <code>--game</code>）。
+        自己的路径在 Steam 库里右键游戏 → 管理 → 浏览本地文件（Steam App 4496710），Steam 库在 C 盘时就是
+        <code>C:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire</code>。判定依据是 <code>mobilepack\packageindex</code> 与
+        <code>mobilepack\FileListPC.txt</code>；<code>--game</code> / <code>-GameRoot</code> 给游戏根或直接给 <code>mobilepack</code> 目录都行</td></tr>
+      <tr><td>Blender 3.6.15</td><td>到 blender.org 的 Release 归档下载 Blender 3.6 的 <code>blender-3.6.15-windows-x64.zip</code>，解压到 <code>D:\Program Files\</code>，
+        得到默认路径 <code>D:\Program Files\blender-3.6.15-windows-x64\blender.exe</code>（<code>-BlenderExe</code> / <code>--blender</code>）。
+        用 MSI 安装（<code>C:\Program Files\Blender Foundation\Blender 3.6\blender.exe</code>）或放在别处时，第 2 步要补 <code>-BlenderExe '&lt;路径&gt;'</code>，
+        第 3/4c 步和"重新生成本页"里的 blender.exe 路径都要跟着改，否则 ps1 预检报 <code>Required path not found</code>、
+        <code>export_model.py</code> 报 <code>Blender not found</code>。
+        导入器只在 3.6 验证过，别换 4.x。不装 addon：导入器是普通 <code>--python</code> 脚本，FBX 走内置导出器</td></tr>
+      <tr><td>Python 3</td><td>PATH 上叫 <code>python</code>（<code>-PythonExe</code>）。新机器从 python.org 安装并勾选 Add python.exe to PATH（或装商店版），
+        用 <code>python --version</code> 确认能出版本号——没装时 Windows 11 的 <code>python</code> 是商店的应用执行别名，只会弹商店。
+        作者机器是 3.13（仓库里有 cpython-313 的 <code>__pycache__</code>）；导出脚本只用标准库，注解都在
+        <code>from __future__ import annotations</code> 之下，按代码 3.8+ 即可，但只在 3.13 上验证过，稳妥起见建议 3.10 以上
+        （在 Blender 里跑的导入器和复检脚本用 Blender 自带的 Python，不受影响）。<code>-List</code> 也要用它读编号表：
+        报 <code>Could not read FEMALE_MODEL_IDS via 'python'</code>、"无法将“python”项识别为 cmdlet…"，或错误里带
+        <code>Python was not found; run without arguments to install from the Microsoft Store</code>，都是 python 没找到或还是商店别名。
+        画廊的 <code>make_gallery.py</code> 另需在同一个 python 里 <code>pip install Pillow</code></td></tr>
+      <tr><td>WSL + g++</td><td>编译解码器用一次；之后<b>每次导出</b>也经 <code>wsl.exe</code> 调用它们（Linux 可执行文件），WSL 要一直可用。
+        新机器先装：管理员 PowerShell 里 <code>wsl --install</code>（默认装 Ubuntu），重启并完成首次用户创建后，在 Ubuntu 里
+        <code>sudo apt update &amp;&amp; sudo apt install -y g++</code>；回到 Windows 用 <code>wsl.exe g++ --version</code> 能出版本号才算就绪。
+        重启后 Ubuntu 首次启动若报 <code>0x80370102</code> / <code>WslRegisterDistribution failed</code>，是主板固件里没开硬件虚拟化
+        （Intel VT-x / AMD-V），进 BIOS/UEFI 打开后再试；WSL 装不起来，第 0 步和之后所有导出都跑不了（脚本只会经 <code>wsl.exe</code> 调用解码器）。
+        <code>build_codecs.py</code> 用的是 <code>wsl.exe</code> 的默认发行版，装了多个发行版时用 <code>wsl --set-default</code> 指到有 g++ 的那个</td></tr>
+      <tr><td>本仓库</td><td>命令按 <code>E:\code\othercode\ripper_tpose</code> 写；解码器默认在仓库根的 <code>.tmp\</code></td></tr>
+      <tr><td>导出根</td><td><code>D:\throneofdesire_exports</code>；批量脚本默认写其下的 <code>female_all\</code>（<code>-OutputDir</code>）</td></tr>
     </table>
 
+    <h3>第 0 步 · 编译解码器（build_codecs.py，只做一次）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose
+python scripts\throneofdesire\build_codecs.py</pre>
+    <p>联网下载 lzham_codec 与 Ericsson ETCPACK 源码到 <code>.tmp\codec_sources\</code>，用 WSL 的 g++ 编出
+      <code>.tmp\lzham_v1_decode_raw</code>（贴图 LZHAM 流）和 <code>.tmp\etc_dds_decode</code>
+      （自定义 <code>ETC2</code>/<code>ETCA</code>/<code>EAC4</code> DDS → TGA）。<code>.tmp\</code> 不进仓库，新 clone 必须先跑这步。</p>
+    <p><code>--output</code> 可换目录，但不建议：<code>export_nude_models.ps1</code> 没有解码器参数，写死找仓库根 <code>.tmp\</code>
+      下的两个文件，换了目录第 2 步直接报 <code>Texture decoder(s) missing</code>，没有任何参数能救。真要换，批量只能绕过 ps1 直接跑
+      <code>python scripts\throneofdesire\batch_export_female.py --game … --blender … --output … --lzham-decoder &lt;路径&gt; --etc-decoder &lt;路径&gt;</code>
+      （也支持 <code>--models</code>、<code>--formats</code>、<code>--no-render</code>、<code>--include-helpers</code>、<code>--force</code>）；
+      单模型的 <code>export_model.py</code> 显式传 <code>--lzham-decoder</code>/<code>--etc-decoder</code>；第 4b 步的
+      <code>extract_model_textures.py</code> 里 LZHAM 参数拼作 <code>--decoder</code>（ETC 仍是 <code>--etc-decoder</code>）。</p>
+    <div class="note">WSL 没装（找不到 <code>wsl.exe</code>）或装了但没有发行版（wsl 打印 Windows Subsystem for Linux has no installed distributions，
+      脚本随后报 <code>error: Command '…' returned non-zero exit status …</code>）时这步直接失败，后面所有导出都会被解码器预检挡住；按前提表装好 WSL 和 g++ 再跑。
+      下载到的不是合法 zip（被代理或登录门户页面顶替）时会直接抛 <code>zipfile.BadZipFile</code> 的 traceback（脚本不捕获它），重跑会重新下载，先把网络弄通；
+      解压中途被打断则不同——源码目录已存在就不再下载，之后报 <code>error: lzhamdecomp sources were not found</code> 或 g++ 找不到文件，
+      删掉 <code>.tmp\codec_sources\</code> 整个目录再跑一次。</div>
+
+    <h3>第 1 步 · 找模型编号</h3>
+    <p>游戏没有角色名表，只有编号。323 个 KFM 模型组全在 <code>docs\throne-of-desire-model-list.md</code>
+      （<code>h</code> 15、<code>hm</code> 12、<code>m</code> 294、<code>b</code>/<code>l</code> 各 1）。批量脚本认的 13 套女性基础体写死在
+      <code>batch_export_female.py</code> 的 <code>FEMALE_MODEL_IDS</code>：h005 h006 h008 h009 h011 h012 h015 h020 h021 h091 h997 h998 h999。</p>
+    <div class="note">第一次跑 <code>.ps1</code> 若报"无法加载文件 … 因为在此系统上禁止运行脚本"（新机器默认执行策略 Restricted），
+      先在同一个 PowerShell 里执行 <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>，或改用
+      <code>powershell -ExecutionPolicy Bypass -File .\export_nude_models.ps1 -List</code> 这种写法；只影响本用户，不改系统。</div>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
+.\export_nude_models.ps1 -List      # 13 套编号 + COMPLETE/PARTIAL/MISSING + 产物目录
+
+# 自己从封包重生成完整清单（一般不需要）。不带 <code>--inventory</code> 时两条命令各要把 3 万多条映射记录逐条预览一遍，所以只跑 list-models 并不会更快；
+# 先 scan 出 inventory.json 的好处是它可以反复复用，之后的 list-models 只读清单里标成 .kfm 的那些记录（323 个模型组）：
+python extract_nfs.py scan `
+  --game 'D:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire' --output '..\..\.tmp\throneofdesire\inventory.json'
+python extract_nfs.py list-models `
+  --game 'D:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire' --inventory '..\..\.tmp\throneofdesire\inventory.json' `
+  --output '..\..\.tmp\throneofdesire\model-list.md'</pre>
+    <p>新机器上 <code>-List</code> 报 13 套全是 MISSING 是正常起点（还没导）；它只看导出目录里的三个产物文件，不检查游戏路径、Blender 和解码器，
+      那些要到第 2 步真正启动时才预检。</p>
+
+    <h3>第 2 步 · 批量路径：13 套女性基础体（export_nude_models.ps1）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
+
+.\export_nude_models.ps1                         # 全部 13 套 -&gt; blend + fbx + 预览，已完整的自动 skip
+.\export_nude_models.ps1 -Only h005,h020 -Force  # 只重做这两套（原地覆盖这两个目录里已有的 blend/fbx/预览/source/贴图）
+.\export_nude_models.ps1 -Format blend -NoRender # 只要 blend、不渲预览
+.\export_nude_models.ps1 -ValidateOnly           # 用 Blender 重开已导出的 blend/FBX 复检（默认查全部 13 套；只导了子集要带同样的 -Only）</pre>
+    <p>它包装 <code>batch_export_female.py</code>，后者对每个编号调一次第 3 步的 <code>export_model.py</code>。
+      跑前预检两个解码器、游戏目录、Blender 是否存在。一套的 6 个产物（<code>source\&lt;id&gt;.nif</code>、
+      <code>source\&lt;id&gt;.kfm</code>、<code>textures\textures_manifest.json</code>、blend、fbx、预览）都在且非空就记 skipped，
+      否则重导；逐条合并进 <code>female_all\female_export_manifest.json</code>。</p>
+
+    <h3>第 3 步 · 单模型路径：任意编号（export_model.py）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose
+python scripts\throneofdesire\export_model.py `
+  --game 'D:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire' `
+  --model h996 `
+  --blender 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' `
+  --output 'D:\throneofdesire_exports' `
+  --formats blend fbx `
+  --render</pre>
+    <p>一条命令依次：提取 NIF/KFM → 按 NIF 引用的 DDS 名找出全部相关 NFS 包并解贴图（h996 复用 h001 身体贴图、
+      h999 的 he10000/he50000 补全装备这类跨包依赖自动处理）→ Blender 导入建材质、打包、存 blend/FBX、渲预览 →
+      写 <code>export_manifest.json</code>。产物在 <code>&lt;--output&gt;\&lt;编号&gt;\</code>，目录已存在时原地覆盖。
+      <code>hm*</code>、<code>m*</code> 也可以用这条命令试，但文档正式验证的只有 h 系（h005 端到端、13 套批量）；仓库画廊里另有 hm003 单独导过一次
+      （9 网格、1 骨架、6 贴图全打包、有预览），294 个 <code>m*</code> 一个都没导过。主体网格判定按 <code>&lt;编号&gt;_</code> 前缀
+      （h997/h999 另有写死的 he* 装备表，h011 按底色贴图名兜底），跨包贴图按文件名前 4 位配对；这些在 <code>hm*</code>/<code>m*</code> 上
+      失败时属于未验证范围，不是环境问题。
+      <b>注意</b>：写到 <code>D:\throneofdesire_exports</code> 根下的本页归为"单独导出"，写到 <code>…\female_all</code> 才算"批量裸模"。</p>
+
+    <h3>第 4 步 · 分步手工（只在排查时需要）</h3>
+    <pre>cd E:\code\othercode\ripper_tpose
+# 4a 取 NIF/KFM -&gt; h005.nif、h005.kfm、manifest.json（含 SHA-256）
+python scripts\throneofdesire\extract_nfs.py extract-model `
+  --game 'D:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire' --model h005 --output '.tmp\throneofdesire\h005\source'
+
+# 4b 解贴图 -&gt; DDS + TGA + textures_manifest.json（跨包依赖：--model 换成包主人如 h001，--nif 不变，再跑一次；包主人怎么认见下文）
+python scripts\throneofdesire\extract_model_textures.py `
+  --game 'D:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire' --model h005 --nif '.tmp\throneofdesire\h005\source\h005.nif' `
+  --decoder '.tmp\lzham_v1_decode_raw' --etc-decoder '.tmp\etc_dds_decode' --output '.tmp\throneofdesire\h005\textures'
+
+# 4c Blender 导入（另可加 --fbx &lt;路径&gt;、--render &lt;路径&gt;、--include-helpers）
+&amp; 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' --background `
+  --python 'E:\code\othercode\ripper_tpose\scripts\throneofdesire\import_xlegend_nif36.py' -- `
+  --input '.tmp\throneofdesire\h005\source\h005.nif' --textures '.tmp\throneofdesire\h005\textures' `
+  --output '.tmp\throneofdesire\h005\h005_blender36.blend'</pre>
+    <p><b>4b 的"包主人"怎么认。</b>包主人 = DDS 文件名前 4 个字符，也就是它所在的 NFS 包（文件名以 <code>h001</code> 开头的归 h001，
+      以 <code>he50000</code> 开头的归 he50）。先用 <code>python scripts\throneofdesire\inspect_materials.py --nif &lt;nif&gt;</code>
+      看每个 shape 的 <code>textures</code>（只列顶点数 &gt; 100 的 shape，小的辅助网格不会出现），凡是前 4 位不等于本编号的，
+      就用那 4 位当 <code>--model</code> 再跑一次 4b
+      （<code>--nif</code>、<code>--output</code> 不变）；只有主体 shape 引用的跨包贴图才需要补。注意每次运行都会覆盖 <code>--output</code>
+      下的 <code>textures_manifest.json</code>，要留底就先改名；第 2/3 步走 <code>export_model.py</code> 时会自动按包主人拆成
+      <code>textures_manifest_&lt;包主人&gt;.json</code> 并写汇总清单。</p>
+
+    <h3>参数表</h3>
+    <table>
+      <tr><th>参数</th><th>作用</th></tr>
+      <tr><td><code>-List</code></td><td>列 13 套编号、状态（COMPLETE / PARTIAL / MISSING，只看 blend/fbx/预览三个文件）和产物目录，不导出</td></tr>
+      <tr><td><code>-Only h005,h020</code></td><td>子集；只接受 13 个女性编号，其它报 Unknown。清单按固定顺序合并，不丢别的记录</td></tr>
+      <tr><td><code>-Format blend,fbx</code></td><td>只认 <code>blend</code>、<code>fbx</code>，缺省两者都出；写 xps 直接报错</td></tr>
+      <tr><td><code>-Force</code></td><td>产物齐全也重导，<b>原地覆盖</b>该编号目录下的旧产物（blend/fbx/预览/source/textures）；不加时齐全的记 skipped。
+        <b>只覆盖本次要求的那些产物</b>：<code>-Format blend -Force</code> 不碰旧的 <code>.fbx</code>、<code>-NoRender -Force</code> 不碰旧的预览 PNG，
+        它们会作为和新 blend 不同批的过期文件留在目录里——而 <code>-List</code> 仍报 COMPLETE、<code>-ValidateOnly</code> 也会拿这个旧 FBX 通过。
+        要整套重做就用默认参数（blend+fbx+预览）跑 <code>-Force</code></td></tr>
+      <tr><td><code>-NoRender</code></td><td>不渲 720×960 正面预览 PNG。预览走 EEVEE，需要本机显卡驱动能建 OpenGL 上下文；远程桌面或无显卡环境下渲染失败导致整套
+        failed 时，加 <code>-NoRender</code>（<code>export_model.py</code> 去掉 <code>--render</code>）先出 blend/fbx</td></tr>
+      <tr><td><code>-IncludeHelpers</code></td><td>把碰撞体 / 调试辅助网格也导入</td></tr>
+      <tr><td><code>-ValidateOnly</code></td><td>不导出，用 Blender 重开 blend 与 FBX，报告写 <code>female_export_validation.json</code>。
+        它默认复检全部 13 套，且每套同时要 blend 和 fbx：只导了子集时必须带同样的 <code>-Only</code>（如 <code>-ValidateOnly -Only h005,h020</code>），
+        否则没导的记 FAILED 并报 <code>N export(s) failed validation</code>；用 <code>-Format blend</code> 导的没有 fbx，过不了复检</td></tr>
+      <tr><td><code>-GameRoot</code> / <code>-BlenderExe</code> / <code>-OutputDir</code> / <code>-PythonExe</code></td><td>覆盖前提表里的默认值</td></tr>
+      <tr><td><code>export_model.py</code>：<code>--game --model --blender --output</code></td><td>四个必填</td></tr>
+      <tr><td><code>--formats blend fbx</code> / <code>--render</code> / <code>--include-helpers</code></td><td>空格分隔；含义同上，<code>--render</code> 默认关</td></tr>
+      <tr><td><code>--lzham-decoder</code> / <code>--etc-decoder</code></td><td>解码器路径。默认值只在 <code>export_model.py</code> 里
+        （<code>&lt;仓库&gt;\.tmp\</code> 下的两个文件，路径按脚本位置算、与当前目录无关）；<code>batch_export_female.py</code> 有同名参数但没有默认，
+        不传就由它调用的 <code>export_model.py</code> 用自己的默认；ps1 没有这两个参数</td></tr>
+    </table>
+
+    <h3>产物</h3>
+    <pre>D:\throneofdesire_exports\
+  female_all\                          批量裸模
+    female_export_manifest.json        每套 status / bytes / artifacts；实际导出的另有 duration_seconds /
+                                       returncode / missing_artifacts，skipped 的另有 reason
+    female_export_validation.json      -ValidateOnly 的独立报告
+    h005\
+      h005_blender36.blend             贴图已 pack 进文件，可随意移动
+      h005.fbx                         只含基础网格 + 静止骨架，贴图已内嵌进 FBX
+      h005_preview.png                 720×960 正面渲染
+      export_manifest.json             文件路径 + known_limitations
+      source\h005.nif  h005.kfm  manifest.json
+      textures\*.dds  *.tga  textures_manifest.json  textures_manifest_&lt;包主人&gt;.json
+  h996\ ...                            单独导出（export_model.py 直接写到根）
+  tod_models_manifest.json             collect_manifest.py 的画廊清单
+  _gallery\thumbs\&lt;组&gt;_&lt;模型&gt;.jpg    make_gallery.py 的缩略图</pre>
+    <p>blend 里三个集合：<code>&lt;编号&gt;_Base</code>（身体/脸/发）、默认隐藏的 <code>&lt;编号&gt;_Attachments</code>（衣服等附件）和放静止骨架的
+      <code>&lt;编号&gt;_Skeleton</code>，网格物体带自定义属性 <code>xlegend_category</code> = base / attachment。底色贴图默认接好
+      （跨模型遮罩叠层例外：贴图已载入但不接，见材质自定义属性 <code>xlegend_base_status</code>），法线/高光/光泽只挂在节点里。</p>
+
+    <h3>容易踩的坑</h3>
+    <div class="note"><b>报 <code>Texture decoder(s) missing</code>。</b>没跑第 0 步，或换了新 clone（<code>.tmp\</code> 不进仓库），
+      或 <code>build_codecs.py --output</code> 编到了别处（ps1 只认仓库根 <code>.tmp\</code>）。跑一次 <code>build_codecs.py</code>；它要 WSL 里有 g++ 且能联网。</div>
+    <div class="note"><b>报 <code>WSL decoder requires a drive-qualified path</code>。</b>解码器经 <code>wsl.exe</code> 跑，
+      路径被换算成 <code>/mnt/&lt;盘符&gt;/…</code>，导出根和仓库都得在本地盘符下，UNC 和映射盘不行。为稳妥起见，仓库和导出根
+      （<code>-OutputDir</code> / <code>--output</code>）路径别带空格和中文——这些路径会原样拼进 <code>wsl.exe</code> 的命令行；
+      游戏目录只在 Python 侧读取，含空格没关系。</div>
+    <div class="note"><b>报 <code>Unsupported packageindex version 0x…; expected 0x20190503</code>。</b>游戏更新换了封包索引格式，
+      脚本只认 <code>0x20190503</code>（本页流程在该版本上验证），不是环境问题，需要改 <code>extract_nfs.py</code>。</div>
+    <p><b>重跑秒回 already complete。</b>产物齐全时默认 skip（断点续跑的设计）；要重做加 <code>-Force</code>。
+      注意 <code>-List</code> 的 COMPLETE/PARTIAL 只看 blend/fbx/预览三个文件，而批量 skip 判定要 6 个产物（另含 <code>source\</code> 的 nif/kfm 和
+      <code>textures\textures_manifest.json</code>）都在且非空，且只按本次 <code>-Format</code>/<code>-NoRender</code> 要求的产物算——
+      删过 <code>source\</code> 或 <code>textures\</code> 的模型 <code>-List</code> 仍是 COMPLETE 但会被重导；
+      <code>-Format blend -NoRender</code> 时 <code>-List</code> 报 PARTIAL 的反而可能被 skip。</p>
+    <p><b>模型整体一个颜色 / 全白。</b>手工 4b 漏了 <code>--etc-decoder</code>，只有 DDS 没有 TGA；导入器只按 DDS 的 stem 在
+      <code>--textures</code> 目录找 <code>.tga</code>/<code>.png</code>。补上再跑。</p>
+    <p><b>皮肤平、没法线细节。</b>有意为之：EAC 法线通道约定未验证完，接上会让皮肤斑驳，法线节点默认断开，要用自己连。</p>
+    <p><b>手工分步时 h996 / h999 缺贴图。</b>它们的贴图在别的包（h001 身体、he10/he50 装备），4b 要按包主人多跑几次；
+      第 2/3 步会自动处理。</p>
+
+    <h3>并行与耗时</h3>
+    <p>批量脚本没有分片/lane 参数，13 套顺序跑。<b>别开两个 <code>export_nude_models.ps1</code> 写同一个 <code>-OutputDir</code></b>：
+      清单是启动时读一次、每套写一次的合并模式，会互相覆盖记录。要并行就开几个窗口直接跑 <code>export_model.py</code>，各自只写自己的
+      <code>&lt;编号&gt;\</code>（该目录已有产物会被原地覆盖）：</p>
+    <pre>cd E:\code\othercode\ripper_tpose
+python scripts\throneofdesire\export_model.py `
+  --game 'D:\Program Files (x86)\Steam\steamapps\common\ThroneOfDesire' --model h005 `
+  --blender 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' `
+  --output 'D:\throneofdesire_exports\female_all' --formats blend fbx --render
+# 全部跑完后再执行一次批量脚本（不加 -Force），它把每套记为 skipped 并补齐完整清单
+.\scripts\throneofdesire\export_nude_models.ps1</pre>
+    <p>耗时大头是每张贴图两次 <code>wsl.exe</code> 往返（先对包里每个 LZHAM 流解一次，h005 一个包就有 35 个；再对每张映射到的 DDS
+      调一次 ETC 解码转 TGA，h005 是 34 张）和 Blender 打包；实际导出的每套秒数记在清单的 <code>duration_seconds</code>（skipped 的没有这个字段），
+      已完整的模型 skip 只要几秒。</p>
+
     <h3>重新生成本页</h3>
-    <pre>blender --background --factory-startup --python scripts\throneofdesire\html\collect_manifest.py
-python scripts\throneofdesire\html\make_gallery.py</pre>
-    <p>第一步递归扫导出根下全部 blend、逐个打开收集统计写成 manifest
-      （<code>female_all\</code> 下的归为批量裸模，其余归为单独导出），
-      第二步把预览图缩成 JPEG 放进 <code>_gallery\thumbs\</code> 并重写本页。
-      <b>缩略图刻意不进仓库</b> —— 和其它脚本一样，仓库不收任何游戏素材。</p>
-  </section>
+    <pre>cd E:\code\othercode\ripper_tpose\scripts\throneofdesire
+&amp; 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' --background --factory-startup --python html\collect_manifest.py
+python html\make_gallery.py                 # 加 --force 强制重做缩略图</pre>
+    <p><code>collect_manifest.py</code> 递归扫导出根下全部 <code>.blend</code>，逐个打开统计网格/面/骨架/材质/贴图打包数
+      （缺骨架、缺贴图、贴图未打包记为告警），<code>female_all\</code> 下归批量裸模、其余归单独导出，并入
+      <code>female_export_manifest.json</code> 的状态，写 <code>&lt;导出根&gt;\tod_models_manifest.json</code>
+      （导出根不在默认位置时在 <code>--</code> 后面依次传导出根和 manifest 路径）。
+      <code>make_gallery.py</code>（<code>--source-root</code> / <code>--manifest</code> / <code>--out</code> / <code>--thumb-dir</code> / <code>--force</code>）
+      把预览图缩成 720 宽 JPEG 放进 <code>_gallery\thumbs\</code>，按 <code>&lt;组&gt;_&lt;模型&gt;.jpg</code> 命名（同一编号可能两组都有），
+      再重写 <code>html\index.html</code>。<b>清单和缩略图留在导出根，只有 index.html 进仓库</b>——仓库不收任何游戏素材。</p>
+
+    <h3>例外与已知限制</h3>
+    <ul>
+      <li>批量名单只有 13 套女性 <code>h</code> 系；<code>hm*</code> 是复合场景组，刻意不进名单；294 个 <code>m*</code> 未分类，需要的用第 3 步单个导。</li>
+      <li>产物是<b>静态网格 + 未蒙皮的静止骨架</b>：蒙皮权重和 KFM 动画曲线尚未恢复，骨架只能看不能摆姿势。</li>
+      <li>只出 blend 和 FBX；XPS 不支持，交换格式用 FBX。</li>
+      <li>EAC 法线贴图保留在节点但默认断开；编号没有对应角色名。</li>
+      <li>NFS 包尾偶有未被 NIF 引用的旧贴图流，只作为 <code>unmapped_streams</code> 记进按包主人拆出的
+        <code>textures_manifest_&lt;包主人&gt;.json</code>（只手工跑 4b 时记在 <code>textures_manifest.json</code> 里），不导出。</li>
+    </ul>
+</section>
+
 </main>
 
 <script>

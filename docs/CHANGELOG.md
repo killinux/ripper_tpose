@@ -14,6 +14,32 @@
 
 ---
 
+## 2026-09-06 — 六个画廊页面补「手工导出教程」附录
+
+### 新增
+
+原来每个 `html/index.html` 底部的附录只有几条命令，别人看了自己导不出来。现在 DOA6、DOA5LR、
+FF7 Remake、FF7 Rebirth、Throne of Desire、Stellar Blade 六页的附录都换成完整教程（每页 1.8–2.3 万字符，
+写在各自 `make_gallery.py` 的 `APPENDIX_HTML` 常量里，`PAGE_TEMPLATE` 用 `{appendix}` 占位）：
+
+- **前提**：工具版本与本机默认路径（Blender 3.6.15、Noesis 32/64 位、UE Viewer 专用构建、FModel、
+  Python 包），要在装了游戏的机器上跑，需要自己设的环境变量只写名字（AES key 一律不进页面）。
+- **步骤**：从游戏文件到带贴图 `.blend`，每步写清作用、完整命令、产物落在哪；单个模型与批量两条路径；
+  怎么列出模型 ID / 包名。
+- **参数表、产物目录、坑、并行与耗时、重新生成本页、例外与已知限制**。破坏性命令（会删掉整个部件目录、
+  覆盖已有产物、覆盖 FModel 全局设置的那些）都在命令旁边标了出来。
+
+### 验证
+
+每页起草后过两轮多代理对抗校验（命令 / 参数 / 默认路径逐条对照脚本的 `param()`、`argparse`，
+外加安全与过期检查），共 72 条问题、68 条已改。抓到的实质错误例如：DOA6 的 `_objdb` 提取
+`--filter "*.kidssingletondb"` 会写出 347 个文件（应为 `*Editor.kidssingletondb` 三个）、
+DOA5LR 的自检命令查错了封包（霞的部件在 `chara_initial` 不在 `chara_common`）、
+FF7 Remake 手套那节 `-save` 只存了 Model 包导致后面必然缺贴图、
+Rebirth「24 个没有主模型包」的成分写错、Stellar Blade 打包体积与耗时是旧数字。
+
+---
+
 ## 2026-09-05 — Stellar Blade：每个 Eve 模型打成可单独分发的文件夹（`package_outfits.py`）
 
 ### 新增
@@ -30,18 +56,29 @@
 
 ### 本批结果
 
-148 个包（146 套服装 + 标准 Eve + 裸模；UEFormat 探针不打）33.2 GB，三路并行约 8 分钟。
+148 个包（146 套服装 + 标准 Eve + 裸模；UEFormat 探针不打）29.8 GB（平均 201 MB，其中附带贴图 16.5 GB），
+三路并行约 10 分钟。
 校验：14 个样本包拷到 C 盘另一路径，用 `--factory-startup`（无插件）Blender 3.6.15 打开，
 贴图 14/14 全部从包内加载、从副本渲染与预览一致；审查代理另外在 4.5.10 / 5.1.2 打开无误。
 
-### 待改（下次）
+### 2026-09-06 按审查结果修正（全部 148 个包重打）
 
-审查发现的非阻塞问题：README 把头部网格叫 `Face_003`，实际对象名是 `Eve_Head_Mesh_01`（表情 Shape Keys
-在它上面）；`01_Body` / `Eve_Standard_validation` 的 `textures\extra\` 为空、`49_TypeB` 缺 TypeB 专属副图
-（来源目录判定要放宽）；`60NH` 身体材质接的是 `CH_P_EVE_BB_A.png`（源 .blend 的匹配问题，需回查
-`validate_eve.py`）；.blend 的着色工作区文件浏览器还存着作者机器的 `C:\Users\<user>\Documents`、
-Scene 上有 Faceit 插件残留属性、工作区是中文名；相对路径用的反斜杠（Windows 可用，建议改 `/`）；
-README 材质段对头发（只接了 alpha）说过头、单位是 UE 厘米、"管线"等内部用语。
+- `textures\extra\` 改成从已接贴图往上找 `CH_P_EVE_<服装>` 目录后整棵树递归收（01 系的 `Tex\Body`、
+  `Tex\Boost` 和 49_TypeB 的 `Textures\TypeB` 原来漏掉）；同名贴图冲突时两边都加前缀，不再依赖枚举顺序。
+- 相对路径统一成 `//textures/x.png` 正斜杠；打包命令加 `--factory-startup`（否则存进去的是本机启动文件
+  的中文工作区名和文件浏览器路径），最终保存后再按字节把用户目录 / 导出根的残留填成 NUL；Scene 上的
+  `faceit_*` 残留属性删掉。校验：148 个 .blend 二进制里 0 个含用户目录或 `stellarblade_exports`。
+- `package.json` 做完才写（`.part` + `os.replace`），重做先删旧的；`--zip` 在 marker 之后打包（原来 fresh
+  构建的 zip 里没有 package.json）；SKIP 判定要求 .blend 和清单里的贴图都在；统计直接从打开的文件数，
+  验证 JSON 缺失或不一致记为 problem；`--lane/--lanes` 校验、目录参数取绝对路径。
+- README.txt：头部对象是 `Eve_Head_Mesh_01`（表情 Shape Keys 在它上面），列出全部物体名；单位厘米说明；
+  导出时先选骨架和网格（场景里还有验证相机和三盏灯）；头发只接了 alpha、颜色固定；版本"3.6 及更新
+  （4.5、5.1 已实测）"；来源改成"UE Viewer + FModel 导出、Blender 3.6 组装"，注明非官方、勿再分发；
+  带头套的服装提示隐藏身体看表情；extras 为 0 时不写那两行。
+- `validate_eve._export_index` 同名文件只记第一个，`CH_P_EVE_60` 的 `CH_P_EVE_BB_A.png` 被 CH_P_EVE_55 的
+  同名文件顶掉（全部 146 套里只有 60 / 60NH 中招）→ 索引保留全部路径，`.mat` 与贴图都优先取服装自己
+  目录下的；60 / 60NH 已重导、重渲预览。
+- `collect_manifest.NAMES`：加 `01 = Default Body`，`11_1` / `15_V02` 名字加区分，NH 名字去掉多余空格。
 
 ---
 

@@ -137,11 +137,15 @@ D:\stellarblade_exports\packages\Eve_CH_P_EVE_45_TypeB\
 
 ```powershell
 cd E:\code\othercode\ripper_tpose\scripts\stellarblade
-blender --background --python package_outfits.py                              # 全部，已有 package.json 的跳过
-blender --background --python package_outfits.py -- --only Eve_CH_P_EVE_45_TypeB --force
-blender --background --python package_outfits.py -- --lane 0 --lanes 3        # 三路并行各开一个（0/1/2）
+blender --background --factory-startup --python package_outfits.py            # 全部，已有 package.json 的跳过
+blender --background --factory-startup --python package_outfits.py -- --only Eve_CH_P_EVE_45_TypeB --force
+blender --background --factory-startup --python package_outfits.py -- --lane 0 --lanes 3   # 三路并行各开一个（0/1/2）
 python package_outfits.py --index                                             # 汇总 packages\README.md + packages_index.json
 ```
+
+`--factory-startup` 必须带：不带的话存进 .blend 的界面来自本机启动文件（中文工作区名、文件浏览器里的
+`C:\Users\<你>\Documents`）。即使带了，Blender 也会把文件浏览器默认目录填成本机 Documents，脚本在最终
+保存后按字节把用户目录 / 导出根的残留填成 NUL（`scrub_blend_bytes`，未压缩 .blend 的定长缓冲区，不改结构）。
 
 | 参数 | 作用 |
 |---|---|
@@ -153,13 +157,20 @@ python package_outfits.py --index                                             # 
 | `--include-probe` | 连 `Eve_Face003_UEFormat36_test`（UEFormat 导入探针，无贴图）也打 |
 | `--index` | 不开 Blender，扫 `package.json` 写总索引 |
 
-实现：`open_mainfile` → 每张 `FILE` 图片拷进 `textures\`（同名不同源的加上一级目录名前缀，如
-`CH_P_EVE_Head_Tex_P_EVE_Head_A.png`）→ 图片路径先指到新绝对位置 → `save_as_mainfile` 到目标
-→ `bpy.ops.file.make_paths_relative()` → 再存一次 → **重新打开校验**每张图都是 `//textures/`
-且文件在包内；对象 / 材质自定义属性里以导出根开头的绝对路径改成相对（`relativize_custom_props`），
-`save_version=0` 不留 `.blend1`。148 个包 33.2 GB（平均 225 MB），三路并行约 8 分钟。
+实现：`open_mainfile` → 收集每张 `FILE` 图片的来源，同名不同源的**两边都**加上一级目录名前缀
+（`Old_Tex_P_EVE_Head_A.png` / `CH_P_EVE_Head_Tex_P_EVE_Head_A.png`，与枚举顺序无关）→ 拷进 `textures\`
+→ 图片路径先指到新绝对位置 → `save_as_mainfile` 到目标 → `bpy.ops.file.make_paths_relative()` →
+路径统一成 `//textures/x.png` 正斜杠 → 再存一次 → **重新打开校验**每张图都在包内；对象 / 材质自定义
+属性里以导出根开头的绝对路径改成相对、Scene 上 `faceit_*` 残留删掉（`relativize_custom_props`），
+`save_version=0` 不留 `.blend1`。`textures\extra\` 从已接贴图的来源往上找 `CH_P_EVE_<服装>` 目录
+（排除共享的 Head / Hair / ReferenceBody），整棵树递归收（01 系在 `Tex\Body`、`Tex\Boost`，49_TypeB
+在 `Textures\TypeB`）。网格 / 顶点 / 骨骼 / 表情直接从打开的文件数，验证 JSON 只用来交叉核对。
+`package.json` 做完才写（`.part` + `os.replace`），重做先删旧的，中途被杀不会留下假的"已完成"；
+`--zip` 在 marker 写完后打包。148 个包三路并行约 10 分钟。
 校验：14 个样本包拷到 C 盘另一路径，用 `--factory-startup`（不带任何插件）打开、逐图加载、
-从副本渲染与预览比对；全部 .blend 二进制里已无 `stellarblade_exports` 字样。
+从副本渲染与预览比对，审查代理另外在 Blender 4.5 / 5.1 打开无误；全部 .blend 二进制里已无
+用户目录和 `stellarblade_exports` 字样。60 / 60NH 原来接了 CH_P_EVE_55 的同名 `CH_P_EVE_BB_A.png`
+（`validate_eve._export_index` 同名只记第一个），已改成优先取服装自己目录的并重导。
 画廊卡片上的「独立包」一行就是这个文件夹（`collect_manifest.py` 记 `packageDir`）。
 
 ## 裸模（EveOriginalProportions Mod）

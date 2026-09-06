@@ -24,11 +24,13 @@ PKG_DIR = os.path.join(ROOT, "packages")
 
 # 编号 -> 名称（docs/stellar-blade-eve-outfits.md，来源 Stellar Blade Modding Guide ID's Library）
 NAMES = {
+    "01": "Default Body（默认身体）",
     "02": "Daily Biker", "03": "Daily Rider", "04": "Daily Denim", "05": "Daily Sailor", "06": "Black Wave",
     "07": "Punk Top", "08": "Prototype Planet Diving Suit V2", "09": "Planet Diving Suit (7th)",
     "09_V02": "Protection Suit (7th)", "10": "Planet Diving Suit (Captain)", "11": "Raven Suit",
+    "11_1": "Raven Suit (own hair, 11_1)",
     "14": "Planet Diving Suit (3rd)", "14_1": "Planet Diving Suit (3rd) Prototype", "15": "Orca Engineer",
-    "15_V02": "Orca Engineer", "16": "Black Kunoichi", "17": "Sporty Yellow", "18": "Daily Mascot",
+    "15_V02": "Orca Engineer (V02)", "16": "Black Kunoichi", "17": "Sporty Yellow", "18": "Daily Mascot",
     "19": "Cybernetic Bondage", "20": "Black Rose", "21": "Sky Ace", "22": "White full dress",
     "23": "Black full dress", "24": "Wasteland Adventurer", "25": "Motivation", "26": "Red Passion",
     "27": "Ocean Maid", "28": "Holliday Rabbit", "29": "Keyhole Suit", "30": "Planet Diving Suit (2nd)",
@@ -86,7 +88,7 @@ def outfit_name(suffix):
         extra = ""
     if "NH" in extra:
         extra = extra.replace("NH", "") + "（无高跟）"
-    label = (name + (" " + extra if extra else "")).strip() or s
+    label = (name + (("" if extra.startswith("（") else " ") + extra if extra else "")).strip() or s
     return label, grp.split("_")[0]
 
 

@@ -393,26 +393,44 @@ def _export_root(directory: str) -> str:
 
 
 def _export_index(root: str) -> dict[str, str]:
-    """name.lower() -> path for every .png/.mat under the export root (cached per root)."""
+    """name.lower() -> path for every .png/.mat under the export root (cached per root).
+
+    Several outfits ship a texture with the same bare name (CH_P_EVE_55 and
+    CH_P_EVE_60 both have ``CH_P_EVE_BB_A.png`` with different content), so the
+    index also keeps every path under ``"*" + name`` and lookups can prefer the
+    copy inside the outfit's own directory via :func:`_prefer_under`.
+    """
     if root not in _EXPORT_INDEX:
         index: dict[str, str] = {}
         for walk_root, _dirs, files in os.walk(root):
             for name in files:
                 low = name.lower()
                 if low.endswith((".png", ".mat")):
-                    index.setdefault(low, os.path.join(walk_root, name))
+                    path = os.path.join(walk_root, name)
+                    index.setdefault(low, path)
+                    index.setdefault("*" + low, []).append(path)  # type: ignore[arg-type]
         _EXPORT_INDEX[root] = index
     return _EXPORT_INDEX[root]
 
 
-def _usable_colour_texture(name: str, index: dict[str, str]) -> str | None:
+def _prefer_under(index: dict[str, str], key: str, prefer_dir: str | None) -> str | None:
+    """The indexed path for ``key``; when several exist, the one inside ``prefer_dir``."""
+    if prefer_dir:
+        prefix = os.path.normcase(os.path.abspath(prefer_dir)) + os.sep
+        for path in index.get("*" + key, []):  # type: ignore[union-attr]
+            if os.path.normcase(os.path.abspath(path)).startswith(prefix):
+                return path
+    return index.get(key)
+
+
+def _usable_colour_texture(name: str, index: dict[str, str], prefer_dir: str | None = None) -> str | None:
     """Return the PNG path if ``name`` looks like a colour texture that was exported."""
     if not name or _GENERIC_DIFFUSE.match(name):
         return None
     stem = name.lower()
     if _NON_COLOUR_SUFFIX.search(stem) and not _COLOUR_SUFFIX.search(stem):
         return None
-    path = index.get(stem + ".png")
+    path = _prefer_under(index, stem + ".png", prefer_dir)
     if not path or "/engine/" in path.replace('\\', "/").lower():
         return None
     return path
@@ -429,7 +447,7 @@ def material_diffuse_from_mat(directory: str, material_name: str) -> str | None:
     """
     base = material_base_name(material_name)
     index = _export_index(_export_root(directory))
-    mat = index.get((base + ".mat").lower())
+    mat = _prefer_under(index, (base + ".mat").lower(), directory)
     if not mat:
         return None
     diffuse = ""
@@ -444,12 +462,12 @@ def material_diffuse_from_mat(directory: str, material_name: str) -> str | None:
                 diffuse = value
             elif key not in ("Normal", "Opacity", "Emissive", "SpecPower"):
                 others.append(value)
-    path = _usable_colour_texture(diffuse, index)
+    path = _usable_colour_texture(diffuse, index, directory)
     if path:
         return path
     for name in others:
         if _COLOUR_SUFFIX.search(name.lower()):
-            path = _usable_colour_texture(name, index)
+            path = _usable_colour_texture(name, index, directory)
             if path:
                 return path
     return None
