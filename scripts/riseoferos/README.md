@@ -551,17 +551,25 @@ a10 实测：`knee_L` 52%、`muscle_elbow` 46%、`UpArmTwist` 63%、`CalfTwist` 
 
 ```powershell
 .\render_pmx_dance.ps1 -List                     # 看哪些预览过期了
-.\render_pmx_dance.ps1 -Only a02,g12,j10         # 渲指定角色
+.\render_pmx_dance.ps1 -Only a02,g12,j10         # 渲指定编号
+.\render_pmx_dance.ps1 -PerCharacter             # 13 个角色各一个（取编号最大的那套服装）
 .\render_pmx_dance.ps1 -Stale                    # 渲所有比 PMX 旧的
 .\render_pmx_dance.ps1 -Only a02 -Frames 300     # 只渲前 300 帧，快速看一眼
 .\render_pmx_dance.ps1 -Stale -Parallel 6        # 同时开 6 个 Blender
 ```
+
+`-PerCharacter` 按「**字母 = 角色，数字 = 服装变体**」（见
+[character-roster.md](character-roster.md)）分组，每个字母只取编号最大的那套：
+a12 / b13 / c10 / d09 / e10 / f11 / g13 / h09 / i04 / j10 / k06 / l01 / m02。
+同编号还有 `_outfit1` 时取 outfit 那套。
 
 一段 2291 帧的 EEVEE 动画单个要好几分钟，串行渲一批就是一下午，所以默认 `-Parallel 4`
 同时跑四个 Blender 进程；各自的日志在 `%TEMP%\roe_dance_logs\<id>.log`。
 
 产物 `D:\roe_exports\<id>\blend\pmx\<stem>_dance.mp4`，同名 `.blend` 一起留下，
 方便回头从同一个场景补渲静帧、量骨骼。默认用 `来杯好茶摇一摇` 那套 VMD，`-Vmd` 可换。
+一个角色目录里可能有两个 PMX（`a08` 同时放 `pc_a08_hd` 和 `pc_a08_outfit1_hd`），
+脚本按 **PMX 逐个**建任务，不是按目录，所以 outfit 变体不会被漏掉。
 
 **比 PMX 旧的预览默认跳过并标 STALE**，要重渲得加 `-Force`。这条规则是有代价换来的：
 a10 和 m02 报上来的「大腿根和膝盖有问题」，实际是 mp4 比 PMX 早了 50 分钟——
