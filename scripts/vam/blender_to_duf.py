@@ -73,8 +73,13 @@ def evaluated_mesh(obj, use_modifiers=True):
     return out, len(ngons)
 
 
-def read_mesh(obj, use_modifiers=True):
-    """(verts, faces, loop uvs or None, face material slots, slot names)."""
+def read_mesh(obj, use_modifiers=True, keep_materials=None):
+    """(verts, faces, loop uvs or None, face material slots, slot names).
+
+    ``keep_materials`` limits the export to the faces of those material slots
+    and drops the vertices no kept face uses -- ripped characters often arrive
+    as one merged mesh where the body and every garment are just materials.
+    """
     mesh, ngons = evaluated_mesh(obj, use_modifiers)
     try:
         count = len(mesh.vertices)
@@ -103,20 +108,45 @@ def read_mesh(obj, use_modifiers=True):
             layer.data.foreach_get("uv", flat)
             loop_uv = flat.reshape(loops, 2)
 
+        raw = [slot.material.name if slot.material else "default"
+               for slot in obj.material_slots] or ["default"]
+        names = [sanitize(n, "default") for n in raw]
+        wanted = None
+        if keep_materials:
+            # Accept the material's real name as well as the url-safe one the
+            # DUF will carry, so "+Dress.1" and "_Dress.1" both work.
+            asked = {str(m) for m in keep_materials}
+            wanted = {i for i in range(len(names)) if raw[i] in asked or names[i] in asked}
+            missing = asked - {raw[i] for i in wanted} - {names[i] for i in wanted}
+            if missing:
+                raise SystemExit("%s has no material named %s (it has: %s)"
+                                 % (obj.name, ", ".join(sorted(missing)), ", ".join(raw)))
+
         # A negatively scaled object comes through inside out.
         flip = np.linalg.det(matrix[:3, :3]) < 0
-        faces, uv_faces = [], []
-        for start, total in zip(loop_start, loop_total):
+        faces, uv_faces, slots = [], [], []
+        for face, (start, total) in enumerate(zip(loop_start, loop_total)):
+            slot = min(int(material_index[face]), len(names) - 1)
+            if wanted is not None and slot not in wanted:
+                continue
             corner = list(range(start, start + total))
             if flip:
                 corner.reverse()
             faces.append([int(loop_vert[c]) for c in corner])
+            slots.append(slot)
             if loop_uv is not None:
                 uv_faces.append(corner)
 
-        names = [sanitize(slot.material.name if slot.material else "default", "default")
-                 for slot in obj.material_slots] or ["default"]
-        slots = [min(int(m), len(names) - 1) for m in material_index]
+        if wanted is not None:
+            used = sorted({v for face in faces for v in face})
+            remap = {v: i for i, v in enumerate(used)}
+            faces = [[remap[v] for v in face] for face in faces]
+            verts = verts[used]
+            kept = sorted(wanted)
+            reslot = {old: new for new, old in enumerate(kept)}
+            slots = [reslot[s] for s in slots]
+            names = [names[i] for i in kept]
+
         return {"verts": verts, "faces": faces, "loop_uv": loop_uv,
                 "uv_faces": uv_faces, "slots": slots, "names": names,
                 "ngons": ngons}
@@ -124,7 +154,7 @@ def read_mesh(obj, use_modifiers=True):
         bpy.data.meshes.remove(mesh)
 
 
-def combine(objects, use_modifiers=True):
+def combine(objects, use_modifiers=True, keep_materials=None):
     """Merge several objects into the arrays :class:`vam_duf.DufMesh` wants.
 
     UVs are deduplicated by value first: without that every loop of a shared
@@ -137,7 +167,9 @@ def combine(objects, use_modifiers=True):
     ngons = 0
     offset = 0
     for obj in objects:
-        part = read_mesh(obj, use_modifiers)
+        part = read_mesh(obj, use_modifiers, keep_materials)
+        if not part["faces"]:
+            continue
         ngons += part["ngons"]
         verts.append(part["verts"])
         remap = {}
@@ -170,6 +202,48 @@ def combine(objects, use_modifiers=True):
             "uvs": np.asarray(uv_values, dtype=np.float64) if have_uv and uv_values else None,
             "uv_faces": uv_faces if have_uv and uv_values else None,
             "ngons": ngons}
+
+
+def align_and_lift(parts, objects, args):
+    """Move an outside figure's garment onto VaM's base body, and out of it.
+
+    Two separate corrections.  The fit is a uniform scale + translation solved
+    against the source figure's own skin (``--align-using``) -- a garment must
+    move with its wearer, not be fitted on its own.  The lift then pushes what
+    still ends up inside the Genesis 2 body back out along the surface normal,
+    because VaM keeps showing the body under the clothes and another figure's
+    proportions differ by a couple of centimetres everywhere.
+    """
+    report = {}
+    cache = vl.VamCache(args.cache, None, log=lambda *a: None)
+    base, _meta = cache.base(args.align)
+    body = np.asarray(base.verts, dtype=np.float64)
+    body_blender = vl.to_blender(body).astype(np.float64)
+
+    if args.align_using:
+        skin = combine(objects, not args.no_modifiers, set(args.align_using))["verts"]
+        if not len(skin):
+            raise SystemExit("--align-using matched no faces")
+    else:
+        skin = parts["verts"]
+    scale, translate, residual = vd.fit_to_reference(skin, body_blender)
+    parts["verts"] = parts["verts"] * scale + translate
+    report["fit"] = {"scale": round(float(scale), 6),
+                     "translate": [round(float(x), 5) for x in translate],
+                     "skinResidualMedianMm": round(float(np.median(residual)) * 1000, 1),
+                     "skinResidualP90Mm": round(float(np.percentile(residual, 90)) * 1000, 1),
+                     "usedMaterials": list(args.align_using or []) or ["the exported mesh itself"]}
+
+    if args.lift > 0:
+        normals = vl.outward_normals(body, base.poly_len, base.poly_idx).astype(np.float64)
+        in_vam = vd.blender_to_vam(parts["verts"])
+        lifted = vl.lift_off_skin(in_vam, body, normals, clearance=args.lift)
+        moved = np.linalg.norm(lifted - in_vam, axis=1)
+        parts["verts"] = vd.vam_to_blender(lifted)
+        report["lift"] = {"clearanceMm": round(args.lift * 1000, 1),
+                          "pushed": int((moved > 1e-6).sum()),
+                          "largestPushMm": round(float(moved.max()) * 1000, 1) if len(moved) else 0.0}
+    return report
 
 
 def to_duf_mesh(name, parts):
@@ -261,6 +335,19 @@ def parse_args(argv):
     parser.add_argument("--load", help="import this .obj/.fbx/.glb first")
     parser.add_argument("--objects", nargs="*",
                         help="object names (default: the selection, else every mesh)")
+    parser.add_argument("--materials", nargs="*",
+                        help="export only the faces of these material slots -- ripped "
+                             "characters are often one mesh where each garment is a material")
+    parser.add_argument("--align", choices=("female", "male"),
+                        help="scale and move the mesh onto VaM's base body first "
+                             "(for meshes built around some other figure)")
+    parser.add_argument("--align-using", nargs="*",
+                        help="material slots holding the SOURCE figure's own skin, which is "
+                             "what the fit is solved against; leave out arms and anything else "
+                             "posed differently from VaM's T-pose")
+    parser.add_argument("--lift", type=float, default=0.0,
+                        help="metres to push cloth out of the body after aligning "
+                             "(0.004 is a sane start; 0 disables)")
     parser.add_argument("--name", help="item name inside the DUF (default: the object)")
     parser.add_argument("--separate", action="store_true",
                         help="one .duf per object instead of one merged item")
@@ -366,7 +453,11 @@ def main():
                   [(objects, sanitize(args.name or objects[0].name))])
         root, ext = os.path.splitext(args.out)
         for index, (members, name) in enumerate(groups):
-            parts = combine(members, use_modifiers=not args.no_modifiers)
+            parts = combine(members, use_modifiers=not args.no_modifiers,
+                            keep_materials=set(args.materials) if args.materials else None)
+            if not parts["faces"]:
+                raise SystemExit("nothing to export for %s" % name)
+            placement = align_and_lift(parts, members, args) if args.align else {}
             mesh = to_duf_mesh(name, parts)
             doc = vd.build_duf(mesh, asset_id="/%s.duf" % name, author=args.author)
             warnings = vd.check_duf(doc)
@@ -375,14 +466,16 @@ def main():
                                 % (name, parts["ngons"]))
             path = args.out if len(groups) == 1 else "%s_%s%s" % (root, name, ext or ".duf")
             vd.write_dson(path, doc, compress=not args.plain)
-            result["written"].append({
+            entry = {
                 "path": path, "name": name,
                 "objects": [o.name for o in members],
                 "vertices": len(mesh.verts), "polygons": len(mesh.faces),
                 "materials": mesh.material_names,
-                "uvs": mesh.uvs is not None and len(mesh.uvs) or 0,
+                "uvs": 0 if mesh.uvs is None else len(mesh.uvs),
                 "seamUVs": len(mesh.uv_pairs),
-            })
+            }
+            entry.update(placement)
+            result["written"].append(entry)
             result["warnings"].extend(warnings)
             del index
 

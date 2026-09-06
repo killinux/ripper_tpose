@@ -17,6 +17,19 @@
     -Source <file>     .blend to open, or .obj / .fbx / .glb / .dae to import
                       (default: whatever -Objects names in a -Source .blend)
     -Out <file>       .duf to write (default <OutRoot>\<name>.duf)
+    -Materials a,b    export only the faces of those material slots.  A model
+                      ripped from another game usually arrives as ONE mesh
+                      where the body and every garment are just materials.
+    -Align            the mesh was built around some other figure (another DAZ
+                      generation, another game): scale and move it onto VaM's
+                      base body first.  Pair with -AlignUsing.
+    -AlignUsing a,b   the material slots holding the SOURCE figure's own skin,
+                      which is what the fit is solved against.  Leave out arms
+                      and anything else posed differently from VaM's T-pose.
+    -Lift <metres>    push cloth back out of the body after aligning (0.004 is
+                      a sane start).  Another figure's proportions differ by a
+                      couple of centimetres, and VaM keeps drawing the body
+                      under the clothes, so it would poke through.
     -Morph <name>     write a Genesis 2 morph .dsf instead of a .duf: the
                       deltas between the chosen object and the base body.
                       Sculpt a copy of the -Reference body without adding or
@@ -52,6 +65,12 @@
 
 .EXAMPLE
   .\import_to_vam.ps1 -Source D:\work\belly.blend -Morph "Belly Out" -Install morph
+
+.EXAMPLE
+  # a Genesis 8 character ripped to one merged mesh: take just the dress
+  .\import_to_vam.ps1 -Source "E:\Downloads\Fiona 18\Fiona 18 V1.blend" -Name FionaDress `
+      -Objects "Fiona 18 V1_mesh" -Materials "+Dress.1","+Dress.2" `
+      -Align -AlignUsing Body,Legs,Face -Lift 0.004 -Install clothing
 #>
 [CmdletBinding()]
 param(
@@ -64,6 +83,10 @@ param(
     [string[]]$Objects,
     [string]$Name,
     [string]$Author = "ripper_tpose",
+    [string[]]$Materials,
+    [switch]$Align,
+    [string[]]$AlignUsing,
+    [double]$Lift = 0.0,
     [string]$Morph,
     [string]$MorphGroup = "/Morphs/ripper_tpose",
     [ValidateSet('clothing', 'hair', 'morph')]
@@ -141,6 +164,10 @@ $scriptArgs = @('--out', $Out, '--name', $stem, '--author', $Author)
 if ($ext -eq '.blend') { $blenderArgs += $Source } else { $blenderArgs += '--factory-startup'; $scriptArgs += @('--load', $Source) }
 if ($Morph) { $scriptArgs += @('--morph', $Morph, '--gender', $Gender, '--morph-group', $MorphGroup, '--cache', $CacheDir) }
 if ($Objects) { $scriptArgs += @('--objects') + $Objects }
+if ($Materials) { $scriptArgs += @('--materials') + $Materials }
+if ($Align) { $scriptArgs += @('--align', $Gender, '--cache', $CacheDir) }
+if ($AlignUsing) { $scriptArgs += @('--align-using') + $AlignUsing }
+if ($Lift -gt 0) { $scriptArgs += @('--lift', ('{0}' -f $Lift)) }
 if ($Separate) { $scriptArgs += '--separate' }
 if ($NoModifiers) { $scriptArgs += '--no-modifiers' }
 if ($Plain) { $scriptArgs += '--plain' }

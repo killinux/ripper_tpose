@@ -103,8 +103,94 @@ def daz_to_blender(verts):
     return out
 
 
+def blender_to_vam(verts):
+    """Blender metres -> VaM metres (the inverse of ``vam_lib.to_blender``)."""
+    verts = np.asarray(verts, dtype=np.float64)
+    out = np.empty_like(verts)
+    out[:, 0] = -verts[:, 0]
+    out[:, 1] = verts[:, 2]
+    out[:, 2] = -verts[:, 1]
+    return out
+
+
+def vam_to_blender(verts):
+    """VaM metres -> Blender metres (same map as ``vam_lib.to_blender``)."""
+    verts = np.asarray(verts, dtype=np.float64)
+    out = np.empty_like(verts)
+    out[:, 0] = -verts[:, 0]
+    out[:, 1] = -verts[:, 2]
+    out[:, 2] = verts[:, 1]
+    return out
+
+
 TO_DAZ = {"daz": lambda v: np.asarray(v, dtype=np.float64),
           "vam": vam_to_daz, "blender": blender_to_daz}
+
+
+# --------------------------------------------------------------------------
+# Fitting an outside figure onto VaM's body
+# --------------------------------------------------------------------------
+# A garment ripped from another game or another DAZ generation arrives in its
+# own units, at its own height, around its own body.  VaM's creator wraps onto
+# the base Genesis 2 body, so the mesh has to be moved there first.  Both
+# figures stand upright facing the same way, so only a uniform scale and a
+# translation are free -- solving for a rotation as well would let a bad
+# correspondence tip the figure over.
+
+def nearest_points(points, cloud, chunk=1024):
+    """For each point, the closest point of ``cloud`` and the distance to it."""
+    points = np.asarray(points, dtype=np.float64)
+    cloud = np.asarray(cloud, dtype=np.float64)
+    hit = np.empty_like(points)
+    distance = np.empty(len(points))
+    for start in range(0, len(points), chunk):
+        block = points[start:start + chunk]
+        d2 = ((block[:, None, :] - cloud[None, :, :]) ** 2).sum(-1)
+        index = d2.argmin(1)
+        hit[start:start + chunk] = cloud[index]
+        distance[start:start + chunk] = np.sqrt(d2[np.arange(len(block)), index])
+    return hit, distance
+
+
+def _scale_and_shift(source, target):
+    """Least-squares uniform scale + translation taking source onto target."""
+    sc, tc = source.mean(0), target.mean(0)
+    spread = ((source - sc) ** 2).sum()
+    scale = 1.0 if spread == 0 else float(((source - sc) * (target - tc)).sum() / spread)
+    return scale, tc - scale * sc
+
+
+def fit_to_reference(source, reference, iterations=6, sample=2500, cloud_sample=8000):
+    """Scale + translation putting ``source`` on top of ``reference``.
+
+    Starts from matching height and foot plane, then refines by re-fitting to
+    nearest points (a scaled ICP with the rotation locked to identity).  Pass
+    only the parts of the figure that are posed the same in both -- feeding it
+    arms that are A-posed on one side and T-posed on the other drags the whole
+    fit.  Returns (scale, translate, residual distances of the sample).
+    """
+    source = np.asarray(source, dtype=np.float64)
+    reference = np.asarray(reference, dtype=np.float64)
+    assert len(source) and len(reference), "nothing to fit"
+
+    lo, hi = source[:, 2].min(), source[:, 2].max()
+    ref_lo, ref_hi = reference[:, 2].min(), reference[:, 2].max()
+    scale = float((ref_hi - ref_lo) / (hi - lo)) if hi > lo else 1.0
+    translate = np.array([
+        reference[:, 0].mean() - scale * source[:, 0].mean(),
+        np.median(reference[:, 1]) - scale * np.median(source[:, 1]),
+        ref_lo - scale * lo,
+    ])
+
+    picked = source[::max(1, len(source) // sample)]
+    cloud = reference[::max(1, len(reference) // cloud_sample)]
+    distance = None
+    for _ in range(iterations):
+        target, distance = nearest_points(picked * scale + translate, cloud)
+        scale, translate = _scale_and_shift(picked, target)
+    if distance is None:
+        _, distance = nearest_points(picked * scale + translate, cloud)
+    return scale, translate, distance
 
 
 def _round(values, digits=6):

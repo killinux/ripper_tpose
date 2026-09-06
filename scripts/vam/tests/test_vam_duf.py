@@ -8,6 +8,8 @@ install is present (a package that ships the creator's own .duf next to the
 Covers:
   * the measured coordinate maps and their inverses, and that going through
     Blender agrees with vam_lib's own basis
+  * nearest_points and the scale+translation fit used to drop an outside
+    figure onto VaM's base body
   * winding survives Blender -> DAZ (the two mirrors cancel)
   * per-vertex UVs, and seam UVs split into defaults + polygon_vertex_indices
   * quads stay quads, n-gons and out-of-range indices are refused
@@ -77,6 +79,32 @@ def test_coordinates():
     # A metre of VaM is a hundred DAZ units and nothing is reordered.
     assert vd.DAZ_SCALE == 100.0
     assert np.allclose(vd.vam_to_daz([[1, 2, 3]]), [[-100, 200, 300]])
+
+
+def test_fitting():
+    # blender_to_vam / vam_to_blender must agree with vam_lib's own basis
+    vam = np.array([[0.3, 1.6, 0.07], [-0.5, 0.2, -1.25]])
+    assert np.allclose(vd.vam_to_blender(vam), vl.to_blender(vam), atol=1e-6)
+    assert np.allclose(vd.blender_to_vam(vd.vam_to_blender(vam)), vam)
+
+    cloud = np.array([[0.0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]])
+    hit, distance = vd.nearest_points(np.array([[0.9, 0.1, 0.0]]), cloud)
+    assert np.allclose(hit[0], [1, 0, 0]) and abs(distance[0] - np.sqrt(0.02)) < 1e-9
+
+    # a known scale + shift must be recovered exactly when the clouds match
+    rng = np.arange(300).reshape(100, 3) / 97.0
+    reference = rng * 1.0
+    source = (reference - [0.2, 0.1, 0.05]) / 3.0
+    scale, translate, residual = vd.fit_to_reference(source, reference, iterations=4)
+    assert abs(scale - 3.0) < 1e-3, scale
+    assert np.allclose(source * scale + translate, reference, atol=2e-3)
+    assert float(np.median(residual)) < 1e-3
+
+    # and it must not blow up when the two shapes only roughly correspond
+    noisy = reference + np.tile([0.01, -0.02, 0.015], (len(reference), 1))
+    scale2, _t2, res2 = vd.fit_to_reference(source, noisy, iterations=4)
+    assert 2.5 < scale2 < 3.5, scale2
+    assert float(np.median(res2)) < 0.1
 
 
 def test_winding():
@@ -260,6 +288,7 @@ def main():
     note = ""
     try:
         test_coordinates()
+        test_fitting()
         test_winding()
         test_mesh_and_uvs()
         test_materials_and_document()
