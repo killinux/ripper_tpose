@@ -14,6 +14,36 @@
 
 ---
 
+## 2026-09-12 — Rise of Eros：9-12 更新的新角色导出（b14 / k07 / m03）
+
+### 怎么发现的
+
+这次更新是 Steam 增量更新，运行时缓存（`LocalLow\Pinkcore\Rise of Eros\AssetBundles`）已被清到 29 个
+文件，8-30 记的「缓存 vs 安装目录」差分法查不出东西。改用两条线索：安装目录里 `chara_(armor|bare)_pc_<id>`
+的 ID 减去 `D:\roe_exports\<id>` 已有目录；以及安装目录的 mtime 直方图——增量更新只给改动的文件盖新
+日期（2082 个文件是 2026-09-12，7841 个还是 2025-12-13），所以新日期这次是可信的，和 8-01 全量重下
+那次不同。
+
+### 结果
+
+- **新角色**：`b14`（Kart 14，主装 + `outfit1` 两套网格、92 张贴图）、`k07`（Keleira 7）、`m03`（Amano 3，
+  以前没有独立网格，这次补了 armor 包）。`extract_character.ps1 <id> -ExportTextures` →
+  `export_character_models.ps1 -Only b14,k07,m03`，4 个模型全部 PASS，渲染逐张目视（脸 / 眼 / 发 / 服装齐全）。
+- **占位**：`f13`、`h11` 只有 36–45 KB 的 `chara_bare` 包，提取出来只有武器，记为 NOMESH。
+- **老角色被重写的 armor 包**（a11 c02 c09 c10 j10 k02 m02 m03 h09）：用 `-OutputRoot D:\roe_exports_probe`
+  提到临时目录再和现有导出比对，**不直接重提**（重提会把 `blend\`、XPS、PMX 整个删掉）。FBX 只能按大小比
+  （导出器写时间戳，哈希每次不同），PNG 按 SHA。只有 **c10** 真变了（身体 albedo / mgac 高低模各一套 +
+  新增脸部法线）；a11 只是法线图的 pathID 后缀变了、c09 只是玩具 fbx 改名、h09 的 `_update_1` 贴图包解出来
+  和原来一样。c10 把临时目录里的贴图 / FBX 拷回原目录（保留 `blend\`），`-Only c10 -Force -Format blend,xps,pmx`
+  重做三种格式。
+- 画廊重生成（142 条：PASS 124、NOMESH 18），`prune_exports.py --apply` 清掉 0.57 GB 重复贴图，临时目录已删。
+
+### 坑
+
+Git Bash 里调 robocopy 的 `/E` 会被 MSYS 当成 `E:\` 路径，什么都不拷且不报错——同步用 python 或 PowerShell。
+
+---
+
 ## 2026-09-06 — VaM 导入线：把别的人物身上的网格搬到 VaM 的身体上
 
 ### 新增
