@@ -5,15 +5,16 @@ it cannot reproduce MMD's dynamic feel or its joint-frame explosions.  What it
 can tell reliably: whether a chain is structurally healthy - built in the
 rest pose, does it settle without flying away?  The reference implementation
 used "< 0.17 m of drift after 60 frames" as its health line; the drop test
-here reports the drift of every dynamic rigid body and flags the ones above
-``limit``.
+here reports, per dynamic rigid body, how far it drifted, how much the joint
+holding it stretched (the tear signal) and whether it is still moving at the
+end (the "never settles" signal).
 """
 import bpy
 
-from . import api
+from . import analyze, api
 
 
-def drop_test(obj, frames=60, limit=0.17):
+def drop_test(obj, frames=60):
     """Build the mmd_tools physics, step ``frames`` in the rest pose, report
     drift per rigid body, then unbuild.  Returns {"summary", "lines", "worst"}."""
     model, root, arm, meshes = api.model_of(obj)
@@ -38,18 +39,19 @@ def drop_test(obj, frames=60, limit=0.17):
     world.enabled = True
     world.point_cache.frame_start = 1
     world.point_cache.frame_end = frames + 1
-    # rest distance of every dynamic body to its nearest kinematic one: a joint
-    # chain that is being torn apart shows up as this distance growing, while a
-    # sleeve swinging from the A-pose to vertical does not
-    kinematic = [o for o in bpy.data.objects if getattr(o, "mmd_type", "") == "RIGID_BODY"
-                 and str(o.mmd_rigid.type) == "0"]
-
-    def nearest_kinematic(o):
-        pos = o.matrix_world.translation
-        return min(((k.matrix_world.translation - pos).length, k.name) for k in kinematic) \
-            if kinematic else (0.0, None)
-
-    rest_dist = {o.name: nearest_kinematic(o) for o in rigids}
+    # rest distance between the two bodies of every joint: a chain that is being
+    # torn apart shows up as one of these growing, while a sleeve swinging from
+    # the A-pose to vertical keeps every link at its length
+    unit = analyze.unit_scale(meshes)
+    links = {}
+    for o in bpy.data.objects:
+        if getattr(o, "mmd_type", "") != "JOINT" or o.rigid_body_constraint is None:
+            continue
+        a, b = o.rigid_body_constraint.object1, o.rigid_body_constraint.object2
+        if a is None or b is None or b.name not in start:
+            continue
+        rest = (a.matrix_world.translation - b.matrix_world.translation).length
+        links.setdefault(b.name, []).append((a, rest))
     scene.frame_set(1)
     for frame in range(2, frames + 2):
         scene.frame_set(frame)
@@ -59,10 +61,10 @@ def drop_test(obj, frames=60, limit=0.17):
     for o in rigids:
         pos = o.matrix_world.translation
         moved = (pos - start[o.name]).length
-        rest, kname = rest_dist[o.name]
-        anchor = next((k for k in kinematic if k.name == kname), None)
-        stretch = ((anchor.matrix_world.translation - pos).length / rest
-                   if anchor is not None and rest > 0.02 else 1.0)
+        stretch = 1.0
+        for a, rest in links.get(o.name, ()):
+            now = (a.matrix_world.translation - pos).length
+            stretch = max(stretch, (now + 0.01 * unit) / (rest + 0.01 * unit))
         speed = (pos - before_end[o.name]).length / 8.0
         drift.append((moved, stretch, speed, o.name, o.mmd_rigid.bone))
     # restore
@@ -81,11 +83,11 @@ def drop_test(obj, frames=60, limit=0.17):
         o.matrix_basis = basis
     arm.data.pose_position = pose_was
     bpy.context.view_layer.update()
-    torn = [d for d in drift if d[1] > 1.6]
-    restless = [d for d in drift if d[2] > 0.02]
+    torn = [d for d in drift if d[1] > 1.5]
+    restless = [d for d in drift if d[2] > 0.02 * unit]
     drift.sort(key=lambda d: -d[1])
     lines = ["drop test: %d dynamic rigid bodies, %d frames in the rest pose" % (len(drift), frames),
-             "  torn (>1.6x its rest distance to the nearest kinematic body): %d" % len(torn),
+             "  torn (a joint stretched past 1.5x its rest length): %d" % len(torn),
              "  still moving at the end (>2 cm/frame): %d" % len(restless),
              "  worst stretch / drift / end speed:"]
     for moved, stretch, speed, name, bone in drift[:8]:

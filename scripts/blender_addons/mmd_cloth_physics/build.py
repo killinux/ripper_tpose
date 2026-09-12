@@ -201,14 +201,14 @@ def measured_radius(arm, meshes, bone, weight_min=0.3):
     return distances[int(len(distances) * 0.85)]
 
 
-def make_kinematic(model, arm, meshes, bone, ratio=0.3):
+def make_kinematic(model, arm, meshes, bone, ratio=0.3, unit=1.0):
     """A kinematic collider/anchor on ``bone`` (capsule along it)."""
     mw = arm.matrix_world
     head = mw @ bone.head_local
     vec = (mw @ bone.tail_local) - head
-    length = vec.length or 0.05
+    length = vec.length or 0.05 * unit
     radius = measured_radius(arm, meshes, bone) or length * ratio
-    radius = max(0.015, min(radius, 0.25))
+    radius = max(0.015 * unit, min(radius, 0.25 * unit))
     obj = model.createRigidBody(
         shape_type=SHAPE_CAPSULE, location=head + vec * 0.5, rotation=capsule_frame(vec),
         size=(radius, length, 0.0), dynamics_type=MODE_STATIC,
@@ -219,8 +219,10 @@ def make_kinematic(model, arm, meshes, bone, ratio=0.3):
     return obj
 
 
-def ensure_body_colliders(model, arm, meshes, log=None):
+def ensure_body_colliders(model, arm, meshes, log=None, unit=None):
     """Kinematic capsules on the standard body bones that have none yet."""
+    if unit is None:
+        unit = analyze.unit_scale(meshes)
     have = existing_rigids()
     made = 0
     for name, shape, ratio in BODY_COLLIDERS:
@@ -234,13 +236,14 @@ def ensure_body_colliders(model, arm, meshes, log=None):
             radius = measured_radius(arm, meshes, bone) or vec.length * ratio
             obj = model.createRigidBody(
                 shape_type=SHAPE_SPHERE, location=head + vec * 0.5, rotation=(0.0, 0.0, 0.0),
-                size=(max(0.03, min(radius, 0.2)), 0.0, 0.0), dynamics_type=MODE_STATIC,
+                size=(max(0.03 * unit, min(radius, 0.2 * unit)), 0.0, 0.0),
+                dynamics_type=MODE_STATIC,
                 collision_group_number=GROUP_BODY, collision_group_mask=mask16(NOCOLLIDE_BODY),
                 name=name, bone=bone.name,
                 mass=1.0, friction=0.5, linear_damping=0.5, angular_damping=0.5, bounce=0.0)
             obj[TAG] = "body"
         else:
-            make_kinematic(model, arm, meshes, bone, ratio)
+            make_kinematic(model, arm, meshes, bone, ratio, unit)
         made += 1
     if log:
         log("body colliders: %d created, %d already there" % (made, len(have)))
@@ -249,16 +252,18 @@ def ensure_body_colliders(model, arm, meshes, log=None):
 
 # ------------------------------------------------------------- garments --
 
-def rigid_size(preset, shape, half_len, extent):
-    """BOX: (half thickness, half length, half width); CAPSULE: (radius, height, 0)."""
+def rigid_size(preset, shape, half_len, extent, unit=1.0):
+    """BOX: (half thickness, half length, half width); CAPSULE: (radius, height, 0).
+    Absolute sizes are metres times ``unit``."""
     if shape == SHAPE_CAPSULE:
         radius = extent[0] if extent else half_len * 0.35
-        radius = max(0.012, min(radius, 0.06, half_len * 1.2 + 0.01))
-        return (radius, max(0.02, half_len * 2.0), 0.0)
-    half_thick = max(0.008, preset["thickness"] * 0.5 + (extent[1] * 0.3 if extent else 0.0))
+        radius = max(0.012 * unit, min(radius, 0.06 * unit, half_len * 1.2 + 0.01 * unit))
+        return (radius, max(0.02 * unit, half_len * 2.0), 0.0)
+    half_thick = max(0.008 * unit, preset["thickness"] * unit * 0.5
+                     + (extent[1] * 0.3 if extent else 0.0))
     half_width = (extent[0] if extent else half_len * 0.75)
-    half_width = max(0.015, min(half_width, 0.3))
-    return (min(half_thick, 0.04), max(0.015, half_len), half_width)
+    half_width = max(0.015 * unit, min(half_width, 0.3 * unit))
+    return (min(half_thick, 0.04 * unit), max(0.015 * unit, half_len), half_width)
 
 
 def build_garment(model, arm, meshes, garment, options, log=None):
@@ -274,12 +279,13 @@ def build_garment(model, arm, meshes, garment, options, log=None):
     lattice_on = options.get("lattice", True) and preset["lattice"]
     reverse = options.get("reverse_joints", False)
     thickness_scale = options.get("thickness_scale", 1.0)
+    unit = options.get("unit", 1.0)
 
     # anchor rigid body: the garment hangs off it
     anchor_bone = bones.get(garment.anchor) or find_bone(arm, garment.anchor)
     anchor_rigid = have.get(anchor_bone.name) if anchor_bone is not None else None
     if anchor_rigid is None and anchor_bone is not None:
-        anchor_rigid = make_kinematic(model, arm, meshes, anchor_bone)
+        anchor_rigid = make_kinematic(model, arm, meshes, anchor_bone, unit=unit)
         have[anchor_bone.name] = anchor_rigid
 
     rigids, joints, lattice = 0, 0, 0
@@ -288,7 +294,7 @@ def build_garment(model, arm, meshes, garment, options, log=None):
         bone = bones[name]
         row = garment.rows[name]
         head, vec = analyze.segment(arm, bone, members)
-        half_len = min(vec.length * 0.5, 0.25)
+        half_len = min(vec.length * 0.5, 0.25 * unit)
         if shape == SHAPE_BOX:
             centre, euler, axes = box_frame(head, vec, garment.center)
         else:
@@ -297,13 +303,13 @@ def build_garment(model, arm, meshes, garment, options, log=None):
         if options.get("measure_skin", True):
             frame_axes = axes or (Vector((1, 0, 0)), vec.normalized(), Vector((0, 1, 0)))
             extent = analyze.skin_extent(arm, meshes, name, frame_axes, head, vec)
-        size = rigid_size(preset, shape, half_len, extent)
+        size = rigid_size(preset, shape, half_len, extent, unit)
         if shape == SHAPE_BOX:
-            size = (min(0.05, size[0] * thickness_scale), size[1], size[2])
+            size = (min(0.05 * unit, size[0] * thickness_scale), size[1], size[2])
         half_diag = math.sqrt(sum(s * s for s in size[:2]))
         if is_hair:
             group, mask = GROUP_HAIR, mask16(NOCOLLIDE_CLOTH)
-        elif row == 0 or near_body(shapes, centre, half_diag):
+        elif row == 0 or near_body(shapes, centre, half_diag, 0.03 * unit):
             group, mask = GROUP_NEAR, mask16(NOCOLLIDE_NEAR)
         else:
             group, mask = GROUP_CLOTH, mask16(NOCOLLIDE_CLOTH)
@@ -332,7 +338,7 @@ def build_garment(model, arm, meshes, garment, options, log=None):
         spring = lerp(preset["spring"], row, rows)
         # springs scale with segment length squared (inertia), as the reference
         # implementation found necessary for solver stability on short links
-        spring *= min(1.0, max(0.02, (vec.length / 0.15) ** 2))
+        spring *= min(1.0, max(0.02, (vec.length / (0.15 * unit)) ** 2))
         rotation = (0.0, 0.0, 0.0) if is_hair else joint_frame(vec, centre, garment.center)
         joint = model.createJoint(
             location=head, rotation=rotation, rigid_a=parent_rigid, rigid_b=rigid,
@@ -344,7 +350,7 @@ def build_garment(model, arm, meshes, garment, options, log=None):
         joints += 1
 
     if lattice_on:
-        lin = preset["lattice_lin"]
+        lin = preset["lattice_lin"] * unit
         ang = tuple(math.radians(a) for a in preset["lattice_ang"])
         for name_a, name_b in garment.pairs:
             if name_a not in have or name_b not in have or name_a not in geometry:
@@ -370,6 +376,18 @@ def build_garment(model, arm, meshes, garment, options, log=None):
             % (garment.name, garment.kind, garment.preset, len(garment.chains), rows,
                rigids, joints, lattice))
     return rigids, joints, lattice
+
+
+def strip_dynamic_physics():
+    """Delete every dynamic rigid body and every joint (whoever made them), so a
+    PMX that already ships physics can be rebuilt; kinematic body colliders stay."""
+    doomed = [obj for obj in bpy.data.objects
+              if getattr(obj, "mmd_type", "") == "JOINT"
+              or (getattr(obj, "mmd_type", "") == "RIGID_BODY"
+                  and str(obj.mmd_rigid.type) not in ("0", "STATIC"))]
+    for obj in doomed:
+        bpy.data.objects.remove(obj, do_unlink=True)
+    return len(doomed)
 
 
 def clear_garment_physics(garment_names=None):

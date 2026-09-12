@@ -127,6 +127,21 @@ class MCP_OT_build(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class MCP_OT_strip(bpy.types.Operator):
+    bl_idname = "mmd_cloth.strip"
+    bl_label = "Strip dynamic physics"
+    bl_description = ("Delete every dynamic rigid body and joint the model came with "
+                      "(body colliders stay), so Analyze can see the cloth bones again")
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        removed = build.with_world_off(build.strip_dynamic_physics)
+        _garments[:] = []
+        context.scene.mmd_cloth.garments.clear()
+        context.scene.mmd_cloth.report = "stripped %d rigid bodies / joints" % removed
+        return {"FINISHED"}
+
+
 class MCP_OT_clear(bpy.types.Operator):
     bl_idname = "mmd_cloth.clear"
     bl_label = "Clear"
@@ -202,7 +217,9 @@ class MCP_PT_panel(bpy.types.Panel):
         row.prop(settings, "reverse_joints")
         row.prop(settings, "measure_skin")
         col.prop(settings, "thickness_scale")
-        layout.operator("mmd_cloth.analyze", icon="VIEWZOOM")
+        row = layout.row(align=True)
+        row.operator("mmd_cloth.strip", icon="X")
+        row.operator("mmd_cloth.analyze", icon="VIEWZOOM")
         layout.template_list("MCP_UL_garments", "", settings, "garments", settings, "active",
                              rows=4)
         if 0 <= settings.active < len(settings.garments):
@@ -218,8 +235,8 @@ class MCP_PT_panel(bpy.types.Panel):
             layout.label(text=settings.report)
 
 
-CLASSES = (MCP_GarmentItem, MCP_Settings, MCP_OT_analyze, MCP_OT_build, MCP_OT_clear,
-           MCP_OT_colliders, MCP_OT_drop_test, MCP_UL_garments, MCP_PT_panel)
+CLASSES = (MCP_GarmentItem, MCP_Settings, MCP_OT_analyze, MCP_OT_build, MCP_OT_strip,
+           MCP_OT_clear, MCP_OT_colliders, MCP_OT_drop_test, MCP_UL_garments, MCP_PT_panel)
 
 
 def register():

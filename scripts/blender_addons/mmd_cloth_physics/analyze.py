@@ -61,6 +61,22 @@ class Garment:
                 "bones": len(self.bones), "pairs": len(self.pairs)}
 
 
+def unit_scale(meshes):
+    """Metres per Blender unit for this model, from its height: a PMX imported
+    at mmd_tools' default 0.08 stands about 1.6 units tall, one imported at 1.0
+    about 20.  Every absolute size in the presets is in metres and gets
+    multiplied by this."""
+    lo, hi = None, None
+    for mesh in meshes:
+        for corner in mesh.bound_box:
+            z = (mesh.matrix_world @ Vector(corner)).z
+            lo = z if lo is None else min(lo, z)
+            hi = z if hi is None else max(hi, z)
+    if lo is None or hi - lo < 1e-3:
+        return 1.0
+    return max(0.05, (hi - lo) / 1.65)
+
+
 def skin_totals(arm, meshes, threshold=0.02):
     names = {bone.name for bone in arm.data.bones}
     total = defaultdict(float)
@@ -200,7 +216,7 @@ def segment(arm, bone, members):
     if child is not None and tail_vec.length > 0.015 and vec.length > 2.5 * tail_vec.length:
         vec = tail_vec
     if vec.length < 1e-6:
-        vec = Vector((0.0, 0.0, -0.05))
+        vec = Vector((0.0, 0.0, -0.03 * max(bone.length, 1.0)))
     return head, vec
 
 
@@ -208,7 +224,7 @@ def azimuth(point, center):
     return math.atan2(point.y - center.y, point.x - center.x)
 
 
-def classify(arm, garment):
+def classify(arm, garment, unit=1.0):
     """Ring / sheet / strand, and the lattice pairs for rings and sheets."""
     bones = arm.data.bones
     mw = arm.matrix_world
@@ -224,8 +240,8 @@ def classify(arm, garment):
     for chain in chains:
         for name in chain:
             seg_lengths.append(segment(arm, bones[name], set(chain))[1].length)
-    typical = sorted(seg_lengths)[len(seg_lengths) // 2] if seg_lengths else 0.1
-    near = max(0.06, 2.5 * typical)
+    typical = sorted(seg_lengths)[len(seg_lengths) // 2] if seg_lengths else 0.1 * unit
+    near = max(0.06 * unit, 2.5 * typical)
 
     ordered = list(range(len(chains)))
     kind = "sheet"
@@ -293,6 +309,7 @@ def find_garments(arm, meshes, body_regex=None, prop_regex=r"\bProp\d*$",
     comps = components(arm, free)
     bones = arm.data.bones
     mw = arm.matrix_world
+    unit = unit_scale(meshes)
 
     grouped = defaultdict(list)
     for root, (order, rows, children) in comps.items():
@@ -315,7 +332,7 @@ def find_garments(arm, meshes, body_regex=None, prop_regex=r"\bProp\d*$",
                     garment.rows[name] = rows[name]
                     garment.bones.append(name)
         garment.bones.sort(key=lambda n: garment.rows[n])
-        classify(arm, garment)
+        classify(arm, garment, unit)
         garment.preset = guess_preset(garment)
         garments.append(garment)
     return garments
