@@ -32,6 +32,9 @@ import sys
 import traceback
 
 import bpy
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "blender_addons"))
 import numpy as np
 from mathutils import Quaternion, Vector
 
@@ -1315,37 +1318,53 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
     # with), then rigid bodies + joints on skirt / cloak / hair bones.  Optional:
     # a failure here is recorded, not fatal.
     physics = {}
-    for label, op in (("body", bpy.ops.object.add_body_rigids),
-                      ("cloth", bpy.ops.object.add_skirt_physics)):
-        bpy.ops.object.select_all(action="DESELECT")
-        arm.select_set(True)
-        bpy.context.view_layer.objects.active = arm
-        restore = None
-        if label == "cloth":
-            # Teach the add-on this model's own garment names for one call, so
-            # its calibrated rigid-body and joint parameters do the building.
-            from Convert_to_MMD5.convert import skirt
+    bpy.ops.object.select_all(action="DESELECT")
+    arm.select_set(True)
+    bpy.context.view_layer.objects.active = arm
+    try:
+        physics["body"] = ("ok" if bpy.ops.object.add_body_rigids() == {"FINISHED"}
+                           else "cancelled")
+    except Exception as exc:
+        physics["body"] = "failed: %s" % exc
+    # Garments: mmd_cloth_physics (scripts/blender_addons) finds them by shape,
+    # sizes the boxes from the skin, ties neighbouring chains of a skirt with
+    # lattice joints and tapers mass/limits down each chain.  The add-on's own
+    # word-list pass (add_skirt_physics) is the fallback if it is missing.
+    try:
+        from mmd_cloth_physics import api as cloth_api
 
-            chains = cloth_chain_bones(arm, meshes,
-                                       slots.get("lower_body_bone", "").split(" ")[0])
-            # Only the ones its own vocabulary does not already reach.
-            missed = [name for name in chains
-                      if not skirt.CLOTH_RE.search(name)
-                      and not skirt.HAIR_RE.search(name)]
-            physics["cloth_chains"] = missed
-            if missed:
-                restore = skirt.CLOTH_RE
-                skirt.CLOTH_RE = re.compile(
-                    "(?:%s)|(?:%s)" % (restore.pattern,
-                                       "|".join(re.escape(n) for n in missed)),
-                    re.IGNORECASE)
+        biped = slots.get("lower_body_bone", "").split(" ")[0]
+        report = cloth_api.setup(
+            root, body_regex=(r"^%s\b" % re.escape(biped)) if biped else None,
+            prop_regex=r"\bProp\d*$", log=lambda line: print("cloth: " + line))
+        physics["cloth"] = "ok"
+        physics["garments"] = report["garments"]
+        physics["lattice_joints"] = report["lattice"]
+        physics["cloth_chains"] = ["%s: %s %s, %d chains x %d rows, %d lattice"
+                                   % (g["name"], g["kind"], g["preset"], g["chains"],
+                                      g["rows"], g["lattice"]) for g in report["garments"]]
+    except ImportError:
+        from Convert_to_MMD5.convert import skirt
+
+        chains = cloth_chain_bones(arm, meshes,
+                                   slots.get("lower_body_bone", "").split(" ")[0])
+        missed = [name for name in chains
+                  if not skirt.CLOTH_RE.search(name) and not skirt.HAIR_RE.search(name)]
+        physics["cloth_chains"] = missed
+        restore = skirt.CLOTH_RE
+        if missed:
+            skirt.CLOTH_RE = re.compile(
+                "(?:%s)|(?:%s)" % (restore.pattern,
+                                   "|".join(re.escape(n) for n in missed)), re.IGNORECASE)
         try:
-            physics[label] = "ok" if op() == {"FINISHED"} else "cancelled"
+            physics["cloth"] = ("ok" if bpy.ops.object.add_skirt_physics() == {"FINISHED"}
+                                else "cancelled")
         except Exception as exc:
-            physics[label] = "failed: %s" % exc
+            physics["cloth"] = "failed: %s" % exc
         finally:
-            if restore is not None:
-                skirt.CLOTH_RE = restore
+            skirt.CLOTH_RE = restore
+    except Exception as exc:
+        physics["cloth"] = "failed: %s" % exc
     physics["rigid_bodies"] = sum(1 for obj in bpy.data.objects
                                   if getattr(obj, "mmd_type", "") == "RIGID_BODY")
     physics["joints"] = sum(1 for obj in bpy.data.objects

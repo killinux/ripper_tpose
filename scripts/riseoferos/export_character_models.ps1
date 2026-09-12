@@ -305,8 +305,8 @@ foreach ($entry in $entries) {
                         $mc.physics.joints + ", morphs " + @($mc.face_morphs).Count) `
                         -ForegroundColor DarkCyan
                     if (@($mc.physics.cloth_chains).Count) {
-                        Write-Host ("      cloth chains the word list missed: " +
-                            (@($mc.physics.cloth_chains) -join ', ')) -ForegroundColor DarkCyan
+                        Write-Host ("      garments: " +
+                            (@($mc.physics.cloth_chains) -join '; ')) -ForegroundColor DarkCyan
                     }
                     Write-Host ("      helpers: " + @($mc.reparented_helpers).Count +
                         " re-parented, " + @($mc.helper_grants).Count +

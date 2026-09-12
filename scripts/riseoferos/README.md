@@ -347,10 +347,17 @@ D:\roe_exports\character_models_manifest.json   # 全量清单
 >   e05 从 105 个刚体回到 43、j10 从 302 回到 236（触手和翅膀留着，武器不动了）、
 >   i01 从 66 回到 32（只剩腰带）。剩下的都挂在身体上，那才是布该待的地方。
 >
->   识别出来的骨名临时并进插件的 `CLOTH_RE` 再调它的算子，刚体和关节参数仍由插件出，
->   调完还原。g12 实测 165→180 刚体、149→164 关节，多出来的正好是 `Dress_B_01..06`、
->   `Dress_F_01..05`、`ChestTie_L/R_01..02` 这 15 根；渲图确认裙摆正常摆动没有爆炸。
->   结果记进 manifest 的 `physics.cloth_chains`。
+>   第一版是把识别出来的骨名临时并进插件的 `CLOTH_RE` 再调它的算子（g12 实测 165→180
+>   刚体，多出来的正好是 `Dress_B_01..06`、`Dress_F_01..05`、`ChestTie_L/R_01..02`）。
+>   2026-09-12 起改为调 **`scripts/blender_addons/mmd_cloth_physics`**（独立 Blender 插件，
+>   见其 README）：同一套认形状逻辑，再把链按 (锚骨, 名字词干) 归成一件件衣服、分
+>   ring / sheet / strand，按类型套预设（skirt / coat / ribbon / sleeve / tassel / hair /
+>   ornament），刚体宽厚按蒙皮量、质量和限位沿链递变、裙子相邻链之间加 PMXEditor 圈子
+>   标准的横向格子关节（防腿穿裙），弹簧只给需要保形的饰物——插件 skirt.py 对所有布一律
+>   弹簧 30，宽飘带会整段舞停在 T-pose 造型（m03）。插件不可导入时回退到旧路径。
+>   b14_outfit1 实测：5 件衣服（Skirt 11 链×6 行 + 54 横向关节、Sleeve 9 节、Decoration
+>   保形、Tassel、Hair），137 关节，掉落测试无拉断。结果记进 manifest 的 `physics.garments`
+>   / `lattice_joints`，`cloth_chains` 改为每件衣服一行摘要。
 > - **权重被转移到毫不相干的骨上**（`restore_stray_weight_transfers`）：插件退役一根骨时会把它的权重
 >   按几何最近分给别的骨。a10 上这把 11 个背包顶点（原本是 `backpack_D` 0.7 + `backpack_all` 0.3）
 >   分给了 `Point_elbow_R`——一根本来一点蒙皮都没有的肘部垫骨，于是手臂一动，背包上一片红皮革就被
