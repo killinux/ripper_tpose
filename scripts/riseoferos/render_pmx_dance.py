@@ -12,6 +12,9 @@ Usage:
 
 ``frames`` caps the animation (0 = the whole motion).  A ``.blend`` is saved
 beside the mp4 so a still can be re-rendered from the exact same scene.
+
+The worker prints ``physics: N rigid bodies, M bones driven by dynamic ones``;
+M is the number that proves the cloth is simulated rather than parented.
 """
 import math
 import os
@@ -43,11 +46,19 @@ def main():
     while root.parent:
         root = root.parent
 
-    # Without the morph slider the VMD's expression keys drive nothing, and the
-    # blinks are the easiest way to tell a live face from a frozen one.
     from mmd_tools.core.model import Model
 
     rig = Model(root)
+    # Importing PHYSICS only creates the rigid body and joint objects.  Bullet
+    # moves those, but no bone reads them until Model.build() (the "Build"
+    # button of the physics panel) adds the mmd_tools_rigid_track constraints,
+    # so without this every cloth chain still rides its parent bone while a
+    # perfectly good simulation runs beside it, unseen: b14's metre-long sleeve
+    # stuck out of the forearm like a plank.  Build in the rest pose, before
+    # the motion is applied.
+    rig.build()
+    # Without the morph slider the VMD's expression keys drive nothing, and the
+    # blinks are the easiest way to tell a live face from a frozen one.
     rig.morph_slider.create()
     rig.morph_slider.bind()
 
@@ -76,8 +87,10 @@ def main():
         world.enabled = True
         world.point_cache.frame_start = scene.frame_start
         world.point_cache.frame_end = scene.frame_end
-        print("physics: %d rigid bodies"
-              % (len(world.collection.objects) if world.collection else 0))
+        bound = sum(1 for bone in arm.pose.bones
+                    if "mmd_tools_rigid_track" in bone.constraints)
+        print("physics: %d rigid bodies, %d bones driven by dynamic ones"
+              % (len(world.collection.objects) if world.collection else 0, bound))
     else:
         print("physics: no rigid body world in this model")
 

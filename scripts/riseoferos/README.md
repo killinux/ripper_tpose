@@ -582,7 +582,7 @@ a10 实测：`knee_L` 52%、`muscle_elbow` 46%、`UpArmTwist` 63%、`CalfTwist` 
 
 `-PerCharacter` 按「**字母 = 角色，数字 = 服装变体**」（见
 [character-roster.md](character-roster.md)）分组，每个字母只取编号最大的那套：
-a12 / b13 / c10 / d09 / e10 / f11 / g13 / h09 / i04 / j10 / k06 / l01 / m02。
+a12 / b14_outfit1 / c10 / d09 / e10 / f11 / g13 / h09 / i04 / j10 / k07 / l01 / m03。
 同编号还有 `_outfit1` 时取 outfit 那套。
 
 一段 2291 帧的 EEVEE 动画单个要好几分钟，串行渲一批就是一下午，所以默认 `-Parallel 4`
@@ -591,12 +591,17 @@ a12 / b13 / c10 / d09 / e10 / f11 / g13 / h09 / i04 / j10 / k06 / l01 / m02。
 产物 `D:\roe_exports\<id>\blend\pmx\<stem>_dance.mp4`，同名 `.blend` 一起留下，
 方便回头从同一个场景补渲静帧、量骨骼。默认用 `来杯好茶摇一摇` 那套 VMD，`-Vmd` 可换。
 
-> **导入一定要带 `PHYSICS`。** mmd_tools 的 `import_model(types=...)` 不写 `PHYSICS` 就
-> 根本不导刚体和关节，裙子披肩触手全部只是硬跟着父骨走——**这样的预览既看不出布在飘，
-> 也看不出布炸了**，而预览的全部意义就在这两件事上。踩过一次：g12 的披肩明明有 165 个
-> dynamic 刚体，视频里四帧纹丝不动，一度以为是物理参数太硬。加上 `PHYSICS` 之后还要开
+> **导入要带 `PHYSICS`，导完还要 `Model(root).build()`，两步缺一不可。** mmd_tools 的
+> `import_model(types=...)` 不写 `PHYSICS` 就根本不导刚体和关节；写了也只是把刚体、关节
+> **对象**建出来——Bullet 会算它们，但没有任何骨骼在读：把骨骼绑到 dynamic 刚体上的
+> `mmd_tools_rigid_track` 约束是 `Model.build()`（物理面板那个 Build 按钮）才建的，导入器
+> 不会调。两种情况下裙子披肩触手都只是硬跟着父骨走——**这样的预览既看不出布在飘，也看不出
+> 布炸了**，而预览的全部意义就在这两件事上。踩过两次：g12 的披肩 165 个 dynamic 刚体，视频
+> 里四帧纹丝不动，一度以为是物理参数太硬（漏了 `PHYSICS`）；补上之后那批"带物理"的预览其实
+> 仍是 0 根骨绑到刚体（漏了 `build()`，打开 `_dance.blend` 数 `mmd_tools_rigid_track` 就能
+> 看出来），直到 b14 一米长的袖子横着从前臂伸出去像块板才露馅。另外要开
 > `scene.rigidbody_world.enabled` 并把 point cache 的帧范围铺满，Bullet 才会随着逐帧渲染推进。
-> worker 会打印 `physics: N rigid bodies`，为 0 或没有就是没导进来。
+> worker 打印 `physics: N rigid bodies, M bones driven by dynamic ones`，M 为 0 就是没绑上。
 一个角色目录里可能有两个 PMX（`a08` 同时放 `pc_a08_hd` 和 `pc_a08_outfit1_hd`），
 脚本按 **PMX 逐个**建任务，不是按目录，所以 outfit 变体不会被漏掉。
 
