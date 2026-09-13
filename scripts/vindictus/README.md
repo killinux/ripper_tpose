@@ -5,6 +5,71 @@ Nexon 的《洛奇英雄传：反抗命运》还没发售（Steam 商店页写 2
 Alpha Demo（Steam `3576170`）测试结束后被替换成 348 MB 空壳，已经拿不到了。本目录针对
 Pre-Alpha 客户端：**UE 5.3、IoStore（utoc/ucas）、Oodle 压缩、索引 AES 加密**。
 
+## 快速开始
+
+所有命令都在本目录里跑（PowerShell 先 `cd 〈仓库〉\scripts\vindictus`）。
+
+### 看有哪些模型
+
+```powershell
+python .\list_models.py                             # 全表：id / kind / body / 部件数 / umodel 已导 / blend 已建
+python .\list_models.py --kind outfit               # 只看一类：player / outfit / base / monster / npc
+python .\list_models.py --resolve PCF_003 --json    # 某一个模型：每个部件的包路径、PSK 是否已导
+python .\list_models.py --raw --path-filter /Character/AI/   # 容器里的原始路径（找没归类到的东西）
+.\export_model.ps1 -List                            # 同一张表
+```
+
+直接解密并读游戏 `Paks\*.utoc` 的目录索引，不开任何工具。当前 36 个模型：`Fiona`、`Lethita`、
+女装 `PCF_001`…`PCF_067` + `Shiningwill_legacy`、男装 `PCM_00x_Temp`、`Fiona_BaseBody` /
+`PCM_BaseBody`、13 只怪（如 `Gnoll_type3_Tribe_Boss_01`）、2 个 NPC。
+
+### 导出一个模型
+
+```powershell
+.\export_model.ps1 Fiona                 # 主角默认装
+.\export_model.ps1 PCF_003               # 一套服装（自动配 Fiona 的脸和头发）
+.\export_model.ps1 PCF_067 -Force        # 已导过想重做：重导包 + 重建 blend
+.\export_model.ps1 Gnoll_type3_Tribe_Boss_01 -NoPreview
+```
+
+一条命令做完三步：`list_models.py` 解析包 → UE Viewer 逐包导出 PSK + PNG + 材质参数到
+`D:\vindictus_exports\umodel_exports\` → Blender 无头跑 `build_blend.py` 合骨架、建材质、渲预览。
+结束时打印骨骼数、各部件顶点、材质/贴图数、告警。产物：
+
+```text
+D:\vindictus_exports\blend\<id>\<id>.blend       一副骨架 + 全部部件 + 材质
+D:\vindictus_exports\blend\<id>\textures\        贴图
+D:\vindictus_exports\blend\<id>\preview.png / preview_face.png
+```
+
+整个 `blend\<id>\` 目录可以直接拷给别人。常用参数：`-Force`（重做）、`-NoBlend`（只到 UE Viewer）、
+`-NoPreview`、`-Smooth`（平滑法线）、`-IncludeWeapons`（把武器并进来）；路径都有默认值
+（`-GameRoot E:\tools\vindictus`、`-ExportRoot D:\vindictus_exports`、`-UmodelExe`、`-BlenderExe`）。
+
+### 批量
+
+```powershell
+# 先顺序把包导完（UE Viewer 并发会互相覆盖共享贴图，这一步不能并行）
+python .\list_models.py --kind outfit --json | ConvertFrom-Json | Where-Object body -eq PCF | ForEach-Object { .\export_model.ps1 $_.id -NoBlend }
+# 再分几路并行跑 Blender，每套 2–3 分钟
+foreach ($id in 'PCF_001','PCF_002','PCF_003') { .\export_model.ps1 $id }
+```
+
+### 更新画廊
+
+```powershell
+cd html
+python .\collect_manifest.py     # 汇总 blend\*\build.log
+python .\make_gallery.py         # -> html\index.html
+```
+
+### 前提（只做一次）
+
+- 客户端在 `E:\tools\vindictus`，UE Viewer 用 `E:\tools\umodel_specific\materials\umodel_materials_ue5.exe`，
+  Blender 3.6 装了 `io_scene_psk_psa`——本机都已就位，细节见下面「已验证环境」。
+- AES key：脚本从 `VINDICTUS_AES_KEY` 环境变量或 `E:\tools\vindictus\_download\aes_key.txt` 读。
+  换机器或丢了就 `python .\find_aes_key.py --out <路径>` 重新算（80 秒）。key 别放进仓库。
+
 ## 已验证环境
 
 ```text
