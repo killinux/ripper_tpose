@@ -75,11 +75,18 @@
      骨架摆到底骨架的 rest 姿势再烘焙（等价于运行时蒙皮），再并入；只有一根 `root` 的部件（Lethita
      头发）挂到 `head` 骨。默认头发只在 Head 部件带头发材质或 `HEAD_REPLACES_HAIR`（PCF_067）时
      隐藏——项链/耳机/帽子/发带/发冠都不隐藏；几何启发式分不开耳机和发型，所以用表。
-  5. `Shiningwill_legacy`（用户反馈「没有面部」）：Fiona 的脸骨架里还留着旧的 Biped 子树
-     （`Root → Bip001_*`），但相对 UE 骨架转了 90°，旧装绑上去身体侧着、脸朝前。加
+  5. `Shiningwill_legacy`（用户反馈「没有面部」）：旧装的 Biped 骨架（`Root → Bip001_*`）合并进
+     Fiona 脸骨架后是第二棵根子树，而且它的朝向和 UE 骨架差 90°——身体侧着、脸朝前。加
      `align_secondary_hierarchies()`：第二棵根子树连同绑在上面的网格按脚趾方向转到 UE 朝向、按
      `Bip001_Head`→`head` 平移对齐；旧装自带的旧发型盖住新脸的眼睛，改成隐藏旧发型、保留默认头发。
-  6. 眼睛重做（用户反馈「眼睛暗淡」）：原来把 `T_Iris_A_M` 的 B 通道当虹膜遮罩，其实 B 是径向渐变、
+     ——第一版用 `Vector.angle_signed`（顺时针为正）配 `Matrix.Rotation`（逆时针为正），转反了，
+     Shiningwill 旧版看着「正面」其实是背面；改用 `atan2` 差值，并在日志里打印转正后的朝向核对。
+  6. 基础身体（用户要求导出 `Fiona_BaseBody` / `PCM_BaseBody`）：Fiona 的素体是名字带 `SM_` 的
+     SkeletalMesh `SM_pc_fiona_basebody`（`SK_female_base` 是 Skeleton），旧版 Biped 骨架、自带旧头，
+     转正后把 `Bip001_Head/Neck` 权重的旧头切掉换成现在的脸；Lethita 的 `MI_EyeShell01`（无贴图的
+     眼影壳）原来落到默认白色 PBR 变成白眼球，归入遮蔽壳。顺带发现 `"rma"` 子串匹配到 `Normal Map`
+     把法线当 ORM 接进去（金属度 1）：PCF_012「银裙」、素体的古铜皮肤都是这个 bug，改整词匹配后重建。
+  7. 眼睛重做（用户反馈「眼睛暗淡」）：原来把 `T_Iris_A_M` 的 B 通道当虹膜遮罩，其实 B 是径向渐变、
      G 是纤维、alpha 才是瞳孔，而且从色板采到的 `IrisColor` 是 sRGB 值直接塞进了线性颜色口——虹膜
      成了一团发白的雾。现在 `build_eye()`：UV 中心半径 0.2 的程序化虹膜盘，两色沿半径渐变
      （色板采样转线性 × `IrisBrightness` × 1.35）× 纤维 × limbus 变暗，瞳孔半径 0.32×`PupilScale`，
