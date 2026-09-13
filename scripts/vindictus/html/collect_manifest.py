@@ -23,8 +23,8 @@ BLEND_DIR = os.path.join(ROOT, "blend")
 NAMES = {
     "Fiona": "Fiona 默认装 · Shiningwill 银甲（master 网格）",
     "Lethita": "Lethita 默认装 · 红缨全身板甲",
-    "Fiona_BaseBody": "Fiona 基础身体（SK_female_base）",
-    "PCM_BaseBody": "男性基础身体四件",
+    "Fiona_BaseBody": "Fiona 基础身体（SM_pc_fiona_basebody：白 T 恤 + 短裤的旧版素体，旧头已切掉换成现在的脸）",
+    "PCM_BaseBody": "男性基础身体（Upper/Lower/Hand/Foot 四件 + Lethita 脸/发）",
     "Shiningwill_legacy": "旧版 Shiningwill 银甲（Biped 骨架，已转正对齐到 Fiona 的脸和头发；自带的旧发型隐藏）",
     "PCF_001": "白衬衫 + 皮短裤 + 系带长靴，颈圈",
     "PCF_001_Temp": "黑色长风衣 + 贝雷帽（WIP：裤子是占位贴图）",

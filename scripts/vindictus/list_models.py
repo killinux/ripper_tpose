@@ -163,9 +163,15 @@ def all_paths(paks_dir: str, key: bytes | None) -> list[str]:
 # ---------------------------------------------------------------- catalogue
 def is_mesh_asset(path: str) -> bool:
     stem = os.path.basename(path)
-    if not stem.lower().endswith(".uasset") or not stem.startswith("SK_"):
+    if not stem.lower().endswith(".uasset"):
         return False
-    return not stem[:-7].lower().endswith(NON_MESH_SUFFIXES)
+    low = stem[:-7].lower()
+    # Fiona's nude body is a SkeletalMesh misnamed SM_pc_fiona_basebody (SK_female_base next to it is a Skeleton)
+    if stem.startswith("SM_") and "basebody" in low and "/Model/Mesh/" in path:
+        return True
+    if not stem.startswith("SK_"):
+        return False
+    return not low.endswith(NON_MESH_SUFFIXES) and not low.endswith("_base")
 
 
 def content_relative(path: str) -> str:
@@ -210,7 +216,7 @@ def build_catalogue(paths: list[str]) -> list[dict]:
                 parts.append(part(p, part_name(stem, "SK_%s_" % name), "armor"))
             elif "/Weapon/" in rel:
                 extras.append(part(p, part_name(stem, "SK_"), "weapon"))
-            elif "/Model/Mesh/" in rel and stem.lower().endswith("_base"):
+            elif "/Model/Mesh/" in rel and "basebody" in stem.lower():
                 extras.append(part(p, "BaseBody", "base"))
         if parts:
             body = next((b for b, owner in FACE_FOR_BODY.items() if owner == name), "PCF")

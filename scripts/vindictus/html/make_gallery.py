@@ -232,7 +232,7 @@ python .\list_models.py --raw --path-filter /Character/AI/   # 容器里的原�
       <tr><th>kind</th><th>目录</th><th>组成</th></tr>
       <tr><td>player</td><td><code>Character\Player\&lt;Name&gt;\</code></td><td>Fiona（女，PCF 骨架）、Lethita（男，PCM 骨架）：<code>Face\Model\SK_&lt;Name&gt;_Face01</code> + <code>_Hair01</code> + <code>Armor\Model\SK_&lt;Name&gt;_*_master</code></td></tr>
       <tr><td>outfit</td><td><code>Character\Outfit\PC{F,M}_Outfit\&lt;Id&gt;\Model\</code></td><td>服装部件（Upper/Lower 或 Onepiece + Hand/Foot/Head）+ 对应主角的脸和头发；<code>Player\Outfit\Shiningwill\Mesh</code> 下的旧版整套记作 <code>Shiningwill_legacy</code>（3ds Max Biped 骨架 <code>Bip001_*</code>，脸骨架里还留着这套骨、只是转了 90°，脚本会把它转正再配脸/发）</td></tr>
-      <tr><td>base</td><td><code>BaseBody_PCM</code> 四件 / Fiona <code>SK_female_base</code></td><td>裸体基础身体 + 脸/发</td></tr>
+      <tr><td>base</td><td><code>BaseBody_PCM</code> 四件 / Fiona <code>Model\Mesh\SM_pc_fiona_basebody</code>（名字带 SM_ 其实是 SkeletalMesh；旁边的 <code>SK_female_base</code> 是 Skeleton）</td><td>基础身体 + 脸/发（Fiona 的是白 T 恤 + 短裤的旧版素体）</td></tr>
       <tr><td>monster / npc</td><td><code>Character\AI\&lt;Race&gt;\&lt;Type&gt;\&lt;Variant&gt;\Model\</code>、<code>Character\Npc\**</code></td><td>目录下全部 SK（武器标为 weapon，<code>--include-weapons</code> 才并入）</td></tr>
     </table>
     <p>女性角色只有 Fiona 一个（NPC 的 Female_adult 只有骨架）；女装 15 套 = 默认装 + <code>Shiningwill_legacy</code> + 13 套 <code>PCF_*</code>（其中 002/003/005/006/007 是连衣裙）。</p>
@@ -286,7 +286,8 @@ vindictus_models_manifest.json            collect_manifest.py 的汇总；_galle
       <li><b>Head 部件不都是头盔</b>：项链/颈圈（001、007、009）、耳机（002、004）、帽子（003、012）、发带（006）、发冠（005）、自带发型（001_Temp、008、010 打包了 Fiona 的头发）、全盔（067）。
         只有 Head 里带头发材质或 <code>list_models.py</code> 的 <code>HEAD_REPLACES_HAIR</code>（067）标了的才隐藏默认头发；头发仍在文件里（<code>&lt;id&gt;_Hair</code>），要显示就取消隐藏。按几何（贴头皮比例、盖脸比例）分不开耳机和发型，别再试。</li>
       <li><b>部件绑在另一版骨架上</b>：002/003/004/006/007/009/010/012 的 Hand/Head/Upper/Lower 到 <code>head</code>、脚趾差 6.9–13 cm；不重定位帽子会飘在头顶上方。脚本自动烘焙，报告里 <code>reposed_parts</code> 列出。</li>
-      <li><b>旧版 Biped 骨架朝向不同</b>：脸骨架里的 <code>Root → Bip001_*</code> 子树相对 UE 骨架转了 90°（面朝 +X），<code>Shiningwill_legacy</code> 绑在它上面会侧着身、脸朝前。脚本把这棵子树连同绑在上面的网格转正、按 <code>Bip001_Head</code>→<code>head</code> 平移对齐，报告里 <code>aligned_hierarchies</code>；它自带的旧发型盖到新脸的眼睛上，所以隐藏旧发型、保留默认头发。</li>
+      <li><b>旧版 Biped 骨架朝向不同</b>：<code>Shiningwill_legacy</code> 和 Fiona 素体绑的 <code>Root → Bip001_*</code> 骨架合并进脸骨架后是第二棵根子树，朝向和 UE 骨架差 90°（面朝 +X），会侧着身、脸朝前。脚本把这棵子树连同绑在上面的网格转正、按 <code>Bip001_Head</code>→<code>head</code> 平移对齐，报告里 <code>aligned_hierarchies</code>；旧装自带的旧发型盖到新脸的眼睛上，所以隐藏旧发型、保留默认头发；素体自带的旧头（<code>Bip001_Head/Neck</code> 权重）整个切掉。</li>
+      <li><b>材质参数名要整词匹配</b>：<code>"rma"</code> 是 <code>Normal Map</code> 的子串，曾把法线贴图当 ORM 接进去（B 通道≈1 → 金属度 1），没有 ARM 参数的服装全成了金属（PCF_012 的「银裙」、素体的古铜皮肤）。</li>
       <li><b>UE Viewer 不能并行</b>：不同模型共用 Fiona 脸/发/眼睛贴图，同时写会互相覆盖。先 <code>-NoBlend</code> 顺序导完再并行 Blender。</li>
       <li><b>virtual texture 导不出</b>：静态物件贴图全是；角色里 <code>T_pc_fiona_basebody_01_D</code>（<code>M_female_skin_body_01</code>，PCF_001_Temp 用）也是——这类皮肤材质用纯肤色代替，报告里会列「未解析」。</li>
       <li><b>BC6H 贴图写成 .hdr</b>：PCF_012 的 <code>_B</code> 基色是 <code>.hdr</code>，脚本已按 <code>.hdr</code> 索引；别按 png 去找。</li>

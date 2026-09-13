@@ -157,10 +157,14 @@ def image_path(stem):
     return IMAGES.get(stem.lower(), "")
 
 
-def find_role(mat_info, props, roles, suffixes=()):
-    """Pick a texture stem: material-instance parameter names first, then .mat keys, then suffix match."""
+def find_role(mat_info, props, roles, suffixes=(), whole_words=False):
+    """Pick a texture stem: material-instance parameter names first, then .mat keys, then suffix match.
+
+    whole_words matches roles against the parameter name's words ("ARM / E" -> arm) instead of substrings —
+    "rma" is a substring of "Normal Map", which once wired normal maps in as ORM and made cloth metallic."""
     for key, stem in props["textures"].items():
-        if any(r in key.lower() for r in roles):
+        words = re.findall(r"[a-z]+", key.lower())
+        if any((r in words) if whole_words else (r in key.lower()) for r in roles):
             return stem
     for key in mat_info:
         if key != "_others" and key.lower() in roles:
@@ -489,7 +493,9 @@ def setup_material(material):
         return
 
     # --- eye occlusion shell / tear line / fake reflection card: translucent helpers
-    if "eyeocclusion" in parent or "eyeshdow" in low or "eyeshadow" in low:
+    # (Fiona: M_PC_Skin_EyeOcclusion "EyeShdow" shell; Lethita: M_EyeShell01 — a shadow shell with ShadowTint,
+    # no textures at all, which would otherwise fall through to an opaque white PBR default)
+    if "eyeocclusion" in parent or "eyeshell" in parent or "eyeshdow" in low or "eyeshadow" in low or "eyeshell" in low:
         entry["kind"] = "eye-occlusion"
         bsdf.inputs["Base Color"].default_value = (0.0, 0.0, 0.0, 1)
         bsdf.inputs["Alpha"].default_value = 0.12
@@ -530,10 +536,11 @@ def setup_material(material):
     # --- generic PBR: outfit / skin / teeth / props
     diffuse = use(props["textures"].get("BaseColor") or find_role(info, props, ("basecolor", "diffuse", "base color"), ("_d", "_bc")))
     normal = use(props["textures"].get("Normal Map") or find_role(info, props, ("normal map", "normal"), ("_n", "_na")))
-    packed = use(find_role(info, props, ("arm", "orm", "rma"), ("_arm", "_orm")))
+    packed = use(find_role(info, props, ("arm", "orm", "rma", "mra"), ("_arm", "_orm", "_rma"), whole_words=True))
     # skin = the M_PC_Skin_* family plus the base-body instances (MI_PCF_Upper01 ...); outfit instances such as
     # MI_PCF_003_Head are ordinary PBR even though they share the MI_PCF_ prefix
-    skin = "skin" in parent or "skin" in low or "face01_" in low or bool(re.match(r"^mi_pc[fm]_(upper|lower|hand|foot|body|handfoot)\d*$", low))
+    skin = ("skin" in parent or "femalebody" in parent or "malebody" in parent or "skin" in low or "face01_" in low
+            or bool(re.match(r"^mi_pc[fm]_(upper|lower|hand|foot|body|handfoot)\d*$", low)))
     entry["kind"] = "skin" if skin else ("teeth" if "teeth" in low else "pbr")
     tint = props["vectors"].get("Basecolor Tint")
     base_img = None
@@ -541,13 +548,15 @@ def setup_material(material):
         base_img = link_tinted_base(tree, bsdf, diffuse, tint)
     elif skin:
         # e.g. M_female_skin_body_01: its diffuse is a virtual texture UE Viewer cannot export -> plain skin tone
-        bsdf.inputs["Base Color"].default_value = (0.80, 0.60, 0.50, 1.0)
+        bsdf.inputs["Base Color"].default_value = (0.86, 0.68, 0.60, 1.0)
+        bsdf.inputs["Roughness"].default_value = 0.7
+        bsdf.inputs["Specular"].default_value = 0.2
         entry["textures"].append("(flat skin tone: diffuse not exportable)")
     if normal:
         link_normal(tree, bsdf, normal, SKIN_NORMAL_STRENGTH if skin else DEFAULT_NORMAL_STRENGTH)
     if packed and not skin:
         link_packed(tree, bsdf, packed)
-    else:
+    elif diffuse or not skin:
         bsdf.inputs["Roughness"].default_value = 0.55 if skin else 0.6
         bsdf.inputs["Specular"].default_value = 0.35
     if skin:
@@ -770,15 +779,19 @@ def character_forward(arm):
 # turn that whole hierarchy (bones and the meshes bound to it) to the UE facing and put its head under the
 # UE head bone.
 def align_secondary_hierarchies(arm, meshes):
-    bones = arm.data.bones
     primary = character_forward(arm)
+    bones = arm.data.bones
     primary_root = bones["pelvis"] if "pelvis" in bones else (bones["head"] if "head" in bones else None)
     while primary_root is not None and primary_root.parent is not None:
         primary_root = primary_root.parent
+    primary_root_name = primary_root.name if primary_root is not None else ""
+    # bone references die on every edit-mode toggle: work with names and re-fetch
+    root_names = [b.name for b in bones if b.parent is None and b.name != primary_root_name]
     moved = []
-    for root in [b for b in bones if b.parent is None and b is not primary_root]:
+    for root_name in root_names:
+        bones = arm.data.bones
         subtree = set()
-        stack = [root]
+        stack = [bones[root_name]]
         while stack:
             b = stack.pop()
             subtree.add(b.name)
@@ -787,7 +800,10 @@ def align_secondary_hierarchies(arm, meshes):
         forward = forward_of(arm, feet) if feet else None
         if forward is None:
             continue
-        angle = forward.to_2d().angle_signed(primary.to_2d(), 0.0)
+        # counter-clockwise angle that turns `forward` onto `primary` (Matrix.Rotation is counter-clockwise;
+        # mathutils' angle_signed counts clockwise as positive, which sent the first attempt the wrong way)
+        angle = math.atan2(primary.y, primary.x) - math.atan2(forward.y, forward.x)
+        angle = (angle + math.pi) % (2 * math.pi) - math.pi
         offset = Vector((0.0, 0.0, 0.0))
         rotation = Matrix.Rotation(angle, 4, "Z")
         if "Bip001_Head" in subtree and "head" in bones:
@@ -810,7 +826,9 @@ def align_secondary_hierarchies(arm, meshes):
             if groups and len(groups & subtree) * 2 >= len(groups):
                 mesh.matrix_world = transform @ mesh.matrix_world
                 moved_meshes.add(mesh.name)
-        moved.append("%s: rotated %.0f deg, moved %.1f cm" % (root.name, math.degrees(angle), offset.length))
+        check = forward_of(arm, feet)
+        moved.append("%s: rotated %.0f deg, moved %.1f cm, now facing (%.2f, %.2f)" % (
+            root_name, math.degrees(angle), offset.length, check.x if check else 0.0, check.y if check else 0.0))
     return moved
 
 
@@ -818,6 +836,48 @@ moved_meshes = set()   # meshes bound to a legacy hierarchy (filled by align_sec
 aligned = align_secondary_hierarchies(base_arm, [m for _p, _a, ms in imported for m in ms])
 if aligned:
     log("aligned secondary skeleton hierarchies to the UE facing: " + "; ".join(aligned))
+
+# A legacy base body brings its own (old, texture-less) head along; with the current face part in the file it
+# would poke through the new face, so cut it off: drop the vertices the old head / neck bones own.
+def cut_legacy_head(mesh, subtree_bones):
+    import bmesh
+    head_groups = {g.index for g in mesh.vertex_groups if g.name in subtree_bones and ("head" in g.name.lower() or "neck" in g.name.lower())}
+    if not head_groups:
+        return 0
+    doomed = []
+    for v in mesh.data.vertices:
+        if v.groups and max(v.groups, key=lambda x: x.weight).group in head_groups:
+            doomed.append(v.index)
+    if not doomed:
+        return 0
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[bm.verts[i] for i in doomed], context="VERTS")
+    bm.to_mesh(mesh.data)
+    bm.free()
+    mesh.data.update()
+    return len(doomed)
+
+
+has_face_part = any(p["name"].lower() == "face" for p in PARTS)
+if has_face_part and moved_meshes:
+    legacy_bones = set()
+    for b in base_arm.data.bones:
+        top = b
+        while top.parent is not None:
+            top = top.parent
+        if top.name not in ("root",):
+            legacy_bones.add(b.name)
+    for part, _arm, meshes in imported:
+        if part["name"].lower() not in ("basebody", "body"):
+            continue
+        for mesh in meshes:
+            if mesh.name in moved_meshes:
+                removed = cut_legacy_head(mesh, legacy_bones)
+                if removed:
+                    log("cut the old head off %s: %d vertices removed" % (part["name"], removed))
+                    report["warnings"].append("%s: old head/neck removed (%d vertices) so the current face fits" % (part["name"], removed))
 
 report["rig"] = {"bones": len(base_arm.data.bones), "added_from_parts": added,
                  "rest_pose_max_deviation": round(deviation, 4), "rest_pose_worst_bone": deviation_bone,

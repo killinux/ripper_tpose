@@ -209,12 +209,19 @@ python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\
 - 部分服装的部件绑在**另一版骨架**上（Head 的脊柱链到 head 差 6.9 cm，Shiningwill 旧版差 6 cm）：
   `build_blend.py` 先把该部件自己的骨架摆到底骨架的 rest 姿势再烘焙网格（等价于游戏运行时的蒙皮），
   报告里记为 `reposed_parts`。
-- `Shiningwill_legacy` 整套是 3ds Max Biped 骨架（`Bip001_*`）。Fiona 的脸骨架里还留着这棵子树
-  （`Root → Bip001_*`，364 根），但相对 UE 骨架转了 90°（面朝 +X），所以直接合并会身体侧着、脸朝前。
-  `align_secondary_hierarchies()` 把第二棵根子树连同绑在上面的网格按脚趾方向转到 UE 朝向、再按
-  `Bip001_Head`→`head` 平移对齐（报告 `aligned_hierarchies`）；它自带的旧发型是给旧头做的，会盖住新脸的
-  眼睛，所以隐藏旧发型、保留默认头发。
+- `Shiningwill_legacy` 整套和 Fiona 素体是 3ds Max Biped 骨架（`Root → Bip001_*`）。合并进 Fiona 的脸骨架
+  （UE 命名，没有 Bip 骨）后它成了第二棵根子树，而且朝向和 UE 骨架差 90°（面朝 +X），直接合并会身体
+  侧着、脸朝前。`align_secondary_hierarchies()` 把第二棵根子树连同绑在上面的网格按脚趾方向转到 UE
+  朝向、再按 `Bip001_Head`→`head` 平移对齐（报告 `aligned_hierarchies`，日志里打印转正后的朝向）；旧装
+  自带的旧发型是给旧头做的，会盖住新脸的眼睛，所以隐藏旧发型、保留默认头发。
 - `SK_Fiona_Lower01_master` 里有一个 `PCF_005_Onepiece` 材质段，是 master 网格自带的，渲染上被裙甲盖住。
+- 基础身体：`Fiona_BaseBody` 用的是 `Player/Fiona/Model/Mesh/SM_pc_fiona_basebody`（名字带 SM_ 其实是
+  SkeletalMesh；旁边的 `SK_female_base` 反而是 Skeleton 资源，导不出网格）。它是旧版素体（白 T 恤 + 短裤，
+  Biped 骨架，自带一个没贴图的旧头），脚本按上面的对齐规则转正后，把旧头/脖子（`Bip001_Head/Neck`
+  权重的 5.8 万顶点）切掉换成现在的脸，领口处能看到接缝。`PCM_BaseBody` 是新骨架的四件，直接能用。
+- 材质参数名匹配用整词：`"rma"` 曾经作为子串匹配到 `Normal Map`，把法线贴图当 ORM 接了进去
+  （B 通道≈1 → 金属度 1），没有 ARM 参数的服装（PCF_012、旧版 Shiningwill 上衣、素体）全成了金属；
+  `find_role(..., whole_words=True)` 修掉。
 - `T_pc_fiona_basebody_01_D`（`M_female_skin_body_01` 的基色）是 virtual texture 导不出，这类皮肤材质用纯肤色代替；
   BC6H 贴图 UE Viewer 写成 `.hdr`（PCF_012 的 `_B` 基色），已按 `.hdr` 索引。
 - 眼球是近似：没有折射（游戏用角膜折射 + 视差），虹膜半径 0.2 是按这批头的眼裂宽度定的

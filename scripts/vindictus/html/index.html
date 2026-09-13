@@ -95,21 +95,21 @@ td code, li code, p code { font-family: Consolas, monospace; }
 <body>
 <header>
   <h1>Vindictus: Defying Fate · 模型导出总览（2024-03 Pre-Alpha）</h1>
-  <div class="sub">生成于 2026-09-13 17:12 · 导出根目录 <code>D:\vindictus_exports</code> ·
+  <div class="sub">生成于 2026-09-13 21:41 · 导出根目录 <code>D:\vindictus_exports</code> ·
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
-    <div class="stat"><b>16</b><span>已转模型</span></div>
+    <div class="stat"><b>18</b><span>已转模型</span></div>
     <div class="stat"><b>14</b><span>服装</span></div>
-    <div class="stat"><b>473.2 MB</b><span>blend 总体积</span></div>
-    <div class="stat"><b>1</b><span>有告警</span></div>
+    <div class="stat"><b>511.2 MB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>2</b><span>有告警</span></div>
   </div>
 </header>
 
 <div class="toolbar">
   <input id="q" type="search" placeholder="搜索模型 id（PCF_003）、说明（女巫帽）、部件（Onepiece）或路径…（按 / 聚焦）">
-  <select id="body"><option value="">全部身体</option><option value="PCF">女（Fiona） (15)</option><option value="PCM">男（Lethita） (1)</option></select>
+  <select id="body"><option value="">全部身体</option><option value="PCF">女（Fiona） (16)</option><option value="PCM">男（Lethita） (2)</option></select>
   <button class="chip on" data-kind="">全部</button>
-  <button class="chip" data-kind="player">主角默认装</button><button class="chip" data-kind="outfit">服装</button>
+  <button class="chip" data-kind="player">主角默认装</button><button class="chip" data-kind="outfit">服装</button><button class="chip" data-kind="base">基础身体</button>
   <button class="toggle" id="warnOnly">只看告警</button>
   <span class="count" id="count"></span>
 </div>
@@ -127,7 +127,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
             <dt>说明</dt><dd class="prose">Fiona 默认装 · Shiningwill 银甲（master 网格）</dd>
             <dt>部件</dt><dd>Foot · Hand · Lower · Upper · Face · Hair</dd>
             <dt>规格</dt>
-            <dd>103180 顶点 · 146039 面 · 1415 骨骼（合并 757）· 19 材质 · 40 贴图 · 28.9 MB</dd>
+            <dd>103180 顶点 · 146039 面 · 1415 骨骼（合并 757）· 19 材质 · 42 贴图 · 28.9 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/vindictus_exports/blend/Fiona/Fiona.blend" title="D:\vindictus_exports\blend\Fiona\Fiona.blend">D:\vindictus_exports\blend\Fiona\Fiona.blend</a>
                 <button class="copy" data-copy="D:\vindictus_exports\blend\Fiona\Fiona.blend">复制</button></dd>
@@ -187,7 +187,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
             <dt>说明</dt><dd class="prose">黑色长风衣 + 贝雷帽（WIP：裤子是占位贴图）</dd>
             <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
             <dt>规格</dt>
-            <dd>123407 顶点 · 177850 面 · 1362 骨骼（合并 704）· 17 材质 · 35 贴图 · 31.4 MB</dd>
+            <dd>123407 顶点 · 177850 面 · 1362 骨骼（合并 704）· 17 材质 · 36 贴图 · 31.4 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/vindictus_exports/blend/PCF_001_Temp/PCF_001_Temp.blend" title="D:\vindictus_exports\blend\PCF_001_Temp\PCF_001_Temp.blend">D:\vindictus_exports\blend\PCF_001_Temp\PCF_001_Temp.blend</a>
                 <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_001_Temp\PCF_001_Temp.blend">复制</button></dd>
@@ -387,7 +387,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
             <dt>说明</dt><dd class="prose">白帽 + 粉色 Polo 衫 + 银色短裙</dd>
             <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
             <dt>规格</dt>
-            <dd>74730 顶点 · 97012 面 · 1248 骨骼（合并 590）· 16 材质 · 28 贴图 · 19.8 MB</dd>
+            <dd>74730 顶点 · 97012 面 · 1248 骨骼（合并 590）· 16 材质 · 33 贴图 · 19.8 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/vindictus_exports/blend/PCF_012/PCF_012.blend" title="D:\vindictus_exports\blend\PCF_012\PCF_012.blend">D:\vindictus_exports\blend\PCF_012\PCF_012.blend</a>
                 <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_012\PCF_012.blend">复制</button></dd>
@@ -427,12 +427,52 @@ td code, li code, p code { font-family: Consolas, monospace; }
             <dt>说明</dt><dd class="prose">旧版 Shiningwill 银甲（Biped 骨架，已转正对齐到 Fiona 的脸和头发；自带的旧发型隐藏）</dd>
             <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper · Onepiece</dd>
             <dt>规格</dt>
-            <dd>156311 顶点 · 232166 面 · 1290 骨骼（合并 632）· 21 材质 · 37 贴图 · 39.3 MB</dd>
+            <dd>156311 顶点 · 232166 面 · 1290 骨骼（合并 632）· 21 材质 · 39 贴图 · 39.3 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/vindictus_exports/blend/Shiningwill_legacy/Shiningwill_legacy.blend" title="D:\vindictus_exports\blend\Shiningwill_legacy\Shiningwill_legacy.blend">D:\vindictus_exports\blend\Shiningwill_legacy\Shiningwill_legacy.blend</a>
                 <button class="copy" data-copy="D:\vindictus_exports\blend\Shiningwill_legacy\Shiningwill_legacy.blend">复制</button></dd>
             <dt>脸部</dt>
             <dd><a href="file:///D:/vindictus_exports/blend/Shiningwill_legacy/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="fiona_basebody fiona 基础身体（sm_pc_fiona_basebody：白 t 恤 + 短裤的旧版素体，旧头已切掉换成现在的脸） base pcf face hair basebody d:\vindictus_exports\blend\fiona_basebody\fiona_basebody.blend" data-kind="base" data-body="PCF" data-warn="1">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/Fiona_BaseBody/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/Fiona_BaseBody.jpg" alt="Fiona_BaseBody"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>Fiona_BaseBody</h3><span class="badge badge-kind">基础身体</span><span class="badge badge-code">PCF</span><span class="badge badge-warn" title="BaseBody: old head/neck removed (58490 vertices) so the current face fits">告警 1</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">Fiona 基础身体（SM_pc_fiona_basebody：白 T 恤 + 短裤的旧版素体，旧头已切掉换成现在的脸）</dd>
+            <dt>部件</dt><dd>Face · Hair · BaseBody</dd>
+            <dt>规格</dt>
+            <dd>143001 顶点 · 187560 面 · 1027 骨骼（合并 369）· 21 材质 · 24 贴图 · 22.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Fiona_BaseBody/Fiona_BaseBody.blend" title="D:\vindictus_exports\blend\Fiona_BaseBody\Fiona_BaseBody.blend">D:\vindictus_exports\blend\Fiona_BaseBody\Fiona_BaseBody.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\Fiona_BaseBody\Fiona_BaseBody.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Fiona_BaseBody/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcm_basebody 男性基础身体（upper/lower/hand/foot 四件 + lethita 脸/发） base pcm face hair foot hand lower upper d:\vindictus_exports\blend\pcm_basebody\pcm_basebody.blend" data-kind="base" data-body="PCM" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCM_BaseBody/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCM_BaseBody.jpg" alt="PCM_BaseBody"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCM_BaseBody</h3><span class="badge badge-kind">基础身体</span><span class="badge badge-code">PCM</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">男性基础身体（Upper/Lower/Hand/Foot 四件 + Lethita 脸/发）</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>68099 顶点 · 97472 面 · 354 骨骼（合并 1）· 11 材质 · 15 贴图 · 15.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCM_BaseBody/PCM_BaseBody.blend" title="D:\vindictus_exports\blend\PCM_BaseBody\PCM_BaseBody.blend">D:\vindictus_exports\blend\PCM_BaseBody\PCM_BaseBody.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCM_BaseBody\PCM_BaseBody.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCM_BaseBody/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
           </dl>
         </div>
       </article>
@@ -488,7 +528,7 @@ python .\list_models.py --raw --path-filter /Character/AI/   # 容器里的原�
       <tr><th>kind</th><th>目录</th><th>组成</th></tr>
       <tr><td>player</td><td><code>Character\Player\&lt;Name&gt;\</code></td><td>Fiona（女，PCF 骨架）、Lethita（男，PCM 骨架）：<code>Face\Model\SK_&lt;Name&gt;_Face01</code> + <code>_Hair01</code> + <code>Armor\Model\SK_&lt;Name&gt;_*_master</code></td></tr>
       <tr><td>outfit</td><td><code>Character\Outfit\PC{F,M}_Outfit\&lt;Id&gt;\Model\</code></td><td>服装部件（Upper/Lower 或 Onepiece + Hand/Foot/Head）+ 对应主角的脸和头发；<code>Player\Outfit\Shiningwill\Mesh</code> 下的旧版整套记作 <code>Shiningwill_legacy</code>（3ds Max Biped 骨架 <code>Bip001_*</code>，脸骨架里还留着这套骨、只是转了 90°，脚本会把它转正再配脸/发）</td></tr>
-      <tr><td>base</td><td><code>BaseBody_PCM</code> 四件 / Fiona <code>SK_female_base</code></td><td>裸体基础身体 + 脸/发</td></tr>
+      <tr><td>base</td><td><code>BaseBody_PCM</code> 四件 / Fiona <code>Model\Mesh\SM_pc_fiona_basebody</code>（名字带 SM_ 其实是 SkeletalMesh；旁边的 <code>SK_female_base</code> 是 Skeleton）</td><td>基础身体 + 脸/发（Fiona 的是白 T 恤 + 短裤的旧版素体）</td></tr>
       <tr><td>monster / npc</td><td><code>Character\AI\&lt;Race&gt;\&lt;Type&gt;\&lt;Variant&gt;\Model\</code>、<code>Character\Npc\**</code></td><td>目录下全部 SK（武器标为 weapon，<code>--include-weapons</code> 才并入）</td></tr>
     </table>
     <p>女性角色只有 Fiona 一个（NPC 的 Female_adult 只有骨架）；女装 15 套 = 默认装 + <code>Shiningwill_legacy</code> + 13 套 <code>PCF_*</code>（其中 002/003/005/006/007 是连衣裙）。</p>
@@ -542,7 +582,8 @@ vindictus_models_manifest.json            collect_manifest.py 的汇总；_galle
       <li><b>Head 部件不都是头盔</b>：项链/颈圈（001、007、009）、耳机（002、004）、帽子（003、012）、发带（006）、发冠（005）、自带发型（001_Temp、008、010 打包了 Fiona 的头发）、全盔（067）。
         只有 Head 里带头发材质或 <code>list_models.py</code> 的 <code>HEAD_REPLACES_HAIR</code>（067）标了的才隐藏默认头发；头发仍在文件里（<code>&lt;id&gt;_Hair</code>），要显示就取消隐藏。按几何（贴头皮比例、盖脸比例）分不开耳机和发型，别再试。</li>
       <li><b>部件绑在另一版骨架上</b>：002/003/004/006/007/009/010/012 的 Hand/Head/Upper/Lower 到 <code>head</code>、脚趾差 6.9–13 cm；不重定位帽子会飘在头顶上方。脚本自动烘焙，报告里 <code>reposed_parts</code> 列出。</li>
-      <li><b>旧版 Biped 骨架朝向不同</b>：脸骨架里的 <code>Root → Bip001_*</code> 子树相对 UE 骨架转了 90°（面朝 +X），<code>Shiningwill_legacy</code> 绑在它上面会侧着身、脸朝前。脚本把这棵子树连同绑在上面的网格转正、按 <code>Bip001_Head</code>→<code>head</code> 平移对齐，报告里 <code>aligned_hierarchies</code>；它自带的旧发型盖到新脸的眼睛上，所以隐藏旧发型、保留默认头发。</li>
+      <li><b>旧版 Biped 骨架朝向不同</b>：<code>Shiningwill_legacy</code> 和 Fiona 素体绑的 <code>Root → Bip001_*</code> 骨架合并进脸骨架后是第二棵根子树，朝向和 UE 骨架差 90°（面朝 +X），会侧着身、脸朝前。脚本把这棵子树连同绑在上面的网格转正、按 <code>Bip001_Head</code>→<code>head</code> 平移对齐，报告里 <code>aligned_hierarchies</code>；旧装自带的旧发型盖到新脸的眼睛上，所以隐藏旧发型、保留默认头发；素体自带的旧头（<code>Bip001_Head/Neck</code> 权重）整个切掉。</li>
+      <li><b>材质参数名要整词匹配</b>：<code>"rma"</code> 是 <code>Normal Map</code> 的子串，曾把法线贴图当 ORM 接进去（B 通道≈1 → 金属度 1），没有 ARM 参数的服装全成了金属（PCF_012 的「银裙」、素体的古铜皮肤）。</li>
       <li><b>UE Viewer 不能并行</b>：不同模型共用 Fiona 脸/发/眼睛贴图，同时写会互相覆盖。先 <code>-NoBlend</code> 顺序导完再并行 Blender。</li>
       <li><b>virtual texture 导不出</b>：静态物件贴图全是；角色里 <code>T_pc_fiona_basebody_01_D</code>（<code>M_female_skin_body_01</code>，PCF_001_Temp 用）也是——这类皮肤材质用纯肤色代替，报告里会列「未解析」。</li>
       <li><b>BC6H 贴图写成 .hdr</b>：PCF_012 的 <code>_B</code> 基色是 <code>.hdr</code>，脚本已按 <code>.hdr</code> 索引；别按 png 去找。</li>
