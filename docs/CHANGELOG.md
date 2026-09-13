@@ -14,6 +14,93 @@
 
 ---
 
+## 2026-09-13 — Vindictus: Defying Fate（2024-03 Pre-Alpha）：客户端、AES key、UE Viewer → Blender 流水线
+
+### 客户端从哪来
+
+- 游戏未发售（Steam 商店页写 2027）。2025-06 的 Alpha Demo（Steam `3576170`）测试结束两天后被
+  换成 348 MB 空壳，商店页下架、没有 free-on-demand 授权，拿不到；2026-04 的 FGT 只对韩国线下
+  和媒体开放。**唯一能下的是 archive.org 的 2024-03-14 Pre-Alpha 客户端**（项目
+  `vindictus-defying-fate.-7z`，14.1 GB 7z，md5 `801374e1…`），先用 HTTP Range 只读 7z 头确认是
+  完整客户端（478 项 15.8 GB，`Vindictus-Windows.ucas` 15.04 GB），再下。archive.org 直连被墙、
+  配置的远程代理只有 33 KB/s，改走本机 Veee 系统代理（`127.0.0.1:15236`）8 连接 ≈ 14 MB/s，
+  19.5 分钟下完；解压到 `E:\tools\vindictus`（`Vindictus.exe` 为根），按 7z 头逐项核对大小全部一致。
+  下载/校验/安装脚本留在 `E:\tools\vindictus\_download\`，不入库。
+- 引擎 UE **5.3**，IoStore（utoc v5）+ Oodle，pak v11，**索引 AES 加密**（key GUID 全 0）。
+  没有反作弊，只有 Steamworks dll。
+
+### AES key 怎么来的
+
+- cs.rin.ru 的 key 帖要登录；`Vindictus.exe` 和 `libnative.dll` 里也**没有连续的 32 字节 key**
+  （对齐/逐字节全扫 88M 候选都没有）——Nexon 用 8 条 `mov dword [..], imm32` 在运行时拼
+  （`.text` 文件偏移 `0x47745EB`）。
+- 新脚本 `scripts/vindictus/find_aes_key.py`：先扫连续窗口，再收集 `.text` 里成串的
+  imm64×4 / imm32×8 / imm8×32 和成对的 rip 相对 xmm 常量，按顺序（含倒序）拼成候选，用
+  `Vindictus-Windows.pak` 加密索引的前 16 字节 AES-256-ECB 试解密，解出挂载点 `../../../` 即命中。
+  80 秒找到。key **只放** `E:\tools\vindictus\_download\aes_key.txt`，脚本通过 `VINDICTUS_AES_KEY`
+  或 `-AesKeyFile` 读取、经临时文件交给 UE Viewer，仓库/CHANGELOG/画廊里不出现。
+
+### UE Viewer
+
+- spiritovod 的 UE5 specific build（Gildor topic 7906 的 Google Drive `umodel_materials.zip`，
+  取其中 `umodel_materials_ue5.exe`，build 1579 based fix282，2026-09-05）放在
+  `E:\tools\umodel_specific\materials\`；`-game=ue5.3`，Oodle 内置无需额外 dll，`-png` 直接出 PNG。
+  包名用 Content 相对路径（`VindictusRoot/Character/.../SK_xxx`），避开容器里 178 个重名 stem。
+- 已知限制（Gildor 8886/8190）：静态网格贴图是 virtual texture 导不出；Nanite 只有基础几何；
+  不导 morph target（脸包里的 MetaHuman `DNAAsset` 同样不导）。
+
+### 新增 `scripts/vindictus/`
+
+- `list_models.py`：解密并解析 utoc 目录索引（16,703 条路径），把 SK 网格按游戏拼装方式分成
+  36 个模型：player（Fiona、Lethita）、outfit（PCF_001…067 共 13 套女装 + `Player/Outfit/Shiningwill/Mesh`
+  下的旧版 Shiningwill 一套（`Shiningwill_legacy`），都配 Fiona 脸/发；PCM_00x_Temp 3 套男装 +
+  Lethita 脸/发；PCF→Fiona、PCM→Lethita 由 UE Viewer 加载的
+  `SK_PCF/PCM_BaseBody01_Skeleton` 核实）、base（PCM 四件 / `SK_female_base`）、monster（Gnoll /
+  Kobold / Goblin 13 个）、npc（2 个）；`--resolve <id> --json` 给出包路径和 PSK 状态。
+- `export_model.ps1 <id>`：list → 逐包 umodel → `build_blend.py`，解析 `VINDICTUS_REPORT=`
+  打印骨骼/顶点/材质/贴图/警告；`-List/-Force/-NoBlend/-NoPreview/-Smooth/-IncludeWeapons`。
+- `build_blend.py`（Blender 3.6 无头，`io_scene_psk_psa` 5.0.6）：
+  1. UE Viewer 给每个网格导的是自己的骨架子集（Fiona 脸 658、发 274、上身 531、脚 30……），
+     取最多的一副为底按名字补缺、rest 变换照抄，所有网格重绑到一副骨架；共享骨骼 rest 偏差
+     写进报告（Fiona 0，Lethita 脸骨架 0.25 cm）。只有一根 `root` 的部件（Lethita 头发）按游戏的
+     做法挂到 `head` 骨（bone parent），否则会躺在脚下。
+  2. 材质从 `.mat` + `.props.txt` 重建：服装 D/N/ORM|ARM（Opacity 用 alpha 按 UE Masked 1/3
+     裁切）、皮肤 D×Basecolor Tint、头发 ODI.R 透明 + FR.B 驱动 Root/Mid/Tip 渐变、眉睫 ODI.R、
+     眼球 = 巩膜 + 虹膜遮罩（`T_PC_Iris_A_M`：1-B 虹膜环、R 瞳孔，UV 以中心 ×2 采样）+ 在
+     `T_PC_Iris_color_picker` 上按实例 `IrisColor1/2 U,V` 采样的虹膜色、眼部遮蔽壳/泪线/假反射片
+     半透明。
+  3. 贴图复制到 `textures\`、相对路径保存；预览相机不写死 +X——UE 骨骼网格资源朝 -Y，
+     用 `foot→ball`（Biped 用 `Bip001_*_Foot→Toe0`）骨方向判断朝向。
+  4. 部件绑在另一版骨架上的（8 套服装的 Head 脊柱链差 6.9 cm，Shiningwill 旧版差 6 cm）先把自己的
+     骨架摆到底骨架的 rest 姿势再烘焙（等价于运行时蒙皮），再并入；只有一根 `root` 的部件（Lethita
+     头发）挂到 `head` 骨。默认头发只在 Head 部件带头发材质或 `HEAD_REPLACES_HAIR`（PCF_067）时
+     隐藏——项链/耳机/帽子/发带/发冠都不隐藏；几何启发式分不开耳机和发型，所以用表。
+  5. `Shiningwill_legacy`（用户反馈「没有面部」）：Fiona 的脸骨架里还留着旧的 Biped 子树
+     （`Root → Bip001_*`），但相对 UE 骨架转了 90°，旧装绑上去身体侧着、脸朝前。加
+     `align_secondary_hierarchies()`：第二棵根子树连同绑在上面的网格按脚趾方向转到 UE 朝向、按
+     `Bip001_Head`→`head` 平移对齐；旧装自带的旧发型盖住新脸的眼睛，改成隐藏旧发型、保留默认头发。
+  6. 眼睛重做（用户反馈「眼睛暗淡」）：原来把 `T_Iris_A_M` 的 B 通道当虹膜遮罩，其实 B 是径向渐变、
+     G 是纤维、alpha 才是瞳孔，而且从色板采到的 `IrisColor` 是 sRGB 值直接塞进了线性颜色口——虹膜
+     成了一团发白的雾。现在 `build_eye()`：UV 中心半径 0.2 的程序化虹膜盘，两色沿半径渐变
+     （色板采样转线性 × `IrisBrightness` × 1.35）× 纤维 × limbus 变暗，瞳孔半径 0.32×`PupilScale`，
+     巩膜 × 血丝，粗糙度 0.12；`M_PC_Skin_Eye`（Lethita，`Iris Color Inner/Outer` + `T_EyeMap01`）
+     走同一套。遮蔽壳 0.25→0.12。半径 0.17/0.2/0.22、亮度 3/4/5 用 `eye_lab.py` 渲染对比后定的。
+- `README.md`：环境、key 规矩、三个脚本、材质映射表、限制、验证。
+- `html/collect_manifest.py` + `html/make_gallery.py` → `html/index.html`：和其它游戏同一套画廊
+  （`file://` 缩略图落在导出根的 `_gallery\thumbs`，manifest 只有路径和统计）。卡片带类型/身体/
+  隐藏头发/重定位/告警徽章，可按类型、身体筛选和搜索；底部是完整手工导出教程（客户端来源、
+  key 计算、脚本、批量、参数、坑）。16 张卡片，用无头 Edge 截图核过版式。
+
+### 验证
+
+- `Fiona`：6 部件 103,180 顶点 → 1415 根骨架（合并 757），19 材质 41 贴图，0 未解析贴图；
+  `Lethita`：7 部件 476 根，19 材质。preview.png / preview_face.png 逐张看过：正面取景、Shiningwill
+  银甲、头发/眉毛/皮肤/眼睛都对。
+- **15 套女装全部导出**（Fiona 默认装 + `Shiningwill_legacy` + 13 套 `PCF_*`）：先顺序 `-NoBlend`
+  导 61 个包（UE Viewer 并发会互相覆盖共享贴图，不能并行），再 3 路并行 Blender（每套 2–3 分钟）。
+  15 张预览拼图逐一核对：8 套旧骨架服装重定位后帽子/耳机/颈圈位置正确，头发按表显示/隐藏，
+  PCF_012 的 `.hdr` 基色生效；`PCF_001_Temp` 裤子的彩虹格是资源自带的占位贴图。
+
 ## 2026-09-12 — Rise of Eros：9-12 更新的新角色导出（b14 / k07 / m03）
 
 ### 怎么发现的

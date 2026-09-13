@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vindictus: Defying Fate 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --mod: #7a3fa0; --mod-bg: #f1e7f8; --kind: #1f7a4d; --kind-bg: #e3f4ea; --shot: #d9dbe2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --mod: #c99ae6; --mod-bg: #33203d; --kind: #7fd1a3; --kind-bg: #1c3527; --shot: #2a2d34;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header { padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* 作者写的 display 会盖过 UA 的 [hidden] 规则，筛选必须显式声明 */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg { padding: 46px 0; text-align: center; color: var(--muted); font-size: 12px; }
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.titlerow h3 { margin: 0; font-size: 15px; font-family: Consolas, monospace; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-mod { color: var(--mod); background: var(--mod-bg); }
+.badge-kind { color: var(--kind); background: var(--kind-bg); cursor: default; }
+.badge-code { color: var(--accent); background: var(--bg); cursor: default; font-family: Consolas, monospace; }
+#body { padding: 6px 8px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; }
+dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+dd.prose { font-family: inherit; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code, p code { font-family: Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Vindictus: Defying Fate · 模型导出总览（2024-03 Pre-Alpha）</h1>
+  <div class="sub">生成于 2026-09-13 17:12 · 导出根目录 <code>D:\vindictus_exports</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>16</b><span>已转模型</span></div>
+    <div class="stat"><b>14</b><span>服装</span></div>
+    <div class="stat"><b>473.2 MB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>1</b><span>有告警</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索模型 id（PCF_003）、说明（女巫帽）、部件（Onepiece）或路径…（按 / 聚焦）">
+  <select id="body"><option value="">全部身体</option><option value="PCF">女（Fiona） (15)</option><option value="PCM">男（Lethita） (1)</option></select>
+  <button class="chip on" data-kind="">全部</button>
+  <button class="chip" data-kind="player">主角默认装</button><button class="chip" data-kind="outfit">服装</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="fiona fiona 默认装 · shiningwill 银甲（master 网格） player pcf foot hand lower upper face hair d:\vindictus_exports\blend\fiona\fiona.blend" data-kind="player" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/Fiona/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/Fiona.jpg" alt="Fiona"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>Fiona</h3><span class="badge badge-kind">主角默认装</span><span class="badge badge-code">PCF</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">Fiona 默认装 · Shiningwill 银甲（master 网格）</dd>
+            <dt>部件</dt><dd>Foot · Hand · Lower · Upper · Face · Hair</dd>
+            <dt>规格</dt>
+            <dd>103180 顶点 · 146039 面 · 1415 骨骼（合并 757）· 19 材质 · 40 贴图 · 28.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Fiona/Fiona.blend" title="D:\vindictus_exports\blend\Fiona\Fiona.blend">D:\vindictus_exports\blend\Fiona\Fiona.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\Fiona\Fiona.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Fiona/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="lethita lethita 默认装 · 红缨全身板甲 player pcm foot hand head lower upper face hair d:\vindictus_exports\blend\lethita\lethita.blend" data-kind="player" data-body="PCM" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/Lethita/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/Lethita.jpg" alt="Lethita"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>Lethita</h3><span class="badge badge-kind">主角默认装</span><span class="badge badge-code">PCM</span><span class="badge badge-mod" title="Head 部件替代了默认头发，头发留在文件里但隐藏">隐藏 Hair</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">Lethita 默认装 · 红缨全身板甲</dd>
+            <dt>部件</dt><dd>Foot · Hand · Head · Lower · Upper · Face · Hair</dd>
+            <dt>规格</dt>
+            <dd>151196 顶点 · 217159 面 · 476 骨骼（合并 51）· 19 材质 · 35 贴图 · 34.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Lethita/Lethita.blend" title="D:\vindictus_exports\blend\Lethita\Lethita.blend">D:\vindictus_exports\blend\Lethita\Lethita.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\Lethita\Lethita.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Lethita/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_001 白衬衫 + 皮短裤 + 系带长靴，颈圈 outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_001\pcf_001.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_001/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_001.jpg" alt="PCF_001"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_001</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">白衬衫 + 皮短裤 + 系带长靴，颈圈</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>106451 顶点 · 155468 面 · 1312 骨骼（合并 654）· 17 材质 · 35 贴图 · 28.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_001/PCF_001.blend" title="D:\vindictus_exports\blend\PCF_001\PCF_001.blend">D:\vindictus_exports\blend\PCF_001\PCF_001.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_001\PCF_001.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_001/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_001_temp 黑色长风衣 + 贝雷帽（wip：裤子是占位贴图） outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_001_temp\pcf_001_temp.blend" data-kind="outfit" data-body="PCF" data-warn="1">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_001_Temp/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_001_Temp.jpg" alt="PCF_001_Temp"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_001_Temp</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="Head 部件替代了默认头发，头发留在文件里但隐藏">隐藏 Hair</span><span class="badge badge-warn" title="有贴图没解析到：T_pc_fiona_basebody_01_D &lt;- M_female_skin_body_01">告警 1</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">黑色长风衣 + 贝雷帽（WIP：裤子是占位贴图）</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>123407 顶点 · 177850 面 · 1362 骨骼（合并 704）· 17 材质 · 35 贴图 · 31.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_001_Temp/PCF_001_Temp.blend" title="D:\vindictus_exports\blend\PCF_001_Temp\PCF_001_Temp.blend">D:\vindictus_exports\blend\PCF_001_Temp\PCF_001_Temp.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_001_Temp\PCF_001_Temp.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_001_Temp/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_002 猫耳耳机 + 白色帽衫 + 紫色连体衣 outfit pcf face hair foot hand head onepiece d:\vindictus_exports\blend\pcf_002\pcf_002.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_002/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_002.jpg" alt="PCF_002"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_002</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Onepiece (13.1 cm at ball_r)">重定位 3</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">猫耳耳机 + 白色帽衫 + 紫色连体衣</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Onepiece</dd>
+            <dt>规格</dt>
+            <dd>110709 顶点 · 158490 面 · 1248 骨骼（合并 590）· 15 材质 · 30 贴图 · 28.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_002/PCF_002.blend" title="D:\vindictus_exports\blend\PCF_002\PCF_002.blend">D:\vindictus_exports\blend\PCF_002\PCF_002.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_002\PCF_002.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_002/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_003 女巫帽 + 藏青条纹连衣裙 + 单只长手套 outfit pcf face hair foot hand head onepiece d:\vindictus_exports\blend\pcf_003\pcf_003.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_003/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_003.jpg" alt="PCF_003"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_003</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Onepiece (13.3 cm at Outfit003_foot_ribbon_d_05_r)">重定位 3</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">女巫帽 + 藏青条纹连衣裙 + 单只长手套</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Onepiece</dd>
+            <dt>规格</dt>
+            <dd>105416 顶点 · 146171 面 · 1403 骨骼（合并 745）· 15 材质 · 30 贴图 · 27.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_003/PCF_003.blend" title="D:\vindictus_exports\blend\PCF_003\PCF_003.blend">D:\vindictus_exports\blend\PCF_003\PCF_003.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_003\PCF_003.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_003/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_004 耳机白帽 + 紫色露脐夹克 + 浅色运动裤 outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_004\pcf_004.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_004/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_004.jpg" alt="PCF_004"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_004</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Lower (12.2 cm at foot_r); Upper (13.1 cm at ball_r)">重定位 4</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">耳机白帽 + 紫色露脐夹克 + 浅色运动裤</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>93170 顶点 · 129144 面 · 1248 骨骼（合并 590）· 16 材质 · 33 贴图 · 24.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_004/PCF_004.blend" title="D:\vindictus_exports\blend\PCF_004\PCF_004.blend">D:\vindictus_exports\blend\PCF_004\PCF_004.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_004\PCF_004.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_004/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_005 发冠 + 白色仙女裙 + 金色项链耳坠 outfit pcf face hair foot hand head onepiece d:\vindictus_exports\blend\pcf_005\pcf_005.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_005/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_005.jpg" alt="PCF_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_005</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">发冠 + 白色仙女裙 + 金色项链耳坠</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Onepiece</dd>
+            <dt>规格</dt>
+            <dd>114706 顶点 · 155501 面 · 1506 骨骼（合并 848）· 17 材质 · 32 贴图 · 31.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_005/PCF_005.blend" title="D:\vindictus_exports\blend\PCF_005\PCF_005.blend">D:\vindictus_exports\blend\PCF_005\PCF_005.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_005\PCF_005.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_005/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_006 发带 + 蓝白条纹连衣裙 outfit pcf face hair foot hand head onepiece d:\vindictus_exports\blend\pcf_006\pcf_006.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_006/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_006.jpg" alt="PCF_006"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_006</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Onepiece (13.1 cm at ball_r)">重定位 3</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">发带 + 蓝白条纹连衣裙</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Onepiece</dd>
+            <dt>规格</dt>
+            <dd>87078 顶点 · 122242 面 · 1248 骨骼（合并 590）· 15 材质 · 30 贴图 · 23.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_006/PCF_006.blend" title="D:\vindictus_exports\blend\PCF_006\PCF_006.blend">D:\vindictus_exports\blend\PCF_006\PCF_006.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_006\PCF_006.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_006/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_007 颈圈 + 黑色系带连衣裙 outfit pcf face hair foot hand head onepiece d:\vindictus_exports\blend\pcf_007\pcf_007.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_007/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_007.jpg" alt="PCF_007"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_007</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Onepiece (13.1 cm at ball_r)">重定位 3</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">颈圈 + 黑色系带连衣裙</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Onepiece</dd>
+            <dt>规格</dt>
+            <dd>93772 顶点 · 130369 面 · 1248 骨骼（合并 590）· 15 材质 · 30 贴图 · 24.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_007/PCF_007.blend" title="D:\vindictus_exports\blend\PCF_007\PCF_007.blend">D:\vindictus_exports\blend\PCF_007\PCF_007.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_007\PCF_007.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_007/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_008 粉色熊耳连帽衫 + 黑粉运动裤（自带发型） outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_008\pcf_008.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_008/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_008.jpg" alt="PCF_008"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_008</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="Head 部件替代了默认头发，头发留在文件里但隐藏">隐藏 Hair</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Lower (11.2 cm at ankle_bck_r); Upper (12.9 cm at littletoe_02_r)">重定位 2</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">粉色熊耳连帽衫 + 黑粉运动裤（自带发型）</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>142373 顶点 · 214825 面 · 1472 骨骼（合并 814）· 18 材质 · 38 贴图 · 39.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_008/PCF_008.blend" title="D:\vindictus_exports\blend\PCF_008\PCF_008.blend">D:\vindictus_exports\blend\PCF_008\PCF_008.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_008\PCF_008.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_008/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_009 黑色西装套装 + 高跟鞋 outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_009\pcf_009.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_009/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_009.jpg" alt="PCF_009"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_009</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Lower (12.2 cm at foot_r); Upper (13.1 cm at ball_r)">重定位 4</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">黑色西装套装 + 高跟鞋</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>83912 顶点 · 113740 面 · 1291 骨骼（合并 633）· 16 材质 · 33 贴图 · 22.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_009/PCF_009.blend" title="D:\vindictus_exports\blend\PCF_009\PCF_009.blend">D:\vindictus_exports\blend\PCF_009\PCF_009.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_009\PCF_009.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_009/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_010 白色宽檐帽 + 绿色露肩上衣 + 牛仔短裤（自带发型） outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_010\pcf_010.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_010/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_010.jpg" alt="PCF_010"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_010</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="Head 部件替代了默认头发，头发留在文件里但隐藏">隐藏 Hair</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Lower (12.2 cm at foot_r); Upper (13.1 cm at ball_r)">重定位 4</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">白色宽檐帽 + 绿色露肩上衣 + 牛仔短裤（自带发型）</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>122870 顶点 · 177691 面 · 1291 骨骼（合并 633）· 16 材质 · 33 贴图 · 31.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_010/PCF_010.blend" title="D:\vindictus_exports\blend\PCF_010\PCF_010.blend">D:\vindictus_exports\blend\PCF_010\PCF_010.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_010\PCF_010.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_010/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_012 白帽 + 粉色 polo 衫 + 银色短裙 outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_012\pcf_012.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_012/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_012.jpg" alt="PCF_012"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_012</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (6.6 cm at clavicle_l); Head (6.9 cm at head); Lower (12.2 cm at foot_r); Upper (13.1 cm at ball_r)">重定位 4</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">白帽 + 粉色 Polo 衫 + 银色短裙</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>74730 顶点 · 97012 面 · 1248 骨骼（合并 590）· 16 材质 · 28 贴图 · 19.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_012/PCF_012.blend" title="D:\vindictus_exports\blend\PCF_012\PCF_012.blend">D:\vindictus_exports\blend\PCF_012\PCF_012.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_012\PCF_012.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_012/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pcf_067 带角全身板甲（全罩头盔） outfit pcf face hair foot hand head lower upper d:\vindictus_exports\blend\pcf_067\pcf_067.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/PCF_067/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/PCF_067.jpg" alt="PCF_067"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PCF_067</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="Head 部件替代了默认头发，头发留在文件里但隐藏">隐藏 Hair</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">带角全身板甲（全罩头盔）</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper</dd>
+            <dt>规格</dt>
+            <dd>153819 顶点 · 230205 面 · 1423 骨骼（合并 765）· 14 材质 · 29 贴图 · 39.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_067/PCF_067.blend" title="D:\vindictus_exports\blend\PCF_067\PCF_067.blend">D:\vindictus_exports\blend\PCF_067\PCF_067.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\PCF_067\PCF_067.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/PCF_067/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="shiningwill_legacy 旧版 shiningwill 银甲（biped 骨架，已转正对齐到 fiona 的脸和头发；自带的旧发型隐藏） outfit pcf face hair foot hand head lower upper onepiece d:\vindictus_exports\blend\shiningwill_legacy\shiningwill_legacy.blend" data-kind="outfit" data-body="PCF" data-warn="0">
+        <a class="shot" href="file:///D:/vindictus_exports/blend/Shiningwill_legacy/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/vindictus_exports/_gallery/thumbs/Shiningwill_legacy.jpg" alt="Shiningwill_legacy"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>Shiningwill_legacy</h3><span class="badge badge-kind">服装</span><span class="badge badge-code">PCF</span><span class="badge badge-mod" title="Head 部件替代了默认头发，头发留在文件里但隐藏">隐藏 Head</span><span class="badge badge-mod" title="绑在另一版骨架上的部件已按底骨架重新烘焙：Hand (4.1 cm at Bip001_R_Toe0); Head (4.1 cm at Bip001_R_Toe0); Lower (6.0 cm at Anim_Attachment_EyeTarget); Upper (6.0 cm at Anim_Attachment_EyeTarget); Onepiece (4.1 cm at Bip001_R_Toe0)">重定位 5</span>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">旧版 Shiningwill 银甲（Biped 骨架，已转正对齐到 Fiona 的脸和头发；自带的旧发型隐藏）</dd>
+            <dt>部件</dt><dd>Face · Hair · Foot · Hand · Head · Lower · Upper · Onepiece</dd>
+            <dt>规格</dt>
+            <dd>156311 顶点 · 232166 面 · 1290 骨骼（合并 632）· 21 材质 · 37 贴图 · 39.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Shiningwill_legacy/Shiningwill_legacy.blend" title="D:\vindictus_exports\blend\Shiningwill_legacy\Shiningwill_legacy.blend">D:\vindictus_exports\blend\Shiningwill_legacy\Shiningwill_legacy.blend</a>
+                <button class="copy" data-copy="D:\vindictus_exports\blend\Shiningwill_legacy\Shiningwill_legacy.blend">复制</button></dd>
+            <dt>脸部</dt>
+            <dd><a href="file:///D:/vindictus_exports/blend/Shiningwill_legacy/preview_face.png" target="_blank" rel="noopener">preview_face.png</a></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+
+<section class="appendix">
+    <h2>附录 · 手工导出教程</h2>
+    <p>脚本都在 <code>scripts\vindictus\</code>，产物默认落在 <code>D:\vindictus_exports</code>（<code>-ExportRoot</code>）。这套和别的游戏最大的不同：
+      <b>游戏没发售</b>（Steam 商店页写 2027），能拿到的只有 2024-03-14 那次 Pre-Alpha 测试的客户端，而且它的 pak/utoc 索引是 <b>AES 加密</b>的，
+      key 不在任何公开网页上——要自己从 exe 里算出来（<code>find_aes_key.py</code>，一分多钟）。顺序固定：装客户端 → 算 key → <code>list_models.py</code> 看清单
+      → <code>export_model.ps1 &lt;模型&gt;</code> 出带贴图、一副骨架的 .blend → 重生成本页。
+      <b>以下所有命令都在 <code>〈仓库〉\scripts\vindictus</code> 里跑，每开一个新窗口先 <code>cd</code> 进去。</b></p>
+
+    <h3>前提 · 工具与默认路径</h3>
+    <table>
+      <tr><th>工具</th><th>脚本默认路径 / 说明</th></tr>
+      <tr><td>客户端</td><td>archive.org 项目 <code>vindictus-defying-fate.-7z</code>（<code>Vindictus_Defying_Fate.7z</code>，15,150,318,532 字节，md5 <code>801374e112f438af9d401579c75fc6c1</code>，
+        种子在同一页）。解压后把压缩包顶层的 <code>Vindictus\</code> 当游戏根放到 <code>E:\tools\vindictus</code>（<code>-GameRoot</code>），
+        即 <code>E:\tools\vindictus\Vindictus.exe</code> 和 <code>E:\tools\vindictus\Vindictus\Content\Paks\Vindictus-Windows.ucas</code>（15.04 GB）。
+        国内直连 archive.org 不通、普通 HTTP 代理只有几十 KB/s——走本机 VPN 客户端的系统代理端口并开 8 个 Range 连接可到 14 MB/s（20 分钟）。
+        2025-06 的 Alpha Demo（Steam <code>3576170</code>）测试结束后被换成 348 MB 空壳，<b>下不到</b>。</td></tr>
+      <tr><td>UE Viewer</td><td>必须是 spiritovod 的 <b>UE5 specific build</b>：Gildor 论坛 <code>https://www.gildor.org/smf/index.php?topic=7906.0</code> 首帖的 Google Drive
+        <code>umodel_materials.zip</code>，取里面的 <code>umodel_materials_ue5.exe</code>（本机是 build 1579 based fix282 / 2026-09-05）放到
+        <code>E:\tools\umodel_specific\materials\</code>（<code>-UmodelExe</code>）。Oodle 已内置，不需要额外 dll；官网普通版对 UE 5.3 会报
+        <code>Serializing behind stopper</code>。<code>E:\tools\umodel_stellarblade</code>、<code>umodel_ff7remake</code> 那两个专用版<b>不能</b>用在这里。</td></tr>
+      <tr><td>Blender 3.6.15</td><td><code>D:\Program Files\blender-3.6.15-windows-x64\blender.exe</code>（<code>-BlenderExe</code>），须先装好并启用 <b>io_scene_psk_psa 5.0.6</b>
+        （<code>https://github.com/DarklightGames/io_scene_psk_psa/releases/tag/5.0.6</code>，别拿面向 4.x 的新版）。脚本用 <code>--factory-startup</code> 跑，
+        自己 <code>addon_utils.enable</code> 这个插件，所以只要装在用户目录即可，不必在偏好里勾选。</td></tr>
+      <tr><td>Python 3</td><td><code>python</code> 要能直接调起 Python 3；<code>pip install cryptography Pillow</code>——前者解 utoc 目录索引和试解密 pak 索引，后者出缩略图。</td></tr>
+      <tr><td>PowerShell</td><td>未签名脚本，第一次跑先在当前用户范围放开执行策略（RemoteSigned），按 <code>.\export_model.ps1</code> 调用。</td></tr>
+    </table>
+
+    <h3>第零步 · 算 AES key（find_aes_key.py，只做一次）</h3>
+    <pre>cd 〈仓库〉\scripts\vindictus
+python .\find_aes_key.py --out E:\tools\vindictus\_download\aes_key.txt      # 默认就扫 E:\tools\vindictus 的 exe 和 pak</pre>
+    <p>key <b>不是</b>明文躺在 exe 里的：Nexon 用 8 条 <code>mov dword [..], imm32</code> 在运行时把 32 字节拼起来，所以 UnrealKey 之类找连续 32 字节的工具会空手而回。
+      脚本先扫一遍连续窗口，再收集 <code>.text</code> 里成串的立即数（imm64×4 / imm32×8 / imm8×32）和成对的 xmm 常量，按顺序拼成候选，
+      拿 <code>Vindictus-Windows.pak</code> 加密索引的前 16 字节做 AES-256-ECB 试解密，解出挂载点 <code>../../../</code> 即命中（本机 80 秒）。
+      命中后写成一行 <code>0x…</code>。之后所有脚本按 <code>VINDICTUS_AES_KEY</code> 环境变量 → <code>-AesKeyFile</code>（默认就是上面这个路径）的顺序取 key，
+      再经临时文件以 <code>-aes=@file</code> 交给 UE Viewer，命令行里不出现。</p>
+    <div class="note">key 只放本地文件或环境变量。仓库、CHANGELOG、本页面、聊天记录里都不要出现——和 FF7 Remake 的 key 同一条规矩。</div>
+
+    <h3>第一步 · 看清单（list_models.py）</h3>
+    <pre>python .\list_models.py                          # 36 个模型：id / kind / body / 部件数 / umodel 已导 / blend 已建
+python .\list_models.py --kind outfit --json
+python .\list_models.py --resolve PCF_003 --json  # 一个模型的包路径、PSK 状态
+python .\list_models.py --raw --path-filter /Character/AI/   # 容器里的原始路径</pre>
+    <p>直接解密并解析 <code>Paks\*.utoc</code> 的 IoStore 目录索引（16,703 条路径），不开 UE Viewer。索引只有路径没有类型，所以「部件」= <code>Model\</code> 下名为
+      <code>SK_*</code> 且不是 <code>_Skeleton / _Physics / _PhysicsAsset</code> 的资源，再按游戏的拼装方式分组：</p>
+    <table>
+      <tr><th>kind</th><th>目录</th><th>组成</th></tr>
+      <tr><td>player</td><td><code>Character\Player\&lt;Name&gt;\</code></td><td>Fiona（女，PCF 骨架）、Lethita（男，PCM 骨架）：<code>Face\Model\SK_&lt;Name&gt;_Face01</code> + <code>_Hair01</code> + <code>Armor\Model\SK_&lt;Name&gt;_*_master</code></td></tr>
+      <tr><td>outfit</td><td><code>Character\Outfit\PC{F,M}_Outfit\&lt;Id&gt;\Model\</code></td><td>服装部件（Upper/Lower 或 Onepiece + Hand/Foot/Head）+ 对应主角的脸和头发；<code>Player\Outfit\Shiningwill\Mesh</code> 下的旧版整套记作 <code>Shiningwill_legacy</code>（3ds Max Biped 骨架 <code>Bip001_*</code>，脸骨架里还留着这套骨、只是转了 90°，脚本会把它转正再配脸/发）</td></tr>
+      <tr><td>base</td><td><code>BaseBody_PCM</code> 四件 / Fiona <code>SK_female_base</code></td><td>裸体基础身体 + 脸/发</td></tr>
+      <tr><td>monster / npc</td><td><code>Character\AI\&lt;Race&gt;\&lt;Type&gt;\&lt;Variant&gt;\Model\</code>、<code>Character\Npc\**</code></td><td>目录下全部 SK（武器标为 weapon，<code>--include-weapons</code> 才并入）</td></tr>
+    </table>
+    <p>女性角色只有 Fiona 一个（NPC 的 Female_adult 只有骨架）；女装 15 套 = 默认装 + <code>Shiningwill_legacy</code> + 13 套 <code>PCF_*</code>（其中 002/003/005/006/007 是连衣裙）。</p>
+
+    <h3>第二步 · 一个模型一条命令（export_model.ps1）</h3>
+    <pre>.\export_model.ps1 -List                  # = list_models.py
+.\export_model.ps1 Fiona                  # 主角默认装
+.\export_model.ps1 PCF_003                # 一套服装 + Fiona 脸/发
+.\export_model.ps1 PCF_067 -Force         # 重导 + 重建
+.\export_model.ps1 Gnoll_type3_Tribe_Boss_01 -NoPreview</pre>
+    <p>三步：<code>list_models.py --resolve</code> 解析包路径（UE Viewer 接受 <code>VindictusRoot/Character/.../SK_xxx</code> 这种 Content 相对路径，避开容器里 178 个重名 stem）；
+      对缺失的包逐个 <code>umodel_materials_ue5.exe -game=ue5.3 -path=&lt;Paks&gt; -aes=@tmp -export -png -out=&lt;导出根&gt;\umodel_exports &lt;包&gt;</code>，
+      得到 PSK/PSKX + PNG + <code>.mat</code>/<code>.props.txt</code>（材质实例的贴图、向量、标量参数）；然后写 <code>blend\&lt;id&gt;\spec.json</code>，
+      无头跑 <code>build_blend.py</code>，解析 <code>VINDICTUS_REPORT=</code> 打印骨骼数、各部件顶点、材质/贴图数、重定位、告警。</p>
+    <p><code>build_blend.py</code> 做的事：① UE Viewer 给每个网格导的是它自己的骨架子集（Fiona 脸 658 根、发 274、上身 531、脚 30……），取最多的一副为底按名字补缺、
+      所有网格重绑到同一副（Fiona 1415 根）；② 部件绑在另一版骨架上的（8 套服装的 Head 脊柱链差 6.9 cm）先把自己的骨架摆到底骨架的 rest 姿势再烘焙，
+      只有一根 <code>root</code> 的部件（Lethita 头发）挂到 <code>head</code> 骨；③ 材质从 <code>.mat</code> + <code>.props.txt</code> 重建——服装 D/N/ORM|ARM、皮肤 D×Tint、
+      头发 ODI.R 透明 + FR.B 驱动 Root/Mid/Tip 渐变、眉睫 ODI.R、眼球程序化虹膜（色板采样 → 线性 × IrisBrightness、纤维、limbus、瞳孔）；
+      ④ 贴图拷到 <code>textures\</code>、相对路径保存，渲 <code>preview.png</code> / <code>preview_face.png</code>（相机按脚骨方向判断朝向）。</p>
+
+    <h3>第三步 · 批量</h3>
+    <pre># 1) 先顺序把包都导出来（UE Viewer 并发会互相覆盖共享贴图，这一步不能并行）
+python .\list_models.py --kind outfit --json | ConvertFrom-Json | Where-Object body -eq PCF | ForEach-Object { .\export_model.ps1 $_.id -NoBlend }
+# 2) 再分几路并行跑 Blender（PSK 都在了，脚本会跳过 UE Viewer）
+foreach ($id in 'PCF_001','PCF_002','PCF_003') { .\export_model.ps1 $id }</pre>
+    <p>每套 Blender 约 2–3 分钟；15 套女装三路并行十几分钟。</p>
+
+    <h3>参数表</h3>
+    <table>
+      <tr><th>参数</th><th>默认</th><th>说明</th></tr>
+      <tr><td><code>-GameRoot</code></td><td><code>E:\tools\vindictus</code></td><td>游戏根（含 <code>Vindictus.exe</code>）</td></tr>
+      <tr><td><code>-ExportRoot</code></td><td><code>D:\vindictus_exports</code></td><td>产物根</td></tr>
+      <tr><td><code>-UmodelExe</code> / <code>-BlenderExe</code> / <code>-PythonExe</code></td><td>见前提表</td><td>工具路径</td></tr>
+      <tr><td><code>-AesKeyFile</code></td><td><code>E:\tools\vindictus\_download\aes_key.txt</code></td><td>没设 <code>VINDICTUS_AES_KEY</code> 时从这里读</td></tr>
+      <tr><td><code>-Force</code></td><td>关</td><td>重导包 + 重建 blend（否则 blend 已存在就跳过）</td></tr>
+      <tr><td><code>-NoBlend</code> / <code>-NoPreview</code></td><td>关</td><td>只到 UE Viewer 为止 / 不渲预览</td></tr>
+      <tr><td><code>-Smooth</code></td><td>关</td><td>丢掉 PSK 自带的拆分法线改平滑着色</td></tr>
+      <tr><td><code>-IncludeWeapons</code></td><td>关</td><td>把 <code>Weapon\</code> 下的 SK 也并进模型</td></tr>
+    </table>
+
+    <h3>产物目录（默认 D:\vindictus_exports）</h3>
+    <pre>umodel_exports\VindictusRoot\...          UE Viewer 原始导出（按游戏目录结构：PSK/PSKX、PNG、.mat、.props.txt）
+blend\&lt;id&gt;\&lt;id&gt;.blend                     一副骨架 + 全部部件 + 材质（相对路径）
+blend\&lt;id&gt;\textures\                      用到的贴图（PNG）
+blend\&lt;id&gt;\preview.png / preview_face.png / spec.json / build.log
+vindictus_models_manifest.json            collect_manifest.py 的汇总；_gallery\thumbs\ 是本页缩略图</pre>
+    <p>整个 <code>blend\&lt;id&gt;\</code> 目录可以直接拷给别人。</p>
+
+    <h3>容易踩的坑</h3>
+    <ul>
+      <li><b>Head 部件不都是头盔</b>：项链/颈圈（001、007、009）、耳机（002、004）、帽子（003、012）、发带（006）、发冠（005）、自带发型（001_Temp、008、010 打包了 Fiona 的头发）、全盔（067）。
+        只有 Head 里带头发材质或 <code>list_models.py</code> 的 <code>HEAD_REPLACES_HAIR</code>（067）标了的才隐藏默认头发；头发仍在文件里（<code>&lt;id&gt;_Hair</code>），要显示就取消隐藏。按几何（贴头皮比例、盖脸比例）分不开耳机和发型，别再试。</li>
+      <li><b>部件绑在另一版骨架上</b>：002/003/004/006/007/009/010/012 的 Hand/Head/Upper/Lower 到 <code>head</code>、脚趾差 6.9–13 cm；不重定位帽子会飘在头顶上方。脚本自动烘焙，报告里 <code>reposed_parts</code> 列出。</li>
+      <li><b>旧版 Biped 骨架朝向不同</b>：脸骨架里的 <code>Root → Bip001_*</code> 子树相对 UE 骨架转了 90°（面朝 +X），<code>Shiningwill_legacy</code> 绑在它上面会侧着身、脸朝前。脚本把这棵子树连同绑在上面的网格转正、按 <code>Bip001_Head</code>→<code>head</code> 平移对齐，报告里 <code>aligned_hierarchies</code>；它自带的旧发型盖到新脸的眼睛上，所以隐藏旧发型、保留默认头发。</li>
+      <li><b>UE Viewer 不能并行</b>：不同模型共用 Fiona 脸/发/眼睛贴图，同时写会互相覆盖。先 <code>-NoBlend</code> 顺序导完再并行 Blender。</li>
+      <li><b>virtual texture 导不出</b>：静态物件贴图全是；角色里 <code>T_pc_fiona_basebody_01_D</code>（<code>M_female_skin_body_01</code>，PCF_001_Temp 用）也是——这类皮肤材质用纯肤色代替，报告里会列「未解析」。</li>
+      <li><b>BC6H 贴图写成 .hdr</b>：PCF_012 的 <code>_B</code> 基色是 <code>.hdr</code>，脚本已按 <code>.hdr</code> 索引；别按 png 去找。</li>
+      <li><b>PCF_001_Temp 是 WIP 服装</b>：裤子的彩虹格/棋盘是资源自带的占位贴图，不是导出坏了。</li>
+      <li><b>眼睛</b>：<code>T_Iris_A_M</code> 的 B 是径向渐变、G 是纤维、alpha 是瞳孔，不是遮罩；从色板贴图采到的颜色是 sRGB 值，喂给节点前要转线性——否则虹膜是一团白雾。</li>
+      <li><b>UE Viewer 报 Oodle 解压错误</b>：多半是下载的包坏了，核对 md5。</li>
+      <li>morph target 导不出（脸包里的 MetaHuman <code>DNAAsset</code> 也不导），面部没有形态键；Nanite 只有基础几何。</li>
+    </ul>
+
+    <h3>重新生成本页</h3>
+    <pre>cd 〈仓库〉\scripts\vindictus\html
+python .\collect_manifest.py          # 读 blend\*\build.log -> D:\vindictus_exports\vindictus_models_manifest.json
+python .\make_gallery.py              # 缩略图 -> D:\vindictus_exports\_gallery\thumbs，页面 -> 本目录 index.html</pre>
+
+    <h3>例外与已知局限</h3>
+    <ul>
+      <li>怪物 / NPC 目前只是按目录把 SK 并起来，材质母板没逐个核对。</li>
+      <li>眼球是近似：没有角膜折射，虹膜半径 0.2 是按这批头的眼裂宽度定的；皮肤 <code>_Mask</code>、头发高光随机度等参数没用上。</li>
+      <li><code>SK_Fiona_Lower01_master</code> 里带一段 <code>PCF_005_Onepiece</code> 材质，是 master 网格自带的，渲染上被裙甲盖住。</li>
+      <li>正式版发售后目录结构、骨架版本都可能变，本页所有数字只对 2024-03 Pre-Alpha 客户端成立。</li>
+    </ul>
+</section>
+
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var bodySel = document.getElementById('body');
+  var kind = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!kind || card.dataset.kind === kind)
+        && (!bodySel.value || card.dataset.body === bodySel.value)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  bodySel.addEventListener('change', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      kind = chip.dataset.kind || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard 需要安全上下文，file:// 不是
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

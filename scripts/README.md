@@ -13,6 +13,7 @@
 | Dead or Alive 5 Last Round | Team Ninja .bin/.lnk + TMC/TMCL | [`doa5lr/`](doa5lr/) | `doa5lr\export_full.ps1` |
 | Dead or Alive 6 | KTGL v2 RDB + G1M/G1T | [`doa6/`](doa6/) | `doa6\export_full.ps1` |
 | Virt-A-Mate 1.22 | Unity 资源包 + `.var`（DAZ Genesis 2 人体 / 自定义网格） | [`vam/`](vam/) | `vam\export_vam_models.ps1` |
+| Vindictus: Defying Fate（2024-03 Pre-Alpha） | Unreal 5.3 IoStore（`.utoc/.ucas`，索引 AES 加密） | [`vindictus/`](vindictus/) | `vindictus\export_model.ps1` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -71,6 +72,15 @@ DAZSkinWrapStore 在 morph 后的身体上重建（和 VaM 运行时一样）。
 DAZ `.duf`（贴身由 VaM 自己算），以及 Genesis 2 体型 morph `.dsf`，不需要 DAZ Studio 或 Unity。
 格式细节见 [`vam/README.md`](vam/README.md)。
 
+Vindictus: Defying Fate 还没发售，`vindictus/` 针对的是 archive.org 上的 2024-03 Pre-Alpha
+客户端（UE 5.3 IoStore）。它的 pak/utoc 索引是 AES 加密的，key 不在 exe 里连续存放，
+`vindictus\find_aes_key.py` 按指令模式从 exe 重组候选、拿 pak 索引试解密算出来（key 只放本地，
+不进仓库）；之后 `list_models.py` 解密目录索引列出 36 个模型（Fiona / Lethita、15 套女装、
+男装、怪物、NPC），`export_model.ps1 <id>` 用 spiritovod 的 UE Viewer specific build 逐包导
+PSK + PNG + 材质参数，`build_blend.py` 把各部件的骨架子集并成一副、按 `.mat/.props.txt` 重建
+头发/眼睛/皮肤/服装材质，出 `.blend` + 预览；`vindictus\html\index.html` 是画廊。详见
+[`vindictus/README.md`](vindictus/README.md)。
+
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
 Archive Tool 源码），TMC/TMCL 经 Noesis（32 位 + doa5pc 插件）转 FBX+DDS；DOA6 用
@@ -92,5 +102,5 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。

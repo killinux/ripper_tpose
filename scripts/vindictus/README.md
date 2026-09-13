@@ -1,0 +1,168 @@
+# Vindictus: Defying Fate（2024-03 Pre-Alpha）模型导出
+
+Nexon 的《洛奇英雄传：反抗命运》还没发售（Steam 商店页写 2027）。能拿到的只有 2024-03-14
+那次 Pre-Alpha 的客户端（archive.org 项目 `vindictus-defying-fate.-7z`，14.1 GB 7z）；2025-06 的
+Alpha Demo（Steam `3576170`）测试结束后被替换成 348 MB 空壳，已经拿不到了。本目录针对
+Pre-Alpha 客户端：**UE 5.3、IoStore（utoc/ucas）、Oodle 压缩、索引 AES 加密**。
+
+## 已验证环境
+
+```text
+客户端：E:\tools\vindictus（Vindictus.exe 为游戏根；Paks 在 Vindictus\Content\Paks，ucas 15.04 GB）
+UE Viewer：spiritovod 的 UE5 specific build，umodel_materials_ue5.exe（build 1579 based fix282，2026-09-05，自带 Oodle）
+            E:\tools\umodel_specific\materials\umodel_materials_ue5.exe
+Blender：3.6.15 + io_scene_psk_psa 5.0.6（PSK/PSKX 导入器）
+Python：3.13 + cryptography（解 utoc 目录索引用）
+输出：D:\vindictus_exports
+```
+
+## AES key（不在仓库里）
+
+pak/utoc 的索引用主 key（GUID 全 0）加密。key **只放本地**，脚本按下面顺序取：
+
+1. 环境变量 `VINDICTUS_AES_KEY`（`0x` + 64 位十六进制）；
+2. `-AesKeyFile`（默认 `E:\tools\vindictus\_download\aes_key.txt`，一行）。
+
+`export_model.ps1` 把 key 写进临时文件再以 `-aes=@file` 交给 UE Viewer，命令行里不出现 key。
+仓库、CHANGELOG、画廊页面里都不能出现 key（和 FF7 Remake 的规矩一样）。
+
+key 不是明文躺在 exe 里的：`Vindictus.exe` 用 8 条 `mov dword [..], imm32` 指令把 32 字节拼出来
+（`.text` 文件偏移 `0x47745EB`），所以「找连续 32 字节」的扫描器找不到。`find_aes_key.py` 按指令
+模式（imm64×4 / imm32×8 / imm8×32 / 成对 xmm 常量）重组候选，再拿 `Vindictus-Windows.pak`
+的加密索引试解密，解出 `../../../` 挂载点即命中（先扫一遍连续窗口再扫指令模式，共约 80 秒）：
+
+```powershell
+python find_aes_key.py            # 默认扫 E:\tools\vindictus 的 exe + pak，命中后写 aes_key.txt 到 --out
+python find_aes_key.py --exe <Game>.exe --pak <any>.pak --out D:\keys\game_aes.txt
+```
+
+## 三个脚本
+
+### `export_model.ps1`（一键：UE Viewer → Blender）
+
+```powershell
+.\export_model.ps1 -List                 # 模型清单 + 导出状态（= list_models.py）
+.\export_model.ps1 Fiona                 # 女主：脸 + 发 + Shiningwill 全套（Upper/Lower/Hand/Foot）
+.\export_model.ps1 Lethita               # 男主：脸 + 发 + 盔甲（含 Head）
+.\export_model.ps1 PCF_067 -Force        # 女服装 067 + Fiona 脸/发，重建
+.\export_model.ps1 Gnoll_type3_Tribe_Boss_01 -NoPreview
+```
+
+步骤：
+
+1. `list_models.py --resolve <id> --json` 解析出该模型的骨骼网格包（Content 相对路径，
+   UE Viewer 接受 `VindictusRoot/Character/.../SK_xxx` 这种写法，避免 178 个重名 stem 的歧义）；
+2. 对缺失的包逐个执行 `umodel -game=ue5.3 -path=<Paks> -aes=@tmp -export -png -out=<ExportRoot>\umodel_exports <package>`
+   → PSK/PSKX + PNG 贴图 + `.mat`/`.props.txt`（材质实例的贴图、向量、标量参数）；
+3. 写 `<ExportRoot>\blend\<id>\spec.json`，无头跑 `build_blend.py`；解析 `VINDICTUS_REPORT=` 行打印
+   骨骼数、各部件顶点数、材质/贴图数、未解析贴图、警告。
+
+参数：`-GameRoot`、`-ExportRoot`、`-UmodelExe`、`-BlenderExe`、`-AesKeyFile`、`-PythonExe`、
+`-IncludeWeapons`（把武器也并进来）、`-Force`（重导 + 重建）、`-NoBlend`、`-NoPreview`、
+`-Smooth`（丢掉 PSK 自带的拆分法线改平滑着色）。输出已存在且未 `-Force` 时跳过。
+
+### `list_models.py`（清单）
+
+直接解密并解析 Paks 下每个 `.utoc` 的 IoStore 目录索引（TOC v5：ChunkIds → OffsetLengths →
+PerfectHashSeeds → ChunksWithoutPerfectHash → CompressionBlocks → 方法名 → 签名块 → 目录索引），
+不需要 UE Viewer 在场。索引只有路径没有类型，所以「部件」= `Model/` 目录下名为 `SK_*` 且不是
+`_Skeleton/_Physics/_PhysicsAsset` 的资源。按游戏的拼装方式分组：
+
+| kind | 目录 | 组成 |
+| --- | --- | --- |
+| player | `Character/Player/<Name>/` | `Face/Model/SK_<Name>_Face01` + `SK_<Name>_Hair01` + `Armor/Model/SK_<Name>_*_master` |
+| outfit | `Character/Outfit/PC{F,M}_Outfit/<Id>/Model/` | 服装部件 + 对应身体的脸/发（PCF→Fiona，PCM→Lethita；由 UE Viewer 加载的骨架 `SK_PCF/PCM_BaseBody01_Skeleton` 核实）；`Player/Outfit/<Name>/Mesh/` 下的旧版整套记作 `<Name>_legacy` |
+| base | `BaseBody_PCM` 四件 / Fiona `SK_female_base` | 裸体基础身体 + 脸/发 |
+| monster | `Character/AI/<Race>/<Type>/<Variant>/Model/` | 目录下全部 SK（武器标为 weapon） |
+| npc | `Character/Npc/**` | 单个 SK |
+
+```powershell
+python list_models.py                         # 表：id / kind / body / 部件数 / umodel 已导 / blend 已建
+python list_models.py --json --kind outfit
+python list_models.py --resolve PCF_067 --json
+python list_models.py --raw --path-filter /Character/AI/   # 原始路径
+```
+
+武器（`Weapon/` 下的 SK）默认放在 `extras`，`--include-weapons` 才并入部件。
+
+### `build_blend.py`（Blender 3.6 无头组装）
+
+```powershell
+blender --background --factory-startup --python build_blend.py -- --spec spec.json [--no-preview] [--smooth]
+```
+
+1. 逐个导入 PSK（`io_scene_psk_psa`，材质按 PSK 的 MATT 槽命名，同名复用）；
+2. **合并骨架**：UE Viewer 给每个网格导的是它自己的参考骨架子集（Fiona 脸 658 根、头发 274、
+   上身 531、脚 30……），取最多的一副为底，其余按名字补缺（父子关系、rest 变换照抄），所有网格
+   重新绑定到这一副——Fiona 合成 1415 根一副可摆姿势的骨架，共享骨骼 rest 位置偏差 0；
+3. **材质**从 `.mat`（Diffuse/Normal/Opacity/Other[n]）和 `.props.txt`（贴图参数名、向量、标量、Parent）重建：
+
+| 母材质 | 处理 |
+| --- | --- |
+| `M_PC_Outfit` 服装 / 怪物 | `_D` 基色（有 Opacity 时 alpha 作 UE Masked 裁切，阈值 1/3）、`_N` 法线（翻 G 通道）、`_ORM`/`_ARM`：G 粗糙度、B 金属度 |
+| `M_PC_Skin_Body` / `M_PC_Skin_Head` 皮肤 | `_D` × `Basecolor Tint`、`_N`（强度 0.6）、少量次表面；`_Mask` 未用 |
+| `M_PC_Hair` 头发卡片 | `ODI` 的 R 作 alpha（HASHED），`FR` 的 B（发根→发梢）驱动 ColorRamp，颜色取实例的 `Color Root/Mid/Tip` |
+| `M_PC_Skin_Eyebrow` 眉毛/睫毛 | `T_Eyebrow01_ODI` 的 R 作 alpha，深色 |
+| `M_PC_Skin_EyeRefractive_Old`（Fiona）/ `M_PC_Skin_Eye`（Lethita）眼球 | `build_eye()`：巩膜贴图 × 血丝贴图（0.4）；虹膜是**程序化**的——以 UV 中心半径 0.2 为虹膜盘（MetaHuman 惯例），两种虹膜色沿半径渐变（Fiona：实例的 `IrisColor1/2 U,V` 在 `T_PC_Iris_color_picker` 上采样，**采样值是 sRGB 编码要先转线性**，再乘 `IrisBrightness`×1.35；Lethita：`Iris Color Inner/Outer` 向量），× 虹膜贴图 G 通道的纤维结构（`T_Iris_A_M` B 通道是径向渐变、G 是纤维；`T_EyeMap01` R 渐变、G 纤维），外缘 limbus 变暗（`LimbusDarkAmount`+0.1），瞳孔按半径 0.32×`PupilScale` 抠黑；粗糙度 0.12、高光 0.5、`T_PC_Eye_N` 法线 0.4 |
+| 眼部遮蔽壳 / 泪线 / 假反射片 | 半透明黑 0.12（无高光）/ 透明高光 / 贴图 alpha × 0.4 |
+
+4. 用到的贴图复制到 `textures\`，`.blend` 存相对路径（整个 `<ExportRoot>\blend\<id>\` 目录可单独拷走）；
+5. 渲 `preview.png`（全身 900×1400）与 `preview_face.png`（头骨 `head` 取景）。相机方向不是写死的
+   +X：UE 骨骼网格资源朝 -Y，脚本用 `foot_l/r → ball_l/r` 的方向判断角色朝向再放相机。
+
+## 输出
+
+```text
+D:\vindictus_exports\umodel_exports\VindictusRoot\...   UE Viewer 原始导出（按游戏目录结构）
+D:\vindictus_exports\blend\<id>\<id>.blend               一副骨架 + 全部部件 + 材质
+D:\vindictus_exports\blend\<id>\textures\                贴图（PNG）
+D:\vindictus_exports\blend\<id>\preview.png / preview_face.png / spec.json / build.log
+D:\vindictus_exports\vindictus_models_manifest.json      画廊 manifest；_gallery\thumbs\ 缩略图
+```
+
+## 画廊（`html/`）
+
+```powershell
+cd html
+python .\collect_manifest.py     # 读 blend\*\build.log 的 VINDICTUS_REPORT -> manifest（只有路径和统计）
+python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\index.html（自包含，file:// 链接）
+```
+
+和其它游戏的画廊同一套：卡片 = 预览 + 说明 + 部件 + 规格（顶点/面/骨骼/材质/贴图/体积）+ blend 路径
++ 脸部预览；徽章标出类型、身体、隐藏的头发、重定位过的部件数、告警；顶部可按类型/身体筛选、搜索。
+页面底部是完整的手工导出教程（客户端来源、key 计算、三个脚本、批量、参数表、产物目录、坑）。
+`NAMES` 表里的中文说明是看着预览写的——Pre-Alpha 资源没有正式服装名。
+
+## 已知限制
+
+- 静态网格贴图是 virtual texture，UE Viewer 导不出（角色不受影响）；Nanite 只有基础几何；
+  umodel 不导 morph target（脸包里的 MetaHuman `DNAAsset` 也不导），面部没有形态键。
+- 服装的 `Head` 部件五花八门：项链/颈圈（001、007、009）、耳机（002、004）、帽子（003、012）、发带（006）、
+  发冠 + 头皮片（005，头发照常显示）、自带发型（001_Temp、008、010 里打包了 Fiona 的头发）、全盔（067、Lethita）。
+  规则：Head 部件里有头发材质，或 `list_models.py` 的 `HEAD_REPLACES_HAIR`（067）标了的，才隐藏默认
+  头发（仍留在文件里，`<id>_Hair`）；其余保留。几何启发式（贴头皮比例、盖脸比例）试过，分不开耳机/帽子和发型。
+- 部分服装的部件绑在**另一版骨架**上（Head 的脊柱链到 head 差 6.9 cm，Shiningwill 旧版差 6 cm）：
+  `build_blend.py` 先把该部件自己的骨架摆到底骨架的 rest 姿势再烘焙网格（等价于游戏运行时的蒙皮），
+  报告里记为 `reposed_parts`。
+- `Shiningwill_legacy` 整套是 3ds Max Biped 骨架（`Bip001_*`）。Fiona 的脸骨架里还留着这棵子树
+  （`Root → Bip001_*`，364 根），但相对 UE 骨架转了 90°（面朝 +X），所以直接合并会身体侧着、脸朝前。
+  `align_secondary_hierarchies()` 把第二棵根子树连同绑在上面的网格按脚趾方向转到 UE 朝向、再按
+  `Bip001_Head`→`head` 平移对齐（报告 `aligned_hierarchies`）；它自带的旧发型是给旧头做的，会盖住新脸的
+  眼睛，所以隐藏旧发型、保留默认头发。
+- `SK_Fiona_Lower01_master` 里有一个 `PCF_005_Onepiece` 材质段，是 master 网格自带的，渲染上被裙甲盖住。
+- `T_pc_fiona_basebody_01_D`（`M_female_skin_body_01` 的基色）是 virtual texture 导不出，这类皮肤材质用纯肤色代替；
+  BC6H 贴图 UE Viewer 写成 `.hdr`（PCF_012 的 `_B` 基色），已按 `.hdr` 索引。
+- 眼球是近似：没有折射（游戏用角膜折射 + 视差），虹膜半径 0.2 是按这批头的眼裂宽度定的
+  （0.17 偏小、0.22 偏大），`IrisSaturation`（0.21）没有采用——按它做会灰掉；皮肤 `_Mask`、
+  头发 `Specular Highlight Randomness` 等参数没有用上。
+- 怪物/NPC 目前只是按目录把 SK 并起来，没有逐个核对材质母板。
+
+## 已验证
+
+- `Fiona`：6 部件 103,180 顶点，骨架 1415 根（合并 757），19 材质 41 贴图，0 未解析，rest 偏差 0。
+- `Lethita`：7 部件，476 根（脸骨架 `SK_Lethita_Face01_Skeleton` 与 PCM 身体 rest 差 0.25 cm，可接受），19 材质 33 贴图。
+- **全部 15 套女装**（Fiona 默认装、`Shiningwill_legacy`、`PCF_001`…`PCF_012`、`PCF_067`）一次批量导出：
+  先 `-NoBlend` 顺序导 61 个包，再 3 路并行 Blender。逐张看过 `blend\*\preview.png`（拼图脚本在
+  `_download` 之外的临时目录）：002/003/004/006/007/009/010/012 的部件都做了重定位烘焙（Head 6.9 cm、
+  Upper/Lower 到脚趾 13 cm），帽子、耳机、颈圈位置正确；005/008/010/067 隐藏默认头发，其余保留；
+  PCF_012 的 `.hdr` 基色生效；`PCF_001_Temp` 裤子是资源自带的彩虹占位贴图（WIP 服装），不是导出问题。
