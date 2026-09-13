@@ -190,6 +190,58 @@ class MCP_OT_drop_test(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class MCP_OT_preview(bpy.types.Operator):
+    bl_idname = "mmd_cloth.preview"
+    bl_label = "Preview (build + play)"
+    bl_description = ("mmd_tools Build (bind bones to their rigid bodies), switch the rigid "
+                      "body world on over the scene's frame range and jump to the first frame; "
+                      "press Space to watch. Stop preview before exporting")
+
+    def execute(self, context):
+        try:
+            model, root, arm, meshes = api.model_of(context.active_object)
+        except Exception as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        scene = context.scene
+        scene.frame_set(scene.frame_start)
+        if not root.mmd_root.is_built:
+            model.build()
+        world = scene.rigidbody_world
+        if world is None:
+            self.report({"ERROR"}, "no rigid body world; build physics first")
+            return {"CANCELLED"}
+        world.enabled = True
+        world.point_cache.frame_start = scene.frame_start
+        world.point_cache.frame_end = scene.frame_end
+        scene.frame_set(scene.frame_start)
+        bound = sum(1 for pb in arm.pose.bones if "mmd_tools_rigid_track" in pb.constraints)
+        scene.mmd_cloth.report = "previewing: %d bones follow their rigid bodies, Space to play" % bound
+        return {"FINISHED"}
+
+
+class MCP_OT_stop_preview(bpy.types.Operator):
+    bl_idname = "mmd_cloth.stop_preview"
+    bl_label = "Stop preview"
+    bl_description = "mmd_tools Clean: unbind the bones and put every rigid body back (do this before exporting)"
+
+    def execute(self, context):
+        try:
+            model, root, arm, meshes = api.model_of(context.active_object)
+        except Exception as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        scene = context.scene
+        world = scene.rigidbody_world
+        if world is not None:
+            world.enabled = False
+        scene.frame_set(scene.frame_start)
+        if root.mmd_root.is_built:
+            model.clean()
+        scene.mmd_cloth.report = "preview stopped, bind positions restored"
+        return {"FINISHED"}
+
+
 class MCP_UL_garments(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         row = layout.row(align=True)
@@ -230,13 +282,17 @@ class MCP_PT_panel(bpy.types.Panel):
         row.operator("mmd_cloth.clear", icon="TRASH")
         row = layout.row(align=True)
         row.prop(settings, "drop_frames")
-        row.operator("mmd_cloth.drop_test", icon="PLAY")
+        row.operator("mmd_cloth.drop_test", icon="CHECKMARK")
+        row = layout.row(align=True)
+        row.operator("mmd_cloth.preview", icon="PLAY")
+        row.operator("mmd_cloth.stop_preview", icon="SNAP_OFF")
         if settings.report:
             layout.label(text=settings.report)
 
 
 CLASSES = (MCP_GarmentItem, MCP_Settings, MCP_OT_analyze, MCP_OT_build, MCP_OT_strip,
-           MCP_OT_clear, MCP_OT_colliders, MCP_OT_drop_test, MCP_UL_garments, MCP_PT_panel)
+           MCP_OT_clear, MCP_OT_colliders, MCP_OT_drop_test, MCP_OT_preview,
+           MCP_OT_stop_preview, MCP_UL_garments, MCP_PT_panel)
 
 
 def register():

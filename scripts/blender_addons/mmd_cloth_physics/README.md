@@ -27,10 +27,14 @@ scripts/blender_addons/mmd_cloth_physics/
    每件可改预设 / 取消勾选。
 2. 没有身体碰撞刚体的模型先点 **Body colliders**（有就跳过）。
 3. **Build physics** —— 建刚体 + 关节。**Clear** 删掉本插件建的（身体胶囊保留）。
-4. **Drop test** —— 静置 60 帧，报告每个刚体离最近的 kinematic 刚体拉开了多少倍、
-   末尾还在不在动。先存盘：它会 `Model.build()` 再 `clean()`，位置会还原，但仍属于
-   会动场景的操作。
-5. 之后用 mmd_tools 正常导出 PMX。
+4. **Drop test** —— 静置 60 帧，报告每个关节拉伸了几倍（>1.5× 记拉断）、末尾还在不在动。
+   先存盘：它会 `Model.build()` 再 `clean()`，位置会还原，但仍属于会动场景的操作。
+5. **Preview (build + play)** —— 相当于 mmd_tools 的 Build 再把 Scene 的 Rigid Body World
+   打开、cache 铺满帧范围、跳到首帧；空格播放就能看布飘。**看完按 Stop preview**（= mmd_tools
+   Clean，刚体回绑定位）再导出。直接点 mmd_tools 自己的 Build 也行，但它会保留 Rigid Body
+   World 原来的开关状态——场景里若是关着的，骨骼绑上了刚体、刚体却不算，衣服就整段定在
+   空中不跟身体走。
+6. 之后用 mmd_tools 正常导出 PMX。
 
 **脚本方式**（批处理、ROE 导出流程就是这样调）：
 
