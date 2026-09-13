@@ -36,6 +36,9 @@ scripts/blender_addons/mmd_cloth_physics/
    空中不跟身体走。
 6. 之后用 mmd_tools 正常导出 PMX。
 
+不想自己点：Blender 里开着 blender-mcp 的服务时，`scripts/blender_mcp/cloth_demo.py` 会把
+1–5 步在那个 Blender 里全做完并开始播放，见 `docs/blender-mcp-driving.md`。
+
 **脚本方式**（批处理、ROE 导出流程就是这样调）：
 
 ```python
