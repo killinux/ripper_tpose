@@ -35,6 +35,8 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `roe_xps_addon.py` | Blender 3.6 插件 | HD 角色一步步转带材质的 XPS（**主推**） | [xps-addon.md](../../docs/xps-addon.md) |
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
 | `convert_fbx.py` | 被 ps1 调用（Blender 无头） | FBX → XPS/PMX/GLB **白模**转换 | 本页 §8 |
+| `suit_parts.py` | 任意 Python 3（需 UnityPy） | 列出一套 suit（服装变体）由哪些部件网格组成 | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
+| `assemble_suit_blender.py` | Blender 无头 | 把裸模 + 头发 + suit 部件拼成一个带材质、绑到底模骨架的 .blend | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
 
 产物用的是 `a01`/`g11` 这类代号——字母是角色、数字是服装变体，
 字母与角色名的对照见 [character-roster.md](character-roster.md)。
@@ -684,6 +686,30 @@ blender --background --python convert_fbx.py -- <输入.fbx> <输出目录> <xps
 
 FBX 里没有网格/骨架时会明确报错退出（有的角色的 `nk_bs` 是纯空节点层级，
 如 g02）；ps1 调用时会自动换下一个候选 FBX（一般是 `pc_<id>_hd`）重试。
+
+---
+
+## 8.5 拼装「套装」(suit) —— 把服装变体导成一个模型
+
+角色的服装变体（内部叫 *suit*，如林恩的「冷艳主管」ProUniform）**不是**一个整体
+FBX：它 = 裸体底模 + 头发 + 一堆分开的部件网格（外套/领饰/手套/长袜/高跟/桂冠…），
+全部蒙皮到同一副骨架，游戏运行时叠上去。拼装线：
+
+```bash
+# 1) 正常提取该角色（会顺带 stage components / suit 贴图）
+.\extract_character.ps1 j01 -ExportTextures
+# 2) 列出这套 suit 有哪些部件
+python suit_parts.py --game "<AssetBundles 目录>" --id j01 --suit prouniform
+# 3) 挑「穿好」的部件拼装（去掉替代态/道具）
+blender --background --factory-startup --python assemble_suit_blender.py -- \
+    --root <提取目录> --tex <贴图目录> \
+    --out D:\roe_exports\j01\blend\pc_j01_prouniform.blend \
+    --base pc_j01_nk --parts <逗号分隔部件名> --glb 1
+```
+
+产物是内嵌贴图、绑到底模 `Root_G` 骨架的 `.blend` + 三视图预览（+ 可选 glb）。两个坑
+（部件 FBX 不带材质、蒙皮部件顶点对但物体变换错导致飘 1.5 m）与完整原理、ProUniform
+实例、限制见 [ROE 套装拼装](../../docs/roe-suit-assembly.md)。
 
 ---
 

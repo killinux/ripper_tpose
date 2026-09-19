@@ -14,6 +14,44 @@
 
 ---
 
+## 2026-09-19 — Rise of Eros：把「套装」(suit) 拼装成一个模型（林恩·冷艳主管）
+
+### 新增
+
+`suit_parts.py` + `assemble_suit_blender.py`：把一套服装变体（suit）拼成一个带材质、
+绑到底模骨架的 `.blend`。ROE 的 suit 不是一个整体 FBX，而是裸体底模 + 头发 +
+一堆分开的部件网格（外套/领饰/手套/长袜/高跟/桂冠…），全部蒙皮到同一副骨架。
+第一个实例是林恩（`j01`）的 **ProUniform**（冷艳主管职业制服，2026-09-12 更新加入）。
+
+### 用户如何操作
+
+```
+.\extract_character.ps1 j01 -ExportTextures
+python suit_parts.py --game "<AssetBundles>" --id j01 --suit prouniform
+blender --background --factory-startup --python assemble_suit_blender.py --     --root <提取目录> --tex <贴图目录>     --out D:oe_exports\j01lend\pc_j01_prouniform.blend     --base pc_j01_nk --parts <逗号分隔部件名> --glb 1
+```
+
+产物：`D:oe_exports\j01lend\pc_j01_prouniform.blend`（内嵌贴图）+ 三视图预览 + `glb\`。
+
+### 实现原理与坑
+
+- **部件组成**写在存根 `accessory_components_pc_<id>_suit_<suit>.ab`（根 GameObject 用 PPtr
+  指向 `chara_components_pc_<id>.ab` 里的真网格）；`suit_parts.py` 解析它列出部件名。
+- **部件 FBX 不带材质**，需按部件名去 suit 贴图目录找 `Lynn_<部件>_rgbx_Albedo`。
+- **蒙皮部件的顶点在正确模型空间，但物体 `matrix_world` 是错的**（AssetStudio 把四肢
+  部件的导出根设成一根肢骨，烘了个多余变换），导入后会飘到离骨头约 1.5 m（手套
+  飘到身体正前方）。修法：蒙皮部件丢掉物体变换、重新绑到底模骨架（顶点组名与骨名
+  一致）；静态部件（如桂冠，`MeshFilter` 无骨架）相反——保留自己的变换，只挂到骨架下。
+- ProUniform 存根列 17 个部件，“穿好”用 13 个，去掉 `EggVibrator`（道具）、`OpenVest`
+  （`CloseVest` 的敷开替代态）、`LLaceBra`/`RLaceBra`（乳贴）。完整说明见
+  [ROE 套装拼装](roe-suit-assembly.md)。
+
+### 验证
+
+仓库脚本重跑一致复现，`missing=[]`，15 个网格 / 14 张贴图全部打包，三视图逐件目检：
+外套/领饰/手套/长袜/高跟/桂冠/吊袜带位置与贴图均正确。目前只出 blend/preview/glb（XPS/PMX 未接），
+且只在 j01 ProUniform 上验证过。
+
 ## 2026-09-13 — Vindictus: Defying Fate（2024-03 Pre-Alpha）：客户端、AES key、UE Viewer → Blender 流水线
 
 ### 客户端从哪来
