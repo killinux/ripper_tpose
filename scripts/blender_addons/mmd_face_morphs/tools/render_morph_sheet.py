@@ -23,10 +23,13 @@ SCALE = 0.08
 
 
 def option(argv, flag, count, default):
-    if flag in argv:
-        i = argv.index(flag)
-        return argv[i + 1:i + 1 + count]
-    return default
+    if flag not in argv:
+        return default
+    i = argv.index(flag)
+    values = argv[i + 1:i + 1 + count]
+    if len(values) != count or any(v.startswith("--") for v in values):
+        raise SystemExit("%s needs %d value(s)" % (flag, count))
+    return values
 
 
 def main():
@@ -46,13 +49,13 @@ def main():
                                        types={"MESH", "ARMATURE", "MORPHS"})
     else:
         bpy.ops.wm.open_mainfile(filepath=src, load_ui=False)
-    arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
-    root = arm
-    while root.parent:
-        root = root.parent
-
     sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
     from mmd_face_morphs import api, build, faces
+
+    # through mmd_tools, not "the first armature": a .blend touched by the
+    # morph slider also holds its ".dummy_armature", which sorts first
+    candidates = [o for o in bpy.data.objects if getattr(o, "mmd_type", "") == "ROOT"] or list(bpy.data.objects)
+    root, arm = build.model_of(candidates[0])
 
     if "--setup" in argv:
         api.setup(root, log=lambda line: print("setup: " + line))

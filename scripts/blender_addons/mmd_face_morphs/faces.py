@@ -1,20 +1,27 @@
 """Find the face bones of an mmd_tools model.
 
 Rise of Eros ships no shape keys: eyelids, brows, jaw, lips, tongue and teeth
-are skinned bones under the head.  Three naming styles exist in the same game
-and the MMD conversion keeps them as they are (only the eyeballs become
-左目/右目), so every role below lists the spellings seen so far, matched with
-the ``Bip001 `` / ``Bip000 `` prefix stripped and case ignored.  ``AC `` bones
-are 3ds Max helper duplicates parented under the real controls; they are
-skipped, moving the control moves them too.
+are skinned bones under the head.  Three spellings of the same rig exist in
+the same game and the MMD conversion keeps them as they are (only the eyeballs
+become 左目/右目), so every role below lists the spellings seen so far, matched
+with the ``Bip001 `` / ``Bip000 `` prefix stripped and case ignored.
+
+``AC `` bones are 3ds Max helper duplicates.  Almost all of them hang UNDER the
+control they duplicate (``AC eyelid_UL`` under ``Bip001 eyelid_UL``), so moving
+the control moves them and they are simply skipped.  The one exception found so
+far is ``AC jaw``: it carries the skin under the chin but is parented to the
+NECK, so a chin rotation would leave that patch behind.  Such a helper is kept
+as a *follower* of its role - build.py gives it the same rotation about the
+role's pivot.
 """
 import re
 
 from mathutils import Vector
 
+from . import expressions
+
 PREFIX = re.compile(r"^(?:Bip\d+|AC)\s+", re.I)
-# 3ds Max helper duplicates (parented under the real control, so moving the
-# control moves them too) and mmd_tools' own additional-transform proxies.
+# helper duplicates and mmd_tools' own additional-transform proxies
 HELPER = re.compile(r"^(?:AC\s+|_dummy_|_shadow_)", re.I)
 
 # role -> spellings, in preference order (prefix stripped, lower case)
@@ -41,11 +48,17 @@ ROLE_NAMES = {
     "teeth_dw": ("teeth_dw", "teeth_b", "teeth_d", "teeth_down", "teeth_lower", "lowerteeth"),
 }
 
-# which spelling of the upper-left lid identifies which naming style
-STYLE_OF = {"eyelid_ul": "lowercase (a/c/d/e/f/g/h)", "eyelid_lt": "capitalised (b14, i/j/k/l/m)",
-            "eyelid_up_l": "b01 (UP/DN, Jaw)"}
+# the spelling of the upper-left lid names the style; families are NOT a guide
+# (c01-c07 are lowercase, c08-c10 capitalised, and so on through the roster)
+STYLE_OF = {"eyelid_ul": "lowercase (eyelid_UL / lip_UC / chin)",
+            "eyelid_lt": "capitalised (Eyelid_LT / Lips_TC / Chin)",
+            "eyelid_up_l": "b01 (eyelid_UP_L / Lips_UP / Jaw)"}
 
 PAIRED = ("eye", "upper_lid", "lower_lid", "brow", "corner")
+
+# every role a recipe can ask for, derived roles included
+EXPECTED_ROLES = sorted({role for recipe in expressions.MORPHS
+                         for role, _kind, _amount in recipe["actions"]} | set(ROLE_NAMES))
 
 
 def strip(name):
@@ -58,7 +71,9 @@ class Face(object):
     def __init__(self, arm):
         self.arm = arm
         self.bones = {}         # role -> bone name
+        self.followers = {}     # role -> [helper bones that must move with it]
         self.unit = 0.06        # eye spacing in armature units
+        self.calibrated = False  # True when ``unit`` was measured on a real pair
         self.front = -1.0       # sign of the armature Y axis that points forward
         self.centre_x = 0.0
         self.head = None        # head bone name
@@ -76,12 +91,17 @@ class Face(object):
         x = self.arm.data.bones[bone_name].head_local.x - self.centre_x
         return -1.0 if x < -1e-6 else 1.0
 
+    def missing(self):
+        return [role for role in EXPECTED_ROLES if role not in self.bones]
+
     def describe(self):
         found = sorted(self.bones)
-        missing = sorted((set(ROLE_NAMES) | {"brow_L_inner", "brow_L_outer"}) - set(found))
-        return ("style %s, unit %.3f, front %+d, %d roles: %s | missing: %s" % (
-            self.style, self.unit, int(self.front), len(found),
-            " ".join("%s=%s" % (r, self.bones[r]) for r in found), " ".join(missing) or "-"))
+        followers = " ".join("%s<-%s" % (role, ",".join(names)) for role, names in sorted(self.followers.items()))
+        return ("style %s, unit %.3f%s, front %+d, %d roles: %s | missing: %s%s" % (
+            self.style, self.unit, "" if self.calibrated else " (GUESSED, no eye/lid/brow pair)",
+            int(self.front), len(found),
+            " ".join("%s=%s" % (r, self.bones[r]) for r in found), " ".join(self.missing()) or "-",
+            (" | followers: " + followers) if followers else ""))
 
 
 def _index(arm):
@@ -109,7 +129,8 @@ def _brow_segments(face, side):
     if not root:
         return
     bone = face.arm.data.bones[root]
-    segments = [c for c in bone.children if strip(c.name).startswith(("eyebrow", "brow"))]
+    segments = [c for c in bone.children
+                if not HELPER.match(c.name) and strip(c.name).startswith(("eyebrow", "brow"))]
     if not segments:
         # no segments: the root itself is tilted by the "tilt" role
         face.bones["brow_%s_tilt" % side] = root
@@ -132,12 +153,39 @@ def _tongue_chain(face):
         return
     bone = face.arm.data.bones[root]
     chain = [bone]
-    while bone.children:
-        # follow the longest branch
-        bone = max(bone.children, key=lambda c: len(c.children_recursive))
+    while True:
+        children = [c for c in bone.children if not HELPER.match(c.name)]
+        if not children:
+            break
+        bone = max(children, key=lambda c: len(c.children_recursive))   # the longest branch
         chain.append(bone)
     for i, link in enumerate(chain[1:], 1):
         face.bones["tongue_%d" % i] = link.name
+
+
+def _followers(face):
+    """``AC`` helpers named like a role but living OUTSIDE that role's subtree.
+
+    A helper under its control needs nothing (it inherits the pose); one
+    parented elsewhere - ``AC jaw`` under the neck - has to be driven
+    explicitly or its skin stays behind.
+    """
+    arm = face.arm
+    by_spelling = {}
+    for role, spellings in ROLE_NAMES.items():
+        for spelling in spellings:
+            by_spelling.setdefault(spelling, role)
+    for bone in arm.data.bones:
+        if not bone.name.lower().startswith("ac "):
+            continue
+        role = by_spelling.get(strip(bone.name))
+        control = face.bone(role) if role else None
+        if control is None or control == bone.name:
+            continue
+        control_bone = arm.data.bones[control]
+        if control_bone in bone.parent_recursive:
+            continue
+        face.followers.setdefault(role, []).append(bone.name)
 
 
 def resolve(arm):
@@ -172,8 +220,10 @@ def resolve(arm):
             spacing = (arm.data.bones[left].head_local - arm.data.bones[right].head_local).length
             if spacing > 1e-6:
                 face.unit = spacing
+                face.calibrated = True
                 break
     else:
+        # no facial pair to measure: a guess, and the recipes refuse to build on it
         if head:
             face.unit = max(arm.data.bones[head].length * 0.5, 1e-3)
 
@@ -188,6 +238,7 @@ def resolve(arm):
     for side in "LR":
         _brow_segments(face, side)
     _tongue_chain(face)
+    _followers(face)
     return face
 
 

@@ -1,6 +1,6 @@
 """Script entry points.
 
-    import sys; sys.path.insert(0, r"...\scripts\blender_addons")
+    import sys; sys.path.insert(0, "E:/code/othercode/ripper_tpose/scripts/blender_addons")
     from mmd_face_morphs import api
     report = api.setup(root_or_any_object_of_the_model)
 

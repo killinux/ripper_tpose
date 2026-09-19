@@ -50,11 +50,11 @@ def lid_roll(sides, degrees):
     return [("upper_lid_%s" % side, "roll", degrees) for side in sides]
 
 
-def brows(inner=None, centre=None, outer=None, root=None, tilt=0.0):
+def brows(inner=None, centre=None, outer=None, root=None, tilt=0.0, sides="LR"):
     """Segment moves for rigs with three brow bones per side; ``tilt`` (roll of
     the root, outer end up) only applies to rigs whose brow is a single bone."""
     acts = []
-    for side in "LR":
+    for side in sides:
         for segment, amount in (("inner", inner), ("centre", centre), ("outer", outer)):
             if amount:
                 acts.append(("brow_%s_%s" % (side, segment), "move", amount))
@@ -107,8 +107,14 @@ SMILE = lids("LR", 0.35, 2.2)            # lower lid up, upper down a little: ^ 
 # to be carried forward bodily.  fwd 0.45 puts the tip ~14 mm past the lower
 # lip with the jaw open 16 deg; the curl then lets it droop over the lip.
 PERO = jaw(16.0) + tongue(fwd=0.45, down=0.08, pitch=6.0, curl=6.0)
-OMEGA = (corners(out=-0.10, up=0.06) + lip("upper_lip_C", fwd=0.03, up=-0.03)
-         + lip("lower_lip_C", fwd=0.03, up=0.02))
+# Lateral lip travel is in eye spacings like everything else, but a mouth is
+# only ~0.6 eye spacings wide, so these numbers are small: a render sweep on
+# b14 put い at 0.14 (0.22 stretched the lips to a thin line and 0.06 read as
+# nothing), 口横広げ at 0.15, う at -0.12 (-0.18 crumpled the corners into
+# the centre of the lip).
+OMEGA = (corners(out=-0.08, up=0.06) + lip("upper_lip_C", fwd=0.03, up=-0.03)
+         + lip("lower_lip_C", fwd=0.03, up=0.02)
+         + lip("upper_lip_L", up=0.02) + lip("upper_lip_R", up=0.02))   # the two humps of ω
 
 MORPHS = [
     # 眉
@@ -125,7 +131,7 @@ MORPHS = [
                 root=(0.0, 0.0, -0.01), tilt=14.0)),
     morph("上", "brow_up", "EYEBROW", brows(root=(0.0, 0.0, 0.10))),
     morph("下", "brow_down", "EYEBROW", brows(root=(0.0, 0.0, -0.08))),
-    # 目
+    # 目  (upper + 0.45 * lower <= 1.0 keeps the lids from passing through each other)
     morph("まばたき", "blink", "EYE", lids("LR", 1.0, 1.0)),
     morph("笑い", "smile", "EYE", SMILE),
     morph("ウィンク", "wink", "EYE", lids("L", 1.0, 1.0)),
@@ -133,31 +139,71 @@ MORPHS = [
     morph("ウィンク２", "wink2", "EYE", lids("L", 0.45, 2.2)),
     morph("ｳｨﾝｸ２右", "wink2_right", "EYE", lids("R", 0.45, 2.2)),
     morph("なごみ", "calm", "EYE", lids("LR", 0.5, 0.5)),
-    morph("はぅ", "hau", "EYE", lids("LR", 1.05, 1.3)),
+    morph("はぅ", "hau", "EYE", lids("LR", 0.85, 1.3)),
     morph("びっくり", "surprised", "EYE", lids("LR", -0.25, -0.4)),
     morph("じと目", "jito", "EYE", lids("LR", 0.55, 0.0)),
     morph("キリッ", "kiri", "EYE", lid_roll("LR", 10.0) + lids("LR", 0.12, 0.2)),
     # 口
     morph("あ", "a", "MOUTH", jaw(JAW_DEG)),
-    morph("い", "i", "MOUTH", jaw(6.0) + corners(out=0.22)),
-    morph("う", "u", "MOUTH", jaw(7.0) + corners(out=-0.18, fwd=0.04)),
-    morph("え", "e", "MOUTH", jaw(12.0) + corners(out=0.10)),
-    morph("お", "o", "MOUTH", jaw(13.0) + corners(out=-0.12, fwd=0.03)),
-    morph("▲", "triangle", "MOUTH", jaw(7.0) + corners(out=-0.12, up=-0.04)),
-    morph("∧", "frown", "MOUTH", corners(out=-0.04, up=-0.07) + lip("lower_lip_C", up=0.02)),
+    morph("い", "i", "MOUTH", jaw(6.0) + corners(out=0.14)),
+    morph("う", "u", "MOUTH", jaw(7.0) + corners(out=-0.12, fwd=0.04)),
+    morph("え", "e", "MOUTH", jaw(12.0) + corners(out=0.07)),
+    morph("お", "o", "MOUTH", jaw(13.0) + corners(out=-0.10, fwd=0.03)),
+    morph("▲", "triangle", "MOUTH", jaw(7.0) + corners(out=-0.09, up=-0.04)),
+    morph("∧", "frown", "MOUTH", corners(out=-0.04, up=-0.07) + lip("lower_lip_C", up=0.02)
+          + lip("lower_lip_L", up=0.01) + lip("lower_lip_R", up=0.01)),
     morph("ω", "omega", "MOUTH", OMEGA),
     morph("ω□", "omega_open", "MOUTH", OMEGA + jaw(6.0)),
-    morph("にやり", "grin", "MOUTH", corners(out=0.08, up=0.07)),
-    morph("にやり２", "grin2", "MOUTH", corners(out=0.08, up=0.09, sides="L")),
+    morph("にっこり", "smile_mouth", "MOUTH", corners(out=0.03, up=0.07)),
+    morph("にやり", "grin", "MOUTH", corners(out=0.05, up=0.07)),
+    morph("にやり２", "grin2", "MOUTH", corners(out=0.06, up=0.10)),
     morph("ぺろっ", "tongue_out", "MOUTH", PERO),
     morph("てへぺろ", "tehepero", "MOUTH", PERO + tongue(yaw=25.0) + lids("L", 1.0, 1.0)),
     morph("てへぺろ２", "tehepero2", "MOUTH", PERO + tongue(yaw=-25.0) + lids("R", 1.0, 1.0)),
     morph("口角上げ", "corner_up", "MOUTH", corners(up=0.08)),
     morph("口角下げ", "corner_down", "MOUTH", corners(up=-0.08)),
-    morph("口横広げ", "mouth_wide", "MOUTH", corners(out=0.25)),
+    morph("口横広げ", "mouth_wide", "MOUTH", corners(out=0.15)),
     morph("歯無し上", "no_upper_teeth", "MOUTH", teeth("up", back=0.20, up=0.18)),
     morph("歯無し下", "no_lower_teeth", "MOUTH", teeth("dw", back=0.20, up=-0.18)),
 ]
+
+CORE = len(MORPHS)
+
+# -- Tda-style extras ----------------------------------------------------------
+# Names a typical Tda-authored motion also keys (seen in the test dance VMD):
+# spelling aliases, a few more mouths, and the one-sided brow/eye variants,
+# which are the same recipes restricted to a side.  Cheap to carry and they
+# stop a motion from finding nothing under these names.
+BROW_ONE_SIDED = {
+    "困る": dict(inner=(-0.02, 0.0, 0.09), centre=(0.0, 0.0, 0.03), outer=(0.0, 0.0, -0.05),
+               root=(0.0, 0.0, 0.02), tilt=-12.0),
+    "にこり": dict(inner=(0.0, 0.0, 0.02), centre=(0.0, 0.0, 0.05), outer=(0.0, 0.0, 0.03),
+                root=(0.0, 0.0, 0.03)),
+    "怒り": dict(inner=(-0.05, 0.0, -0.09), centre=(0.0, 0.0, -0.03), outer=(0.0, 0.0, 0.05),
+               root=(0.0, 0.0, -0.01), tilt=14.0),
+    "上": dict(root=(0.0, 0.0, 0.10)),
+    "下": dict(root=(0.0, 0.0, -0.08)),
+}
+EXTRAS = [
+    # aliases: the same expression under the other common spelling
+    morph("ウィンク２右", "wink2_right_fw", "EYE", lids("R", 0.45, 2.2)),
+    morph("ジト目", "jito_kana", "EYE", lids("LR", 0.55, 0.0)),
+    # eyes
+    morph("下眼上", "lower_lid_up", "EYE", lids("LR", 0.0, 1.0)),
+    morph("怒り目", "angry_eyes", "EYE", lid_roll("LR", 12.0) + lids("LR", 0.25, 0.3)),
+    morph("悲しむ", "sad_eyes", "EYE", lid_roll("LR", -10.0) + lids("LR", 0.2, 0.2)),
+    morph("なごみ左", "calm_left", "EYE", lids("L", 0.5, 0.5)),
+    morph("なごみ右", "calm_right", "EYE", lids("R", 0.5, 0.5)),
+    # mouths
+    morph("あ２", "a2", "MOUTH", jaw(24.0)),
+    morph("ん", "n", "MOUTH", corners(out=-0.03) + lip("lower_lip_C", up=0.03) + lip("upper_lip_C", up=-0.02)),
+    morph("ワ", "wa", "MOUTH", jaw(14.0) + corners(out=0.08, up=0.06)),
+    morph("口横狭め", "mouth_narrow", "MOUTH", corners(out=-0.10)),
+]
+for _name, _kw in BROW_ONE_SIDED.items():
+    EXTRAS.append(morph(_name + "左", "brow_left", "EYEBROW", brows(sides="L", **_kw)))
+    EXTRAS.append(morph(_name + "右", "brow_right", "EYEBROW", brows(sides="R", **_kw)))
+MORPHS.extend(EXTRAS)
 
 NAMES = [m["name"] for m in MORPHS]
 CATEGORIES = ("EYEBROW", "EYE", "MOUTH")

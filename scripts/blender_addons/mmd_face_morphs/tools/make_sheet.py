@@ -4,6 +4,7 @@
 
 The video, if asked for, holds each expression ``--hold`` seconds (ffmpeg).
 """
+import glob
 import json
 import os
 import subprocess
@@ -34,6 +35,9 @@ def main():
     with open(os.path.join(render_dir, "index.json"), encoding="utf-8") as handle:
         index = json.load(handle)
     tiles = index["tiles"]
+    # labels of an earlier, longer run would otherwise be swept into the video
+    for old in glob.glob(os.path.join(render_dir, "label_*.png")):
+        os.remove(old)
     big, small = font(30), font(18)
     labeled = []
     for i, tile in enumerate(tiles):
