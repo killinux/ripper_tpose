@@ -478,7 +478,7 @@ def bake_rig_transforms(arm, meshes):
         obj.select_set(True)
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-    for obj in list(bpy.data.objects):
+    for obj in list(bpy.context.scene.objects):      # this scene only: a file may hold others
         if obj.type == "EMPTY" and not obj.children:
             bpy.data.objects.remove(obj, do_unlink=True)
     heads = [bone.head_local for bone in arm.data.bones]
@@ -1263,8 +1263,11 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
     if converted != {"FINISHED"}:
         raise RuntimeError("Convert_to_MMD5 one-click conversion failed: %r" % (converted,))
     # The add-on may have replaced the active object; find the live armature.
-    arm = next(obj for obj in bpy.data.objects
-               if obj.type == "ARMATURE" and "backup" not in obj.name.lower())
+    # scene-scoped: an interactive file can hold other scenes (a morph-slider
+    # ".dummy_armature" sorts first in bpy.data.objects and is not selectable here)
+    arm = next(obj for obj in bpy.context.scene.objects
+               if obj.type == "ARMATURE" and "backup" not in obj.name.lower()
+               and not obj.name.startswith("."))
     root = arm
     while root.parent is not None:
         root = root.parent
@@ -1382,9 +1385,9 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
             skirt.CLOTH_RE = restore
     except Exception as exc:
         physics["cloth"] = "failed: %s" % exc
-    physics["rigid_bodies"] = sum(1 for obj in bpy.data.objects
+    physics["rigid_bodies"] = sum(1 for obj in bpy.context.scene.objects
                                   if getattr(obj, "mmd_type", "") == "RIGID_BODY")
-    physics["joints"] = sum(1 for obj in bpy.data.objects
+    physics["joints"] = sum(1 for obj in bpy.context.scene.objects
                             if getattr(obj, "mmd_type", "") == "JOINT")
     stats["physics"] = physics
     return root, stats
@@ -1434,7 +1437,7 @@ def cloth_chain_bones(arm, meshes, biped_prefix=""):
                 if name and item.weight > 0.02:
                     total[name] = total.get(name, 0.0) + item.weight
 
-    with_rigid = {obj.mmd_rigid.bone for obj in bpy.data.objects
+    with_rigid = {obj.mmd_rigid.bone for obj in bpy.context.scene.objects
                   if getattr(obj, "mmd_type", "") == "RIGID_BODY"}
     japanese = re.compile(r"[぀-ヿ一-鿿]")
     biped = re.compile(r"^%s\b" % re.escape(biped_prefix)) if biped_prefix else None

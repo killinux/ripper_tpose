@@ -33,10 +33,14 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `html/make_gallery.py` | 任意 Python 3 | 按 manifest 生成可浏览的模型总览网页 | 本页 §5 |
 | `prune_exports.py` | 任意 Python 3 | 清理导出目录里的重复贴图副本与 Blender 备份 | 本页 §5 |
 | `roe_xps_addon.py` | Blender 3.6 插件 | HD 角色一步步转带材质的 XPS（**主推**） | [xps-addon.md](../../docs/xps-addon.md) |
+| `../blender_addons/roe_pmx_tools` | Blender 3.6 插件 | 在 Blender 里手动四步转 PMX（与批处理同一套函数） | [roe-pmx-manual-guide.md](../../docs/roe-pmx-manual-guide.md) |
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
 | `convert_fbx.py` | 被 ps1 调用（Blender 无头） | FBX → XPS/PMX/GLB **白模**转换 | 本页 §8 |
 | `suit_parts.py` | 任意 Python 3（需 UnityPy） | 列出一套 suit（服装变体）由哪些部件网格组成 | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
 | `assemble_suit_blender.py` | Blender 无头 | 把裸模 + 头发 + suit 部件拼成一个带材质、绑到底模骨架的 .blend | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
+| `suit_bundle.py` | 任意 Python 3（需 UnityPy） | 直接从 bundle 读一套 suit：部件网格 / 蒙皮 / 放置 / 材质贴图 → `_suits\<id>\<suit>\`，并算「穿好」状态 | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
+| `export_suits.py` | 任意 Python 3（需 UnityPy，调 Blender） | 批量把全部 suit 拼成 `.blend`（`--list` / `--only` / `--exclude` / `--force` / `--lanes`），清单 + 预览拼图 | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
+| `suit_overrides.json` | 数据 | 「穿好」规则的人工覆盖表（按 `<id>:<suit>` include / exclude 部件） | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
 
 产物用的是 `a01`/`g11` 这类代号——字母是角色、数字是服装变体，
 字母与角色名的对照见 [character-roster.md](character-roster.md)。
@@ -710,6 +714,24 @@ blender --background --factory-startup --python assemble_suit_blender.py -- \
 产物是内嵌贴图、绑到底模 `Root_G` 骨架的 `.blend` + 三视图预览（+ 可选 glb）。两个坑
 （部件 FBX 不带材质、蒙皮部件顶点对但物体变换错导致飘 1.5 m）与完整原理、ProUniform
 实例、限制见 [ROE 套装拼装](../../docs/roe-suit-assembly.md)。
+
+**批量（2026-09-19 起的正式路线，不经 AssetStudio）**：`suit_bundle.py` 直接从 bundle 读部件、蒙皮、
+放置和材质贴图，`export_suits.py` 把 13 个角色的全部 suit（`common` 配件池除外）各拼成一个 `.blend`：
+
+```bash
+python export_suits.py --list                      # 80 个存根里 67 套是 suit，哪些已拼
+python export_suits.py --lanes 4                   # 全部没拼的（每套 7–17 秒）
+python export_suits.py --only j01:idol,b01:* --force
+python export_suits.py --exclude fm --force        # 跳过魔化（fm）套
+python export_suits.py --sheet                     # 只重拼预览总图
+```
+
+产物 `D:\roe_exports\<id>\blend\pc_<id>_<suit>.blend` + `_preview.png`，中间数据 `D:\roe_exports\_suits\<id>\<suit>\`，
+清单 `_suits\manifest.json`，拼图 `_suits\_contact.png`。前提只有底模已提取（`extract_character.ps1 <id>`，
+要 `pc_<id>_nk` 的 FBX 和 `_textures\`）。规则判错的穿法在 `suit_overrides.json` 里按 `<id>:<suit>` 改，
+然后 `--only <id>:<suit> --force`。拼完 `python html\make_gallery.py` 重生成画廊，套装卡片会插在各自角色
+的卡片后面（工具栏「套装」筛选）。部件坐标系的五种情况、「穿好」规则、验证见
+[ROE 套装拼装](../../docs/roe-suit-assembly.md)。
 
 ---
 
