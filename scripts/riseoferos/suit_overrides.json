@@ -1,0 +1,52 @@
+{
+  "_comment": "Per-suit corrections to suit_bundle.select_dressed: key '<id>:<suit>', 'include' re-adds stub roots the rules dropped, 'exclude' drops roots the rules kept (root names as printed by suit_bundle.py / export_suits.py). Decided by looking at the previews.",
+  "c01:student": {
+    "exclude": [
+      "LWhiteStocking_obj001",
+      "RWhiteStocking_obj001"
+    ],
+    "_why": "the stub ships a black and a white pair for the same legs; the black pair is the game's default"
+  },
+  "c01:prisoner": {
+    "include": [
+      "LScrewNippleRing_obj001",
+      "RScrewNippleRing_obj001"
+    ],
+    "_why": "PrisonClothes is a cropped top that leaves the chest bare, the rings are visible"
+  },
+  "d01:sm": {
+    "include": [
+      "LSMNipple_obj001",
+      "RSMNipple_obj001"
+    ],
+    "_why": "SMBra is an open harness, the nipple covers are part of the look"
+  },
+  "e01:nurse": {
+    "include": [
+      "LBandAidCross_obj001",
+      "RBandAidCross_obj001"
+    ],
+    "_why": "NurseCloth is open at the chest, the band-aid crosses show"
+  },
+  "e01:latex": {
+    "exclude": [
+      "LatexNoBreast_obj001",
+      "LatexOpenBreast_obj001",
+      "LatexsuitOpen_obj001"
+    ],
+    "_why": "four states of one garment; LatexLeotardOpen is the fully closed leotard (compared all three renders)"
+  },
+  "j01:stewardess": {
+    "exclude": [
+      "ShirtOpen_obj001",
+      "braUp_obj001"
+    ],
+    "_why": "ShirtOpen / braUp are the opened and pulled-up states of whiteShirt / bra"
+  },
+  "k01:2025xmas": {
+    "exclude": [
+      "EyeMask_obj001"
+    ],
+    "_why": "two eye masks on the same face; the fluffy one belongs to this outfit"
+  }
+}

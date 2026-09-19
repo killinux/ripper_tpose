@@ -1,8 +1,11 @@
 """Build a browsable HTML gallery of the materialized Rise of Eros models.
 
-Reads ``character_models_manifest.json`` (written by export_character_models.ps1),
-shrinks each composite preview into a JPEG thumbnail and emits a self-contained
-``index.html`` next to this script.
+Reads ``character_models_manifest.json`` (written by export_character_models.ps1)
+and, when present, ``_suits/manifest.json`` (written by export_suits.py — the
+outfit variants assembled from component meshes), shrinks each composite preview
+into a JPEG thumbnail and emits a self-contained ``index.html`` next to this
+script.  Suit cards sit next to their character's cards and can be filtered in
+or out with the 角色 / 套装 chips.
 
 The page links to the real files with ``file://`` URLs and the thumbnails are
 written under the export root, so **no game-derived image ever enters the repo**
@@ -149,6 +152,56 @@ def collect(manifest_path, thumb_dir, force):
     return manifest, models, nomesh
 
 
+def collect_suits(source_root, thumb_dir, force):
+    """Cards for the suits export_suits.py assembled (``_suits/manifest.json``)."""
+    manifest_path = os.path.join(source_root, "_suits", "manifest.json")
+    if not os.path.isfile(manifest_path):
+        return []
+    with open(manifest_path, encoding="utf-8-sig") as handle:
+        manifest = json.load(handle)
+    suits = []
+    for entry in manifest.get("suits", []):
+        blend = entry.get("blend") or ""
+        if entry.get("status") not in ("PASS", "WARN") or not os.path.isfile(blend):
+            continue
+        key = "%s_%s" % (entry.get("id", "?"), entry.get("suit", "?"))
+        preview = blend[:-len(".blend")] + "_preview.png"
+        if not os.path.isfile(preview):
+            preview = ""
+        thumb = build_thumb(preview, os.path.join(thumb_dir, key + ".jpg"), force)
+        excluded = entry.get("excluded") or {}
+        # "SAVED <blend> meshes=14 packed=22 missing=[...]" from the assembler
+        saved = entry.get("saved") or ""
+        meshes = packed = 0
+        for token in saved.split():
+            if token.startswith("meshes="):
+                meshes = int(token[7:] or 0)
+            elif token.startswith("packed="):
+                packed = int(token[7:] or 0)
+        missing = entry.get("missing") or ""
+        warnings = []
+        if missing and missing != "[]":
+            warnings.append("缺基色贴图: " + missing.strip("[]").replace("'", ""))
+        suits.append({
+            "key": key,
+            "family": (entry.get("id") or "?")[:1].upper(),
+            "id": entry.get("id") or "",
+            "suit": entry.get("suit") or "",
+            "base": entry.get("base") or "",
+            "blend": blend,
+            "preview": preview,
+            "thumb": thumb or "",
+            "blend_size": os.path.getsize(blend),
+            "parts": entry.get("parts") or 0,
+            "excluded": excluded,
+            "meshes": meshes,
+            "packed": packed,
+            "warnings": warnings,
+        })
+    suits.sort(key=lambda item: item["key"])
+    return suits
+
+
 def render_card(model):
     esc = html.escape
     thumb_uri = file_uri(model["thumb"])
@@ -184,7 +237,7 @@ def render_card(model):
                     % (esc(thumb_uri or ""), esc(file_uri(model["dance"]))))
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["key"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
-    return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="{warn}">
+    return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="{warn}" data-kind="model">
         <a class="shot" href="{preview}" target="_blank" rel="noopener"
            title="点击查看原图（{family} 家族）">{figure}</a>
         <div class="body">
@@ -210,25 +263,72 @@ def render_card(model):
            textures=model["textures"], size=human_size(model["blend_size"]))
 
 
-def render(manifest, models, nomesh, source_root):
+def render_suit_card(suit):
     esc = html.escape
-    families = sorted({model["family"] for model in models})
-    total_bytes = sum(model["blend_size"] for model in models)
+    thumb_uri = file_uri(suit["thumb"])
+    preview_uri = file_uri(suit["preview"])
+    blend_uri = file_uri(suit["blend"])
+    badges = '<span class="badge badge-suit" title="套装：裸模 + 头发 + 部件网格拼装（export_suits.py）">套装</span>'
+    if suit["excluded"]:
+        badges += '<span class="badge badge-fix" title="%s">去掉 %d</span>' % (
+            esc("; ".join("%s（%s）" % (root.replace("_obj001", ""), why)
+                          for root, why in suit["excluded"].items())), len(suit["excluded"]))
+    if suit["warnings"]:
+        badges += '<span class="badge badge-warn" title="%s">缺图 %d</span>' % (
+            esc("; ".join(suit["warnings"])), len(suit["warnings"]))
+    search_blob = esc(" ".join([suit["key"], "suit 套装", suit["suit"], suit["base"], suit["blend"]]).lower())
+    figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(suit["key"]))
+              if thumb_uri else '<div class="noimg">无预览图</div>')
+    dressed = suit["parts"] - len(suit["excluded"])
+    return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="{warn}" data-kind="suit">
+        <a class="shot" href="{preview}" target="_blank" rel="noopener"
+           title="点击查看原图（{family} 家族）">{figure}</a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>{key}</h3>{badges}
+          </div>
+          <dl>
+            <dt>底模</dt><dd>{base}.fbx + 存根 accessory_components_pc_{id}_suit_{suit}.ab</dd>
+            <dt>blend</dt>
+            <dd><a href="{blend_uri}" title="{blend}">{blend}</a>
+                <button class="copy" data-copy="{blend}">复制</button></dd>
+            <dt>规格</dt>
+            <dd>{parts} 个部件，穿好 {dressed} 个 · {meshes} 网格 · {packed} 贴图 · {size}</dd>
+          </dl>
+        </div>
+      </article>
+""".format(search=search_blob, family=esc(suit["family"]),
+           warn="1" if suit["warnings"] else "0",
+           preview=esc(preview_uri), figure=figure, key=esc(suit["key"]),
+           badges=badges, base=esc(suit["base"]), id=esc(suit["id"]), suit=esc(suit["suit"]),
+           blend_uri=esc(blend_uri), blend=esc(suit["blend"]),
+           parts=suit["parts"], dressed=dressed, meshes=suit["meshes"],
+           packed=suit["packed"], size=human_size(suit["blend_size"]))
+
+
+def render(manifest, models, nomesh, source_root, suits=()):
+    esc = html.escape
+    families = sorted({model["family"] for model in models} | {suit["family"] for suit in suits})
+    total_bytes = sum(model["blend_size"] for model in models) + sum(suit["blend_size"] for suit in suits)
     characters = len({model["key"].split("_")[0] for model in models})
-    warned = sum(1 for model in models if model["warnings"])
+    warned = sum(1 for model in models if model["warnings"]) + sum(1 for suit in suits if suit["warnings"])
     generated = (manifest.get("generatedAt") or "")[:19].replace("T", " ")
 
     chips = "".join(
         '<button class="chip" data-family="%s">%s</button>' % (esc(item), esc(item))
         for item in families)
-    cards = "".join(render_card(model) for model in models)
+    # a suit card sits right behind its character's cards (keys sort that way)
+    entries = [("model", model) for model in models] + [("suit", suit) for suit in suits]
+    entries.sort(key=lambda item: item[1]["key"])
+    cards = "".join(render_card(item) if kind == "model" else render_suit_card(item)
+                    for kind, item in entries)
     nomesh_rows = "".join(
         "        <li><code>%s</code><span>%s</span></li>\n" % (esc(item["key"]), esc(item["reason"]))
         for item in nomesh)
 
     return PAGE_TEMPLATE.format(
         generated=esc(generated), source_root=esc(source_root),
-        total=len(models), characters=characters, size=human_size(total_bytes),
+        total=len(models), suits=len(suits), characters=characters, size=human_size(total_bytes),
         warned=warned, nomesh_count=len(nomesh), chips=chips, cards=cards,
         nomesh_rows=nomesh_rows)
 
@@ -283,6 +383,7 @@ h1 {{ margin: 0 0 6px; font-size: 22px; }}
 }}
 .chip.on, .toggle.on {{ background: var(--accent); border-color: var(--accent); color: #fff; }}
 .count {{ color: var(--muted); font-size: 12px; margin-left: auto; }}
+.sep {{ width: 1px; height: 22px; background: var(--line); margin: 0 4px; }}
 main {{ padding: 22px 32px 48px; }}
 .grid {{
   display: grid; gap: 18px;
@@ -308,6 +409,7 @@ main {{ padding: 22px 32px 48px; }}
 }}
 .badge-warn {{ color: var(--warn); background: var(--warn-bg); }}
 .badge-fix {{ color: var(--fix); background: var(--fix-bg); }}
+.badge-suit {{ color: var(--accent); background: var(--bg); border: 1px solid var(--accent); }}
 dl {{ margin: 0; display: grid; grid-template-columns: 58px 1fr; gap: 3px 10px; }}
 dt {{ color: var(--muted); font-size: 12px; }}
 dd {{
@@ -352,6 +454,7 @@ td code, li code {{ font-family: Consolas, monospace; }}
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
     <div class="stat"><b>{total}</b><span>已转模型</span></div>
+    <div class="stat"><b>{suits}</b><span>套装</span></div>
     <div class="stat"><b>{characters}</b><span>覆盖角色</span></div>
     <div class="stat"><b>{size}</b><span>blend 总体积</span></div>
     <div class="stat"><b>{warned}</b><span>有缺图告警</span></div>
@@ -363,6 +466,10 @@ td code, li code {{ font-family: Consolas, monospace; }}
   <input id="q" type="search" placeholder="搜索模型名、源 FBX 或路径…（按 / 聚焦）">
   <button class="chip on" data-family="">全部</button>
   {chips}
+  <span class="sep"></span>
+  <button class="chip kind on" data-kind="">全部</button>
+  <button class="chip kind" data-kind="model">角色模型</button>
+  <button class="chip kind" data-kind="suit">套装</button>
   <button class="toggle" id="warnOnly">只看告警</button>
   <span class="count" id="count"></span>
 </div>
@@ -421,10 +528,25 @@ td code, li code {{ font-family: Consolas, monospace; }}
     <p>默认那一个清单文件不支持并发写，分片时必须各给一个，跑完再合并。
       全量 123 个条目用 6 分片并行，24 核机器约 25 分钟。</p>
 
+    <h3>套装（suit）· export_suits.py</h3>
+    <p>角色的服装变体（游戏里叫 <em>suit</em>：教师装、猫女、婚纱…）不是一个整体 FBX，而是裸模 + 头发 +
+      一堆分开的部件网格。标着「套装」徽章的卡片就是拼出来的这些，每套一个 <code>.blend</code>，
+      直接从 AssetBundle 读（不经 AssetStudio）：</p>
+    <pre>python export_suits.py --list                     # 哪些套装、哪些已拼
+python export_suits.py --lanes 4                  # 全部没拼的，4 路并行
+python export_suits.py --only j01:idol,b01:* --force
+python export_suits.py --exclude fm --force       # 跳过魔化（fm）套</pre>
+    <p>前提只有该角色的裸模已提取（<code>extract_character.ps1 &lt;id&gt;</code>）。产物
+      <code>&lt;id&gt;\\blend\\pc_&lt;id&gt;_&lt;suit&gt;.blend</code>，中间数据 <code>_suits\\&lt;id&gt;\\&lt;suit&gt;\\</code>，
+      清单 <code>_suits\\manifest.json</code>。「去掉 N」徽章列的是没穿上的部件（道具、敞开/拉下的替代态、
+      被上衣遮住的乳饰），规则判错的在 <code>suit_overrides.json</code> 里按 <code>&lt;id&gt;:&lt;suit&gt;</code>
+      改，再 <code>--only &lt;id&gt;:&lt;suit&gt; --force</code>。部件坐标系的五种情况与「穿好」规则见
+      <code>docs\\roe-suit-assembly.md</code>。</p>
+
     <h3>重新生成本页</h3>
     <pre>python scripts\\riseoferos\\html\\make_gallery.py</pre>
-    <p>读 <code>character_models_manifest.json</code>，把预览图缩成 JPEG 缩略图放进
-      <code>D:\\roe_exports\\_gallery\\thumbs\\</code>，再重写本页。
+    <p>读 <code>character_models_manifest.json</code> 和 <code>_suits\\manifest.json</code>，把预览图缩成
+      JPEG 缩略图放进 <code>D:\\roe_exports\\_gallery\\thumbs\\</code>，再重写本页。
       <b>缩略图刻意不放进仓库</b>——和其它脚本一样，仓库不收任何游戏素材。</p>
 
     <h3>没有 blend 的 {nomesh_count} 个 ID</h3>
@@ -442,8 +564,10 @@ td code, li code {{ font-family: Consolas, monospace; }}
   var count = document.getElementById('count');
   var empty = document.getElementById('empty');
   var warnOnly = document.getElementById('warnOnly');
-  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip:not(.kind)'));
+  var kinds = Array.prototype.slice.call(document.querySelectorAll('.chip.kind'));
   var family = '';
+  var kind = '';
 
   function apply() {{
     var term = q.value.trim().toLowerCase();
@@ -452,6 +576,7 @@ td code, li code {{ font-family: Consolas, monospace; }}
     cards.forEach(function (card) {{
       var ok = (!term || card.dataset.search.indexOf(term) !== -1)
         && (!family || card.dataset.family === family)
+        && (!kind || card.dataset.kind === kind)
         && (!onlyWarn || card.dataset.warn === '1');
       card.hidden = !ok;
       if (ok) shown++;
@@ -470,6 +595,14 @@ td code, li code {{ font-family: Consolas, monospace; }}
       chips.forEach(function (other) {{ other.classList.remove('on'); }});
       chip.classList.add('on');
       family = chip.dataset.family || '';
+      apply();
+    }});
+  }});
+  kinds.forEach(function (chip) {{
+    chip.addEventListener('click', function () {{
+      kinds.forEach(function (other) {{ other.classList.remove('on'); }});
+      chip.classList.add('on');
+      kind = chip.dataset.kind || '';
       apply();
     }});
   }});
@@ -526,13 +659,15 @@ def main():
     manifest, models, nomesh = collect(manifest_path, thumb_dir, args.force)
     if not models:
         raise SystemExit("manifest has no PASS entries: %s" % manifest_path)
+    suits = collect_suits(source_root, thumb_dir, args.force)
 
-    page = render(manifest, models, nomesh, source_root)
+    page = render(manifest, models, nomesh, source_root, suits)
     with open(out_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(page)
 
     missing = [model["key"] for model in models if not model["thumb"]]
     print("models      : %d" % len(models))
+    print("suits       : %d" % len(suits))
     print("no preview  : %d%s" % (len(missing),
                                   (" -> " + ", ".join(missing[:10])) if missing else ""))
     print("nomesh      : %d" % len(nomesh))

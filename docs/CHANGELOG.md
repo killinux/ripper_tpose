@@ -195,6 +195,38 @@ python .\list_models.py --kind descendant
 怪 MOB_CMN_1001_A001（101 骨）均一条命令跑通，渲图目检。key 已由 find_aes_key.py 重建（只存
 `D:	fd_exports\_keyses_key.txt`，不入仓）。
 
+## 2026-09-19 — Rise of Eros：67 套「套装」(suit) 全部拼成独立 .blend（直接读 bundle）
+
+### 新增
+
+- `scripts/riseoferos/suit_bundle.py`：用 UnityPy 直接从存根 `accessory_components_pc_<id>_suit_<suit>.ab`
+  + `chara_components_pc_<id>.ab`（+ `chara_components_common.ab`、该套的 `chara_tex_components_*`）读出每个
+  部件的网格 / 蒙皮骨名权重 / 放置矩阵 / 渲染器材质真正引用的贴图（`_BaseMap`、`_BumpMap`），贴图从
+  bundle 解码，算「穿好」状态；不再经过 AssetStudio 的逐对象 FBX（同名部件互相覆盖、09-12 新套装没提取、
+  贴图靠猜名字三个坑）。
+- `assemble_suit_blender.py --suit suit.json`：bundle 模式，npz 建网格 + 顶点组绑到底模骨架；静态件烘进世界
+  坐标并骨骼父子到最近的 `Bip001` 骨；材质 = 基色 + 法线，无贴图槽用 `_BaseColor`，镜片做玻璃。
+- `export_suits.py`：批量驱动（`--list/--only/--exclude/--force/--lanes/--sheet`），产物
+  `D:\roe_exports\<id>\blend\pc_<id>_<suit>.blend` + 预览，清单 `_suits\manifest.json`。
+- `suit_overrides.json`：「穿好」规则的人工覆盖（7 条，看预览定）。
+- 画廊 `html/make_gallery.py` 读 `_suits/manifest.json`：67 张「套装」卡片插在各自角色的卡片后面（底模 + 存根、
+  部件数/穿好数、去掉的部件和原因、blend 路径），工具栏加「角色模型 / 套装」筛选，附录加 `export_suits.py` 用法；
+  `index.html` 重生成（124 模型 + 67 套装）。
+
+### 实现原理与坑
+
+部件在哪个坐标系里建，数据不说，看了 752 个部件归纳出五种：Z-up 模型空间的蒙皮件（`BoneWorld×BindPose`
+转回模型系是单位阵）、Y-up 世界空间的蒙皮件（c01 泳装胸衣，同一公式再乘 `R_x(+90°)`）、带放置变换的静态件
+（眼镜/猫耳/翅膀）、按**厘米**建模的配件池道具（魔化的角/光环，`_R` 根是镜像）、只有自带物理骨的配件
+（圣诞帽/耳坠/牛尾：bundle 里没挂点，按 `Area` 挂到身体骨，骨的静止矩阵取身体网格 BindPose 的逆——bare 包
+里的 Transform 是动作姿势）。每个部件把说得通的读法都算一遍，取质心离该部位骨骼最近的。Unity→Blender 只是
+镜像 X（j01 底模逐顶点核对），绕序要反。详见 [ROE 套装拼装](roe-suit-assembly.md)。
+
+### 验证
+
+66 套批量 0 失败（4 路并行，每套 7–17 秒）+ 已有 ProUniform = 67 套；逐角色预览拼图看了五轮、每轮修一类放置
+问题；18 条 WARN 全是无基色贴图的槽（fm 的 `FMRear` 1 mm 占位、镜片、乳胶第二层）。XPS/PMX 未接。
+
 ## 2026-09-19 — Vindictus: Defying Fate：剩下的 12 个模型（男装、怪物、NPC）全部导出，共 30 个
 
 ### 新增

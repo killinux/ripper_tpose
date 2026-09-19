@@ -75,12 +75,74 @@ L/RUniformStockings, L/RUniformHighHeels, LaurelWreath, LaceBra`。
 成品：白金职业制服 + 高领 frill + 长手套 + 吊袜带黑丝 + 金饰高跟 + 桂冠，
 在 `D:\roe_exports\j01\blend\pc_j01_prouniform.blend`。
 
-## 目前的限制
+## 2026-09-19 晚：67 套全部拼完——改成直接读 bundle
 
-- **「穿好 / 脱到哪一层」是人工选的**：存根只说这套 suit 有哪 17 个部件，不说默认穿哪几个。
-  哪些是替代态 / 道具要看名字或渲染一眼定。运行时的 `CharacterAccessorySetting` 里应有精确
-  的初始显隐，尚未解析。
-- 目前只出 `.blend`/`preview`/`glb`。XPS / PMX 未做——部件已绑到单一底模骨架，接
-  `export_character_model_blender.py` 的 XPS/PMX 通道应可行，但还没接。
-- 只在 `j01` ProUniform 上验证过。别的角色 suit 走同一条线，`Lynn_` 前缀要换成对应角色的
-  贴图前缀（`resolve_albedo` 目前写死 `Lynn_`）。
+上面的 FBX 路线只验证了 ProUniform 一套。要把 13 个角色的 80 个存根（去掉 13 个 `common`
+——那是季节配件池，不是套装）全部拼出来时，AssetStudio 的逐对象 FBX 有三个绕不过的坑：
+
+1. **同名覆盖**：AssetStudio 按 GameObject 名建目录，不同套装里都叫 `Underwear_obj001`、
+   `Skirt_obj001` 的部件互相覆盖，剩下的那个顶点数和存根里的对不上（c01 学生装的裙子
+   2104 顶点 vs 存根 2429，g01 两套的内裤 1382 vs 3318/527）；
+2. **更新后的套装根本没提取**：09-12 加入的 j01 ProUniform、b01 武林在 08-30 的提取里一个
+   FBX 都没有；
+3. **贴图全靠猜名字**：`Iynn_`/`lynn_`/`Lynn_` 三种前缀、`_obj001rgbx`、`rbgx` 拼错、
+   `IynnLDefeatGodRing` 漏下划线……
+
+而存根本身就用 PPtr 精确指向网格和材质，所以新路线不再经过 AssetStudio：
+
+| 脚本 | 作用 |
+|---|---|
+| `suit_bundle.py` | UnityPy 读存根 + `chara_components_pc_<id>.ab` + `chara_components_common.ab` + 该套的 `chara_tex_components_*`：每个部件的网格（顶点/法线/UV0/三角/子网格）、蒙皮骨名和权重、静态件的放置矩阵、渲染器材质里**真正引用**的贴图名（`_BaseMap` 基色、`_BumpMap` 法线、`_MetallicGlossMap`），贴图直接从 bundle 解码成 PNG；再按规则算「穿好」状态。产物 `D:\roe_exports\_suits\<id>\<suit>\{suit.json, parts\*.npz, textures\}` |
+| `assemble_suit_blender.py --suit suit.json` | 新增的 bundle 模式：底模照旧走六槽材质，部件从 npz 建网格、按骨名建顶点组绑到底模骨架，静态件按算好的放置烘进世界坐标再骨骼父子到最近的 `Bip001` 骨；材质 = 基色 + 法线贴图，没贴图的槽用材质的 `_BaseColor`（镜片/护目镜则做成半透明玻璃） |
+| `export_suits.py` | 批量驱动：`--list` / `--only a01:teacher,b01:*` / `--exclude fm` / `--force` / `--lanes 4`，产物 `D:\roe_exports\<id>\blend\pc_<id>_<suit>.blend` + `_preview.png`，清单 `_suits\manifest.json`，`_suits\_contact.png` 拼图 |
+| `suit_overrides.json` | 规则判错时按 `<id>:<suit>` 手工 `include` / `exclude` 部件 |
+
+### 坐标系：五种「部件在哪」
+
+这是这条线里唯一真正难的地方。数据本身不说部件是在什么坐标系里建的，看了 752 个部件后
+归纳出五种情况，`assemble_suit_blender.import_suit_part` 对每个部件把可能的读法都算一遍，
+**取质心离该部位对应骨骼（`Area` → 骨名表 `AREA_BONES`）最近的一种**，并用原始坐标的
+分布先筛掉说不通的读法（质心在身体范围内 → 允许「模型系原样」；`y` 为高度 → 允许「Unity
+世界 Y-up」；质心贴着原点 → 允许「挂到骨骼」）：
+
+| 情况 | 例子 | 放置 |
+|---|---|---|
+| 蒙皮件，Z-up 建在模型空间 | 绝大多数衣物 | `BoneWorld × BindPose`（= 渲染器变换 `R_x(-90°)`）转回模型系正好是单位阵，原样用 |
+| 蒙皮件，Y-up 建在 Unity 世界 | c01 泳装胸衣 | 同上公式给出单位阵 → 乘 `R_x(+90°)` 翻回 Z-up；不处理会掉到脚边 |
+| 静态件（`MeshFilter`），局部坐标 + 组件包里的放置变换 | 眼镜、猫耳、桂冠、翅膀 | 组件包同名对象的变换链（含 -90° 旋转和单位缩放）烘进顶点 |
+| 配件池道具（`chara_components_common.ab`） | 魔化（fm）的角、光环、毛、腿环 | 按 **厘米** 建模、放置变换里带 0.01 缩放；存根把同一网格实例化成 `<x>_L` / `<x>_R`，`_R` 是镜像（跳过 X 翻转即可） |
+| 只有自带物理骨的配件 | 圣诞帽、牛尾、乳饰流苏、耳坠、护士发箍 | bundle 里没有挂点：按 `Area` 挂到身体骨（`HairArea`→`Bip001 Head`，`NippleArea`→`Nipple_L/R`…），骨的静止矩阵取**身体网格的 BindPose 逆**（bare 包里的 Transform 是某个动作姿势，不能用），乘上网格在自身根骨空间的位置 |
+
+Unity → Blender 始终只是镜像 X（j01 底模逐顶点核对过），镜像后三角形绕序要反过来，
+法线用 `inv(M)ᵀ` 变换。蒙皮部件只引用自己物理骨（`ChineseKnot_Bone001`、`Earrings_Bone01x`）
+的，权重回退到组件包变换链里最近的、底模也有的祖先骨。
+
+### 「穿好」规则（`suit_bundle.select_dressed`）
+
+- 道具：`vibrator|dildo|plug|eggvib` 去掉；
+- 替代态：部件名含 `Open/Pull/Broken/Hole/R18/openbelow/openup` 且去掉该词（或 Open→Close）后
+  同套里有同名部件的，去掉（`OpenVest`→`CloseVest`、`SleepwearPull`→`Sleepwear`、
+  `StockingsBroken`→`Stockings`）；同一网格被存根用两个根实例化的（`WeddingTights` /
+  `WeddingTightsBroken` 只是换材质）按根名判；
+- 乳环/乳贴：胸区有遮盖件（不是绳/挂饰/围巾/领带）时去掉，否则保留。
+
+规则判错的（看预览定）都记在 `suit_overrides.json`：c01 学生装黑白两双长袜留黑的；
+c01 囚服、d01 SM、e01 护士的上衣不遮胸，乳环/乳贴要留；e01 乳胶装四个变体是同一件的四个
+状态，三种都渲了一遍选 `LatexLeotardOpen`（闭合连体）；j01 空姐装 `ShirtOpen`/`braUp`、
+k01 圣诞装的第二个眼罩去掉。
+
+### 验证
+
+66 套一次批量（4 路并行，每套 7–17 秒）0 失败 + 已有的 ProUniform = 67 套 `.blend`。
+逐角色拼预览图（`_suits\_sheet_<id>.png`）看了五轮，每一轮修一类放置问题（Y-up 胸衣、
+配件池厘米单位、按部位挂骨、脚上骨头太多导致「最近骨」误判）。18 条 WARN 全是没有
+基色贴图的槽：13 套 fm 的 `FMRear` 是 298 顶点、1 mm 大的占位网格；镜片；乳胶第二层。
+
+### 目前的限制
+
+- 「穿好」仍是启发式 + 人工覆盖；运行时的初始显隐没有在存根里（没有 MonoBehaviour），
+  真要精确得反编译 `Assembly-CSharp`。
+- 只出 `.blend` / `preview`（`--glb` 可选）。XPS / PMX 未接。
+- fm 的挂点、圣诞帽/耳坠这类自带骨配件的朝向是按「根骨与身体骨对齐」假设的，位置对，
+  朝向可能差一点；`FMRear` 占位没贴图。
+- 组件包里没有的贴图（j01 偶像装发髻）回退到 `D:\roe_exports\<id>\_textures\` 按材质名找。
