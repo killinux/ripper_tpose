@@ -101,5 +101,9 @@ python scripts\blender_mcp\mcp_cmd.py get_viewport_screenshot '{"max_size": 1100
 python scripts\blender_mcp\mcp_exec.py scripts\blender_mcp\cloth_demo_stop.py
 ```
 
+脸的同款：`face_demo.py` / `face_demo_stop.py`——在**新场景**里导入 PMX、跑 Face Morphs 面板、绑 morph
+slider、导入口型 VMD、相机 Child-Of 头骨跟拍（抵消矩阵要按**静止**矩阵算，不是导入 VMD 后那一帧的姿势，
+否则取景偏一截）、播放。不用 MCP 的话直接打开 `pc_b14_outfit1_hd_facelab.blend`，内容一样。
+
 换模型：改 `cloth_demo.py` 顶上的 `BLEND`；准备场景的办法是 PMX 用 mmd_tools 导入（带
 PHYSICS 也无妨）、VMD 导入、然后面板上 **Strip dynamic physics**、存盘。

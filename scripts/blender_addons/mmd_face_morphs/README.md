@@ -3,6 +3,8 @@
 给已经转成 mmd_tools 结构的模型，把 MMD 标准表情集做成 PMX **骨骼 morph**：
 **认脸骨 → 按配方摆骨 → 写成 bone morph → 登记到 表情 枠 → 渲染对照图核对**。
 
+操作步骤（带截图）见 [docs/mmd-face-morphs-guide.md](../../../docs/mmd-face-morphs-guide.md)；这里是原理和参数。
+
 适用对象是**没有 shape key、靠骨骼驱动脸**的模型。Rise of Eros 就是这样：
 每个女性角色 `Bip001 Head` 下固定挂 32 根带蒙皮权重的脸骨（眼皮 4、眼球 2、眉毛
 2+6 段、脸颊 2、鼻翼 2、下巴 1、嘴唇 8、舌头 3、牙齿 2），一根 shape key 都没有。

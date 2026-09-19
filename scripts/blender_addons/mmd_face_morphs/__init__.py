@@ -61,9 +61,19 @@ def _categories(settings):
                                  ("MOUTH", settings.do_mouth)) if on)
 
 
+def _active(context):
+    """The active object even in a draw context that reports none (seen in a
+    maximised 3D view: context.active_object is None while the view layer's
+    active object is set)."""
+    obj = getattr(context, "active_object", None)
+    if obj is None and getattr(context, "view_layer", None) is not None:
+        obj = context.view_layer.objects.active
+    return obj
+
+
 def _root_of(context):
     try:
-        return build.model_of(context.active_object)[0]
+        return build.model_of(_active(context))[0]
     except Exception:
         return None
 
@@ -191,8 +201,7 @@ class MFM_PT_panel(bpy.types.Panel):
     bl_label = "Face Morphs"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "MMD"
-    bl_options = {"DEFAULT_CLOSED"}
+    bl_category = "MMD"          # open by default, like the cloth panel next to it
 
     def draw(self, context):
         layout = self.layout
