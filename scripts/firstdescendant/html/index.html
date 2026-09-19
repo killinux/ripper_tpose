@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The First Descendant 模型导出总览</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f8; --panel: #ffffff; --ink: #1b1c20; --muted: #6b6f78;
+  --line: #e2e4ea; --accent: #3b6ef5; --warn: #b4600a; --warn-bg: #fdf1e0;
+  --mod: #7a3fa0; --mod-bg: #f1e7f8; --kind: #1f7a4d; --kind-bg: #e3f4ea; --shot: #d9dbe2;
+  --f: #b03a72; --f-bg: #fae6ef; --m: #2d6ea8; --m-bg: #e3eefa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16171b; --panel: #1f2126; --ink: #e9eaee; --muted: #9aa0ab;
+    --line: #2e3138; --accent: #7ea2ff; --warn: #e3a765; --warn-bg: #3a2c19;
+    --mod: #c99ae6; --mod-bg: #33203d; --kind: #7fd1a3; --kind-bg: #1c3527; --shot: #2a2d34;
+    --f: #f0a0c4; --f-bg: #3c2030; --m: #96c3ef; --m-bg: #1c2c3e;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+header { padding: 28px 32px 20px; border-bottom: 1px solid var(--line); background: var(--panel); }
+h1 { margin: 0 0 6px; font-size: 22px; }
+.sub { color: var(--muted); font-size: 13px; }
+.stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; }
+.stat span { color: var(--muted); font-size: 12px; }
+.toolbar {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
+  gap: 10px; align-items: center; padding: 12px 32px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#q {
+  flex: 1 1 260px; min-width: 200px; padding: 8px 12px; font: inherit;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+.chip, .copy, .toggle {
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip.on, .toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+#sex { padding: 6px 8px; font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 7px; }
+.count { color: var(--muted); font-size: 12px; margin-left: auto; }
+main { padding: 22px 32px 48px; }
+.grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 11px; overflow: hidden; display: flex; flex-direction: column;
+}
+/* 作者写的 display 会盖过 UA 的 [hidden] 规则，筛选必须显式声明 */
+.card[hidden] { display: none !important; }
+.shot { display: block; background: var(--shot); line-height: 0; }
+.shot img { width: 100%; height: auto; display: block; }
+.noimg { padding: 46px 0; text-align: center; color: var(--muted); font-size: 12px; }
+.body { padding: 12px 14px 14px; }
+.titlerow { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.titletext { min-width: 0; flex: 1; }
+.titlerow h3 { margin: 0 0 4px; font-size: 15px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+.badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.avatar { flex: 0 0 auto; line-height: 0; }
+.avatar img {
+  width: 52px; height: 52px; object-fit: cover; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--shot);
+}
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; cursor: help; }
+.badge-warn { color: var(--warn); background: var(--warn-bg); }
+.badge-mod { color: var(--mod); background: var(--mod-bg); }
+.badge-kind { color: var(--kind); background: var(--kind-bg); cursor: default; }
+.badge-female { color: var(--f); background: var(--f-bg); cursor: default; }
+.badge-male { color: var(--m); background: var(--m-bg); cursor: default; }
+dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-size: 12px; font-family: Consolas, monospace; overflow-wrap: anywhere; }
+dd.prose { font-family: inherit; }
+dd a { color: var(--accent); text-decoration: none; }
+dd a:hover { text-decoration: underline; }
+.copy { padding: 1px 7px; margin-left: 6px; font-size: 11px; border-radius: 5px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+section.appendix {
+  margin-top: 40px; padding: 24px 28px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 11px;
+}
+section.appendix h2 { margin-top: 0; font-size: 18px; }
+section.appendix h3 { font-size: 14px; margin: 22px 0 6px; }
+pre {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; overflow-x: auto; font-family: Consolas, monospace; font-size: 12.5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+td code, li code, p code { font-family: Consolas, monospace; }
+.note {
+  border-left: 3px solid var(--warn); background: var(--warn-bg);
+  color: var(--ink); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>The First Descendant · 模型导出总览</h1>
+  <div class="sub">生成于 2026-09-19 16:13 · 导出根目录 <code>D:\tfd_exports</code> ·
+    图片与 blend 均为本机文件，换机器需重新生成</div>
+  <div class="stats">
+    <div class="stat"><b>14</b><span>已转模型</span></div>
+    <div class="stat"><b>12</b><span>后裔</span></div>
+    <div class="stat"><b>12</b><span>女性后裔</span></div>
+    <div class="stat"><b>3.1 GB</b><span>blend + 贴图</span></div>
+    <div class="stat"><b>0</b><span>有告警</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="q" type="search" placeholder="搜索 id（Viessa）、说明（冰）、部件（Body）、材质（头发）或包路径…（按 / 聚焦）">
+  <select id="sex"><option value="">全部体型</option><option value="">无体型（怪 / 物件） (1)</option><option value="female">女性体型 (13)</option></select>
+  <button class="chip on" data-kind="">全部</button>
+  <button class="chip" data-kind="descendant">后裔 (12)</button><button class="chip" data-kind="skin">皮肤 (1)</button><button class="chip" data-kind="monster">怪物 (1)</button>
+  <button class="toggle" id="warnOnly">只看告警</button>
+  <span class="count" id="count"></span>
+</div>
+
+<main>
+  <div class="grid" id="grid">
+      <article class="card" data-search="bunny 银色兔耳头盔（面罩遮住眼睛）+ 藏青紧身衣 + 白色棱面护肩，髋部一圈蓝红电容，重装战靴 descendant bunny full clear cloth eye eyebrow eyelash glass hair skin teeth characters/pc/mesh/preset/bunny/pc_004_a0101 d:\tfd_exports\blend\bunny\bunny.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Bunny/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Bunny.jpg" alt="Bunny"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Bunny/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Bunny_face.jpg" alt="Bunny 脸部"></a>
+            <div class="titletext"><h3>Bunny</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">银色兔耳头盔（面罩遮住眼睛）+ 藏青紧身衣 + 白色棱面护肩，髋部一圈蓝红电容，重装战靴</dd>
+            <dt>部件</dt><dd title="Full 113,863 顶点 / 425 骨 / 14 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>113,863 顶点 · 201,653 面 · 425 骨骼 · 1 网格 · 198.4 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_004_A0101_Head_000_Glass_MI = glass; PC_004_A0101_Head_000_MI = cloth; PC_004_A0101_Head_999_MI = hair; PC_004_A0101_PartA_MI = cloth; PC_004_A0101_PartB_MI = cloth; PC_004_C0101_EyeBall_MI = eye; PC_004_C0101_Eyeblow_MI = eyebrow; PC_004_C0101_Eyelash_MI = eyelash; PC_004_C0101_Eyeocc_MI = clear; PC_004_C0101_Face_Ml = skin; PC_004_C0101_TearLine_MI = clear; PC_004_C0101_Teeth = teeth">12 个 · 21 张贴图（59.2 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 面罩玻璃 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Bunny/Bunny.blend" title="D:\tfd_exports\blend\Bunny\Bunny.blend">D:\tfd_exports\blend\Bunny\Bunny.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Bunny" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="freyna 绿色挑染短发，黑皮铆钉短夹克 + 墨绿胸衣，露腰，黑皮裤，机械小腿和利爪手套（绿色自发光） descendant freyna full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/freyna/pc_006_a0101 d:\tfd_exports\blend\freyna\freyna.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Freyna/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Freyna.jpg" alt="Freyna"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Freyna/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Freyna_face.jpg" alt="Freyna 脸部"></a>
+            <div class="titletext"><h3>Freyna</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">绿色挑染短发，黑皮铆钉短夹克 + 墨绿胸衣，露腰，黑皮裤，机械小腿和利爪手套（绿色自发光）</dd>
+            <dt>部件</dt><dd title="Full 85,440 顶点 / 520 骨 / 11 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>85,440 顶点 · 142,837 面 · 520 骨骼 · 1 网格 · 138.2 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_006_A0101_Eyeball_MI = eye; PC_006_A0101_Eyebrow_MI = eyebrow; PC_006_A0101_Eyelash_MI = eyelash; PC_006_A0101_Eyeocc_MI = clear; PC_006_A0101_Hair_MI = hair; PC_006_A0101_Mouth_MI = teeth; PC_006_A0101_Tearline_MI = clear; PC_006_A0101_body_MI = skin; PC_006_A0101_face_MI = skin; PC_006_A0101_part_a_MI = cloth; PC_006_A0101_part_b_MI = cloth">11 个 · 22 张贴图（46.9 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Freyna/Freyna.blend" title="D:\tfd_exports\blend\Freyna\Freyna.blend">D:\tfd_exports\blend\Freyna\Freyna.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Freyna" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="gley 银白高盘发 + 黑框眼镜，白色长实验袍 + 红衬衫黑领带，黑皮手套与机械护肩，黑紧身裤 + 战靴 descendant gley full clear cloth eye eyebrow eyelash glass hair skin teeth characters/pc/mesh/preset/gley/pc_007_a0101 d:\tfd_exports\blend\gley\gley.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Gley/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Gley.jpg" alt="Gley"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Gley/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Gley_face.jpg" alt="Gley 脸部"></a>
+            <div class="titletext"><h3>Gley</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">银白高盘发 + 黑框眼镜，白色长实验袍 + 红衬衫黑领带，黑皮手套与机械护肩，黑紧身裤 + 战靴</dd>
+            <dt>部件</dt><dd title="Full 126,273 顶点 / 707 骨 / 15 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>126,273 顶点 · 199,937 面 · 707 骨骼 · 1 网格 · 201.8 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_007_A0101_EYE_MI = eye; PC_007_A0101_Eyelash_Ml = eyelash; PC_007_A0101_Eyeocc_MI = clear; PC_007_A0101_Face_Ml = skin; PC_007_A0101_Fur_Ml = eyebrow; PC_007_A0101_Glass_MI = glass; PC_007_A0101_Hair_MI = hair; PC_007_A0101_Mouth_MI = teeth; PC_007_A0101_Part_A_MI = cloth; PC_007_A0101_Part_B_MI = cloth; PC_007_A0101_Part_C_MI = cloth; PC_007_A0101_Tearline_Ml = clear; PC_007_A0101_skin_MI2 = skin">13 个 · 23 张贴图（48.8 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 面罩玻璃 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Gley/Gley.blend" title="D:\tfd_exports\blend\Gley\Gley.blend">D:\tfd_exports\blend\Gley\Gley.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Gley" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="hailey 赤褐短发配白色眉毛，白色野战夹克敞开 + 灰色运动内衣，白工装裤 + 大腿枪套，黑色系带靴 descendant hailey full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/hailey/pc_016_a0101 d:\tfd_exports\blend\hailey\hailey.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Hailey/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Hailey.jpg" alt="Hailey"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Hailey/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Hailey_face.jpg" alt="Hailey 脸部"></a>
+            <div class="titletext"><h3>Hailey</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">赤褐短发配白色眉毛，白色野战夹克敞开 + 灰色运动内衣，白工装裤 + 大腿枪套，黑色系带靴</dd>
+            <dt>部件</dt><dd title="Full 134,939 顶点 / 407 骨 / 11 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>134,939 顶点 · 217,073 面 · 407 骨骼 · 1 网格 · 230.2 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_016_A0101_Eyebrow_MI = eyebrow; PC_016_A0101_Eyelash_MI = eyelash; PC_016_A0101_Eyeocc_MI = clear; PC_016_A0101_Eyes_MI = eye; PC_016_A0101_Face_MI = skin; PC_016_A0101_Mouth_MI = teeth; PC_016_A0101_TearLine_MI = clear; PC_016_A_Body_000_Body_Ml = skin; PC_016_A_Body_000_PartA_Ml = cloth; PC_016_A_Body_000_PartB_Ml = cloth; PC_016_A_VAR_Head_000A_Hair_MI = hair">11 个 · 22 张贴图（59.0 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Hailey/Hailey.blend" title="D:\tfd_exports\blend\Hailey\Hailey.blend">D:\tfd_exports\blend\Hailey\Hailey.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Hailey" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="harris 粉红短发，棕色皮质短飞行夹克 + 白色比基尼上衣，露腰，白色牛仔短裤 + 枪套，兔子图案白球鞋 descendant harris full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/harris/pc_021_a0101 d:\tfd_exports\blend\harris\harris.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Harris/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Harris.jpg" alt="Harris"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Harris/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Harris_face.jpg" alt="Harris 脸部"></a>
+            <div class="titletext"><h3>Harris</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">粉红短发，棕色皮质短飞行夹克 + 白色比基尼上衣，露腰，白色牛仔短裤 + 枪套，兔子图案白球鞋</dd>
+            <dt>部件</dt><dd title="Full 107,757 顶点 / 497 骨 / 11 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>107,757 顶点 · 179,533 面 · 497 骨骼 · 1 网格 · 185.9 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_021_A0101_EyeOcc_Ml = clear; PC_021_A0101_Eye_Ml = eye; PC_021_A0101_Eyelash_Ml = eyelash; PC_021_A0101_Face_Ml = skin; PC_021_A0101_Fur_Ml = eyebrow; PC_021_A0101_Hair_Ml = hair; PC_021_A0101_TearLine_Ml = clear; PC_021_A0101_Teeth_Ml = teeth; PC_021_A_Body_000_PartA_Ml = cloth; PC_021_A_Body_000_PartB_Ml = cloth; PC_021_Skin_000_MI = skin">11 个 · 20 张贴图（52.0 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Harris/Harris.blend" title="D:\tfd_exports\blend\Harris\Harris.blend">D:\tfd_exports\blend\Harris\Harris.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Harris" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="ines 铂金短发 + 深肤色，全身黑色高光紧身衣 + 装甲片，露指手套，大腿束带（手比脸浅：身体和脸用了两张色调不同的皮肤图，游戏靠肤色/染色参数统一，这套没接） descendant ines full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/ines/pc_018_a0101 d:\tfd_exports\blend\ines\ines.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Ines/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Ines.jpg" alt="Ines"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Ines/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Ines_face.jpg" alt="Ines 脸部"></a>
+            <div class="titletext"><h3>Ines</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">112 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">铂金短发 + 深肤色，全身黑色高光紧身衣 + 装甲片，露指手套，大腿束带（手比脸浅：身体和脸用了两张色调不同的皮肤图，游戏靠肤色/染色参数统一，这套没接）</dd>
+            <dt>部件</dt><dd title="Full 110,534 顶点 / 396 骨 / 11 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>110,534 顶点 · 182,099 面 · 396 骨骼 · 1 网格 · 191.2 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_018_A_Body_000_Body_Ml = skin; PC_018_A_Body_000_PartA_Ml = cloth; PC_018_A_Body_000_PartB_Ml = cloth; PC_018_A_EYE_000_MI = eye; PC_018_A_EyeBrow_000_MI = eyebrow; PC_018_A_EyeOCC_000_MI = clear; PC_018_A_Eyeleash_000_MI = eyelash; PC_018_A_Face_Ml = skin; PC_018_A_TearLine_000_MI = clear; PC_018_A_Teeth_000_MI = teeth; PC_018_A_VAR_HEAD_000_Hair_MI = hair">11 个 · 19 张贴图（44.5 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Ines/Ines.blend" title="D:\tfd_exports\blend\Ines\Ines.blend">D:\tfd_exports\blend\Ines\Ines.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Ines" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="luna 头戴式耳机 + 棕色短发，灰底荧光黄的装甲连体衣，过膝灰长袜 + 运动鞋，左臂黑臂套与纹身 descendant luna full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/luna/pc_015_a0101 d:\tfd_exports\blend\luna\luna.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Luna/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Luna.jpg" alt="Luna"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Luna/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Luna_face.jpg" alt="Luna 脸部"></a>
+            <div class="titletext"><h3>Luna</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">头戴式耳机 + 棕色短发，灰底荧光黄的装甲连体衣，过膝灰长袜 + 运动鞋，左臂黑臂套与纹身</dd>
+            <dt>部件</dt><dd title="Full 159,320 顶点 / 456 骨 / 13 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>159,320 顶点 · 256,499 面 · 456 骨骼 · 1 网格 · 271.4 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_015_A_Body_000_Body_Ml = skin; PC_015_A_Body_000_PartA_Ml = cloth; PC_015_A_Body_000_PartB_Ml = cloth; PC_015_A_EYE_MI = eye; PC_015_A_EyeBrow_MI = eyebrow; PC_015_A_Eyelash_Ml = eyelash; PC_015_A_Eyeocc_MI = clear; PC_015_A_Face_Ml = skin; PC_015_A_Head_000_Hair_A_Ml = hair; PC_015_A_Head_000_Hair_B_Ml = hair; PC_015_A_Head_000_Ml = cloth; PC_015_A_Tearline_Ml = clear; PC_015_A_Teeth_Ml = teeth">13 个 · 25 张贴图（55.1 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Luna/Luna.blend" title="D:\tfd_exports\blend\Luna\Luna.blend">D:\tfd_exports\blend\Luna\Luna.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Luna" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="nell 黑色齐耳短发，全黑长风衣 + 高领紧身衣，皮护肩与手套，黑色长靴（脸用的是 gley/007 那套材质实例，游戏自己就这么共用的） descendant nell full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/nell/pc_020_a0101 d:\tfd_exports\blend\nell\nell.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Nell/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Nell.jpg" alt="Nell"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Nell/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Nell_face.jpg" alt="Nell 脸部"></a>
+            <div class="titletext"><h3>Nell</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">黑色齐耳短发，全黑长风衣 + 高领紧身衣，皮护肩与手套，黑色长靴（脸用的是 Gley/007 那套材质实例，游戏自己就这么共用的）</dd>
+            <dt>部件</dt><dd title="Full 138,941 顶点 / 620 骨 / 13 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>138,941 顶点 · 223,050 面 · 620 骨骼 · 1 网格 · 214.9 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_007_A0101_EYE_MI = eye; PC_007_A0101_Eyelash_Ml = eyelash; PC_007_A0101_Eyeocc_MI = clear; PC_007_A0101_Face_Ml = skin; PC_007_A0101_Fur_Ml = eyebrow; PC_007_A0101_Mouth_MI = teeth; PC_007_A0101_Tearline_Ml = clear; PC_020_A0101_SKin_Ml = skin; PC_020_A_VAR_Body_000_PartA_MI = cloth; PC_020_A_VAR_Body_000_PartB_MI = cloth; PC_020_A_VAR_HEAD_000_Hair_MI = hair; PC_020_A_VAR_HEAD_000_MI = cloth">12 个 · 23 张贴图（47.9 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Nell/Nell.blend" title="D:\tfd_exports\blend\Nell\Nell.blend">D:\tfd_exports\blend\Nell\Nell.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Nell" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="serena 铂金波波头，白色连体衣（立领和胸口是黑色蕾丝）+ 灰金护肩，机械手臂，黑色透纱大腿，装甲长靴 descendant serena full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/serena/pc_019_a0101 d:\tfd_exports\blend\serena\serena.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Serena/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Serena.jpg" alt="Serena"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Serena/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Serena_face.jpg" alt="Serena 脸部"></a>
+            <div class="titletext"><h3>Serena</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">铂金波波头，白色连体衣（立领和胸口是黑色蕾丝）+ 灰金护肩，机械手臂，黑色透纱大腿，装甲长靴</dd>
+            <dt>部件</dt><dd title="Full 129,140 顶点 / 539 骨 / 14 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>129,140 顶点 · 212,271 面 · 539 骨骼 · 1 网格 · 222.3 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_019_A0101_Eyebrow_MI = eyebrow; PC_019_A0101_Eyelash_MI = eyelash; PC_019_A0101_Eyeocc_MI = clear; PC_019_A0101_Eyes_MI = eye; PC_019_A0101_Face_MI = skin; PC_019_A0101_TearLine_MI = clear; PC_019_A0101_Teeth_MI = teeth; PC_019_A_Body_000_Lace_Cover_Ml = cloth; PC_019_A_Body_000_Lace_Ml = cloth; PC_019_A_Body_000_PartA_Ml = cloth; PC_019_A_Body_000_PartB_Ml = cloth; PC_019_A_VAR_Body_MI = skin; PC_019_A_VAR_HEAD_000_Hair_MI = hair">13 个 · 26 张贴图（45.8 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Serena/Serena.blend" title="D:\tfd_exports\blend\Serena\Serena.blend">D:\tfd_exports\blend\Serena\Serena.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Serena" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="sharen 整套银白描金动力装甲，全罩面甲只露出头顶的粉发，碳纤维腹甲，高科技胫甲 descendant sharen full clear cloth eye eyelash glass hair skin teeth characters/pc/mesh/preset/sharen/pc_008_a0101 d:\tfd_exports\blend\sharen\sharen.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Sharen/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Sharen.jpg" alt="Sharen"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Sharen/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Sharen_face.jpg" alt="Sharen 脸部"></a>
+            <div class="titletext"><h3>Sharen</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">整套银白描金动力装甲，全罩面甲只露出头顶的粉发，碳纤维腹甲，高科技胫甲</dd>
+            <dt>部件</dt><dd title="Full 139,507 顶点 / 395 骨 / 12 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>139,507 顶点 · 242,361 面 · 395 骨骼 · 1 网格 · 241.5 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_008_A_Body_000_Glass_MI = glass; PC_008_A_Body_000_PartA_MI = cloth; PC_008_A_Body_000_PartB_MI = cloth; PC_008_A_Eye_MI = eye; PC_008_A_Eyelash_MI = eyelash; PC_008_A_Eyeocc_MI = clear; PC_008_A_FaceAcc_MI = cloth; PC_008_A_Tearline_MI = clear; PC_008_A_Teeth_MI = teeth; PC_008_Face_000_MI = skin; PC_008_Head_000_MI = cloth; PC_008_Head_999_MI = hair">12 个 · 25 张贴图（54.4 MB）<br>透明壳 · 布料/装甲 · 眼球 · 睫毛 · 面罩玻璃 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Sharen/Sharen.blend" title="D:\tfd_exports\blend\Sharen\Sharen.blend">D:\tfd_exports\blend\Sharen\Sharen.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Sharen" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="valby 透明球形头盔（隔着头盔能看见脸）+ 全身白色高光紧身衣 + 青绿色短夹克 descendant valby full clear cloth eye eyebrow eyelash glass hair skin teeth characters/pc/mesh/preset/valby/pc_010_a0101 d:\tfd_exports\blend\valby\valby.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Valby/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Valby.jpg" alt="Valby"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Valby/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Valby_face.jpg" alt="Valby 脸部"></a>
+            <div class="titletext"><h3>Valby</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">透明球形头盔（隔着头盔能看见脸）+ 全身白色高光紧身衣 + 青绿色短夹克</dd>
+            <dt>部件</dt><dd title="Full 125,674 顶点 / 424 骨 / 14 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>125,674 顶点 · 198,194 面 · 424 骨骼 · 1 网格 · 200.0 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_010_A0101_EYE_MI = eye; PC_010_A0101_Eyelash_Ml = eyelash; PC_010_A0101_Eyeocc_MI = clear; PC_010_A0101_Face_Ml = skin; PC_010_A0101_Hair_Ml = hair; PC_010_A0101_Tearline_Ml = clear; PC_010_A0101_Teeth_Ml = teeth; PC_010_A_Body_000_BackGlass_MI = glass; PC_010_A_Body_000_Glass_Ml = glass; PC_010_A_Body_000_PartA_Ml = cloth; PC_010_A_Body_000_PartB_Ml = cloth; PC_010_A_EyeBrow_MI = eyebrow; PC_010_A_Head_000_Glass_Ml = glass; PC_010_A_Head_000_Ml = cloth">14 个 · 22 张贴图（54.7 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 面罩玻璃 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Valby/Valby.blend" title="D:\tfd_exports\blend\Valby\Valby.blend">D:\tfd_exports\blend\Valby\Valby.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Valby" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="viessa 白色罗纹针织连衣裙（胸前锁孔）+ 玫瑰棕绗缝皮短外套与腰带，银色机械小臂和胫甲，白金色低马尾、有雀斑 descendant viessa full clear cloth eye eyebrow eyelash hair skin teeth characters/pc/mesh/preset/viessa/pc_003_a0101 d:\tfd_exports\blend\viessa\viessa.blend" data-kind="descendant" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Viessa/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Viessa.jpg" alt="Viessa"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Viessa/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Viessa_face.jpg" alt="Viessa 脸部"></a>
+            <div class="titletext"><h3>Viessa</h3><div class="badges"><span class="badge badge-kind">后裔</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">白色罗纹针织连衣裙（胸前锁孔）+ 玫瑰棕绗缝皮短外套与腰带，银色机械小臂和胫甲，白金色低马尾、有雀斑</dd>
+            <dt>部件</dt><dd title="Full 95,612 顶点 / 622 骨 / 13 槽">Full</dd>
+            <dt>规格</dt>
+            <dd>95,612 顶点 · 145,721 面 · 622 骨骼 · 1 网格 · 147.4 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_003_A0101_Body_MI = skin; PC_003_A0101_EyeOCC_MI = clear; PC_003_A0101_Eyebrow_MI = eyebrow; PC_003_A0101_Eyelash_MI = eyelash; PC_003_A0101_Eyes_MI = eye; PC_003_A0101_Face_MI = skin; PC_003_A0101_PartA_MI = cloth; PC_003_A0101_PartB_MI = cloth; PC_003_A0101_TearLine_MI = clear; PC_003_A0101_Teeth_MI = teeth; PC_003_B0101_000_Hair_MI = hair">11 个 · 22 张贴图（55.9 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 头发 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Viessa/Viessa.blend" title="D:\tfd_exports\blend\Viessa\Viessa.blend">D:\tfd_exports\blend\Viessa\Viessa.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Viessa" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="bunny_cmn_001 bunny 的一套皮肤：橙白红机甲 + 双角头盔（紫色面罩）。头盔是 socket 配件，靠 bn_socket_head 挂在头上 skin bunny body head face clear cloth eye eyebrow eyelash glass skin teeth characters/pc/mesh/004/a/skel/skin/cmn/001/pc_004_a_cmn_body_001 characters/pc/mesh/004/a/skel/skin/cmn/001/pc_004_a_cmn_head_001 characters/pc/mesh/004/a/skel/face/pc_004_a_face_000 d:\tfd_exports\blend\bunny_cmn_001\bunny_cmn_001.blend" data-kind="skin" data-sex="female" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/Bunny_CMN_001/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Bunny_CMN_001.jpg" alt="Bunny_CMN_001"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/Bunny_CMN_001/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/Bunny_CMN_001_face.jpg" alt="Bunny_CMN_001 脸部"></a>
+            <div class="titletext"><h3>Bunny_CMN_001</h3><div class="badges"><span class="badge badge-kind">皮肤</span><span class="badge badge-sex badge-female">女</span><span class="badge badge-mod" title="面部 morph target（形态键）">111 morph</span><span class="badge badge-mod" title="Head: socket accessory, bone-parented to Bn_Socket_Head">socket 配件</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">Bunny 的一套皮肤：橙白红机甲 + 双角头盔（紫色面罩）。头盔是 socket 配件，靠 Bn_Socket_Head 挂在头上</dd>
+            <dt>部件</dt><dd title="Body 58,599 顶点 / 495 骨 / 1 槽; Head 4,882 顶点 / 3 骨 / 2 槽; Face 27,951 顶点 / 446 骨 / 7 槽">Body · Head · Face</dd>
+            <dt>规格</dt>
+            <dd>91,432 顶点 · 156,556 面 · 504 骨骼 · 3 网格 · 76.6 MB</dd>
+            <dt>材质</dt>
+            <dd title="PC_004_A_Full_001_H_Glass_MI = glass; PC_004_A_Full_001_H_MI = cloth; PC_004_A_Full_001_MI = cloth; PC_004_C0101_EyeBall_MI = eye; PC_004_C0101_Eyeblow_MI = eyebrow; PC_004_C0101_Eyelash_MI = eyelash; PC_004_C0101_Eyeocc_MI = clear; PC_004_C0101_Face_Ml = skin; PC_004_C0101_TearLine_MI = clear; PC_004_C0101_Teeth = teeth">10 个 · 17 张贴图（48.9 MB）<br>透明壳 · 布料/装甲 · 眼球 · 眉毛 · 睫毛 · 面罩玻璃 · 皮肤 · 牙齿</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/Bunny_CMN_001/Bunny_CMN_001.blend" title="D:\tfd_exports\blend\Bunny_CMN_001\Bunny_CMN_001.blend">D:\tfd_exports\blend\Bunny_CMN_001\Bunny_CMN_001.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\Bunny_CMN_001" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mob_cmn_1001_a001 vulgus 杂兵：湿漉漉的黑色皮肤 + 灰白骨甲（头、肩、胸），利爪 monster  mob_cmn_1001_a001 cloth characters/monster/cmn/1001/a001/mesh/skel/mob_cmn_1001_a001 d:\tfd_exports\blend\mob_cmn_1001_a001\mob_cmn_1001_a001.blend" data-kind="monster" data-sex="" data-warn="0">
+        <a class="shot" href="file:///D:/tfd_exports/blend/MOB_CMN_1001_A001/preview.png" target="_blank" rel="noopener" title="点击查看原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/MOB_CMN_1001_A001.jpg" alt="MOB_CMN_1001_A001"></a>
+        <div class="body">
+          <div class="titlerow"><a class="avatar" href="file:///D:/tfd_exports/blend/MOB_CMN_1001_A001/preview_face.png" target="_blank" rel="noopener" title="点击看脸部原图"><img loading="lazy" src="file:///D:/tfd_exports/_gallery/thumbs/MOB_CMN_1001_A001_face.jpg" alt="MOB_CMN_1001_A001 脸部"></a>
+            <div class="titletext"><h3>MOB_CMN_1001_A001</h3><div class="badges"><span class="badge badge-kind">怪物</span></div></div>
+          </div>
+          <dl>
+            <dt>说明</dt><dd class="prose">Vulgus 杂兵：湿漉漉的黑色皮肤 + 灰白骨甲（头、肩、胸），利爪</dd>
+            <dt>部件</dt><dd title="MOB_CMN_1001_A001 32,128 顶点 / 119 骨 / 1 槽">MOB_CMN_1001_A001</dd>
+            <dt>规格</dt>
+            <dd>32,128 顶点 · 63,130 面 · 119 骨骼 · 1 网格 · 9.5 MB</dd>
+            <dt>材质</dt>
+            <dd title="MOB_CMN_1001_A001_MI = cloth">1 个 · 3 张贴图（17.7 MB）<br>布料/装甲</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/tfd_exports/blend/MOB_CMN_1001_A001/MOB_CMN_1001_A001.blend" title="D:\tfd_exports\blend\MOB_CMN_1001_A001\MOB_CMN_1001_A001.blend">D:\tfd_exports\blend\MOB_CMN_1001_A001\MOB_CMN_1001_A001.blend</a>
+                <button class="copy" data-copy="D:\tfd_exports\blend\MOB_CMN_1001_A001" title="复制整个目录路径">复制目录</button></dd>
+          </dl>
+        </div>
+      </article>
+  </div>
+  <div class="empty" id="empty" hidden>没有匹配的模型</div>
+
+
+<section class="appendix">
+    <h2>附录 · 手工导出教程</h2>
+    <p>脚本都在 <code>scripts\firstdescendant\</code>，产物默认落在 <code>D:\tfd_exports</code>（<code>-ExportRoot</code>）。
+      这套和别的游戏最大的不同：<b>贴图全是 UE5 虚拟贴图（Virtual Texture）</b>，UE Viewer 一张都导不出来（日志里写
+      <code>it's a virtual texture</code>，Exported 0/0），必须换 CUE4Parse；而 CUE4Parse 解本作<b>任何</b>属性都要一份
+      <code>.usmap</code>（包是 unversioned properties），这份映射表在 Nexus 上已被下架，只能从论坛翻。顺序固定：
+      装游戏 → 算 AES key → <code>list_models.py</code> 看清单 → <code>export_model.ps1 &lt;模型&gt;</code> 出带贴图的 .blend → 重生成本页。
+      <b>以下命令都在 <code>〈仓库〉\scripts\firstdescendant</code> 里跑，每开一个新窗口先 <code>cd</code> 进去。</b></p>
+
+    <h3>前提 · 工具与默认路径</h3>
+    <table>
+      <tr><th>工具</th><th>脚本默认路径 / 说明</th></tr>
+      <tr><td>游戏</td><td>Steam <code>2074920</code>，装在 <code>E:\SteamLibrary\steamapps\common\The First Descendant</code>（<code>-GameRoot</code>）。
+        内部代号 <b>M1</b>：容器是 <code>M1\Content\Paks\M1-Windows.{utoc,ucas,pak}</code>（ucas 70 GB），utoc v5 / pak v11 / Oodle /
+        <b>目录索引 AES 加密</b>。</td></tr>
+      <tr><td>CUE4Parse CLI</td><td><code>E:\tools\cue4parse_cli\cue4parse.exe</code>（<code>-Cue4ParseExe</code>）= joric/CUE4Parse.CLI 0.2.0（CUE4Parse 1.2.2）。
+        首次运行会自动下 <code>oodle-data-shared.dll</code> / <code>zlib-ng2.dll</code> / <code>Detex.dll</code> 到 <code>%LOCALAPPDATA%\Temp</code>，拷到 exe 同目录即可长期用
+        （这台机器之前根本没有任何 oo2core dll，<code>iostore.py</code> 也靠这个做 Oodle 解压）。GitHub 直连超时的话走本机代理。</td></tr>
+      <tr><td>usmap 映射表</td><td><code>E:\tools\tfd\Mappings_2024-07-16_gildor.usmap</code>（<code>-UsmapFile</code>，1.46 MB）。见下面「usmap 从哪来」。</td></tr>
+      <tr><td>UE Viewer</td><td><code>E:\tools\umodel_specific\materials\umodel_materials_ue5.exe</code>（<code>-UmodelExe</code>）。
+        <b>只</b>用来读材质实例的标量/向量参数（<code>-game=first</code> 出 <code>.props.txt</code>）——它解不了虚拟贴图。</td></tr>
+      <tr><td>Blender 3.6.15</td><td><code>D:\Program Files\blender-3.6.15-windows-x64\blender.exe</code>（<code>-BlenderExe</code>），须装 <b>io_scene_psk_psa 5.0.6</b>。
+        脚本用 <code>--factory-startup</code> 跑并自己 <code>addon_utils.enable</code>，所以不必在偏好里勾选。
+        <b>坑</b>：<code>read_factory_settings()</code> 会把刚 enable 的插件又关掉，别调。</td></tr>
+      <tr><td>Python 3</td><td><code>pip install cryptography Pillow</code>——前者解 utoc 目录索引，后者出本页缩略图。</td></tr>
+    </table>
+
+    <h3>第零步 · 算 AES key（find_aes_key.py，只做一次）</h3>
+    <pre>python .\find_aes_key.py --out D:\tfd_exports\_keys\aes_key.txt</pre>
+    <p>和 Vindictus 同一个 Nexon 套路：key <b>不是</b>明文躺在 exe 里，而是运行时用 8 条 <code>mov dword [..], imm32</code> 拼出来的，
+      找连续 32 字节的工具会空手而回。脚本扫 <code>M1-Win64-Shipping.exe</code> 的 <code>.text</code>，把成串的立即数按顺序拼成候选，
+      拿 <code>M1-Windows.pak</code> 加密索引的前 16 字节做 AES-256-ECB 试解，解出挂载点即命中（本机 60 秒，命中点在文件偏移 0x458850B）。
+      之后所有脚本按 <code>TFD_AES_KEY</code> 环境变量 → <code>-AesKeyFile</code> 取 key。</p>
+    <div class="note">key 只放本地文件或环境变量。仓库、CHANGELOG、本页面、聊天记录里都不要出现。
+      （<code>cue4parse.exe</code> 没有 key 文件参数，key 会出现在它的命令行上，本机使用可接受。）</div>
+
+    <h3>第一步 · 看清单（list_models.py）</h3>
+    <pre>python .\list_models.py                        # 2067 个模型：id / kind / char / 部件 / 已导 / blend
+python .\list_models.py --kind descendant      # descendant|skin|monster|boss|npc|weapon|accessory|fellow|vehicle
+python .\list_models.py --char Bunny           # 某后裔的默认装 + 全部皮肤
+python .\list_models.py --resolve Viessa --json
+python .\list_models.py --raw --path-filter /Monster/UNQ/</pre>
+    <p>直接解密 <code>Paks\*.utoc</code> 的 IoStore 目录索引取全部路径，不开任何外部工具。索引只有路径没有类型，所以「网格」靠目录 + 命名判：
+      在 <code>/Skel/</code> 或 <code>/MESH/</code> 下、不在 <code>/Material/ /Texture/ /Textuer/ /Anim/ /BP/</code> 里、不以 <code>BP_ ABP_ CIN_</code> 开头、
+      不以 <code>_AnimBP _AimOffset _Skeleton _Physics _MI</code> 等结尾。</p>
+    <table>
+      <tr><th>kind</th><th>容器里的位置</th><th>组成</th></tr>
+      <tr><td>descendant（33）</td><td><code>PC/MESH/PRESET/&lt;名字&gt;/PC_&lt;编号&gt;_&lt;A|U&gt;0101</code></td>
+        <td>21 个角色 + 12 个 Ultimate（A 标准 / U Ultimate）。<b>默认装就是这一整块合并网格</b>（身体+头+头发+脸，带面部 morph），导出最干净。</td></tr>
+      <tr><td>skin（1075）</td><td><code>PC/MESH/&lt;编号&gt;/&lt;A|U&gt;/Skel/SKIN/&lt;类别&gt;/&lt;序号&gt;/..._(BODY|HEAD)</code></td>
+        <td>BODY + HEAD 两件 + 该后裔的 Face 三件合成。类别 F / M / MF / CMN / AGT / BOS / CLB / EVO / VAR（Makeup 只有材质，跳过）。</td></tr>
+      <tr><td>monster / boss / npc</td><td><code>Monster/(CMN|UNQ|MIN)/</code>、<code>Boss/&lt;id&gt;/</code>、<code>NPC/&lt;id&gt;/MESH/</code></td>
+        <td>一个主网格一个模型（id = 网格名，所以 A001 / B001 变体各算一个），同目录 <code>Parts/</code> <code>Separate_Parts/</code> 记作 extras（<code>-IncludeExtras</code> 才并进来）。</td></tr>
+      <tr><td>weapon / accessory / fellow / vehicle</td><td><code>Weapon/(RW|MW)/</code>、<code>ACC/&lt;部位&gt;/</code>、<code>Fellow/</code>、<code>Vehicle/</code></td><td>同上</td></tr>
+    </table>
+    <p><b>女性体型 12 个</b>：Viessa、Bunny、Freyna、Gley、Sharen、Valby、Luna、Hailey、Ines、Serena、Nell、Harris。
+      判据是三条数据而不是看脸：骨架里有 <code>Breast_PoseAsset</code>、皮肤在 <code>SKIN/F</code> 类别下、用 F 系动画。</p>
+
+    <h3>第二步 · 一个模型一条命令（export_model.ps1）</h3>
+    <pre>.\export_model.ps1 Viessa                 # 后裔默认装
+.\export_model.ps1 Bunny_CMN_001          # 一套皮肤（Body + Head 配件 + Face）
+.\export_model.ps1 MOB_CMN_1001_A001      # 一只怪
+.\export_model.ps1 BOS_1001_A001 -IncludeExtras
+.\export_model.ps1 Viessa -Force          # 重做</pre>
+    <p>四步，全自动：</p>
+    <ol>
+      <li><code>list_models.py --resolve</code> 解析出这个模型要哪几个包；</li>
+      <li><b>CUE4Parse</b> 逐包导 ActorX pskx：<code>-g GAME_TheFirstDescendant -m &lt;usmap&gt; --mesh-format ActorX --export-materials</code>。
+        出来的 pskx 带<b>真实材质槽名</b>（<code>PC_003_A0101_PartA_MI</code> 这种）、<b>morph target</b>、顶点色；</li>
+      <li><code>resolve_textures.py</code>：槽名 → 材质实例包 → 用 <code>iostore.py</code> 读它的 zen 名字表拿到引用的贴图名 →
+        CUE4Parse 一次把这些虚拟贴图解码成 PNG → UE Viewer 读材质参数，汇总成 <code>materials.json</code>；</li>
+      <li>Blender 无头跑 <code>build_blend.py</code>：合成一副骨架、按槽建材质、渲两张预览、存 <code>.blend</code>（贴图拷进 <code>textures\</code> 用相对路径）。</li>
+    </ol>
+    <p>末尾解析 <code>TFD_REPORT=</code> 打印骨骼数、每个部件的顶点 / 槽 / morph 数、材质与贴图张数、未解析贴图、告警。
+      整个 <code>blend\&lt;id&gt;\</code> 目录可以直接拷给别人。</p>
+
+    <h3>第三步 · 批量 + 重建本页</h3>
+    <pre># 12 个女性后裔，一个约 1–2 分钟
+foreach ($id in 'Viessa','Bunny','Freyna','Gley','Sharen','Valby','Luna','Hailey','Ines','Serena','Nell','Harris') {
+    .\export_model.ps1 $id
+}
+
+cd .\html
+python .\collect_manifest.py      # 读 blend\*\build.log -> D:\tfd_exports\tfd_models_manifest.json
+python .\make_gallery.py          # 缩略图 -> D:\tfd_exports\_gallery\thumbs，页面 -> 本目录 index.html</pre>
+    <p>已经有 <code>.blend</code> 的会跳过（要重做加 <code>-Force</code>）。<code>collect_manifest.py</code> 会顺手读一次容器编目来给每条打上
+      kind / 角色 / 编号，没有 AES key 时加 <code>--no-catalogue</code>，退化成按 id 前缀猜。</p>
+
+    <h3>usmap 从哪来（最麻烦的一步）</h3>
+    <p>本作的包是 <b>unversioned properties</b>（我直接读包头标志确认的），没有 <code>.usmap</code> 时 CUE4Parse 只会报
+      <code>Could not load standard asset, check game version, mappings or keys</code>。Nexus 上原来的两个映射 mod
+      （<code>thefirstdescendant/mods/1</code> 和 <code>mods/5</code>）<b>已被下架</b>——用公开 GraphQL 接口查过，整个板块只剩 1 个壁纸 mod。
+      现在用的是 Gildor 论坛 TFD 帖（topic 9006）第 7 页网友发的 MediaFire 文件 <code>Mappings.usmap</code>（2024-07-16）。
+      <b>它是发售版的映射，两年后已部分过期</b>：</p>
+    <ul>
+      <li>能解：<b>Texture2D / 虚拟贴图</b>、<b>SkeletalMesh</b>（含材质槽名、morph、顶点色）→ 网格和贴图全靠它；</li>
+      <li>不能解：<b>MaterialInstanceConstant</b>（报 <code>Invalid bool value</code>），所以「这个材质引用了哪些贴图」读不出来。
+        这块由 <code>iostore.py</code> 补：自己解容器（AES-ECB 分块 + Oodle）、自己读 zen 包头的名字表（UE 5.2 的 44 字节 summary），
+        <b>完全不需要 usmap</b>——一个材质实例的名字表里就明晃晃列着它引用的全部贴图名。</li>
+    </ul>
+    <p>自己生成新 usmap 要往带 EAC + Nexon 反作弊的游戏进程里注入 Dumper-7 / UE4SS，有封号风险，没做。
+      <b>另一个坑</b>：拿通用的 <code>-g GAME_UE5_2</code> 代替 TFD 专用枚举，网格能出但贴图会解坏
+      （<code>Failed to parse pixel format: PF_DXT5_0</code>、<code>Serialized FString is not null terminated</code>）。</p>
+
+    <h3>贴图约定（build_blend.py 按这个建材质）</h3>
+    <table>
+      <tr><th>后缀</th><th>内容</th><th>用法</th></tr>
+      <tr><td><code>_C</code></td><td>颜色</td><td>Base Color（sRGB）</td></tr>
+      <tr><td><code>_N</code></td><td>法线，<b>DirectX 约定</b></td><td>翻绿通道再进 Normal Map</td></tr>
+      <tr><td><code>_P</code></td><td>打包图 <b>R=AO，G=粗糙度，B=金属度</b>（alpha≈0）</td>
+        <td>必须按 <b>Channel Packed</b> 读，否则 alpha 预乘会把 RGB 抹黑；皮肤的 <code>_P</code> 是另一个母材质（B 恒 255），金属度强制 0</td></tr>
+      <tr><td><code>_ID</code></td><td>六色硬边区域遮罩（红/绿/蓝/品红/黄/青 = 染色区 A–F）</td><td>玩家染色系统用；默认外观直接用 <code>_C</code>，没接</td></tr>
+      <tr><td><code>_FX</code></td><td>自发光遮罩（R）</td><td>× 材质参数 <code>Emissive_col</code></td></tr>
+      <tr><td><code>Female/Male_HairTex_NNN_P</code></td><td>共享发丝图：A=透明度，G=发根→发梢，R/B=深度/AO</td>
+        <td>颜色 = <code>Hair_RootColor</code> → <code>Hair_TipColor</code> 按 G 混合</td></tr>
+      <tr><td>眼睛</td><td><code>T_Sclera_D</code> + <code>T_Veins_D</code> + <code>T_Eye_N</code>；虹膜是 MetaHuman 式程序化（<code>IrisColor1U/V</code> 去 <code>iris_color_picker</code> 取色）</td>
+        <td>巩膜贴图 + 程序化虹膜圆盘（<b>颜色目前是近似棕色，取色还没接</b>）</td></tr>
+      <tr><td>眉 / 睫</td><td>父材质的 <code>T_eyebrow_d</code> / <code>T_eyelash2_D</code></td><td>深色 + alpha</td></tr>
+      <tr><td><code>*Glass_MI</code></td><td>面罩</td><td>参数 <code>Color</code>/<code>Opacity</code>/<code>Roughness</code> → 半透明</td></tr>
+      <tr><td><code>EyeOCC</code> / <code>TearLine</code></td><td>眼部遮挡壳 / 泪线</td><td>全透明</td></tr>
+    </table>
+    <p>材质实例名就是 pskx 的槽名，<code>classify()</code> 按名字<b>和贴图</b>判类型。游戏方的拼写要注意：<code>Eyeblow</code>（= 眉毛）、
+      <code>Textuer</code>、<code>_Ml</code>；<code>Head_999_MI</code> 这种不带 hair 字样的按有没有 <code>HairTex</code> 贴图识别；
+      <code>Face_Dyed_Mask</code> 是参数名不是贴图，别去找。</p>
+
+    <h3>多部件怎么合</h3>
+    <ul>
+      <li><b>同骨架部件</b>（皮肤的 Body / Face）：按骨名并入底模骨架，缺的骨按父子关系补进去。
+        Blender 坑：跨 <code>mode_set</code> 切换后不能再读旧的骨引用（会 <code>UnicodeDecodeError</code>），合骨前先把骨名 / 坐标拉成普通值。</li>
+      <li><b>socket 配件</b>（皮肤 HEAD 里的头盔：自带 <code>Head_Root → Pt_Head → Bn_Socket_*</code> 三根骨、和角色骨架<b>无一根同名</b>、网格画在原点）：
+        不能蒙皮，整体骨父级到底模的 <code>Bn_Socket_Head</code>（退而求其次 <code>Bip001-Head</code>），用该骨的完整矩阵。不这么做它会掉在脚边。</li>
+      <li>部件自己的骨和底模同名骨位置不一致时，用最靠根的共享骨算刚体差把部件挪过去（同骨架时为恒等）。</li>
+      <li>骨架是 3ds Max Biped：<code>Bip001-Head</code>、<code>Bn_*</code>、<code>Pt_*</code>、<code>Dm_*</code>。</li>
+    </ul>
+
+    <h3>容易踩的坑</h3>
+    <ul>
+      <li><b>PowerShell 5.1 + 原生程序的 stderr</b>：cue4parse 把日志写 stderr，在 <code>$ErrorActionPreference='Stop'</code> 下配 <code>2&gt;&amp;1</code>，
+        第一行日志就会变成终止性的 <code>NativeCommandError</code>。调用处临时切 <code>Continue</code>，<code>finally</code> 里切回来。</li>
+      <li><b>.ps1 里的字符串必须全 ASCII</b>：PowerShell 5.1 按 OEM 代码页读无 BOM 的 .ps1，引号里的多字节中文会把解析搞坏。中文放 Python / Markdown 里。</li>
+      <li><b>打包图别用默认色彩空间</b>：<code>_P</code> 的 alpha≈0，Blender 里不勾 Channel Packed 就会预乘成黑的，模型全成了 AO 全黑。</li>
+      <li><b>怪物清单会混进蓝图</b>：<code>BP_</code> / <code>ABP_</code> / <code>_AnimBP</code> 也在 <code>MESH/</code> 下，不过滤会把 201 只怪虚报成几百。</li>
+      <li><b>一个目录里有多个变体</b>：<code>MOB_CMN_1001</code> 下同时有 A001 和 B001，按主网格分组（id = 网格名）才不会被合成一个。</li>
+      <li>预览图取脸的位置按 <code>Bip001-Head</code> 找；相机 <code>sensor_fit = VERTICAL</code>，否则竖构图会把人裁掉。</li>
+    </ul>
+
+    <h3>产物目录（默认 D:\tfd_exports）</h3>
+    <pre>cue4_exports\M1\Content\...               CUE4Parse 原始导出（pskx + 贴图 PNG，按游戏目录结构）
+umodel_exports\...                        UE Viewer 的 .props.txt（材质参数）
+blend\&lt;id&gt;\&lt;id&gt;.blend                     一副骨架 + 全部部件 + 材质（相对路径）
+blend\&lt;id&gt;\textures\                      这个模型用到的 PNG
+blend\&lt;id&gt;\preview.png / preview_face.png / materials.json / spec.json / build.log
+tfd_models_manifest.json                  collect_manifest.py 的汇总；_gallery\thumbs\ 是本页缩略图
+_keys\aes_key.txt                         AES key（不进仓库）</pre>
+
+    <h3>已知局限</h3>
+    <ul>
+      <li><b>虹膜颜色是近似值</b>：游戏用 <code>IrisColor1U/V</code> 去 <code>iris_color_picker</code> 取色，图已经解出来在
+        <code>cue4_exports\M1\Content\BaseMaterials\Character\Material\Eyes\Texture\</code>，采样还没接。</li>
+      <li><b>染色系统没接</b>（<code>_ID</code> + <code>ID_A..F_col</code>）：默认外观就是 <code>_C</code> 的颜色。</li>
+      <li>usmap 是 2024 年的：后续赛季新加的材质母版若改了布局，个别贴图 / 网格可能解不出，卡片上会显示「告警」，
+        <code>materials.json</code> 里也有 <code>missing_textures</code>。</li>
+      <li>怪物 / 武器 / 载具只按目录并网格，材质母版没有逐个核对。</li>
+      <li>本页所有路径都是本机 <code>file://</code>，换机器要重新导出 + 重新生成。</li>
+    </ul>
+</section>
+
+</main>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var q = document.getElementById('q');
+  var count = document.getElementById('count');
+  var empty = document.getElementById('empty');
+  var warnOnly = document.getElementById('warnOnly');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+  var sexSel = document.getElementById('sex');
+  var kind = '';
+
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var onlyWarn = warnOnly.classList.contains('on');
+    var shown = 0;
+    cards.forEach(function (card) {
+      var ok = (!term || card.dataset.search.indexOf(term) !== -1)
+        && (!kind || card.dataset.kind === kind)
+        && (!sexSel.value || card.dataset.sex === sexSel.value)
+        && (!onlyWarn || card.dataset.warn === '1');
+      card.hidden = !ok;
+      if (ok) shown++;
+    });
+    count.textContent = shown + ' / ' + cards.length;
+    empty.hidden = shown !== 0;
+  }
+
+  q.addEventListener('input', apply);
+  sexSel.addEventListener('change', apply);
+  warnOnly.addEventListener('click', function () {
+    warnOnly.classList.toggle('on');
+    apply();
+  });
+  chips.forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      chips.forEach(function (other) { other.classList.remove('on'); });
+      chip.classList.add('on');
+      kind = chip.dataset.kind || '';
+      apply();
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === '/' && document.activeElement !== q) {
+      event.preventDefault();
+      q.focus();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.copy');
+    if (!button) return;
+    var text = button.dataset.copy;
+    var done = function () {
+      var old = button.textContent;
+      button.textContent = '已复制';
+      setTimeout(function () { button.textContent = old; }, 1200);
+    };
+    // navigator.clipboard 需要安全上下文，file:// 不是
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done);
+      return;
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); done(); } catch (err) { /* ignore */ }
+    document.body.removeChild(area);
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

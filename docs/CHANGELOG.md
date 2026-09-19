@@ -14,6 +14,64 @@
 
 ---
 
+## 2026-09-19 — The First Descendant：12 个女性后裔批量导出 + 一页 HTML 画廊
+
+### 新增 / 变化
+
+- **批量导完 12 个女性后裔**（Viessa、Bunny、Freyna、Gley、Sharen、Valby、Luna、Hailey、Ines、
+  Serena、Nell、Harris），加上之前的皮肤 Bunny_CMN_001 和怪 MOB_CMN_1001_A001，共 14 个模型
+  落在 `D:\tfd_exports\blend\<id>\`。
+- `scripts/firstdescendant/html/`（新）：`collect_manifest.py` 读每个模型的 `build.log`
+  （`TFD_REPORT=` 那行）汇总成 manifest，`make_gallery.py` 出自包含的 `index.html` ——
+  每个模型一张卡片（正身预览 + 圆形脸部小图、骨骼/顶点/材质/贴图统计、说明、blend 路径一键复制），
+  顶部按 kind / 体型筛选 + 全文搜索 + 只看告警，末尾附完整的手工导出教程。和其它游戏的画廊同一套式样。
+- 顺手修了几个让材质 / 预览出错的问题：预览分辨率、槽名识别、假的「贴图没解析到」、
+  镜片的抖动噪点、日志编码（见下）。
+
+### 用户如何操作
+
+```
+foreach ($id in 'Viessa','Bunny','Freyna','Gley','Sharen','Valby','Luna','Hailey','Ines','Serena','Nell','Harris') {
+    .\export_model.ps1 $id
+}
+cd .\html
+python .\collect_manifest.py
+python .\make_gallery.py
+```
+
+只想重跑贴图和 Blender、不重导网格：删掉模型目录下的 `materials.json` 和 `<id>.blend` 再跑一次。
+
+### 实现原理与坑
+
+- **预览图分辨率一直没设过**：`build_blend.py` 的 `render()` 收了个 `size` 参数却只拿它算
+  `clip_end`，结果每张预览都是场景默认的 1920×1080，竖着的人像被塞进宽幅中间一条，
+  两侧全是空白。现在 `size` 真的写进 `resolution_x/y`（正身 900×1400、脸 900×900），
+  `clip_end` 改用相机距离算。
+- **游戏方的命名不统一，按名字判类型会漏**，三处都是实打实的错，不是洁癖：
+  1. `_Ml`（小写 L）是 `_MI` 的笔误，Gley、Harris 整套都这么写；
+  2. 贴图后缀可以多一位数字——Gley 的脸部颜色图叫 `PC_007_A0101_Face_C1`，
+     `TEXTURE_RE` 和 `pick()` 都只认严格后缀，于是**她和 Nell 的脸整张没有颜色**（渲出来是白的）；
+  3. 槽名里可以夹序号：`PC_018_A_EYE_000_MI`（Ines）、`PC_021_A0101_Eye_Ml`（Harris）
+     按 `_eye_mi$` 判不出是眼球，被当成布料 → 现在另加「有 `Sclera` 贴图就是眼球」这条数据判据。
+  顺带：`Fur` 也是眉毛（贴 `T_eyebrow_d`），`Eyeleash` 是睫毛的另一种拼法。
+- **「没解析到的贴图」以前有一半是假警报**：材质名字表里那些看着像贴图名的参数
+  （`Face_Dyed_Mask` 之类），容器里根本没有同名包。现在凡是找不到包的一律当参数名丢掉，
+  只有「包在、PNG 没解出来」才算 missing——刷新后 14 个模型的 missing 全为空。
+- 蕾丝类材质（Serena 的 `PC_019_A_Body_000_Lace_Ml`）没有颜色图，只有 `_Alpha` + `_N`，
+  颜色来自参数 `Col_A`；单独走一条半透明分支，不再按「没有颜色图」当灰布处理。
+- **面罩/镜片改用 `BLEND` 而不是 `HASHED`**：EEVEE 的 HASHED 是随机抖动，采样数再高，
+  眼睛前面那层镜片也糊成一片磨砂噪点（Gley 的眼镜）。没有镂空遮罩的纯 alpha 材质就该用真混合。
+- **`Tee-Object` 写出来的 `build.log` 是 UTF-16**：PowerShell 的 `Select-String` 能认，
+  Python 按 UTF-8 读就是一堆乱码，`TFD_REPORT=` 那行永远匹配不上（画廊里一半模型统计全是 0）。
+  `export_model.ps1` 改成自己用 UTF-8 写日志，`collect_manifest.py` 也按 BOM 兼容 UTF-16 旧日志。
+
+### 验证
+
+14 个模型全部重跑（贴图 + Blender），14 张正身预览逐张目检：Gley / Nell 的脸恢复肤色和妆容、
+Gley 的镜片干净了，Ines / Harris 的眼球是眼球而不是灰片，Serena 的胸口蕾丝透了，Valby 隔着
+透明头盔能看见脸，Bunny_CMN_001 的角盔仍在头上，预览构图正常（900×1400 / 脸 900×900）。
+画廊页在浏览器里打开过；HTML 标签闭合、70 条 `file://` 链接全部指向存在的文件（脚本校验）。
+
 ## 2026-09-19 — The First Descendant：带贴图的导出线（CUE4Parse + 自读 zen 包头）
 
 ### 新增 / 变化

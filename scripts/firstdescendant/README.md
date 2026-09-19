@@ -57,9 +57,36 @@ D:\tfd_exports\blend\<id>\materials.json  槽 → 材质实例 → 贴图 / 参�
 （配合 `-List`）；路径都有默认值（`-GameRoot`、`-ExportRoot D:\tfd_exports`、`-Cue4ParseExe`、
 `-UsmapFile`、`-UmodelExe`、`-BlenderExe`、`-AesKeyFile`）。
 
-已跑通：Viessa（622 骨 / 95,700 顶点 / 13 槽 / 111 morph）、Bunny（425 骨 / 14 槽）、皮肤
-Bunny_CMN_001（Body 495 骨 + Head 配件 + Face 446 骨 → 504 骨）、怪 MOB_CMN_1001_A001，
-渲图逐个目检：布料/皮甲/金属/皮肤/头发/眼睛/眉睫/头盔面罩都对。
+已跑通：**12 个女性后裔全套**（Viessa、Bunny、Freyna、Gley、Sharen、Valby、Luna、Hailey、
+Ines、Serena、Nell、Harris）+ 皮肤 Bunny_CMN_001（Body 495 骨 + Head 配件 + Face 446 骨 →
+504 骨）+ 怪 MOB_CMN_1001_A001，渲图逐个目检：布料/皮甲/金属/皮肤/头发/眼睛/眉睫/头盔面罩都对。
+
+### 批量
+
+```powershell
+foreach ($id in 'Viessa','Bunny','Freyna','Gley','Sharen','Valby','Luna','Hailey','Ines','Serena','Nell','Harris') {
+    .\export_model.ps1 $id
+}
+```
+
+一个约 1–2 分钟，已经有 `.blend` 的会跳过（要重做加 `-Force`）。只想重跑贴图和 Blender、
+不重导网格：删掉该模型目录下的 `materials.json` 和 `<id>.blend` 再跑一次即可（第 2 步会发现
+pskx 都在，自动跳过）。
+
+## 画廊（一页 HTML 总览）
+
+```powershell
+cd .\html
+python .\collect_manifest.py      # 读 blend\*\build.log -> D:\tfd_exports\tfd_models_manifest.json
+python .\make_gallery.py          # 缩略图 -> D:\tfd_exports\_gallery\thumbs，页面 -> html\index.html
+```
+
+`index.html` 是自包含的一页：每个模型一张卡片（正身预览 + 圆形脸部小图、骨骼/顶点/材质/贴图
+统计、说明、blend 路径一键复制），顶部可按 kind、体型筛选、全文搜索、只看告警，末尾附一份完整的
+手工导出教程。图片和 blend 都是本机 `file://` 路径，**不进仓库**；换机器要重新导出再重新生成。
+
+`collect_manifest.py` 会顺手读一次容器编目给每条打上 kind / 角色 / 编号，没有 AES key 时加
+`--no-catalogue` 退化成按 id 前缀猜。模型的中文说明写在 `collect_manifest.py` 的 `NAMES` 表里。
 
 ## 前提（只做一次）
 
@@ -71,7 +98,7 @@ Bunny_CMN_001（Body 495 骨 + Head 配件 + Face 446 骨 → 504 骨）、怪 M
 | usmap 映射表 | `E:\tools\tfd\Mappings_2024-07-16_gildor.usmap` | 见下「usmap 从哪来」 |
 | UE Viewer | `E:\tools\umodel_specific\materials\umodel_materials_ue5.exe` | 只用来读材质实例的参数（`-game=first`） |
 | Blender | 3.6.15 + `io_scene_psk_psa` | PSK/PSKX 导入（含 morph） |
-| Python | 3.13 + `cryptography` | 解 utoc 索引、读 zen 包头 |
+| Python | 3.13 + `cryptography`、`Pillow` | 前者解 utoc 索引、读 zen 包头，后者出画廊缩略图 |
 
 ### usmap 从哪来（重要）
 
@@ -107,8 +134,15 @@ MediaFire 文件 `Mappings.usmap`（1.46 MB）。**它是发售版的映射，�
 | `*Glass_MI` | 面罩 | 参数 `Color`/`Opacity`/`Roughness` → 半透明 |
 | `EyeOCC` / `TearLine` | 眼部遮挡壳 / 泪线 | 全透明 |
 
-材质实例名就是 pskx 的槽名（`PC_003_A0101_PartA_MI` 这种），`classify()` 按名字和贴图判类型；
-`Eyeblow` 是游戏方的拼写（= 眉毛），`Head_999_MI` 这种没带 hair 字样的按 `HairTex` 贴图识别。
+材质实例名就是 pskx 的槽名（`PC_003_A0101_PartA_MI` 这种），`classify()` 按名字**和贴图**判类型。
+游戏方的拼写很不统一，按名字判会漏，几处都踩过：
+
+- `_Ml`（小写 L）是 `_MI` 的笔误，Gley、Harris 整套都这么写 → 先归一化再做后缀判断；
+- 贴图后缀可以多一位数字：Gley 的脸部颜色图叫 `PC_007_A0101_Face_C1`，不认就整张脸没颜色；
+- 槽名里可以夹序号：`PC_018_A_EYE_000_MI` 是眼球，按 `_eye_mi$` 判会漏 → 另加「有 `Sclera` 贴图就是眼球」；
+- `Eyeblow` = 眉毛，`Eyeleash` = 睫毛，`Fur` 也是眉毛（贴 `T_eyebrow_d`）；
+- `Head_999_MI` 这种没带 hair 字样的按 `HairTex` 贴图识别；
+- 名字像贴图但容器里根本没有同名包的（`Face_Dyed_Mask`），一律当参数名丢掉，不算「没解析到」。
 
 ## 多部件怎么合
 

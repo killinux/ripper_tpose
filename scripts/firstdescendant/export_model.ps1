@@ -171,7 +171,14 @@ if ($NoPreview) { $blenderArgs += '--no-preview' }
 if ($Smooth) { $blenderArgs += '--smooth' }
 Write-Host ("[4/4] Blender: " + $outDir) -ForegroundColor Cyan
 $log = Join-Path $outDir 'build.log'
-& $BlenderExe @blenderArgs 2>&1 | Tee-Object -FilePath $log | Where-Object { $_ -match '^\[tfd\]|Traceback|Error' } | ForEach-Object { Write-Host ("      " + $_) }
+# Tee-Object would write the log as UTF-16; other tools (collect_manifest.py) read it
+# as UTF-8, so capture and write it ourselves. Blender logs to stderr like CUE4Parse does.
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try { $blenderOut = @(& $BlenderExe @blenderArgs 2>&1 | ForEach-Object { [string]$_ }) }
+finally { $ErrorActionPreference = $previousPreference }
+[System.IO.File]::WriteAllLines($log, $blenderOut, (New-Object System.Text.UTF8Encoding($false)))
+$blenderOut | Where-Object { $_ -match '^\[tfd\]|Traceback|Error' } | ForEach-Object { Write-Host ("      " + $_) }
 $reportLine = Select-String -Path $log -Pattern '^TFD_REPORT=' | Select-Object -Last 1
 if (-not $reportLine) { throw ("build_blend.py produced no report; see " + $log) }
 $report = $reportLine.Line.Substring('TFD_REPORT='.Length) | ConvertFrom-Json

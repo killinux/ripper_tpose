@@ -47,8 +47,10 @@ DEFAULT_USMAP = r"E:\tools\tfd\Mappings_2024-07-16_gildor.usmap"
 DEFAULT_UMODEL = r"E:\tools\umodel_specific\materials\umodel_materials_ue5.exe"
 GAME_TAG = "GAME_TheFirstDescendant"
 
-# names in a material's name map that are textures (by TFD suffix convention)
-TEXTURE_RE = re.compile(r"(_C|_N|_P|_ID|_E|_FX|_M|_A|_D|_MK|_AO|_ORM|_Mask|_R|_d|_n)$")
+# names in a material's name map that are textures (by TFD suffix convention).
+# The trailing digit is not optional decoration: Gley's face albedo really is
+# ``PC_007_A0101_Face_C1``, and without it her face has no colour at all.
+TEXTURE_RE = re.compile(r"(_C|_N|_P|_ID|_E|_FX|_M|_A|_D|_MK|_AO|_ORM|_Mask|_R|_Alpha|_d|_n)\d?$")
 
 
 def read_key(path: str) -> str:
@@ -176,8 +178,10 @@ def main() -> int:
                 png = os.path.join(tex_root, tp[:-7].replace("/", os.sep) + ".png") if tp else None
                 s["textures"][n] = png if png and os.path.isfile(png) else None
                 if s["textures"][n] is None:
-                    if n.endswith("_Mask") and tp is None:
-                        del s["textures"][n]          # a parameter name (Face_Dyed_Mask), not an asset
+                    if tp is None:
+                        # no package of that name anywhere in the container, so it was never a
+                        # texture - just a parameter whose name looks like one (Face_Dyed_Mask)
+                        del s["textures"][n]
                     else:
                         missing.append(n)
             if s["mi_package"]:

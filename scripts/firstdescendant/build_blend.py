@@ -252,10 +252,13 @@ def load_image(src, non_color=False, packed=False):
 
 
 def pick(textures, *suffixes, exclude=()):
-    """First texture whose name ends with one of the suffixes (case-sensitive), skipping excluded stems."""
+    """First texture whose name ends with one of the suffixes (case-sensitive), skipping
+    excluded stems.  A trailing digit still counts as the suffix - the game ships
+    ``PC_007_A0101_Face_C1`` alongside the usual ``..._Face_C``."""
     for suf in suffixes:
+        pattern = re.compile(re.escape(suf) + r"\d?$")
         for name, path in textures.items():
-            if path and name.endswith(suf) and not any(x in name for x in exclude):
+            if path and pattern.search(name) and not any(x in name for x in exclude):
                 return path
     return None
 
@@ -328,15 +331,21 @@ def link_pack(tree, bsdf, img, metallic=True, base_socket=None):
 
 
 def classify(mat_name, textures):
-    n = mat_name.lower()
+    # "_Ml" is the game's own typo for "_MI" and turns up on whole descendants (Gley,
+    # Harris); normalise it before any suffix test.
+    n = re.sub(r"_ml$", "_mi", mat_name.lower())
     # hair by name OR by the shared strand atlas (PC_004_A0101_Head_999_MI is hair)
     if "hair" in n or any("HairTex" in t for t in textures):
         return "hair"
-    if re.search(r"_eyes?_mi$|_eye_mi$|eyeball", n):
+    # eyes by name (PC_018_A_EYE_000_MI carries an index) OR by the sclera atlas
+    if re.search(r"_eyes?(_\d+)?_mi$|eyeball", n) or any("Sclera" in t for t in textures):
         return "eye"
-    if "eyebrow" in n or "eyeblow" in n or "brow" in n:     # the game spells it "Eyeblow" too
+    # the game spells it "Eyeblow" too, and a face's "Fur" slot is the eyebrow card
+    if ("eyebrow" in n or "eyeblow" in n or "brow" in n
+            or re.search(r"(^|_)fur(_\d+)?_mi$", n)
+            or any("eyebrow" in t.lower() for t in textures)):
         return "eyebrow"
-    if "eyelash" in n or "lash" in n:
+    if "eyelash" in n or "eyeleash" in n or "lash" in n:    # "Eyeleash" is theirs as well
         return "eyelash"
     if "eyeocc" in n or "tearline" in n or "occlusion" in n:
         return "clear"
@@ -377,8 +386,11 @@ def build_material(mat, entry, mesh_name):
         bsdf.inputs["Specular"].default_value = 0.9
         # the shader's Opacity is a fade towards the rim; a flat 0.35 reads as a visor
         bsdf.inputs["Alpha"].default_value = min(0.6, max(0.15, 1.0 - float(props.get("Opacity", 0.85)) + 0.2))
-        mat.blend_method = "HASHED"
-        mat.shadow_method = "HASHED"
+        # a flat alpha with no cutout mask wants real blending: EEVEE's HASHED is
+        # stochastic, and on a lens over an eye it never resolves - Gley's glasses
+        # came out as frosted speckle.
+        mat.blend_method = "BLEND"
+        mat.shadow_method = "NONE"
         mat.show_transparent_back = False
         return info
 
@@ -492,6 +504,22 @@ def build_material(mat, entry, mesh_name):
             mat.blend_method = "HASHED"
         return info
 
+    lace = pick(textures, "_Alpha")
+    if kind == "cloth" and albedo is None and lace:
+        # a lace / mesh overlay has no colour map at all: the shader tints a pure alpha
+        # mask with its own Col_A (Serena's PC_019_A_Body_000_Lace_Ml)
+        col = props.get("Col_A", props.get("col", (0.04, 0.04, 0.05, 1.0)))
+        bsdf.inputs["Base Color"].default_value = (col[0], col[1], col[2], 1.0)
+        bsdf.inputs["Roughness"].default_value = float(props.get("Roughness", 0.5))
+        bsdf.inputs["Metallic"].default_value = float(props.get("Metalic", 0.0))
+        t = tex_node(tree, load_image(lace, non_color=True, packed=True), (-900, 0), "Lace alpha")
+        tree.links.new(t.outputs["Color"], bsdf.inputs["Alpha"])
+        mat.blend_method = "HASHED"
+        mat.shadow_method = "HASHED"
+        if normal:
+            link_normal(tree, bsdf, load_image(normal, non_color=True, packed=True))
+        return info
+
     # skin / cloth / teeth: albedo + normal + pack (+ emissive mask)
     base_socket = None
     if albedo:
@@ -561,15 +589,19 @@ def frame_points(objs):
 
 
 def render(path, center, ortho_scale, size, forward):
+    """size is the output resolution; ortho_scale is what the VERTICAL sensor fits,
+    so a portrait frame crops the sides of a standing figure rather than the head."""
     scene = bpy.context.scene
+    scene.render.resolution_x, scene.render.resolution_y = size
+    scene.render.resolution_percentage = 100
     cam_data = bpy.data.cameras.new("Cam")
     cam_data.type = "ORTHO"
     cam_data.sensor_fit = "VERTICAL"
     cam_data.ortho_scale = ortho_scale
-    cam_data.clip_end = max(size) * 100 + 1000
+    dist = max(ortho_scale, 100) * 3
+    cam_data.clip_end = dist * 3 + ortho_scale * 10
     cam = bpy.data.objects.new("Cam", cam_data)
     scene.collection.objects.link(cam)
-    dist = max(ortho_scale, 100) * 3
     cam.location = center + forward * dist
     cam.rotation_euler = (center - cam.location).to_track_quat("-Z", "Y").to_euler()
     scene.camera = cam
