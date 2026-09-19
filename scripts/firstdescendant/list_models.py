@@ -279,10 +279,14 @@ def build_catalogue(paths: list[str]) -> list[dict]:
 
 # ---------------------------------------------------------------- export status
 def find_psk(export_root: str, package: str) -> str:
-    base = os.path.join(export_root, "umodel_exports", package.replace("/", os.sep))
-    for ext in MODEL_EXTENSIONS:
-        if os.path.isfile(base + ext):
-            return base + ext
+    """The CUE4Parse export (cue4_exports/M1/Content/<package>.pskx: real material slot
+    names + morph targets) wins over an older UE Viewer export of the same package."""
+    rel = package.replace("/", os.sep)
+    for base in (os.path.join(export_root, "cue4_exports", "M1", "Content", rel),
+                 os.path.join(export_root, "umodel_exports", rel)):
+        for ext in MODEL_EXTENSIONS:
+            if os.path.isfile(base + ext):
+                return base + ext
     return ""
 
 

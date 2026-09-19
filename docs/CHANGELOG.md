@@ -14,6 +14,53 @@
 
 ---
 
+## 2026-09-19 — The First Descendant：带贴图的导出线（CUE4Parse + 自读 zen 包头）
+
+### 新增 / 变化
+
+上一条只出白模（umodel 解不了 UE5 虚拟贴图）。现在 `scripts/firstdescendant/` 换成 CUE4Parse 路线，
+后裔 / 皮肤 / 怪都出**带贴图、带 111 个表情 morph、材质槽名真实**的 `.blend`：
+
+- `export_model.ps1`：网格改由 **CUE4Parse CLI**（`-g GAME_TheFirstDescendant` + 社区 usmap）导 ActorX
+  pskx；新增第 3 步 `resolve_textures.py`；Blender 步接收 `materials.json`。
+- `resolve_textures.py`（新）：pskx 槽名 → 材质实例包 → 用 **`iostore.py`（新，纯 Python 读容器 +
+  zen 包头名字表，不需要 usmap）** 拿到它引用的贴图名 → CUE4Parse 一次解码全部虚拟贴图成 PNG →
+  UE Viewer 读材质参数（根/梢发色、自发光色、虹膜参数）。
+- `build_blend.py`：按槽名建材质（`_C/_N/_P/_FX`、皮肤、头发根梢渐变、眼睛程序化虹膜、眉睫、
+  面罩玻璃、透明壳）；**socket 配件规则**（皮肤 HEAD 的头盔自带三根骨、画在原点 → 骨父级到
+  `Bn_Socket_Head`，否则掉在脚边）；贴图拷进 `textures\` 用相对路径。
+- `list_models.py`：`find_psk` 优先认 `cue4_exports\M1\Content\<包>.pskx`。
+
+### 用户如何操作
+
+```
+.\export_model.ps1 Viessa            # 或 Bunny / Bunny_CMN_001 / MOB_CMN_1001_A001 ...
+```
+
+前提多两样：`E:\tools\cue4parse_cli\cue4parse.exe`（joric/CUE4Parse.CLI 0.2.0）和
+`E:\tools\tfd\Mappings_2024-07-16_gildor.usmap`。
+
+### 实现原理与坑
+
+- **usmap 来源**：Nexus 的两个映射 mod 已下架（板块只剩壁纸）；现用 Gildor 论坛 TFD 帖第 7 页
+  （2024-07-16）网友的 MediaFire `Mappings.usmap`。它能解 Texture2D / 虚拟贴图 / SkeletalMesh，
+  **解不了 MaterialInstanceConstant**（`Invalid bool value`）——材质→贴图的链接因此改由自己读
+  zen 名字表完成，参数由 UE Viewer 补。用通用 `GAME_UE5_2` 会把贴图解坏，必须用 TFD 专用枚举。
+- CUE4Parse 首次运行会自动下载 `oodle-data-shared.dll`（这台机器之前找不到任何 oo2core），
+  `iostore.py` 就用它做 Oodle 解压。
+- 贴图约定：`_P` = R AO / G 粗糙 / B 金属（皮肤例外，B 恒 255 → 金属度置 0）；`_N` 是 DirectX
+  法线要翻绿；打包图 alpha≈0，Blender 里必须 Channel Packed 否则预乘抹黑；`_ID` 是六色染色遮罩，
+  默认外观不用；头发共享 `HairTex_*_P`：A 透明度、G 根→梢。
+- PowerShell 5.1：CUE4Parse 往 stderr 写日志，`$ErrorActionPreference='Stop'` + `2>&1` 会把第一行
+  当成终止错误，调用处临时切 `Continue`。
+- Blender：跨 edit-mode 切换后不能再读骨引用（`UnicodeDecodeError`），先拉成普通值。
+
+### 验证
+
+Viessa（622 骨 / 13 槽 / 26 张贴图 / 111 morph）、Bunny、皮肤 Bunny_CMN_001（Body+Head 配件+Face →
+504 骨，头盔在头上）、怪 MOB_CMN_1001_A001 全部一条命令跑通，渲图逐个目检：金属/布料/皮肤/头发/
+眼睛/眉睫/面罩都对。已知限制：虹膜颜色近似、染色系统未接、usmap 为 2024 版。
+
 ## 2026-09-19 — The First Descendant（第一后裔）：查看列表 + 导出脚本
 
 ### 新增
