@@ -99,6 +99,7 @@ python scripts\blender_mcp\mcp_cmd.py get_scene_info                      # 通�
 python scripts\blender_mcp\mcp_exec.py scripts\blender_mcp\cloth_demo.py 600
 python scripts\blender_mcp\mcp_cmd.py get_viewport_screenshot '{"max_size": 1100, "filepath": "C:/tmp/view.png"}'
 python scripts\blender_mcp\mcp_exec.py scripts\blender_mcp\cloth_demo_stop.py
+python scripts\blender_mcp\mcp_exec.py scripts\blender_mcp\vmd_check.py 800     # 给当前场景的模型灌 VMD 并体检
 ```
 
 脸的同款：`face_demo.py` / `face_demo_stop.py`——在**新场景**里导入 PMX、跑 Face Morphs 面板、绑 morph

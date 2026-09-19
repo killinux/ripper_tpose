@@ -49,7 +49,7 @@ mklink /J "%APPDATA%\Blender Foundation\Blender\3.6\scripts\addons\roe_pmx_tools
   皮肤要跟着走，手腕肘膝不撕。
 - **跳舞**：`scripts\riseoferos\render_pmx_dance.ps1 -Only <角色> -Force` 用真 VMD 渲一段（物理、
   眨眼都跑），或者在 Blender 里导入 PMX → Morph Tools **Bind** → 导入 VMD → 播放。
-- **一键体检**：Blender 开着 blender-mcp 时 `python scriptslender_mcp\mcp_exec.py scriptslender_mcpmd_check.py 800`，
+- **一键体检**：Blender 开着 blender-mcp 时 `python scripts\blender_mcp\mcp_exec.py scripts\blender_mcp\vmd_check.py 800`，
   对当前场景的模型灌一支舞蹈 VMD，报：动作里模型没有的骨、模型缺的表情、多少骨在动、多少骨挂在刚体上、
   摆姿势后的撕裂（身体骨单独列）、前 8 秒物理有没有炸、眨眼帧的表情值，然后播放。
   眼皮/眼球交界那几条边在满眨眼时拉伸几毫米是眨眼本身，不算问题。
