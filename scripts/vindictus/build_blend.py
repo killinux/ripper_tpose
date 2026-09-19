@@ -225,28 +225,50 @@ def link_normal(tree, bsdf, path, strength):
     tree.links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
 
 
-def link_packed(tree, bsdf, path):
-    """ORM / ARM: R = ambient occlusion, G = roughness, B = metallic."""
+def link_packed(tree, bsdf, path, rough_range=None, metallic_gain=1.0):
+    """ORM / ARM: R = ambient occlusion, G = roughness, B = metallic.  The monster shaders (M_Mob_Base,
+    M_Mob_Outfit, M_NPC_Outfit) remap the roughness channel to [Roughness Min, Roughness Max]."""
     img = tex_node(tree, path, (-900, -700), non_color=True)
     sep = tree.nodes.new("ShaderNodeSeparateRGB")
     sep.location = (-620, -700)
     tree.links.new(img.outputs["Color"], sep.inputs["Image"])
-    tree.links.new(sep.outputs["G"], bsdf.inputs["Roughness"])
-    tree.links.new(sep.outputs["B"], bsdf.inputs["Metallic"])
+    rough = sep.outputs["G"]
+    if rough_range and (abs(rough_range[0]) > 1e-3 or abs(rough_range[1] - 1.0) > 1e-3):
+        rough = map_range(tree, rough, 0.0, 1.0, rough_range[0], rough_range[1], (-450, -650))
+    tree.links.new(rough, bsdf.inputs["Roughness"])
+    metallic = sep.outputs["B"]
+    if abs(metallic_gain - 1.0) > 1e-3:
+        gain = tree.nodes.new("ShaderNodeMath")
+        gain.operation = "MULTIPLY"
+        gain.inputs[1].default_value = metallic_gain
+        gain.location = (-450, -800)
+        tree.links.new(metallic, gain.inputs[0])
+        metallic = gain.outputs["Value"]
+    tree.links.new(metallic, bsdf.inputs["Metallic"])
 
 
-def link_tinted_base(tree, bsdf, path, tint):
+def link_tinted_base(tree, bsdf, path, tint, brightness=1.0, saturation=1.0):
+    """Diffuse -> Base Color, times the instance tint; the monster shaders also scale the texture by
+    "Basecolor Brightness" (their D maps are authored dark, 3x is common) and desaturate it."""
     img = tex_node(tree, path, (-900, 300))
+    color = img.outputs["Color"]
+    if abs(brightness - 1.0) > 1e-3 or abs(saturation - 1.0) > 1e-3:
+        hsv = tree.nodes.new("ShaderNodeHueSaturation")
+        hsv.inputs["Saturation"].default_value = saturation
+        hsv.inputs["Value"].default_value = brightness
+        hsv.location = (-700, 300)
+        tree.links.new(color, hsv.inputs["Color"])
+        color = hsv.outputs["Color"]
     if tint and any(abs(c - 1.0) > 1e-3 for c in tint[:3]):
         mix = tree.nodes.new("ShaderNodeMixRGB")
         mix.blend_type = "MULTIPLY"
         mix.inputs["Fac"].default_value = 1.0
         mix.inputs["Color2"].default_value = (tint[0], tint[1], tint[2], 1.0)
         mix.location = (-500, 300)
-        tree.links.new(img.outputs["Color"], mix.inputs["Color1"])
+        tree.links.new(color, mix.inputs["Color1"])
         tree.links.new(mix.outputs["Color"], bsdf.inputs["Base Color"])
     else:
-        tree.links.new(img.outputs["Color"], bsdf.inputs["Base Color"])
+        tree.links.new(color, bsdf.inputs["Base Color"])
     return img
 
 
@@ -449,6 +471,36 @@ def setup_material(material):
     material.shadow_method = "OPAQUE"
 
     # --- hair cards: ODI (R = opacity), FR (B = root->tip), Root/Mid/Tip colours from the instance
+    if "ma_hairstyle" in parent:
+        # monster fur cards (MA_HairStyle): Alpha = Fur_A coverage, Root = Fur_root (white at the root),
+        # RootColor -> TipColor times "Brightness"
+        entry["kind"] = "fur"
+        alpha = use(props["textures"].get("Alpha", ""))
+        root_map = use(props["textures"].get("Root", ""))
+        gain = props["scalars"].get("Brightness", 1.0)
+        root = props["vectors"].get("RootColor", (0.10, 0.08, 0.08, 1))
+        tip = props["vectors"].get("TipColor", (0.30, 0.25, 0.25, 1))
+        ramp = tree.nodes.new("ShaderNodeValToRGB")
+        ramp.location = (-500, 300)
+        gain = min(gain, 0.8 / max(max(root[:3]), max(tip[:3]), 1e-3))
+        ramp.color_ramp.elements[0].color = (root[0] * gain, root[1] * gain, root[2] * gain, 1)
+        ramp.color_ramp.elements[1].color = (tip[0] * gain, tip[1] * gain, tip[2] * gain, 1)
+        if root_map:
+            img = tex_node(tree, root_map, (-900, 300), non_color=True)
+            tree.links.new(map_range(tree, channel(tree, img, "R", (-750, 300)), 0.0, 1.0, 1.0, 0.0, (-650, 300)), ramp.inputs["Fac"])
+        else:
+            ramp.inputs["Fac"].default_value = 0.5
+        tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+        if alpha:
+            img = tex_node(tree, alpha, (-900, 0), non_color=True)
+            tree.links.new(channel(tree, img, "R", (-700, 0)), bsdf.inputs["Alpha"])
+            material.blend_method = "HASHED"
+            material.shadow_method = "HASHED"
+        bsdf.inputs["Roughness"].default_value = max(0.45, props["scalars"].get("Roughness", 0.5))
+        bsdf.inputs["Specular"].default_value = 0.2
+        material.use_backface_culling = False
+        return
+
     if "m_pc_hair" in parent or "mob_hair" in parent or "odi map" in {k.lower() for k in props["textures"]}:
         entry["kind"] = "hair"
         odi = use(find_role(info, props, ("odi",), ("_odi",)))
@@ -528,12 +580,72 @@ def setup_material(material):
         return
 
     # --- eyeball: procedural iris like the game's eye shaders (see build_eye)
-    if "skin_eye" in parent or "eyeball" in low or "_eye01" in low:
+    if "skin_eye" in parent or "eyerefractive" in parent or "eyeball" in low or "_eye01" in low:
         entry["kind"] = "eye"
         build_eye(tree, bsdf, info, props, use, entry)
         return
 
-    # --- generic PBR: outfit / skin / teeth / props
+    # --- layered outfit shader (M_Outfit, the NPC sets reused as PCM_00x_Temp): no albedo map — the Sub Mat Map
+    # picks sub-material A (black) / B (white, R) / C (G), each a flat "<X> L1 Color", the GDO map's R is a grey
+    # detail (0.5 = neutral) and its B the opacity; "Layer Color Map" (when present) is a real albedo instead
+    if parent.endswith("/public/m_outfit.m_outfit'"):
+        entry["kind"] = "layered"
+        L = tree.links
+        vec = props["vectors"]
+        col_a = tuple(vec.get("A L1 Color", (0.20, 0.20, 0.20, 1))[:3])
+        col_b = tuple(vec.get("B L1 Color", (0.02, 0.02, 0.02, 1))[:3])
+        col_c = tuple(vec.get("C L1 Color", col_b + (1,))[:3])
+        bc = use(props["textures"].get("Layer Color Map", ""))
+        sm = props["textures"].get("Sub Mat Map", "")
+        sm = use(sm) if sm and "white" not in sm.lower() else ""
+        gdo = use(props["textures"].get("GDO Map", ""))
+        normal = use(props["textures"].get("Normal Map", ""))
+        packed = use(props["textures"].get("ARM Map", ""))
+        if bc:
+            color = tex_node(tree, bc, (-900, 300)).outputs["Color"]
+        else:
+            mix_ab = tree.nodes.new("ShaderNodeMixRGB")
+            mix_ab.location = (-700, 300)
+            mix_ab.inputs["Color1"].default_value = col_a + (1,)
+            mix_ab.inputs["Color2"].default_value = col_b + (1,)
+            mix_c = tree.nodes.new("ShaderNodeMixRGB")
+            mix_c.location = (-500, 300)
+            mix_c.inputs["Color2"].default_value = col_c + (1,)
+            mix_c.inputs["Fac"].default_value = 0.0
+            L.new(mix_ab.outputs["Color"], mix_c.inputs["Color1"])
+            if sm:
+                sm_img = tex_node(tree, sm, (-1100, 500), non_color=True)
+                sep = tree.nodes.new("ShaderNodeSeparateRGB")
+                sep.location = (-900, 500)
+                L.new(sm_img.outputs["Color"], sep.inputs["Image"])
+                L.new(sep.outputs["R"], mix_ab.inputs["Fac"])
+                L.new(sep.outputs["G"], mix_c.inputs["Fac"])
+            else:
+                mix_ab.inputs["Fac"].default_value = 1.0     # T_White_MK: everything is sub-material B
+            color = mix_c.outputs["Color"]
+        if gdo:
+            gdo_img = tex_node(tree, gdo, (-1100, 0), non_color=True)
+            gsep = tree.nodes.new("ShaderNodeSeparateRGB")
+            gsep.location = (-900, 0)
+            L.new(gdo_img.outputs["Color"], gsep.inputs["Image"])
+            if not bc:
+                detail = map_range(tree, gsep.outputs["R"], 0.0, 1.0, 0.0, 2.0, (-700, 0))
+                color = multiply_rgb(tree, color, detail, (-300, 200))
+            L.new(gsep.outputs["B"], bsdf.inputs["Alpha"])
+            material.blend_method = "CLIP"
+            material.alpha_threshold = MASK_CLIP
+            material.shadow_method = "CLIP"
+        L.new(color, bsdf.inputs["Base Color"])
+        if normal:
+            link_normal(tree, bsdf, normal, DEFAULT_NORMAL_STRENGTH)
+        if packed:
+            link_packed(tree, bsdf, packed)
+        else:
+            bsdf.inputs["Roughness"].default_value = 0.6
+        return
+
+    # --- generic PBR: outfit / skin / teeth / props / monsters (M_Mob_Base, M_Mob_Outfit, M_NPC_Outfit:
+    #     "BaseColor / Opacity", "ARM / E", Basecolor Brightness / Saturation / Tint, Roughness Min / Max)
     diffuse = use(props["textures"].get("BaseColor") or find_role(info, props, ("basecolor", "diffuse", "base color"), ("_d", "_bc")))
     normal = use(props["textures"].get("Normal Map") or find_role(info, props, ("normal map", "normal"), ("_n", "_na")))
     packed = use(find_role(info, props, ("arm", "orm", "rma", "mra"), ("_arm", "_orm", "_rma"), whole_words=True))
@@ -543,9 +655,11 @@ def setup_material(material):
             or bool(re.match(r"^mi_pc[fm]_(upper|lower|hand|foot|body|handfoot)\d*$", low)))
     entry["kind"] = "skin" if skin else ("teeth" if "teeth" in low else "pbr")
     tint = props["vectors"].get("Basecolor Tint")
+    scalars = props["scalars"]
     base_img = None
     if diffuse:
-        base_img = link_tinted_base(tree, bsdf, diffuse, tint)
+        base_img = link_tinted_base(tree, bsdf, diffuse, tint, scalars.get("Basecolor Brightness", 1.0),
+                                    scalars.get("Basecolor Saturation", 1.0))
     elif skin:
         # e.g. M_female_skin_body_01: its diffuse is a virtual texture UE Viewer cannot export -> plain skin tone
         bsdf.inputs["Base Color"].default_value = (0.86, 0.68, 0.60, 1.0)
@@ -555,7 +669,8 @@ def setup_material(material):
     if normal:
         link_normal(tree, bsdf, normal, SKIN_NORMAL_STRENGTH if skin else DEFAULT_NORMAL_STRENGTH)
     if packed and not skin:
-        link_packed(tree, bsdf, packed)
+        link_packed(tree, bsdf, packed, (scalars.get("Roughness Min", 0.0), scalars.get("Roughness Max", 1.0)),
+                    scalars.get("Metallic Intensity", 1.0))
     elif diffuse or not skin:
         bsdf.inputs["Roughness"].default_value = 0.55 if skin else 0.6
         bsdf.inputs["Specular"].default_value = 0.35
@@ -637,7 +752,8 @@ base_arm.name = MODEL_ID + "_rig"
 log("base skeleton from %s (%d bones)" % (base_part["name"], len(base_arm.data.bones)))
 # parts with no skeleton of their own (a lone "root") are handled after the merge; remember them now,
 # because their armature objects are gone once the merge loop has re-bound their meshes
-socket_parts = {part["name"] for part, arm, _m in imported if arm is not base_arm and len(arm.data.bones) <= 1}
+socket_parts = {part["name"]: (arm.data.bones[0].name if len(arm.data.bones) else "")
+                for part, arm, _m in imported if arm is not base_arm and len(arm.data.bones) <= 1}
 
 REPOSE_TOLERANCE = 0.5   # cm; the face skeleton sits ~0.25 cm off the body rig, older outfit rigs up to 7 cm
 
@@ -720,23 +836,32 @@ for part, arm, meshes in imported:
         mesh.matrix_basis = local
     bpy.data.objects.remove(arm, do_unlink=True)
 
-# Parts with no skeleton of their own (a lone "root" bone — e.g. Lethita's hair) are authored around the
-# origin and attached to the head socket in game: parent them to the head bone instead of skinning them.
+# Parts with no skeleton of their own (a lone bone) are authored around the origin and attached to a socket
+# in game: parent them to that bone instead of skinning them.  A lone bone that also exists in the base rig
+# names its socket (a monster weapon's "Anim_Attachment_RH" hangs on the right hand, with the bone's full
+# rest transform); a lone "root" (Lethita's hair) goes to the head, translated only.
 head_bone = base_arm.data.bones.get("head")
 attached = []
 for part, _arm, meshes in imported:
-    if part["name"] not in socket_parts or head_bone is None:
+    if part["name"] not in socket_parts:
+        continue
+    socket = base_arm.data.bones.get(socket_parts[part["name"]])
+    if socket is not None and socket.name.lower() != "root":
+        target, matrix = socket, base_arm.matrix_world @ socket.matrix_local
+    elif head_bone is not None:
+        target, matrix = head_bone, Matrix.Translation(base_arm.matrix_world @ head_bone.head_local)
+    else:
         continue
     for mesh in meshes:
         for mod in [m for m in mesh.modifiers if m.type == "ARMATURE"]:
             mesh.modifiers.remove(mod)
         mesh.parent = base_arm
         mesh.parent_type = "BONE"
-        mesh.parent_bone = head_bone.name
-        mesh.matrix_world = Matrix.Translation(base_arm.matrix_world @ head_bone.head_local)
-    attached.append(part["name"])
+        mesh.parent_bone = target.name
+        mesh.matrix_world = matrix
+    attached.append("%s -> %s" % (part["name"], target.name))
 if attached:
-    log("attached to head bone (no own skeleton): " + ", ".join(attached))
+    log("attached to socket bones (no own skeleton): " + ", ".join(attached))
 
 UE_FEET = (("foot_l", "ball_l"), ("foot_r", "ball_r"))                            # UE / MetaHuman names
 BIP_FEET = (("Bip001_L_Foot", "Bip001_L_Toe0"), ("Bip001_R_Foot", "Bip001_R_Toe0"))   # 3ds Max Biped (legacy sets)

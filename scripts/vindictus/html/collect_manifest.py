@@ -39,7 +39,18 @@ NAMES = {
     "PCF_010": "白色宽檐帽 + 绿色露肩上衣 + 牛仔短裤（自带发型）",
     "PCF_012": "白帽 + 粉色 Polo 衫 + 银色短裙",
     "PCF_067": "带角全身板甲（全罩头盔）",
-    "PCM_001_Temp": "男装 001（Temp）", "PCM_002_Temp": "男装 002（Temp）", "PCM_004_Temp": "男装 004（Temp）",
+    "PCM_001_Temp": "男装 001（Temp）：Swordwind 系 NPC 甲 — 面甲头盔 + 锁子甲 + 绗缝罩衣（M_Outfit 分层材质，颜色来自子材质色板）",
+    "PCM_002_Temp": "男装 002（Temp）：Swordwind 系 NPC 甲 — 全罩头盔 + 板甲胸甲 + 锁子甲裙",
+    "PCM_004_Temp": "男装 004（Temp）：RoyalArmy 王家军甲 — 羽饰头盔 + 金边板甲 + 红披风",
+    "Gnoll_type3_Tribe_Boss_01": "豺狼人部族首领 Carminegust：红毛，右手挂锤（武器单骨 Anim_Attachment_RH 挂到手上）",
+    "Gnoll_Type2_Named_Boss_03": "豺狼人精英 Boss 03：白毛弓手，背箭袋（弓是独立骨架，留在原点）",
+    "Gnoll_type1_Named_Boss_01": "豺狼人精英 Boss 01：棕毛，多种毛色材质（FurOrange/White/Black）",
+    "Gnoll_type1_Named_Boss_02": "豺狼人精英 Boss 02：黑毛，豹纹围裙",
+    "Goblin_Type2_FieldBoss02": "哥布林野外 Boss 02：25 万顶点高模，包里没有材质 —— 白模",
+    "Goblin_type3_NamedBoss01": "哥布林精英 Boss 01：与 FieldBoss02 同一网格，同样没有材质 —— 白模",
+    "kobold_Type5_TribeBoss01": "狗头人部族首领：重甲 + 双钩爪（M_Mob_Skin_Body_Old 皮肤 + M_Mob_Outfit 甲）",
+    "Male_Knight": "NPC 男骑士：5k 顶点占位模型，没有材质 —— 白模",
+    "NPCM_RoyalArmy_sword": "王家军 NPC 的佩剑（包里只有这把剑，单骨）",
 }
 
 

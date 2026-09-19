@@ -170,10 +170,17 @@ blender --background --factory-startup --python build_blend.py -- --spec spec.js
 | `M_PC_Skin_Eyebrow` 眉毛/睫毛 | `T_Eyebrow01_ODI` 的 R 作 alpha，深色 |
 | `M_PC_Skin_EyeRefractive_Old`（Fiona）/ `M_PC_Skin_Eye`（Lethita）眼球 | `build_eye()`：巩膜贴图 × 血丝贴图（0.4）；虹膜是**程序化**的——以 UV 中心半径 0.2 为虹膜盘（MetaHuman 惯例），两种虹膜色沿半径渐变（Fiona：实例的 `IrisColor1/2 U,V` 在 `T_PC_Iris_color_picker` 上采样，**采样值是 sRGB 编码要先转线性**，再乘 `IrisBrightness`×1.35；Lethita：`Iris Color Inner/Outer` 向量），× 虹膜贴图 G 通道的纤维结构（`T_Iris_A_M` B 通道是径向渐变、G 是纤维；`T_EyeMap01` R 渐变、G 纤维），外缘 limbus 变暗（`LimbusDarkAmount`+0.1），瞳孔按半径 0.32×`PupilScale` 抠黑；粗糙度 0.12、高光 0.5、`T_PC_Eye_N` 法线 0.4 |
 | 眼部遮蔽壳 / 泪线 / 假反射片 | 半透明黑 0.12（无高光）/ 透明高光 / 贴图 alpha × 0.4 |
+| `M_Outfit`（`Character/public/`，NPC 套装，`PCM_00x_Temp` 男装复用）**分层材质** | 没有基色贴图：`Sub Mat Map` 的 R 选子材质 A（黑）/B（白）、G 选 C，每个子材质是一个纯色 `A/B/C L1 Color`；`GDO Map` 的 R 是灰度细节（0.5 为中性，×2 乘上去）、B 是不透明度（CLIP）；有 `Layer Color Map` 时直接当基色；`ARM Map`、`Normal Map` 同普通 PBR。`T_White_MK` 当 Sub Mat Map 表示整件都是 B |
+| `M_Mob_Base` / `M_Mob_Outfit` / `M_NPC_Outfit`（怪物、NPC） | 参数名 `BaseColor / Opacity`、`ARM / E`、`Normal Map`；基色乘 `Basecolor Brightness`（怪物 D 图故意做得很暗，2–3.5 倍是常态）并按 `Basecolor Saturation` 去饱和、再乘 `Basecolor Tint`；粗糙度通道重映射到 `[Roughness Min, Roughness Max]`，金属度乘 `Metallic Intensity`。`Basecolor Contrast`、`Emissive` 没有用 |
+| `M_Mob_Skin_Body_Old`（狗头人皮肤） | 走皮肤分支（母板名含 skin）：`BaseColor` × 亮度，`Mask`（DRCS）未用 |
+| `MA_HairStyle` 怪物毛发卡片 | `Alpha`（`Fur_A`）R 作 alpha（HASHED），`Root`（`Fur_root`，发根处白）反相驱动 `RootColor → TipColor` 渐变，颜色乘 `Brightness` 但把最大通道压到 0.8 以内（Carminegust 红毛 ×3 会成粉色）；`Fur_Depth/Direction/ID/Gradient`、`DyeColor` 没有用 |
+| `M_EyeRefractive`（怪物眼球） | 与 Fiona 的 MetaHuman 眼一样的参数集，直接走 `build_eye()`（`IrisColor1/2 U,V` 在 `T_PC_Iris_color_picker` 采样）；`M_EyeOcclusion` 走遮蔽壳 |
 
 4. 用到的贴图复制到 `textures\`，`.blend` 存相对路径（整个 `<ExportRoot>\blend\<id>\` 目录可单独拷走）；
 5. 渲 `preview.png`（全身 900×1400）与 `preview_face.png`（头骨 `head` 取景）。相机方向不是写死的
    +X：UE 骨骼网格资源朝 -Y，脚本用 `foot_l/r → ball_l/r` 的方向判断角色朝向再放相机。
+6. 只有一根骨的部件不蒙皮，挂到插槽骨上：那根骨在底骨架里存在就挂那根（豺狼人的锤子
+   `Anim_Attachment_RH` → 右手，带骨的完整 rest 变换）；只有 `root` 的（Lethita 头发）挂到 `head`（只平移）。
 
 ## 输出
 
@@ -227,7 +234,16 @@ python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\
 - 眼球是近似：没有折射（游戏用角膜折射 + 视差），虹膜半径 0.2 是按这批头的眼裂宽度定的
   （0.17 偏小、0.22 偏大），`IrisSaturation`（0.21）没有采用——按它做会灰掉；皮肤 `_Mask`、
   头发 `Specular Highlight Randomness` 等参数没有用上。
-- 怪物/NPC 目前只是按目录把 SK 并起来，没有逐个核对材质母板。
+- 怪物/NPC 的材质母板（`M_Mob_*`、`M_NPC_Outfit`、`MA_HairStyle`、`M_EyeRefractive`、分层 `M_Outfit`）按上表
+  近似，都是看参数名和贴图通道猜的，没有 UE 里的对照：毛发的 `Brightness` 语义不确定（"orange" 毛是 0.15、
+  "black" 毛的发根色反而是浅的），Carminegust 的红毛偏粉。两只哥布林（`Goblin_Type2_FieldBoss02` 和
+  `Goblin_type3_NamedBoss01` 是同一个 25 万顶点的网格）和 NPC `Male_Knight` 在包里**没有任何材质**，
+  导出来是白模——不是导出问题，查过：`umodel -dump` 里两个 section 都是 `Material=None`，SK 包只
+  import 骨架、PhysicsAsset 和 AnimBP（`umodel -save` 抠出原始包、扫 imported package names），角色蓝图
+  `BP_Goblin_Type3_NamedBoss_01` 只引用 VFX、DataAsset、AIC、SK 和**豺狼人的** `ABP_Gnoll`，武器蓝图借的是
+  `AS_Gnoll_Type1_NamedBoss01_weapon`，整个容器 `Character/AI/Goblin/` 下 180 条里没有一个 M_/MI_/T_，
+  顶点色也全白——这版客户端里哥布林就是个占位高模。`NPCM_RoyalArmy_sword` 只有一把剑。多骨的武器
+  （`Gnoll_Type2_Named_Boss_03` 的弓，16 根自己的骨）合并后留在原点。
 
 ## 已验证
 
@@ -238,3 +254,7 @@ python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\
   `_download` 之外的临时目录）：002/003/004/006/007/009/010/012 的部件都做了重定位烘焙（Head 6.9 cm、
   Upper/Lower 到脚趾 13 cm），帽子、耳机、颈圈位置正确；005/008/010/067 隐藏默认头发，其余保留；
   PCF_012 的 `.hdr` 基色生效；`PCF_001_Temp` 裤子是资源自带的彩虹占位贴图（WIP 服装），不是导出问题。
+- **剩下的 12 个**（3 套男装 `PCM_001/002/004_Temp`、7 只怪、2 个 NPC）2026-09-19 一次导完，共 30 个 `.blend`：
+  `PCM_001_Temp` 的整体网格 `SK_PCM_001_Temp`（把脸、发、五件都合在一起的副本）被 `list_models.py` 跳过；
+  三套男装是 Swordwind / RoyalArmy 的 NPC 甲（分层材质，面甲、锁子甲、羽饰头盔、红披风都对）；四只豺狼人
+  的毛、皮、甲、眼都有色，狗头人首领的重甲和钩爪正常；白模的三个见上一节。狗头人其余 6 条只有武器，没有导。

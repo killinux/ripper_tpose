@@ -248,7 +248,11 @@ def build_catalogue(paths: list[str]) -> list[dict]:
             by_outfit[m.group(2)].append(p)
     for oid in sorted(by_outfit):
         body = "PCM" if oid.startswith("PCM") else "PCF"
-        own = [part(p, part_name(os.path.basename(p)[:-7], "SK_%s_" % oid), "outfit") for p in sorted(by_outfit[oid])]
+        paths = sorted(by_outfit[oid])
+        if len(paths) > 1:
+            # PCM_001_Temp also ships SK_PCM_001_Temp, the whole set merged into one mesh (face and hair included)
+            paths = [p for p in paths if os.path.basename(p)[:-7].lower() != ("sk_" + oid).lower()]
+        own = [part(p, part_name(os.path.basename(p)[:-7], "SK_%s_" % oid), "outfit") for p in paths]
         models.append({"id": oid, "kind": "outfit", "body": body, "parts": face_hair(body) + own, "extras": []})
 
     # older outfit sets kept under Character/Player/Outfit/<Name>/Mesh/SK_PC_<female|male>_<Name>_<Part>

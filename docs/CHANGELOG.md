@@ -195,6 +195,35 @@ python .\list_models.py --kind descendant
 怪 MOB_CMN_1001_A001（101 骨）均一条命令跑通，渲图目检。key 已由 find_aes_key.py 重建（只存
 `D:	fd_exports\_keyses_key.txt`，不入仓）。
 
+## 2026-09-19 — Vindictus: Defying Fate：剩下的 12 个模型（男装、怪物、NPC）全部导出，共 30 个
+
+### 新增
+
+- `scripts/vindictus/build_blend.py` 认得怪物和 NPC 的材质家族（之前只按 Fiona/Lethita 的 `M_PC_*` 写）：
+  1. **分层材质 `M_Outfit`**（`Character/public/`，NPC 套装 Swordwind / RoyalArmy，`PCM_001/002/004_Temp`
+     男装就是它们）没有基色贴图，颜色是纯色板：`Sub Mat Map` 的 R 选子材质 A（黑）/B（白）、G 选 C，各取
+     实例的 `A/B/C L1 Color`；`GDO Map` R 是灰度细节（0.5 中性，×2）、B 是不透明度；有 `Layer Color Map`
+     时直接当基色。`T_White_MK` 作 Sub Mat Map 表示整件是 B（手套、头盔）。
+  2. **`M_Mob_Base` / `M_Mob_Outfit` / `M_NPC_Outfit`**：参数名 `BaseColor / Opacity`、`ARM / E`；基色乘
+     `Basecolor Brightness`（怪物 D 图故意很暗，2–3.5 倍）、按 `Basecolor Saturation` 去饱和、乘 `Basecolor Tint`；
+     粗糙度重映射到 `[Roughness Min, Roughness Max]`，金属度乘 `Metallic Intensity`。
+  3. **`MA_HairStyle` 毛发卡片**：`Fur_A` R 作 alpha，`Fur_root` 反相驱动 `RootColor → TipColor`，乘
+     `Brightness` 但最大通道压到 0.8 以内。
+  4. **`M_EyeRefractive` 怪物眼球**直接走 `build_eye()`（同一套 MetaHuman 参数），`M_EyeOcclusion` 走遮蔽壳。
+- 单骨部件的挂点规则：那根骨在底骨架里存在就挂那根、带完整 rest 变换（Carminegust 的锤子
+  `Anim_Attachment_RH` → 右手，之前躺在脚下）；只有 `root` 的仍挂 `head`（Lethita 头发）。
+- `list_models.py` 跳过套装里的整体副本网格（`PCM_001_Temp` 的 `SK_PCM_001_Temp` 把脸、发、五件都合在一起）。
+- 画廊 `collect_manifest.py` 补了 12 个模型的说明；`html/index.html` 重生成，30 张卡。
+
+### 验证
+
+- 先 `-NoBlend` 顺序导 26 个包，再 3 路并行 Blender，12 个全部 rc=0，0 贴图未解析。逐张看过预览：
+  三套男装（面甲 + 锁子甲、全罩盔板甲、羽饰盔 + 红披风）颜色对；四只豺狼人毛/皮/甲/眼都有色，
+  狗头人首领重甲 + 钩爪正常。
+- 已知：两只哥布林（同一个 25 万顶点网格）和 `Male_Knight` 在包里**没有材质**（`material_0/1`、顶点色全白），
+  是白模；`NPCM_RoyalArmy_sword` 只有一把剑；`Gnoll_Type2_Named_Boss_03` 的弓有自己的 16 根骨，留在原点；
+  毛发 `Brightness` 语义没有对照，Carminegust 红毛偏粉。狗头人另外 6 条只有武器，没导。
+
 ## 2026-09-19 — Rise of Eros：把「套装」(suit) 拼装成一个模型（林恩·冷艳主管）
 
 ### 新增
