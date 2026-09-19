@@ -14,6 +14,45 @@
 
 ---
 
+## 2026-09-19 — The First Descendant（第一后裔）：查看列表 + 导出脚本
+
+### 新增
+
+`scripts/firstdescendant/`（新目录）：Nexon UE5 扫射游戏 The First Descendant（内部代号 M1）的
+模型查看 + 导出。游戏是单个 IoStore 容器（utoc v5 / pak v11 / Oodle / 目录索引 AES 加密）。
+
+- `list_models.py`：解密并读 `*.utoc` 目录索引（复用 scripts/vindictus 的解密器，同为 Nexon UE5），
+  编目 **2067 个模型**：33 个后裔（含 Ultimate）、1075 套皮肤、201 怪、54 Boss、99 NPC、250 武器、
+  248 配饰、宠物/载具。`--kind` / `--char` / `--resolve` / `--json` / `--raw` 筛选。
+- `export_model.ps1` + `build_blend.py`：解析 → UE Viewer(`-game=first`) 导 PSK/PSKX → Blender 合骨架、
+  渲预览、存 `.blend`，产物在 `D:	fd_exportslend\<id>\`。
+- `find_aes_key.py`：从 shipping exe 重建 AES key（Nexon 用8 条 `mov imm32` 运行时拼出，非明文）。
+
+### 用户如何操作
+
+```
+cd scriptsirstdescendant
+python .ind_aes_key.py --out D:	fd_exports\_keyses_key.txt   # 一次性，~60s
+python .\list_models.py --kind descendant
+.\export_model.ps1 Bunny
+```
+
+### 实现原理与坑
+
+- **贴图是 UE5 虚拟贴图（Virtual Texture），UE Viewer 解不了**（报 `it's a virtual texture` 跳过），
+  所以 umodel 这条线只出几何 + 骨架的白模。完整贴图需 FModel + usmap（同 FF7 Rebirth 那条线，未接）。
+- 后裔代号 → 名字来自 `PC/MESH/PRESET/<名字>` 文件夹；默认装是一整块合并网格（身体+头+头发+脸），
+  导出最干净；皮肤 = `SKIN/<类别>/<序号>/..._(BODY|HEAD)` + 该后裔的 Face。
+- 怪/Boss/武器按主网格逐个编目（A001/B001 算不同模型），`Parts/` 归为 extras（`-IncludeExtras` 才带）。
+- Blender 坑：跨 edit-mode 切换后不能再读骨引用（会 `UnicodeDecodeError`），合骨前先把骨名/坐标拉成普通值。
+- 已知局限：白模；个别皮肤的头部配件（只挂 socket 的小件）会掉在脚边（身体+脸正确）。
+
+### 验证
+
+后裔 Bunny（270 骨 / 111438 顶点，单块合并网格）、皮肤 Bunny_CMN_001（Body+Head+Face → 348 骨）、
+怪 MOB_CMN_1001_A001（101 骨）均一条命令跑通，渲图目检。key 已由 find_aes_key.py 重建（只存
+`D:	fd_exports\_keyses_key.txt`，不入仓）。
+
 ## 2026-09-19 — Rise of Eros：把「套装」(suit) 拼装成一个模型（林恩·冷艳主管）
 
 ### 新增
