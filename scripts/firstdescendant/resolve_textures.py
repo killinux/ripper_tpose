@@ -52,6 +52,14 @@ GAME_TAG = "GAME_TheFirstDescendant"
 # ``PC_007_A0101_Face_C1``, and without it her face has no colour at all.
 TEXTURE_RE = re.compile(r"(_C|_N|_P|_ID|_E|_FX|_M|_A|_D|_MK|_AO|_ORM|_Mask|_R|_Alpha|_d|_n)\d?$")
 
+# Lash and brow instances set their ``texture`` parameter to None and inherit the strand
+# atlas from the master material, so their name map lists no texture at all and the card
+# would render as a flat tinted quad.  These are the master's two atlases.
+PARENT_ATLAS = (
+    (re.compile(r"eyel(ea|a|e)sh|_lash", re.I), "T_eyelash2_D"),     # "Eyeleash" is theirs too
+    (re.compile(r"eyeb(ro|lo)w|(^|_)fur(_\d+)?_m[il]$", re.I), "T_eyebrow_d"),
+)
+
 
 def read_key(path: str) -> str:
     key = os.environ.get("TFD_AES_KEY", "") or open(path, encoding="utf-8").read().strip()
@@ -125,6 +133,14 @@ def main() -> int:
                     entry["textures"][n] = tp
                     if tp:
                         tex_pkgs.add(tp)
+            if not any(entry["textures"].values()):
+                for pattern, atlas in PARENT_ATLAS:
+                    if pattern.search(mat):
+                        tp = find_pkg(atlas)
+                        if tp:
+                            entry["textures"][atlas] = tp
+                            tex_pkgs.add(tp)
+                        break
             slots.append(entry)
         parts.append({"pskx": pskx, "slots": slots})
         print("[tex] %s: %d slots, %d material packages found"

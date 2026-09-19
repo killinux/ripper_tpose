@@ -130,7 +130,7 @@ MediaFire 文件 `Mappings.usmap`（1.46 MB）。**它是发售版的映射，�
 | `_FX` | 自发光遮罩（R） | × 材质里的 `Emissive_col` |
 | `Female/Male_HairTex_NNN_P` | 共享发丝图：A=透明度，G=发根→发梢，R/B=深度/AO | 颜色 = `Hair_RootColor`→`Hair_TipColor` 按 G 混合 |
 | 眼睛 | `T_Sclera_D` + `T_Veins_D` + `T_Eye_N`；虹膜在游戏里是程序化（MetaHuman 参数：`IrisColor1U/V` 查 `iris_color_picker`） | 巩膜贴图 + 程序化虹膜圆盘（颜色目前是近似棕色，还没接取色图） |
-| 眉/睫 | 父材质的 `T_eyebrow_d` / `T_eyelash2_D` | 深色 + alpha |
+| 眉/睫 | 母材质共享的 `T_eyebrow_d` / `T_eyelash2_D`：**发丝形状在 alpha 通道里**，RGB 是一张几乎均匀的灰卡 | 接 **Alpha → Alpha**（接 Color 会让整块面片半透明，眉毛变成一坨黑楔子）。颜色：睫毛恒为近黑；眉毛取本角色 `Hair_RootColor`（有两套头发时取最暗的） |
 | `*Glass_MI` | 面罩 | 参数 `Color`/`Opacity`/`Roughness` → 半透明 |
 | `EyeOCC` / `TearLine` | 眼部遮挡壳 / 泪线 | 全透明 |
 
@@ -142,7 +142,12 @@ MediaFire 文件 `Mappings.usmap`（1.46 MB）。**它是发售版的映射，�
 - 槽名里可以夹序号：`PC_018_A_EYE_000_MI` 是眼球，按 `_eye_mi$` 判会漏 → 另加「有 `Sclera` 贴图就是眼球」；
 - `Eyeblow` = 眉毛，`Eyeleash` = 睫毛，`Fur` 也是眉毛（贴 `T_eyebrow_d`）；
 - `Head_999_MI` 这种没带 hair 字样的按 `HairTex` 贴图识别；
-- 名字像贴图但容器里根本没有同名包的（`Face_Dyed_Mask`），一律当参数名丢掉，不算「没解析到」。
+- 名字像贴图但容器里根本没有同名包的（`Face_Dyed_Mask`），一律当参数名丢掉，不算「没解析到」；
+- 眉/睫的材质实例把 `texture` 参数置为 None、**从母材质继承发丝图**，所以它的名字表里一张贴图都没有
+  → `resolve_textures.py` 按材质名补上母材质那两张（`T_eyelash2_D` / `T_eyebrow_d`）。
+- **`fresnel_col` 不是发丝颜色**，是掠射角的边缘染色。美术偶尔会把它设成亮桃色（Gley/Nell 的睫毛、
+  Bunny/Hailey 的眉毛），当底色用就渲出一圈白睫毛。发丝底色写死在母材质里读不到，所以睫毛取近黑、
+  眉毛取角色自己的 `Hair_RootColor`。
 
 ## 多部件怎么合
 

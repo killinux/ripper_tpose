@@ -57,6 +57,7 @@ if SPEC.get("materials") and os.path.isfile(SPEC["materials"]):
         MATERIALS[os.path.normcase(os.path.normpath(part["pskx"]))] = part["slots"]
 
 MASK_CLIP = 0.33
+LASH_COLOR = (0.05, 0.035, 0.025, 1.0)      # lashes are near-black on every descendant
 report = {"id": MODEL_ID, "parts": [], "materials": {}, "missing_textures": [], "warnings": []}
 
 
@@ -358,6 +359,24 @@ def classify(mat_name, textures):
     return "cloth"
 
 
+_hair_root = []
+
+
+def hair_root_color():
+    """The character's hair colour, for the eyebrows.  Every hair instance carries
+    Hair_RootColor; a model can have two (Luna's Hair_A/Hair_B), so take the darkest -
+    brows are never lighter than the hair."""
+    if not _hair_root:
+        for slots in MATERIALS.values():
+            for s in slots:
+                col = read_props(s.get("props")).get("Hair_RootColor")
+                if col:
+                    _hair_root.append(tuple(col))
+        _hair_root.sort(key=lambda c: c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722)
+        _hair_root.append(None)          # sentinel so an empty model is only scanned once
+    return _hair_root[0]
+
+
 def build_material(mat, entry, mesh_name):
     textures = {k: v for k, v in (entry.get("textures") or {}).items()}
     props = read_props(entry.get("props"))
@@ -489,14 +508,23 @@ def build_material(mat, entry, mesh_name):
         return info
 
     if kind in ("eyebrow", "eyelash"):
-        strand = pick(textures, "eyebrow_d", "_d", "_D", "_C")
-        col = props.get("fresnel_col", (0.05, 0.035, 0.025, 1.0))
+        strand = pick(textures, "eyebrow_d", "eyelash2_D", "_d", "_D", "_C")
+        # NOT fresnel_col: that is the shader's grazing-angle rim tint, and where an artist
+        # set it (Gley/Nell's lashes, Bunny/Hailey's brows) it is a bright peach that turned
+        # the strands white.  The strand colour is baked into the master material, so take
+        # the character's own hair for the brows and keep the lashes near-black.
+        col = LASH_COLOR if kind == "eyelash" else (hair_root_color() or LASH_COLOR)
         bsdf.inputs["Base Color"].default_value = (col[0], col[1], col[2], 1.0)
         bsdf.inputs["Roughness"].default_value = 0.6
         bsdf.inputs["Specular"].default_value = 0.2
         if strand:
-            t = tex_node(tree, load_image(strand, non_color=True, packed=True), (-900, 0), "Strand alpha")
-            tree.links.new(t.outputs["Color"], bsdf.inputs["Alpha"])
+            img = load_image(strand, non_color=True, packed=True)
+            t = tex_node(tree, img, (-900, 0), "Strand alpha")
+            # the strand shape lives in the atlas's ALPHA channel; its RGB is a nearly
+            # uniform grey card, so feeding Color to Alpha covers the whole quad and the
+            # brow comes out as a solid black wedge instead of hairs
+            tree.links.new(t.outputs["Alpha"] if img.depth >= 32 else t.outputs["Color"],
+                           bsdf.inputs["Alpha"])
             mat.blend_method = "HASHED"
             mat.shadow_method = "HASHED"
         else:
