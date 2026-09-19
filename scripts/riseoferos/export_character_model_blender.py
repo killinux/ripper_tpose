@@ -1290,8 +1290,24 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
         except Exception as exc:
             print("[roe pmx] regroup after 両目: %s" % exc)
 
+    # Expressions: mmd_face_morphs (scripts/blender_addons) builds the standard
+    # MMD set - 37 bone morphs over eyelids, brows, jaw, lips, tongue and teeth,
+    # sized in eye spacings and honouring all three ROE spellings.  The nine-
+    # morph add_face_morphs below is the fallback when the package is missing.
+    face_style = ""
     try:
-        morphs = add_face_morphs(root, arm)
+        from mmd_face_morphs import api as face_api
+    except ImportError:
+        face_api = None
+    try:
+        if face_api is not None:
+            face_report = face_api.setup(root, log=lambda line: print("[roe pmx] face: " + line))
+            morphs = face_report["morphs"]
+            face_style = face_report["style"]
+            for name, reason in face_report["skipped"][:3]:
+                print("[roe pmx] face morph %s skipped: %s" % (name, reason))
+        else:
+            morphs = add_face_morphs(root, arm)
     except Exception as exc:
         print("[roe pmx] face morphs failed: %s" % exc)
         morphs = []
@@ -1311,6 +1327,7 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
         "helper_grants": helper_grants,
         "stray_weights": stray_weights,
         "face_morphs": morphs,
+        "face_style": face_style,
         "unmapped_slots": missing_optional,
     }
 

@@ -12,7 +12,7 @@ PMX 的骨骼 morph 正好能表达这种脸，VMD 里的表情键也就能驱�
 scripts/blender_addons/mmd_face_morphs/
   __init__.py     插件入口：侧栏 MMD 页签 → Face Morphs 面板
   faces.py        认脸骨：三套拼法 → 角色（role）；顺带算出坐标系（中线/眼距/朝向）；找跟随骨
-  expressions.py  配方：37 个标准表情，用 pitch/roll/yaw/move 四种动作描述
+  expressions.py  配方：37 个标准表情 + 21 个 Tda 式补充，用 pitch/roll/yaw/move 四种动作描述
   build.py        配方 → mmd_tools bone morph；预览摆骨 / 复位；管住 morph slider
   api.py          脚本入口 setup(obj, ...)，批处理用
   tools/
@@ -28,7 +28,7 @@ scripts/blender_addons/mmd_face_morphs/
 
 面板在 3D 视图侧栏（N）的 **MMD** 页签 → **Face Morphs**：
 
-1. 选中模型任意对象，**Analyze face** —— 报告认出的拼法、找到几根脸骨、37 个表情里
+1. 选中模型任意对象，**Analyze face** —— 报告认出的拼法、找到几根脸骨、58 个表情里
    有几个能建；没有眼睛/眼皮/眉毛成对骨可量尺寸的模型会直接说明「什么都不会建」。
    控制台还会打出每个 role 对应哪根骨、哪些 role 缺、哪些骨是跟随骨。
 2. 勾选要建的类别（眉 / 目 / 口），需要的话调四个幅度倍率（Eyes / Brows / Mouth / Tongue，
@@ -130,6 +130,12 @@ report = api.setup(root_or_any_object,
 字节完全一致，差一个字（半角 `ｳｨﾝｸ` vs 全角 `ウィンク`）在 MMD 里就是静默失效。
 にやり２ 是对称的、更用力的 にやり，不是单边——单边 morph 都在名字里带 右 或 ２右。
 
+另有 **21 个 Tda 式补充**（`EXTRAS`）：拼法别名 ウィンク２右（全角）/ ジト目，眼 下眼上 /
+怒り目 / 悲しむ / なごみ左 / なごみ右，口 あ２ / ん / ワ / 口横狭め，以及单侧眉毛
+困る・にこり・怒り・上・下 各 左/右。它们是测试舞蹈 VMD 登记过而标准集没有的名字里能用骨
+做出来的那部分；单侧版就是同一配方限定一侧。VMD 里没有的名字不算错，多一个只是多几根骨的
+偏移量。
+
 标定值（都是渲出来看过定的）：
 - 眼皮闭合 **33°**，下眼皮承担 45%；任何目 morph 满足 `上 + 0.45×下 ≤ 1.0` 个眨眼量，
   否则上下眼皮互穿（はぅ 就压到了 0.85 + 1.3）。
@@ -154,10 +160,10 @@ report = api.setup(root_or_any_object,
 mmd_tools 的 root 找，不是「第一个骨架」——被 morph slider 碰过的 .blend 里
 `.dummy_armature` 排在最前面。
 
-b14_outfit1 上的验收结果：37 个全部建出、0 个跳过；导出 PMX 再用 `mmd_tools.core.pmx.load`
-读回来，37 个骨骼 morph 分类正确（眉 6 / 目 11 / 口 20）、没有越界的骨引用、
-`表情` 显示枠列了全部 37 个（MMD 的表情面板才有东西）、`AC jaw` 在 あ 里跟下巴同转 18°
-并带位移补偿。a01（小写拼法）和 b01（b01 拼法）各建出 37 个，眨眼、单眼 wink 的左右、
+b14_outfit1 上的验收结果：58 个全部建出、0 个跳过；导出 PMX 再用 `mmd_tools.core.pmx.load`
+读回来，骨骼 morph 分类正确（标准 37 个是眉 6 / 目 11 / 口 20）、没有越界的骨引用、
+`表情` 显示枠列了全部（MMD 的表情面板才有东西）、`AC jaw` 在 あ 里跟下巴同转 18°
+并带位移补偿。a01（小写拼法）和 b01（b01 拼法）各建出同样多，眨眼、单眼 wink 的左右、
 あいうえお、眉毛喜怒都渲图确认过。
 
 ## 5. 与 mmd_cloth_physics 的关系
