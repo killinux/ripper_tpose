@@ -214,7 +214,17 @@ if not NO_PREVIEW:
     preview = os.path.join(OUT_DIR, "preview.png")
     render(preview, center, height * 1.28, (900, 1400), forward)
     report["preview"] = preview
-    head = base_arm.data.bones.get("head") or base_arm.data.bones.get("Head")
+    # TFD rigs are 3ds Max Biped: the head bone is "Bip001-Head" (UE-style
+    # "head" is tried first for any non-Biped part).
+    head = None
+    for candidate in ("head", "Head", "Bip001-Head", "Bip001 Head"):
+        head = base_arm.data.bones.get(candidate)
+        if head is not None:
+            break
+    if head is None:
+        import re as _re
+        head = next((b for b in base_arm.data.bones
+                     if _re.search(r"(^|[-_ ])head$", b.name, _re.IGNORECASE)), None)
     if head is not None:
         head_pos = base_arm.matrix_world @ head.head_local
         render(os.path.join(OUT_DIR, "preview_face.png"),
