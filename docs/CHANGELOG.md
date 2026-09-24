@@ -14,6 +14,34 @@
 
 ---
 
+## 2026-09-24 — Stellar Blade：Nexus Mod「Vindictus Fiona」装进游戏并导出 Blender
+
+### 新增 / 变化
+
+- 新增 `scripts/stellarblade/build_standalone.py`：按 UE Viewer 的 `.mat` 精确重建一个网格的材质
+  （Diffuse / Normal / ARM；镂空按 alpha 实际数值判断；纯黑代理槽拆成隐藏对象）。两种用法：
+  `--psk` 单独出一个自带整颗头的 Mod 网格；`--blend ... --object Eve_Body_Mesh_01` 给
+  `validate_eve.py` 组装好的场景只重做服装网格的材质。
+- 装了 [mods/1145](https://www.nexusmods.com/stellarblade/mods/1145)（zdimwit）到 `~mods`：它顶替
+  **CH_P_EVE_09（Planet Diving Suit 7th）**，外加 16 / 21 的几个材质实例。以后导原版 09 前要先挪开。
+
+### 用户如何操作
+
+见 `scripts/stellarblade/README.md`「Nexus 服装 Mod」一节（六步）。
+
+### 实现原理与坑
+
+- Mod 的 `face` 槽只是脖子过渡、`head` 槽是发冠——游戏里仍是 Eve 的脸和马尾，所以按普通服装组装；
+  第一次把它当整人单独出，得到的是一个没头的人。
+- `validate_eve.py` 按材质名猜贴图，碰到 `body` / `amt` 这种通用名会猜错（腿上黄粉花纹、裙子全黑）；
+  改由 `.mat` 精确接图。
+- Biped 骨名带连字符（`Bip001-L-Toe0`），按 `endswith("L Toe0")` 找不到脚趾，前方判错，渲出来是侧身。
+
+### 验证
+
+正身与脸部预览目检：Eve 的脸、马尾与 Mod 的发冠、耳坠、项链、白色仙女裙、蕾丝手套、臂环、粉色高跟
+对位正确；`package_outfits.py` 打包 377 MB，30 张贴图全部在包内。
+
 ## 2026-09-19 — The First Descendant：睫毛和眉毛（一圈白睫毛的三个成因）
 
 ### 新增 / 变化
