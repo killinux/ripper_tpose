@@ -184,6 +184,35 @@ python package_outfits.py --index                                             # 
 仍按共有的 `Ab-TL-HairB01` 原生对齐。产物：
 `D:\stellarblade_exports\blender\Eve_Nude_Barefoot.blend`。
 
+## Nexus 服装 Mod（`build_standalone.py`，2026-09-24：Vindictus Fiona）
+
+以 [stellarblade/mods/1145「Vindictus Fiona」](https://www.nexusmods.com/stellarblade/mods/1145)（zdimwit）为例，
+一个 Mod = 一套 IoStore 三件套（`FionaV_p.pak/.utoc/.ucas`）。流程：
+
+1. **装进游戏**：三件套拷到 `SB\Content\Paks\~mods\`。zip 原件留在下载目录不动，先拷到
+   `D:\stellarblade_exports\mods\<名字>\` 再解。
+2. **看它顶替了什么**：`python list_models.py --paks <解压目录> --all-files --path-filter ''`。
+   Mod 的挂载名可以是任意的（这里是 `test/Content/...`），IoStore 按包路径哈希覆盖，所以看
+   `Art/Character/PC/CH_P_EVE_XX` 那一段即可。Fiona 顶替的是 **CH_P_EVE_09（Planet Diving Suit
+   7th）**，另外改了 16 / 21 的几个材质实例。以后导原版 09 时要先把它从 `~mods` 挪开。
+3. **导出**：staging 目录里放 Mod 三件套 + 游戏的 `global.utoc/ucas`，
+   `umodel_stellar_blade_v6.exe -export -path=<staging> -game=ue4.26 -noanim -psk -png -out=<...> "*"`
+   → `umodel_mod_exports\<名字>\`（42/42 对象，2 秒）。
+4. **判断头归谁**：按材质槽算包围盒。Fiona 的 `face` 槽只在 z 140–154（脖子/下颌过渡），`head` 槽是
+   发冠和羽毛——**没有脸**，游戏里仍显示 Eve 的 Face_003 和发型。这种就先用 `validate_eve.py` 按普通
+   服装组装（Face_003 + 发型 + 马尾挂到 Mod 骨架上）。真正自带整颗头的 Mod 则直接
+   `build_standalone.py --psk ...` 单独出，避免两个头。
+5. **重建材质**：`validate_eve.py` 按材质名猜贴图，Mod 作者的材质名是 `body` / `face` / `amt` / `phy`
+   这种通用名，会猜成别的图（腿上一片黄粉花纹、裙子全黑）。`build_standalone.py --blend <组装好的
+   .blend> --object Eve_Body_Mesh_01` 只对这个网格按 UE Viewer 的 `.mat` 精确接图：Diffuse（alpha 真有
+   镂空才接 Alpha，HASHED）、Normal（DirectX 翻绿）、`Other[0]=*_ARM`（G 粗糙 / B 金属）；颜色图是纯黑
+   的槽（`phy` 物理代理，贴 `a.png`）拆成隐藏对象，不删。
+6. `package_outfits.py -- --only Eve_Mod_<名字> --force` 打成自足文件夹。报「validation meshes=5 but
+   blend has 6」是预期的——多出来的就是那个隐藏的代理对象。
+
+产物：`D:\stellarblade_exports\packages\Eve_Mod_VindictusFiona\`（377 MB，30 张贴图 + 15 张附带）。
+朝向：Biped 骨名带连字符（`Bip001-L-Toe0`），按「脚趾指向」判前方时要按词匹配，不然人是侧着的。
+
 ## `validate_eve.py`
 
 脚本导入 Eve 的标准身体、完整 Face_003、默认发型和独立长马尾。身体/头发 PSK 会检查
