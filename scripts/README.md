@@ -15,6 +15,7 @@
 | Virt-A-Mate 1.22 | Unity 资源包 + `.var`（DAZ Genesis 2 人体 / 自定义网格） | [`vam/`](vam/) | `vam\export_vam_models.ps1` |
 | Vindictus: Defying Fate（2024-03 Pre-Alpha） | Unreal 5.3 IoStore（`.utoc/.ucas`，索引 AES 加密） | [`vindictus/`](vindictus/) | `vindictus\export_model.ps1` |
 | NARAKA: BLADEPOINT（永劫无间） | Unity 2019.4 AssetBundle（改头的 UnityFS，不加密） | [`naraka/`](naraka/) | `naraka\list_models.py` / `export_model.py` |
+| HoneySelect 2 (Libido DX) | Unity AssetBundle（`abdata\`，不加密）+ 角色卡 PNG | [`honeyselect2/`](honeyselect2/) | `honeyselect2\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -82,6 +83,15 @@ PSK + PNG + 材质参数，`build_blend.py` 把各部件的骨架子集并成一
 头发/眼睛/皮肤/服装材质，出 `.blend` + 预览；`vindictus\html\index.html` 是画廊。详见
 [`vindictus/README.md`](vindictus/README.md)。
 
+HoneySelect 2 (Libido DX) 的 `abdata\` 是不加密的 Unity AssetBundle，`honeyselect2/` 只用
+UnityPy：`list_models.py` 读 `list\characustom` 里 MessagePack 编码的物品清单，列出男女底模、
+31 类共 812 件带网格的物品（脸型 / 衣服 / 头发 / 饰品）和 `UserData\chara` 的角色卡（可出
+JSON / CSV / 带游戏缩略图的 HTML）；`export_model.py` 按游戏的拼装规则（头挂 `cf_J_Head_s`、衣服按骨名
+并到身体骨、头发挂 `N_hair_Root`、饰品挂 `N_*`）把单件、底模或整张角色卡（`--nude` 可选）拼成一副骨架，
+蒙皮烘到静止姿势，交给 `build_blend.py` 出 `.blend`（+ `--fbx`）与预览。详见
+[`honeyselect2/README.md`](honeyselect2/README.md) 与
+[HoneySelect 2 提取](../docs/honey-select-2-extraction.md)。
+
 NARAKA: BLADEPOINT（永劫无间）的 StreamingAssets 是 12,818 个哈希命名的 bundle——改了文件头的 UnityFS
 （签名、LZ4 编号 6、4 KB 对齐），没加密。`naraka/` 只用 UnityPy + lz4：`naraka_bundle.py` 按需解压，
 `naraka_manifest.py` 读 `AppRes.info` 清单还原资源路径，`list_models.py` 列 3,578 个模型（29 位英雄的 834 套外观、
@@ -109,5 +119,5 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。

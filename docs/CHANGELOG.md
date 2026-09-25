@@ -14,6 +14,35 @@
 
 ---
 
+## 2026-09-25 — NARAKA: BLADEPOINT：全部女性外观批量导出 + 并行批导脚本
+
+### 新增 / 变化
+
+- 新增 `scripts/naraka/batch_export.py`：按家族切成每批不超过 12 套，每批一个 `export_model.py` 进程，默认 8 路并行；
+  空闲内存低于 `--reserve` 时不开新批，已导出的跳过，失败的最后各重试一次；汇总写 `_logs\batch_summary.json`，
+  列表页在全部结束后写一次。
+- `export_model.py` 加 `--no-html`（并行的各批不同时写同一个列表页）。
+- 17 位女性英雄的 495 套外观全部导出到 `E:\game_export\NARAKA`（`.blend` + 四视图预览 + 列表页）。
+- 文档：`scripts/naraka/README.md` 新增「并行批量导出」、补验证结果和「稀有」变色皮肤的限制；
+  `docs/naraka-bladepoint-extraction.md` §4 补批量导出的内存问题，§6 写稀有皮肤的规则文件结构。
+
+### 用户如何操作
+
+`python scripts\naraka\batch_export.py --sex f --out E:\game_export\NARAKA`（`--dry-run` 只看分批；`--jobs` / `--chunk` /
+`--reserve` 调并行度和内存；中途断了原样再跑一次即可）。
+
+### 实现原理与坑
+
+- 一个进程会留着打开过的全部 bundle，内存随导出数量上涨，所以分批、多进程；12 套一批峰值 2.25 GB。单个进程是
+  单线程 Python，8 路并行时 CPU 也只占 2 成左右。
+- 「稀有」变色皮肤（`assets/design/rareskin/<外观>_rule.asset`，女性 11 套）的颜色在游戏里按每件物品的 8 位编号
+  抽取，规则经各皮肤自己的 shadergraph 生效，没有还原，导出的是底色（偏灰白）。
+
+### 验证
+
+495 / 495 成功，26 分钟，共 41 GB。只有沈妙 `lv_s14` 的发型有 8 根骨按最近位置配上（偏 4.2–4.4 cm，预览看不出）。
+按家族拼的 17 张缩略图总览（`_list\overview\`）逐张看过，没有坏的。
+
 ## 2026-09-25 — Stellar Blade：Gantz Reika（CNS mod）导出 + PMX 头发物理修复 + 画廊列出 XPS / PMX
 
 ### 新增 / 变化

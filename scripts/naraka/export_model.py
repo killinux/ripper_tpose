@@ -4,12 +4,12 @@
     python export_model.py --outfit ch_f_ming_haikou_lv_s0 --hair ch_f_hair_05
     python export_model.py --outfit ch_m_ming_haoxia_lv_s1 --no-hair --no-face
     python export_model.py --family ch_f_ming_haikou                  # every outfit of a family
-    python export_model.py --all-outfits [--sex f]                    # all 834 (hours)
+    python export_model.py --all-outfits [--sex f]                    # all 834 (hours; batch_export.py runs it in parallel)
     python export_model.py --prefab mo_pve_a_bigstonewolf_01          # any prefab by name or asset path
     python export_model.py --group full_body                          # a whole list group
 
 Common: --fbx, --keep-fx, --no-preview, --no-blend (scene.json + parts + textures only), --force,
---ui (use the *_ui copies), --out D:\\naraka_exports, --blender <exe>.
+--ui (use the *_ui copies), --no-html, --out D:\\naraka_exports, --blender <exe>.
 
 Output: <out>\\outfits\\<name>\\<name>.blend, _preview/_side/_back/_face.png, scene.json,
 parts\\*.npz, textures\\*.png, export.json; standalone prefabs go to <out>\\items\\<name>.
@@ -147,6 +147,7 @@ def main():
     ap.add_argument("--no-preview", action="store_true")
     ap.add_argument("--no-blend", action="store_true")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--no-html", action="store_true", help="leave <out>\\_list\\index.html alone")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--game-data", default=naraka_env.STREAMING)
@@ -184,7 +185,8 @@ def main():
             stats["failed"] += 1
             print("  FAILED: %s" % exc)
             traceback.print_exc()
-    write_html(os.path.join(args.out, "_list", "index.html"), [i for i in catalog if not i.ui], args.out)
+    if not args.no_html:
+        write_html(os.path.join(args.out, "_list", "index.html"), [i for i in catalog if not i.ui], args.out)
     print("done: %(ok)d exported, %(skipped)d skipped, %(failed)d failed" % stats)
 
 

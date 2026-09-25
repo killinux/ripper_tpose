@@ -107,7 +107,25 @@ D:\naraka_exports\
 `export.json`。834 套外观里 398 套同款、191 套去后缀、240 套 `b0`、3 套家族第一款、2 套默认。
 
 第一次加载一个外观要 30–40 秒（它依赖的公共 bundle 有上百个，按需解压），同一进程里后面的每个
-只要几秒，所以批量导出一次跑完比逐个调用快得多。`export.json` 里的 `unresolved_bones` 应为 0。
+10–25 秒（公共部分已在内存，只解它自己的网格和贴图），所以批量导出一次跑完比逐个调用快得多。
+`export.json` 里的 `unresolved_bones` 应为 0。
+
+### 并行批量导出
+
+```bash
+python batch_export.py --sex f --out E:\game_export\NARAKA          # 全部女性外观（495 套）
+python batch_export.py --out E:\game_export\NARAKA                  # 全部 834 套
+python batch_export.py --family ch_f_ming_haikou --jobs 4
+python batch_export.py --sex f --out E:\game_export\NARAKA --dry-run    # 只看怎么分批
+```
+
+按家族切成每批不超过 12 套（`--chunk`），每批一个 `export_model.py` 进程，同时跑 `--jobs` 个（默认 8）。
+不让一个进程导到底，是因为进程会留着打开过的全部 bundle，内存随导出数量涨；12 套一批峰值约 2.2 GB。
+空闲内存低于 `--reserve`（默认 6 GB）时不开新批。已有 `.blend` 的跳过，中途断了原样再跑一次即可；
+失败的在最后各用一个新进程重试一次。日志在 `<out>\_logs\<家族>_<n>.log`，汇总在
+`<out>\_logs\batch_summary.json`（每套的状态、耗时、未解析骨数），列表页 `<out>\_list\index.html`
+在全部结束后写一次（各批进程带 `--no-html`，免得同时写一个文件）。`--fbx`、`--no-preview`、`--keep-fx`、
+`--force` 原样传给 `export_model.py`。
 
 ## 已知限制
 
@@ -115,9 +133,18 @@ D:\naraka_exports\
 - 脸是默认捏脸（`ch_f_face_battle` / `ch_m_face_battle`）+ 默认妆容；英雄各自的捏脸骨骼偏移和妆容没做。
 - 眼睛虹膜、眉毛是按着色器参数烘进贴图的近似；自发光（`_EmissionMap`）、布料/丝绸的特殊着色没做。
 - 部分人形 NPC（`mo_m_songbing_*` 等）自己不带脸，导出后是光头无五官。
+- 「稀有」变色皮肤（`assets/design/rareskin/<外观>_rule.asset`，女性 11 套：宁红夜 s19、胡桃 s24、崔三娘 s18、
+  迦南 s19、季莹莹 ss1、沈妙 s24、魏轻 ss1、顾清寒 ss1、殷紫萍 ss1、玉玲珑 ss1、jiantianshi s6）的颜色在游戏里由每件
+  物品的 8 位编号按规则抽出（`Mutatable/*` 着色器，`_pm` 分区），导出的是没按编号上色的底色。
 - 外观和发型是分开的物品，游戏里可以自由搭配；这里给外观配的是「同款」发型，想换用 `--hair`。
 
 ## 验证
 
 2026-09-25：32 个家族各一套外观 + 石狼、金色狂战士、宋兵、太刀、双节棍、默认发型，共 40 个，
 全部 `unresolved_bones` = 0，预览逐个看过。
+
+同日全部女性外观（17 个家族 495 套）：`batch_export.py --sex f --out E:\game_export\NARAKA`，8 路并行
+26 分钟，495 套全部成功，共 41 GB（每套平均约 85 MB，其中散装贴图约 25 GB）。单进程内存峰值 2.25 GB。只有
+沈妙 `lv_s14` 的发型有 8 根骨按最近位置配上（偏 4.2–4.4 cm，预览里看不出）。按家族拼的缩略图总览
+（`_list\overview\<家族>.jpg`）逐张看过：构图显得小的是宽袖 / 翅膀的横版预览，偏灰白的正好是上面那 11 套
+稀有变色皮肤。

@@ -157,6 +157,9 @@ u8, u16, u32 crc, string md5, string md5, u8      （固定 74 字节）
 - Python 里往文件写 `b"\0"` 的替换字符串时被转成了真 NUL，模块导不进（`source code string cannot contain null bytes`）。
 - 外观图标按物品 ID 命名，中文外观名在服务器物品表里，客户端没有 prefab ↔ 名字的映射；发型图标
   （`gui/art_source/icon_item/<发型 prefab 名>.png`）倒是按 prefab 名的。
+- 一个进程导到底会越来越占内存：`naraka_env.Game` 留着打开过的每个 bundle（UnityPy 的文件对象 + 每个
+  bundle 最多 64 个解压块的缓存），外观各有各的 bundle。所以 `batch_export.py` 按家族切成 12 套一批、每批一个
+  进程，8 个并行；单进程是单线程，8 个并行时 CPU 只占 2 成左右，瓶颈不在 CPU。
 
 ## 5. 家族 ↔ 英雄
 
@@ -171,3 +174,12 @@ u8, u16, u32 crc, string md5, string md5, u8      （固定 74 字节）
 
 英雄专属捏脸（`avatar_face_custom_*` 配置 + 脸骨偏移）和妆容、自发光、布料物理参数（`Cloth` 组件、
 `BoneShakeDriver`）、动画。
+
+「稀有」变色皮肤：`assets/design/rareskin/<外观>_rule.asset`（MonoBehaviour）按物品的 8 位编号分档
+（`dimensionIdConfigs`：第 0–3 位 0–4999 / 5000–7999 / 8000–9499 / 9500–9999 对应品质 2–5），`ruleGroups`
+（如「泡泡袖变色」）下每条规则（「区域R_颜色R」「区域R_透明度R」「区域R_金属度R」……）按编号区间给颜色 /
+数值（起止两端插值）。材质用 `LX22/Effect/Character/Mutatable/*` 或各皮肤自己的 shadergraph
+（`assets/1stparty/packageext/shadergraph/shaders/effect/character/mutatable/`，94 个），`_MainTex` 可以只存明暗
+（`_SEPARATE_LUMINACE`），颜色按 `_MutateMaskTexture`（`_pm`）分区上。规则 ↔ 材质属性的对应要逐个读 shadergraph，
+没做；这些外观导出的是底色。另有 `character/cloth_custom_data/<外观>/cloth_custom_data_NN.asset`（基础款 a0 / b0
+等的染色预设），默认外观的颜色已在贴图里，也没用上。
