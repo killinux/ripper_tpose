@@ -31,6 +31,14 @@ What is Eve-specific, done here before / after that sequence:
     blender2xps, gives shells alpha 0 and flat materials their own base colour, and sets MMD
     lighting values (diffuse 1, ambient 0.5, low specular - the defaults were diffuse 0.4 and
     specular 1.0: dark and oily);
+  * breasts: the skinned bones are ``Ab-L/R-Breast`` at the end of a four-bone UE
+    AnimDynamics chain (Spine2 -> Dm-*-Breast-Point -> Dm-*-Breast -> Ab-*-Breast-Link),
+    a spelling the ROE resolver does not know, and no tool in the chain builds bust
+    physics anyway (Convert_to_MMD5 only renames the chest slots; its physics half was not
+    ported), so they rode the torso rigidly.  They are put into the chest slots (-> 左胸 /
+    右胸) and add_breast_physics() gives each a sphere at the skin's weighted centre, mode
+    physics+bone, collision group 15 colliding with nothing, jointed at the bone head (inside
+    the rib cage) to the nearest torso body with a rotation spring and limits (BUST);
   * the face is a MetaHuman-style head with the 52 ARKit blendshapes and no face bones,
     so expressions are real VERTEX morphs: the standard MMD set (まばたき, あいうえお,
     笑い, ウィンク, 眉 ...) is mixed from ARKit shapes (RECIPES below), and the ARKit
@@ -99,6 +107,19 @@ RECIPES = [
 ]
 
 
+# Bust physics (MMD blender units = metres here; exported x12.5).  Common MMD practice:
+# a sphere per breast in mode 2 (physics + bone position), mass 1, damping 0.5/0.5, a
+# joint with no translation, rotation limits about the joint's world-aligned axes
+# (X pitch = bounce, Y roll, Z yaw = sway) and an angular spring pulling back to rest.
+# Collision group index 14 (PMX "15") collides with nothing, as in the reference model
+# Convert_to_MMD5's body colliders were calibrated against - no fighting with the arms.
+BUST = {
+    "bones": (("左胸", "Ab-L-Breast"), ("右胸", "Ab-R-Breast")),
+    "mass": 1.0, "lin_damp": 0.5, "ang_damp": 0.5, "friction": 0.5,
+    "limit_deg": (15.0, 5.0, 12.0), "spring": 120.0,
+    "group": 14, "min_weight": 0.3, "radius": (0.025, 0.08),
+}
+
 def load_worker():
     spec = importlib.util.spec_from_file_location("roe_char_worker", WORKER)
     if spec is None or spec.loader is None:
@@ -121,6 +142,7 @@ def prepare_eve(arm, meshes):
         raise RuntimeError("vertex groups did not follow the bone rename: %s" % missing[:5])
     height_cm = max((m.matrix_world @ Vector(c)).z for m in meshes for c in m.bound_box)
     dropped = drop_far_sockets(arm, meshes)
+    undeformed = undeform_sockets(arm, meshes)
     # face -Y: rotate about Z so the foot->toe direction points along -Y.  Both feet,
     # averaged: one foot alone is splayed outwards (~10 degrees on Eve's left foot)
     bones = arm.data.bones
@@ -136,11 +158,12 @@ def prepare_eve(arm, meshes):
     arm.scale = (0.01, 0.01, 0.01)                   # bake_rig_transforms applies both
     bpy.context.view_layer.update()
     return {"renamed_bones": renamed, "height_cm": round(height_cm, 2),
-            "turned_deg": round(math.degrees(turn), 1), "dropped_far_bones": dropped}
+            "turned_deg": round(math.degrees(turn), 1), "dropped_far_bones": dropped,
+            "undeformed_sockets": undeformed}
 
 
-def drop_far_sockets(arm, meshes, margin=0.25):
-    """Delete bone subtrees with no skin weight that reach outside the body box."""
+def weighted_bones(meshes):
+    """Names of the vertex groups that carry any skin weight."""
     weighted = set()
     for m in meshes:
         names = {vg.index: vg.name for vg in m.vertex_groups}
@@ -148,6 +171,73 @@ def drop_far_sockets(arm, meshes, margin=0.25):
             for g in v.groups:
                 if g.weight > 1e-4 and g.group in names:
                     weighted.add(names[g.group])
+    return weighted
+
+
+def undeform_sockets(arm, meshes):
+    """Mark skinless UE helpers as non-deforming so they cannot inherit weight.
+
+    Convert_to_MMD5 retires helper bones it does not keep and hands their weight to the
+    nearest bone head among ``use_deform`` bones - and every PSK bone comes in as
+    deforming.  ``Ab-NeckSub``'s neck weight went to ``Sc_LookAtTarget``, a look-at
+    socket parented to Root, so 94 vertices of the neck and collar stayed behind when
+    the head turned and stretched into a flat skin-coloured ruff.  Every non-Biped bone
+    that carries no skin of its own is set use_deform = False (it deforms nothing either
+    way; the flag only decides who may inherit weight)."""
+    weighted = weighted_bones(meshes)
+    # own skin only, not the subtree: the zero-weight links of the breast chain
+    # (Dm-*-Breast-Point, Dm-*-Breast, Ab-*-Breast-Link) sit exactly on the breast pivot, so
+    # the retired pectoral helper's weight went to Ab-L-Breast-Link - a bone that is not
+    # physics-driven - when only whole skinless subtrees were excluded
+    names = [b.name for b in arm.data.bones
+             if b.use_deform and not b.name.startswith("Bip001") and b.name not in weighted]
+    for name in names:
+        arm.data.bones[name].use_deform = False
+    return len(names)
+
+
+def premerge_spine_helpers(arm, meshes, slots):
+    """Merge the helpers Convert_to_MMD5 is about to retire into their parent bone.
+
+    Its classifier retires a skinned helper whose mapped ancestor is a spine bone and
+    that sits on the midline ('merge'), then hands the weight to the nearest bone
+    head - on Eve ``Ab-NeckSub`` / ``Ab-*-Shoulder0`` / ``Ab-*-Trape0``, and part of
+    the neck-base skin landed on the physics-driven side-hair bones ``Ab_Hair_ex*04``.
+    Without UE's drivers those helpers ride their parent (Spine2) rigidly, so giving the
+    weight to the parent is the exact rest-equivalent; the add-on then finds nothing
+    left to redistribute.  Runs after bake_rig_transforms (the classifier reads
+    armature-space X as left/right and metres)."""
+    from Convert_to_MMD5.helper_classifier import classify_helpers
+    from Convert_to_MMD5.convert.skirt import CLOTH_RE, HAIR_RE
+
+    weighted = weighted_bones(meshes)
+    merged = []
+    for name, kind in sorted(classify_helpers(arm.data, slots).items()):
+        if kind != "merge" or name not in weighted or CLOTH_RE.search(name) or HAIR_RE.search(name):
+            continue
+        parent = arm.data.bones[name].parent
+        while parent is not None and parent.name not in weighted and not parent.name.startswith("Bip001"):
+            parent = parent.parent
+        if parent is None:
+            continue
+        for m in meshes:
+            src = m.vertex_groups.get(name)
+            if src is None:
+                continue
+            dst = m.vertex_groups.get(parent.name) or m.vertex_groups.new(name=parent.name)
+            for v in m.data.vertices:
+                for g in v.groups:
+                    if g.group == src.index and g.weight > 0.0:
+                        dst.add([v.index], g.weight, "ADD")
+            m.vertex_groups.remove(src)
+        arm.data.bones[name].use_deform = False
+        merged.append("%s -> %s" % (name, parent.name))
+    return merged
+
+
+def drop_far_sockets(arm, meshes, margin=0.25):
+    """Delete bone subtrees with no skin weight that reach outside the body box."""
+    weighted = weighted_bones(meshes)
     pts = [m.matrix_world @ Vector(c) for m in meshes for c in m.bound_box]
     lo = Vector([min(p[i] for p in pts) for i in range(3)])
     hi = Vector([max(p[i] for p in pts) for i in range(3)])
@@ -283,6 +373,62 @@ def fix_pmx_materials(meshes, baked):
     return report
 
 
+def add_breast_physics(root, arm, meshes):
+    """One dynamic sphere + spring joint per breast bone.  Returns a report per side."""
+    from mmd_tools.core.model import Model
+
+    model = Model(root)
+    rigids = {o.mmd_rigid.bone: o for o in bpy.context.scene.objects
+              if getattr(o, "mmd_type", "") == "RIGID_BODY"}
+    report = []
+    for mmd_name, source_name in BUST["bones"]:
+        name = mmd_name if mmd_name in arm.data.bones else source_name
+        bone = arm.data.bones.get(name)
+        if bone is None or name in rigids:
+            continue
+        points, weights = [], []
+        for m in meshes:
+            vg = m.vertex_groups.get(name)
+            if vg is None:
+                continue
+            for v in m.data.vertices:
+                for g in v.groups:
+                    if g.group == vg.index and g.weight >= BUST["min_weight"]:
+                        points.append(m.matrix_world @ v.co)
+                        weights.append(g.weight)
+        if not points:
+            report.append("%s: no skin" % name)
+            continue
+        total = sum(weights)
+        centre = sum((p * w for p, w in zip(points, weights)), Vector()) / total
+        dists = sorted((p - centre).length for p in points)
+        lo, hi = BUST["radius"]
+        radius = min(hi, max(lo, 0.8 * dists[int(0.75 * (len(dists) - 1))]))
+        anchor = bone.parent
+        while anchor is not None and anchor.name not in rigids:
+            anchor = anchor.parent
+        if anchor is None:
+            report.append("%s: no torso body to hang on" % name)
+            continue
+        head = arm.matrix_world @ bone.head_local
+        rigid = model.createRigidBody(
+            shape_type=0, location=centre, rotation=(0.0, 0.0, 0.0), size=(radius, 0.0, 0.0),
+            dynamics_type=2, collision_group_number=BUST["group"],
+            collision_group_mask=[True] * 16, name=name, bone=name,
+            mass=BUST["mass"], friction=BUST["friction"], linear_damping=BUST["lin_damp"],
+            angular_damping=BUST["ang_damp"], bounce=0.0)
+        rigids[name] = rigid
+        lim = tuple(math.radians(a) for a in BUST["limit_deg"])
+        model.createJoint(
+            location=head, rotation=(0.0, 0.0, 0.0), rigid_a=rigids[anchor.name], rigid_b=rigid,
+            maximum_location=(0.0, 0.0, 0.0), minimum_location=(0.0, 0.0, 0.0),
+            maximum_rotation=lim, minimum_rotation=tuple(-a for a in lim),
+            spring_linear=(0.0, 0.0, 0.0), spring_angular=(BUST["spring"],) * 3, name=name)
+        report.append("%s: sphere r=%.1f cm at %.1f cm from the pivot, %d verts, joint to %s"
+                      % (name, radius * 100, (centre - head).length * 100, len(points), anchor.name))
+    return report
+
+
 def add_arkit_morphs(root, head):
     """Mix the ARKit shape keys into the standard MMD expression set (vertex morphs)."""
     keys = head.data.shape_keys.key_blocks
@@ -357,10 +503,15 @@ def main():
     if os.path.isfile(path):
         os.remove(path)
     slots, missing_optional = roe.resolve_roe_slots(arm)
+    for (mmd_name, source_name), side in zip(BUST["bones"], ("left", "right")):
+        if not slots.get("%s_chest_bone" % side) and source_name in arm.data.bones:
+            slots["%s_chest_bone" % side] = source_name          # -> 左胸 / 右胸
+            missing_optional = [m for m in missing_optional if m != "%s_chest_bone" % side]
     missing_required = [r for r in roe.ROE_MMD_REQUIRED_SLOTS if not slots[r]]
     if missing_required:
         raise RuntimeError("rig lacks joints the MMD conversion needs: %s" % ", ".join(missing_required))
     roe.bake_rig_transforms(arm, meshes)
+    report["premerged_helpers"] = premerge_spine_helpers(arm, meshes, slots)
     # measured after the cm -> m bake (world geometry unchanged), so both sides share units
     before = roe.edge_lengths(meshes)
     report["height_m"] = round(max((m.matrix_world @ Vector(c)).z for m in meshes for c in m.bound_box), 3)
@@ -369,9 +520,16 @@ def main():
     report["relaxed_groups"] = roe.relax_shoulder_weights(arm, slots)
     report["arm_down_deg"] = roe.apose_arms(arm, meshes, slots)
     skin_before = roe.snapshot_skin(arm, meshes)
+    names_before, weighted_before = set(arm.data.bones.keys()), weighted_bones(meshes)
     root, stats = roe.convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans, skin_before)
     report.update(stats)
+    # audit: a source bone that carried no skin and carries some now was handed someone
+    # else's weight by the conversion (the Sc_LookAtTarget ruff); must stay empty
+    report["stray_recipients"] = sorted((weighted_bones(meshes) - weighted_before) & names_before)
+    slot_names = {v for v in slots.values() if v}
+    report["retired_helpers"] = sorted(weighted_before - weighted_bones(meshes) - slot_names)
     report["dropped_marker_physics"] = drop_marker_physics()
+    report["bust_physics"] = add_breast_physics(root, arm, meshes)
     report["rigid_bodies"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY")
     report["joints"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "JOINT")
     report["distortion"] = roe.mesh_distortion(before, meshes)
