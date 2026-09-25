@@ -99,6 +99,9 @@ def collect(manifest_path, thumb_dir, force):
             "bones": entry.get("bones") or 0,
             "materials": entry.get("materials") or 0,
             "alpha": entry.get("alphaMaterials") or 0,
+            "xps": entry.get("xps") or "",
+            "pmx": entry.get("pmx") or "",
+            "pmx_previews": [tuple(x) for x in (entry.get("pmxPreviews") or [])],
             "warnings": list(entry.get("warnings") or []),
         })
     models.sort(key=lambda m: m["label"])
@@ -119,8 +122,12 @@ def render_card(model):
         badges += '<span class="badge badge-mod">%s</span>' % esc(KIND_LABELS[model["kind"]])
     if model["code"]:
         badges += '<span class="badge badge-code">%s</span>' % esc(model["code"].replace("CH_P_EVE_", ""))
+    for key, text in (("xps", "XPS"), ("pmx", "PMX")):
+        if model[key]:
+            badges += '<span class="badge badge-fmt">%s</span>' % text
 
-    search_blob = esc(" ".join([model["label"], model["char"], model["variant"], model["code"], model["blend"]]).lower())
+    search_blob = esc(" ".join([model["label"], model["char"], model["variant"], model["code"], model["blend"]]
+                               + (["xps"] if model["xps"] else []) + (["pmx", "mmd"] if model["pmx"] else [])).lower())
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["label"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
     return """      <article class="card" data-search="{search}" data-kind="{kind}" data-chr="{chr}" data-warn="{warn}">
@@ -136,7 +143,7 @@ def render_card(model):
             <dd>{meshes} 网格 · {vertices} 顶点 · {bones} 骨骼 · {morphs} 表情 · {size}</dd>
             <dt>blend</dt>
             <dd><a href="{blend_uri}" title="{blend}">{blend}</a>
-                <button class="copy" data-copy="{blend}">复制</button></dd>{package_row}
+                <button class="copy" data-copy="{blend}">复制</button></dd>{package_row}{format_rows}
           </dl>
         </div>
       </article>
@@ -151,7 +158,27 @@ def render_card(model):
            package_row=('\n            <dt>独立包</dt>\n            <dd><a href="%s" title="整个文件夹可拷给别人：blend + textures\\ + README">%s</a>'
                         '\n                <button class="copy" data-copy="%s">复制</button></dd>'
                         % (esc(file_uri(model["package"])), esc(model["package"]), esc(model["package"])))
-                       if model["package"] else "")
+                       if model["package"] else "",
+           format_rows=format_rows(model))
+
+
+def format_rows(model):
+    """XPS / PMX rows: the file, a copy button, and for PMX the read-back previews
+    (preview_pmx_blender.py: front / morphs / gaze / dance)."""
+    esc = html.escape
+    rows = ""
+    if model["xps"]:
+        rows += ('\n            <dt>XPS</dt>\n            <dd><a href="%s" title="XNALara / XPS，贴图在同一文件夹">%s</a>'
+                 '\n                <button class="copy" data-copy="%s">复制</button></dd>'
+                 % (esc(file_uri(model["xps"])), esc(model["xps"]), esc(model["xps"])))
+    if model["pmx"]:
+        shots = " · ".join('<a href="%s" target="_blank" rel="noopener">%s</a>' % (esc(file_uri(path)), esc(title))
+                           for title, path in model["pmx_previews"])
+        rows += ('\n            <dt>PMX</dt>\n            <dd><a href="%s" title="MMD 模型，textures\\ 在同一文件夹">%s</a>'
+                 '\n                <button class="copy" data-copy="%s">复制</button>%s</dd>'
+                 % (esc(file_uri(model["pmx"])), esc(model["pmx"]), esc(model["pmx"]),
+                    ('<br><span class="shots">回读预览：%s</span>' % shots) if shots else ""))
+    return rows
 
 
 def render(models, source_root):
@@ -160,6 +187,7 @@ def render(models, source_root):
     characters = len({m["char"] for m in models})
     warned = sum(1 for m in models if m["warnings"])
     mods = sum(1 for m in models if m["kind"] != "official")
+    mmd = sum(1 for m in models if m["xps"] or m["pmx"])
     kinds = [k for k in ("official", "dlc", "mod", "nude", "other") if any(m["kind"] == k for m in models)]
     per_char = {}
     for m in models:
@@ -175,7 +203,7 @@ def render(models, source_root):
         appendix=APPENDIX_HTML,
         generated=esc(generated), source_root=esc(source_root),
         total=len(models), characters=characters, size=human_size(total_bytes),
-        warned=warned, mods=mods, chips=chips, chr_options=chr_options, cards=cards)
+        warned=warned, mods=mods, mmd=mmd, chips=chips, chr_options=chr_options, cards=cards)
 
 
 APPENDIX_HTML = r"""
@@ -333,6 +361,31 @@ python .\package_outfits.py --index          # 不开 Blender，写 packages\REA
     </table>
     <p>存完会重新打开校验每张图都是 <code>//textures/</code> 且在包内，不通过的记进 package.json 的 <code>problems</code>。作者实测 148 个包（146 套 + 标准 Eve + 裸模）29.8 GB（平均 201 MB，其中 <code>textures\extra\</code> 占 16.5 GB），三路并行约 10 分钟。
       文件夹整个拷到任何装了 <b>Blender 3.6 或更新版</b>的电脑，双击 .blend 直接打开、视口切 Material Preview 就有贴图；选 <code>Eve_Armature</code> 进 Pose Mode 摆姿势，表情是头部物体 <code>Eve_Head_Mesh_01</code>（源包 Face_003）的 Object Data &gt; Shape Keys。</p>
+
+    <h3>Nexus 服装 mod → Blender / XPS / MMD（PMX）</h3>
+    <p>「Nexus 服装 mod」分类里的卡片（Vindictus Fiona = mod 1145，Gantz Reika A / B = mod 3561）另有 XPS 和 PMX 版本，卡片上带 <span class="badge badge-fmt">XPS</span> <span class="badge badge-fmt">PMX</span> 徽章。
+      详细步骤与每个坑见 <code>scripts\stellarblade\README.md</code>「Nexus 服装 Mod」「导出 MMD（PMX）」两节，这里只列命令。zip 原件留在下载目录不动，先拷到 <code>D:\stellarblade_exports\mods\&lt;名字&gt;\</code> 再解。</p>
+    <table>
+      <tr><th>mod 类型</th><th>怎么装 / 怎么导</th></tr>
+      <tr><td>顶替型（Fiona：顶替 09）</td><td>三件套放 <code>~mods</code>；导<b>原版</b>那套时要先挪走。<code>list_models.py --paks &lt;解压目录&gt; --all-files --path-filter ''</code> 看它顶替了哪个 <code>CH_P_EVE_XX</code></td></tr>
+      <tr><td>CNS 型（名字带 CNS，Gantz Reika）</td><td>整个文件夹（三件套 + <code>*.dekcns.json</code>）放 <code>~mods</code>，不顶替原版；游戏里要看到还得装 UE4SS for Stellar Blade 与 CNS（mod 1496），按 N 开换装菜单。
+        json 的 <code>OutfitPaths</code> 列出各变体网格，每个变体单独组装</td></tr>
+    </table>
+    <pre># 1 导出：staging 里放 mod 三件套 + 游戏的 global.utoc/ucas
+umodel_stellar_blade_v6.exe -export "-path=&lt;staging&gt;" "-game=ue4.26" -noanim -psk -png "-out=D:\stellarblade_exports\umodel_mod_exports\&lt;名字&gt;" "*"
+# 2 组装：validate_eve.py（参数同 export_outfit.ps1，--body 指 mod 的 PSK），输出 blender\Eve_Mod_&lt;名字&gt;.blend
+# 3 按 .mat 精确接图（_ARM / _ORM / 皮肤 _ORSS / 自发光）
+blender --background --factory-startup --python .\build_standalone.py -- --blend D:\stellarblade_exports\blender\Eve_Mod_&lt;名字&gt;.blend --object Eve_Body_Mesh_01 --tex-root D:\stellarblade_exports\umodel_mod_exports\&lt;名字&gt; --out D:\stellarblade_exports\blender --name Eve_Mod_&lt;名字&gt;
+# 4 独立包
+blender --background --factory-startup --python .\package_outfits.py -- --only Eve_Mod_&lt;名字&gt; --force
+# 5 XPS（blender2xps 仓库里跑）
+blender -b --python tools\batch_export_blends.py -- --out D:\stellarblade_exports\xps --scale 0.01 --bake AUTO D:\stellarblade_exports\packages\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.blend
+# 6 PMX + 回读验证（正面 / 表情 / 视线 / 跳舞四张预览）
+blender -b D:\stellarblade_exports\packages\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.blend --python .\export_pmx_blender.py -- --out D:\stellarblade_exports\pmx --model-name "Eve ..." --comment "出处……"
+blender -b --python .\preview_pmx_blender.py -- --pmx D:\stellarblade_exports\pmx\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.pmx</pre>
+    <p>PMX 报告要看的：<code>torn</code> 0、<code>grant_order_violations</code> 空、<code>weight_holes</code> 0、<code>stray_recipients</code> 空；回读的 <code>rest_drop_test</code> 里没有超过 3 cm 的链根。
+      2026-09-25 修过两处头发物理（三个模型都已按新脚本重导）：头皮头发的根骨 <code>Hair_Root</code> 原来是纯物理刚体，一开物理整片头发往下掉、跳舞时像光头 → 改成跟随骨骼；
+      马尾上段 <code>HairTail_Root</code> 静止时嵌在头部碰撞球里 9.4 cm → 取消这对碰撞。预览里的舞蹈按 30 帧 <code>margin</code> 导入，从静止姿势过渡——不加的话第一帧会把头发链拽乱，看起来像模型坏了，其实 MMD 里没事。</p>
   </section>
 """
 
@@ -400,6 +453,8 @@ main {{ padding: 22px 32px 48px; }}
 .badge-warn {{ color: var(--warn); background: var(--warn-bg); }}
 .badge-mod {{ color: var(--mod); background: var(--mod-bg); cursor: default; }}
 .badge-code {{ color: var(--accent); background: var(--bg); cursor: default; font-family: Consolas, monospace; }}
+.badge-fmt {{ color: var(--mod); background: var(--bg); border: 1px solid var(--mod-bg); cursor: default; }}
+.shots {{ font-size: 12px; color: var(--muted, #888); }}
 #chr {{ padding: 6px 8px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; }}
 dl {{ margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }}
 dt {{ color: var(--muted); font-size: 12px; }}
@@ -436,7 +491,8 @@ td code, li code, p code {{ font-family: Consolas, monospace; }}
   <div class="stats">
     <div class="stat"><b>{total}</b><span>已转模型</span></div>
     <div class="stat"><b>{characters}</b><span>服装编号</span></div>
-    <div class="stat"><b>{mods}</b><span>DLC / 裸模</span></div>
+    <div class="stat"><b>{mods}</b><span>DLC / Mod / 裸模</span></div>
+    <div class="stat"><b>{mmd}</b><span>有 XPS / PMX</span></div>
     <div class="stat"><b>{size}</b><span>blend 总体积</span></div>
     <div class="stat"><b>{warned}</b><span>有告警</span></div>
   </div>

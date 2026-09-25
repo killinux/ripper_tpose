@@ -62,6 +62,8 @@ main { padding: 22px 32px 48px; }
 .badge-warn { color: var(--warn); background: var(--warn-bg); }
 .badge-mod { color: var(--mod); background: var(--mod-bg); cursor: default; }
 .badge-code { color: var(--accent); background: var(--bg); cursor: default; font-family: Consolas, monospace; }
+.badge-fmt { color: var(--mod); background: var(--bg); border: 1px solid var(--mod-bg); cursor: default; }
+.shots { font-size: 12px; color: var(--muted, #888); }
 #chr { padding: 6px 8px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; }
 dl { margin: 0; display: grid; grid-template-columns: 42px 1fr; gap: 3px 10px; }
 dt { color: var(--muted); font-size: 12px; }
@@ -93,20 +95,21 @@ td code, li code, p code { font-family: Consolas, monospace; }
 <body>
 <header>
   <h1>Stellar Blade · Eve 服装导出总览</h1>
-  <div class="sub">生成于 2026-09-25 10:23 · 导出根目录 <code>D:\stellarblade_exports</code> ·
+  <div class="sub">生成于 2026-09-25 17:40 · 导出根目录 <code>D:\stellarblade_exports</code> ·
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
-    <div class="stat"><b>150</b><span>已转模型</span></div>
+    <div class="stat"><b>152</b><span>已转模型</span></div>
     <div class="stat"><b>72</b><span>服装编号</span></div>
-    <div class="stat"><b>14</b><span>DLC / 裸模</span></div>
-    <div class="stat"><b>6.4 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>16</b><span>DLC / Mod / 裸模</span></div>
+    <div class="stat"><b>3</b><span>有 XPS / PMX</span></div>
+    <div class="stat"><b>6.5 GB</b><span>blend 总体积</span></div>
     <div class="stat"><b>0</b><span>有告警</span></div>
   </div>
 </header>
 
 <div class="toolbar">
   <input id="q" type="search" placeholder="搜索服装名（Pink Bear）、包名（45_TypeB）或路径…（按 / 聚焦）">
-  <select id="chr"><option value="">全部编号</option><option value="01">01 (3)</option><option value="02">02 (2)</option><option value="03">03 (1)</option><option value="04">04 (2)</option><option value="05">05 (4)</option><option value="06">06 (4)</option><option value="07">07 (2)</option><option value="08">08 (3)</option><option value="09">09 (5)</option><option value="10">10 (1)</option><option value="11">11 (2)</option><option value="14">14 (4)</option><option value="15">15 (3)</option><option value="16">16 (2)</option><option value="17">17 (4)</option><option value="18">18 (2)</option><option value="19">19 (2)</option><option value="20">20 (3)</option><option value="21">21 (2)</option><option value="22">22 (1)</option><option value="23">23 (1)</option><option value="24">24 (2)</option><option value="25">25 (2)</option><option value="26">26 (2)</option><option value="27">27 (2)</option><option value="28">28 (4)</option><option value="29">29 (3)</option><option value="30">30 (2)</option><option value="31">31 (2)</option><option value="32">32 (2)</option><option value="33">33 (2)</option><option value="34">34 (2)</option><option value="35">35 (2)</option><option value="36">36 (2)</option><option value="37">37 (2)</option><option value="39">39 (2)</option><option value="40">40 (3)</option><option value="41">41 (4)</option><option value="42">42 (2)</option><option value="43">43 (2)</option><option value="45">45 (2)</option><option value="46">46 (2)</option><option value="47">47 (1)</option><option value="48">48 (1)</option><option value="49">49 (2)</option><option value="50">50 (2)</option><option value="51">51 (1)</option><option value="52">52 (2)</option><option value="53">53 (2)</option><option value="54">54 (1)</option><option value="55">55 (2)</option><option value="56">56 (1)</option><option value="57">57 (2)</option><option value="58">58 (1)</option><option value="59">59 (2)</option><option value="60">60 (2)</option><option value="61">61 (1)</option><option value="62">62 (1)</option><option value="63">63 (1)</option><option value="Christmas">Christmas (1)</option><option value="DX">DX (1)</option><option value="DX_">DX_ (1)</option><option value="Eve">Eve (3)</option><option value="Fusion">Fusion (2)</option><option value="IberisCos">IberisCos (1)</option><option value="InnerSuit">InnerSuit (1)</option><option value="InnerSuit1">InnerSuit1 (1)</option><option value="Mod">Mod (1)</option><option value="Nier">Nier (4)</option><option value="Nikke">Nikke (6)</option><option value="OneMillion">OneMillion (1)</option><option value="RoyalGuard">RoyalGuard (1)</option></select>
+  <select id="chr"><option value="">全部编号</option><option value="01">01 (3)</option><option value="02">02 (2)</option><option value="03">03 (1)</option><option value="04">04 (2)</option><option value="05">05 (4)</option><option value="06">06 (4)</option><option value="07">07 (2)</option><option value="08">08 (3)</option><option value="09">09 (5)</option><option value="10">10 (1)</option><option value="11">11 (2)</option><option value="14">14 (4)</option><option value="15">15 (3)</option><option value="16">16 (2)</option><option value="17">17 (4)</option><option value="18">18 (2)</option><option value="19">19 (2)</option><option value="20">20 (3)</option><option value="21">21 (2)</option><option value="22">22 (1)</option><option value="23">23 (1)</option><option value="24">24 (2)</option><option value="25">25 (2)</option><option value="26">26 (2)</option><option value="27">27 (2)</option><option value="28">28 (4)</option><option value="29">29 (3)</option><option value="30">30 (2)</option><option value="31">31 (2)</option><option value="32">32 (2)</option><option value="33">33 (2)</option><option value="34">34 (2)</option><option value="35">35 (2)</option><option value="36">36 (2)</option><option value="37">37 (2)</option><option value="39">39 (2)</option><option value="40">40 (3)</option><option value="41">41 (4)</option><option value="42">42 (2)</option><option value="43">43 (2)</option><option value="45">45 (2)</option><option value="46">46 (2)</option><option value="47">47 (1)</option><option value="48">48 (1)</option><option value="49">49 (2)</option><option value="50">50 (2)</option><option value="51">51 (1)</option><option value="52">52 (2)</option><option value="53">53 (2)</option><option value="54">54 (1)</option><option value="55">55 (2)</option><option value="56">56 (1)</option><option value="57">57 (2)</option><option value="58">58 (1)</option><option value="59">59 (2)</option><option value="60">60 (2)</option><option value="61">61 (1)</option><option value="62">62 (1)</option><option value="63">63 (1)</option><option value="Christmas">Christmas (1)</option><option value="DX">DX (1)</option><option value="DX_">DX_ (1)</option><option value="Eve">Eve (3)</option><option value="Fusion">Fusion (2)</option><option value="IberisCos">IberisCos (1)</option><option value="InnerSuit">InnerSuit (1)</option><option value="InnerSuit1">InnerSuit1 (1)</option><option value="Mod">Mod (3)</option><option value="Nier">Nier (4)</option><option value="Nikke">Nikke (6)</option><option value="OneMillion">OneMillion (1)</option><option value="RoyalGuard">RoyalGuard (1)</option></select>
   <button class="chip on" data-kind="">全部</button>
   <button class="chip" data-kind="official">本体服装</button><button class="chip" data-kind="dlc">联动 DLC</button><button class="chip" data-kind="mod">Nexus 服装 mod</button><button class="chip" data-kind="nude">裸模（mod）</button><button class="chip" data-kind="other">其它</button>
   <button class="toggle" id="warnOnly">只看告警</button>
@@ -3052,12 +3055,64 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </dl>
         </div>
       </article>
-      <article class="card" data-search="eve_mod_vindictusfiona mod vindictus fiona（nexus mod 1145，顶替 09 planet diving suit） eve_mod_vindictusfiona d:\stellarblade_exports\blender\eve_mod_vindictusfiona.blend" data-kind="mod" data-chr="Mod" data-warn="0">
+      <article class="card" data-search="eve_mod_gantzreika_a mod gantz reika a 全套战斗服（nexus mod 3561，cns 新增，不顶替原版） eve_mod_gantzreika_a d:\stellarblade_exports\blender\eve_mod_gantzreika_a.blend xps pmx mmd" data-kind="mod" data-chr="Mod" data-warn="0">
+        <a class="shot" href="file:///D:/stellarblade_exports/validation/Eve_Mod_GantzReika_A.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/stellarblade_exports/_gallery/thumbs/Eve_Mod_GantzReika_A.jpg" alt="Eve_Mod_GantzReika_A"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>Eve_Mod_GantzReika_A</h3><span class="badge badge-mod">Nexus 服装 mod</span><span class="badge badge-code">Eve_Mod_GantzReika_A</span><span class="badge badge-fmt">XPS</span><span class="badge badge-fmt">PMX</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>Gantz Reika A 全套战斗服（Nexus mod 3561，CNS 新增，不顶替原版）</dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 78852 顶点 · 236 骨骼 · 53 表情 · 33.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/stellarblade_exports/blender/Eve_Mod_GantzReika_A.blend" title="D:\stellarblade_exports\blender\Eve_Mod_GantzReika_A.blend">D:\stellarblade_exports\blender\Eve_Mod_GantzReika_A.blend</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\blender\Eve_Mod_GantzReika_A.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///D:/stellarblade_exports/packages/Eve_Mod_GantzReika_A" title="整个文件夹可拷给别人：blend + textures\ + README">D:\stellarblade_exports\packages\Eve_Mod_GantzReika_A</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\packages\Eve_Mod_GantzReika_A">复制</button></dd>
+            <dt>XPS</dt>
+            <dd><a href="file:///D:/stellarblade_exports/xps/Eve_Mod_GantzReika_A/Eve_Mod_GantzReika_A.xps" title="XNALara / XPS，贴图在同一文件夹">D:\stellarblade_exports\xps\Eve_Mod_GantzReika_A\Eve_Mod_GantzReika_A.xps</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\xps\Eve_Mod_GantzReika_A\Eve_Mod_GantzReika_A.xps">复制</button></dd>
+            <dt>PMX</dt>
+            <dd><a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_A/Eve_Mod_GantzReika_A.pmx" title="MMD 模型，textures\ 在同一文件夹">D:\stellarblade_exports\pmx\Eve_Mod_GantzReika_A\Eve_Mod_GantzReika_A.pmx</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\pmx\Eve_Mod_GantzReika_A\Eve_Mod_GantzReika_A.pmx">复制</button><br><span class="shots">回读预览：<a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_A/preview.png" target="_blank" rel="noopener">正面</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_A/preview_morphs.png" target="_blank" rel="noopener">表情</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_A/preview_gaze.png" target="_blank" rel="noopener">视线</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_A/preview_dance.png" target="_blank" rel="noopener">跳舞</a></span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="eve_mod_gantzreika_b mod gantz reika b 露肤版（nexus mod 3561，cns 新增，不顶替原版） eve_mod_gantzreika_b d:\stellarblade_exports\blender\eve_mod_gantzreika_b.blend xps pmx mmd" data-kind="mod" data-chr="Mod" data-warn="0">
+        <a class="shot" href="file:///D:/stellarblade_exports/validation/Eve_Mod_GantzReika_B.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/stellarblade_exports/_gallery/thumbs/Eve_Mod_GantzReika_B.jpg" alt="Eve_Mod_GantzReika_B"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>Eve_Mod_GantzReika_B</h3><span class="badge badge-mod">Nexus 服装 mod</span><span class="badge badge-code">Eve_Mod_GantzReika_B</span><span class="badge badge-fmt">XPS</span><span class="badge badge-fmt">PMX</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>Gantz Reika B 露肤版（Nexus mod 3561，CNS 新增，不顶替原版）</dd>
+            <dt>规格</dt>
+            <dd>5 网格 · 96059 顶点 · 236 骨骼 · 53 表情 · 38.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/stellarblade_exports/blender/Eve_Mod_GantzReika_B.blend" title="D:\stellarblade_exports\blender\Eve_Mod_GantzReika_B.blend">D:\stellarblade_exports\blender\Eve_Mod_GantzReika_B.blend</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\blender\Eve_Mod_GantzReika_B.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///D:/stellarblade_exports/packages/Eve_Mod_GantzReika_B" title="整个文件夹可拷给别人：blend + textures\ + README">D:\stellarblade_exports\packages\Eve_Mod_GantzReika_B</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\packages\Eve_Mod_GantzReika_B">复制</button></dd>
+            <dt>XPS</dt>
+            <dd><a href="file:///D:/stellarblade_exports/xps/Eve_Mod_GantzReika_B/Eve_Mod_GantzReika_B.xps" title="XNALara / XPS，贴图在同一文件夹">D:\stellarblade_exports\xps\Eve_Mod_GantzReika_B\Eve_Mod_GantzReika_B.xps</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\xps\Eve_Mod_GantzReika_B\Eve_Mod_GantzReika_B.xps">复制</button></dd>
+            <dt>PMX</dt>
+            <dd><a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_B/Eve_Mod_GantzReika_B.pmx" title="MMD 模型，textures\ 在同一文件夹">D:\stellarblade_exports\pmx\Eve_Mod_GantzReika_B\Eve_Mod_GantzReika_B.pmx</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\pmx\Eve_Mod_GantzReika_B\Eve_Mod_GantzReika_B.pmx">复制</button><br><span class="shots">回读预览：<a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_B/preview.png" target="_blank" rel="noopener">正面</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_B/preview_morphs.png" target="_blank" rel="noopener">表情</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_B/preview_gaze.png" target="_blank" rel="noopener">视线</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_GantzReika_B/preview_dance.png" target="_blank" rel="noopener">跳舞</a></span></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="eve_mod_vindictusfiona mod vindictus fiona（nexus mod 1145，顶替 09 planet diving suit） eve_mod_vindictusfiona d:\stellarblade_exports\blender\eve_mod_vindictusfiona.blend xps pmx mmd" data-kind="mod" data-chr="Mod" data-warn="0">
         <a class="shot" href="file:///D:/stellarblade_exports/validation/Eve_Mod_VindictusFiona.png" target="_blank" rel="noopener"
            title="点击查看原图"><img loading="lazy" src="file:///D:/stellarblade_exports/_gallery/thumbs/Eve_Mod_VindictusFiona.jpg" alt="Eve_Mod_VindictusFiona"></a>
         <div class="body">
           <div class="titlerow">
-            <h3>Eve_Mod_VindictusFiona</h3><span class="badge badge-mod">Nexus 服装 mod</span><span class="badge badge-code">Eve_Mod_VindictusFiona</span>
+            <h3>Eve_Mod_VindictusFiona</h3><span class="badge badge-mod">Nexus 服装 mod</span><span class="badge badge-code">Eve_Mod_VindictusFiona</span><span class="badge badge-fmt">XPS</span><span class="badge badge-fmt">PMX</span>
           </div>
           <dl>
             <dt>服装</dt><dd>Vindictus Fiona（Nexus mod 1145，顶替 09 Planet Diving Suit）</dd>
@@ -3069,6 +3124,12 @@ td code, li code, p code { font-family: Consolas, monospace; }
             <dt>独立包</dt>
             <dd><a href="file:///D:/stellarblade_exports/packages/Eve_Mod_VindictusFiona" title="整个文件夹可拷给别人：blend + textures\ + README">D:\stellarblade_exports\packages\Eve_Mod_VindictusFiona</a>
                 <button class="copy" data-copy="D:\stellarblade_exports\packages\Eve_Mod_VindictusFiona">复制</button></dd>
+            <dt>XPS</dt>
+            <dd><a href="file:///D:/stellarblade_exports/xps/Eve_Mod_VindictusFiona/Eve_Mod_VindictusFiona.xps" title="XNALara / XPS，贴图在同一文件夹">D:\stellarblade_exports\xps\Eve_Mod_VindictusFiona\Eve_Mod_VindictusFiona.xps</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\xps\Eve_Mod_VindictusFiona\Eve_Mod_VindictusFiona.xps">复制</button></dd>
+            <dt>PMX</dt>
+            <dd><a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_VindictusFiona/Eve_Mod_VindictusFiona.pmx" title="MMD 模型，textures\ 在同一文件夹">D:\stellarblade_exports\pmx\Eve_Mod_VindictusFiona\Eve_Mod_VindictusFiona.pmx</a>
+                <button class="copy" data-copy="D:\stellarblade_exports\pmx\Eve_Mod_VindictusFiona\Eve_Mod_VindictusFiona.pmx">复制</button><br><span class="shots">回读预览：<a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_VindictusFiona/preview.png" target="_blank" rel="noopener">正面</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_VindictusFiona/preview_morphs.png" target="_blank" rel="noopener">表情</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_VindictusFiona/preview_gaze.png" target="_blank" rel="noopener">视线</a> · <a href="file:///D:/stellarblade_exports/pmx/Eve_Mod_VindictusFiona/preview_dance.png" target="_blank" rel="noopener">跳舞</a></span></dd>
           </dl>
         </div>
       </article>
@@ -3270,6 +3331,31 @@ python .\package_outfits.py --index          # 不开 Blender，写 packages\REA
     </table>
     <p>存完会重新打开校验每张图都是 <code>//textures/</code> 且在包内，不通过的记进 package.json 的 <code>problems</code>。作者实测 148 个包（146 套 + 标准 Eve + 裸模）29.8 GB（平均 201 MB，其中 <code>textures\extra\</code> 占 16.5 GB），三路并行约 10 分钟。
       文件夹整个拷到任何装了 <b>Blender 3.6 或更新版</b>的电脑，双击 .blend 直接打开、视口切 Material Preview 就有贴图；选 <code>Eve_Armature</code> 进 Pose Mode 摆姿势，表情是头部物体 <code>Eve_Head_Mesh_01</code>（源包 Face_003）的 Object Data &gt; Shape Keys。</p>
+
+    <h3>Nexus 服装 mod → Blender / XPS / MMD（PMX）</h3>
+    <p>「Nexus 服装 mod」分类里的卡片（Vindictus Fiona = mod 1145，Gantz Reika A / B = mod 3561）另有 XPS 和 PMX 版本，卡片上带 <span class="badge badge-fmt">XPS</span> <span class="badge badge-fmt">PMX</span> 徽章。
+      详细步骤与每个坑见 <code>scripts\stellarblade\README.md</code>「Nexus 服装 Mod」「导出 MMD（PMX）」两节，这里只列命令。zip 原件留在下载目录不动，先拷到 <code>D:\stellarblade_exports\mods\&lt;名字&gt;\</code> 再解。</p>
+    <table>
+      <tr><th>mod 类型</th><th>怎么装 / 怎么导</th></tr>
+      <tr><td>顶替型（Fiona：顶替 09）</td><td>三件套放 <code>~mods</code>；导<b>原版</b>那套时要先挪走。<code>list_models.py --paks &lt;解压目录&gt; --all-files --path-filter ''</code> 看它顶替了哪个 <code>CH_P_EVE_XX</code></td></tr>
+      <tr><td>CNS 型（名字带 CNS，Gantz Reika）</td><td>整个文件夹（三件套 + <code>*.dekcns.json</code>）放 <code>~mods</code>，不顶替原版；游戏里要看到还得装 UE4SS for Stellar Blade 与 CNS（mod 1496），按 N 开换装菜单。
+        json 的 <code>OutfitPaths</code> 列出各变体网格，每个变体单独组装</td></tr>
+    </table>
+    <pre># 1 导出：staging 里放 mod 三件套 + 游戏的 global.utoc/ucas
+umodel_stellar_blade_v6.exe -export "-path=&lt;staging&gt;" "-game=ue4.26" -noanim -psk -png "-out=D:\stellarblade_exports\umodel_mod_exports\&lt;名字&gt;" "*"
+# 2 组装：validate_eve.py（参数同 export_outfit.ps1，--body 指 mod 的 PSK），输出 blender\Eve_Mod_&lt;名字&gt;.blend
+# 3 按 .mat 精确接图（_ARM / _ORM / 皮肤 _ORSS / 自发光）
+blender --background --factory-startup --python .\build_standalone.py -- --blend D:\stellarblade_exports\blender\Eve_Mod_&lt;名字&gt;.blend --object Eve_Body_Mesh_01 --tex-root D:\stellarblade_exports\umodel_mod_exports\&lt;名字&gt; --out D:\stellarblade_exports\blender --name Eve_Mod_&lt;名字&gt;
+# 4 独立包
+blender --background --factory-startup --python .\package_outfits.py -- --only Eve_Mod_&lt;名字&gt; --force
+# 5 XPS（blender2xps 仓库里跑）
+blender -b --python tools\batch_export_blends.py -- --out D:\stellarblade_exports\xps --scale 0.01 --bake AUTO D:\stellarblade_exports\packages\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.blend
+# 6 PMX + 回读验证（正面 / 表情 / 视线 / 跳舞四张预览）
+blender -b D:\stellarblade_exports\packages\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.blend --python .\export_pmx_blender.py -- --out D:\stellarblade_exports\pmx --model-name "Eve ..." --comment "出处……"
+blender -b --python .\preview_pmx_blender.py -- --pmx D:\stellarblade_exports\pmx\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.pmx</pre>
+    <p>PMX 报告要看的：<code>torn</code> 0、<code>grant_order_violations</code> 空、<code>weight_holes</code> 0、<code>stray_recipients</code> 空；回读的 <code>rest_drop_test</code> 里没有超过 3 cm 的链根。
+      2026-09-25 修过两处头发物理（三个模型都已按新脚本重导）：头皮头发的根骨 <code>Hair_Root</code> 原来是纯物理刚体，一开物理整片头发往下掉、跳舞时像光头 → 改成跟随骨骼；
+      马尾上段 <code>HairTail_Root</code> 静止时嵌在头部碰撞球里 9.4 cm → 取消这对碰撞。预览里的舞蹈按 30 帧 <code>margin</code> 导入，从静止姿势过渡——不加的话第一帧会把头发链拽乱，看起来像模型坏了，其实 MMD 里没事。</p>
   </section>
 
 </main>

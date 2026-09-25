@@ -9,7 +9,9 @@ carries its own head that gives two heads, so this script takes the PSK as it is
     Other[0] = ARM); textures are found by name anywhere under --tex-root, copied into
     <out>/textures and linked relatively, so the folder travels on its own;
   * a Diffuse alpha that really cuts (min ~0) drives a hashed cutout (lace, crowns);
-  * ARM = R ambient occlusion, G roughness, B metallic; normals are DirectX (flip G);
+  * ARM / ORM = R ambient occlusion, G roughness, B metallic (mod authors use either
+    name); a skin *_ORSS map gives only its G roughness; normals are DirectX (flip G);
+  * an Emissive map feeds Principled Emission, strength 2 (the Gantz suit's blue lights);
   * a slot whose colour map is flat black (a physics proxy such as "phy") or that is
     listed in --hide is split into a hidden object, not deleted;
   * renders preview.png (900x1400) and preview_face.png (900x900 at Bip001-Head).
@@ -150,19 +152,32 @@ def build(mat, slot):
         if n_img:
             link_normal(nt, bsdf, n_img)
     arm_stem = spec.get("Other[0]", "")
-    if arm_stem.endswith("_ARM"):
-        a_img, _ = image(arm_stem, True)
-        if a_img:
-            ta = nt.nodes.new("ShaderNodeTexImage")
-            ta.image, ta.location = a_img, (-1000, 0)
-            sep = nt.nodes.new("ShaderNodeSeparateColor")
-            nt.links.new(ta.outputs["Color"], sep.inputs["Color"])
-            nt.links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
+    packed = re.search(r"_(ARM|ORM|ORSS)$", arm_stem, re.I)
+    a_img = image(arm_stem, True)[0] if packed else None
+    if a_img:
+        ta = nt.nodes.new("ShaderNodeTexImage")
+        ta.image, ta.location = a_img, (-1000, 0)
+        sep = nt.nodes.new("ShaderNodeSeparateColor")
+        nt.links.new(ta.outputs["Color"], sep.inputs["Color"])
+        nt.links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
+        if packed.group(1).upper() in ("ARM", "ORM"):
             nt.links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
+        else:
+            bsdf.inputs["Metallic"].default_value = 0.0
     else:
         bsdf.inputs["Roughness"].default_value = 0.55
         bsdf.inputs["Metallic"].default_value = 0.0
     bsdf.inputs["Specular"].default_value = 0.4
+    if "Emissive" in spec:
+        # glow maps are sparse (a few lit dots), a sampled max can miss them; a black
+        # map adds nothing, so link whatever is there
+        e_img, _ = image(spec["Emissive"], False)
+        if e_img is not None:
+            te = nt.nodes.new("ShaderNodeTexImage")
+            te.image, te.location = e_img, (-700, -650)
+            nt.links.new(te.outputs["Color"], bsdf.inputs["Emission"])
+            bsdf.inputs["Emission Strength"].default_value = 2.0
+            info["emission"] = True
     return info, True
 
 

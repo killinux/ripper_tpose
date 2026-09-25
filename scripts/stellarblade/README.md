@@ -116,7 +116,9 @@ LODSettings / Physics / Shadow / _sample / Test / Taper / NoHair / Clothdata` �
 | 11_1（Raven 变体）头上两套头发 | 这个包自带 NA_53 的发型网格，管线又照常装上 Eve 默认发型/马尾 | 未处理，属已知局限；它自己的头发贴图已按 `.mat` 的 `_ADIR` 正确接上 |
 
 画廊：`python html\collect_manifest.py`（读 `validation\*.json`，不开 Blender）+
-`python html\make_gallery.py` → `html\index.html`；亮预览由
+`python html\make_gallery.py` → `html\index.html`；有 `xps\<名>\<名>.xps` / `pmx\<名>\<名>.pmx` 的卡片多出
+「XPS」「PMX」两行和徽章，PMX 一行附回读预览（正面 / 表情 / 视线 / 跳舞）链接，页尾附录有「Nexus 服装 mod →
+Blender / XPS / MMD」一节；亮预览由
 `..\final\html\render_blend_preview.py -- D:\stellarblade_exports\blender --suffix _gallery` 补渲
 （`validate_eve.py` 自己的渲染偏暗，仍保留在 `validation\`）。
 
@@ -213,7 +215,26 @@ python package_outfits.py --index                                             # 
 产物：`D:\stellarblade_exports\packages\Eve_Mod_VindictusFiona\`（377 MB，30 张贴图 + 15 张附带）。
 朝向：Biped 骨名带连字符（`Bip001-L-Toe0`），按「脚趾指向」判前方时要按词匹配，不然人是侧着的。
 
-## 导出 MMD（PMX）：`export_pmx_blender.py`（2026-09-25，Vindictus Fiona 首个）
+### CNS 类 Mod（2026-09-25：Gantz Reika，mod 3561）
+
+名字里带「CNS」的 mod 是给 [CNS - Custom Nanosuit System](https://www.nexusmods.com/stellarblade/mods/1496)
+（DekitaRPG）做的：**不顶替任何原版服装**，资源放在自己的路径下（`/Game/OutfitMods/GantzReika/...`），
+另附一个 `*.dekcns.json` 登记显示名和各变体的网格路径（`OutfitPaths`，这里 A / B 两个版本）。
+与上面流程的不同点：
+
+- **安装**：zip 里的整个文件夹（三件套 + json）放进 `~mods\`（子文件夹可以）。游戏里要看到还得装
+  UE4SS for Stellar Blade（`ue4ss\` + `dwmapi.dll` 放 `SB\Binaries\Win64`）和 CNS 本体（`SB` 文件夹并进游戏根目录），
+  按 N 键开 CNS 菜单换装。这两个都要自己去 Nexus 下。
+- **导出不用挪 `~mods`**：不覆盖原版，原版照常导。
+- **每个变体一个网格**：`GantzReika_A.psk` / `_B.psk`，分别跑 `validate_eve.py`（`--body` 指 PSK、
+  `--body-diffuse` 指 mod 的导出目录，其余参数同 `export_outfit.ps1`），输出 `Eve_Mod_GantzReika_A/B`。
+  两个都只到脖子（z ≤ 151 cm），用 Eve 的 Face_003 + 发型。
+- **材质**：贴图叫 `_Base_Color` / `_Normal_OpenGL_DX` / `_ORM` / `_Emissive`，mod 自带一套皮肤
+  `EveSKin`（`_N_ORSS`）。`build_standalone.py` 为此补了三点：`_ORM` 同 `_ARM`（G 粗糙 / B 金属），`_ORSS` 只取
+  G 作粗糙度，`Emissive` 接 Principled 自发光（强度 2，战斗服上的蓝色光圈）。
+- XPS / PMX 与 Fiona 相同，对 `packages\Eve_Mod_GantzReika_A|B\*.blend` 各跑一次。
+
+## 导出 MMD（PMX）：`export_pmx_blender.py`（2026-09-25：Vindictus Fiona、Gantz Reika A / B）
 
 ```powershell
 & 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' -b `
@@ -223,8 +244,19 @@ python package_outfits.py --index                                             # 
 ```
 
 输入是任何一个组装好的 Eve `.blend`（`validate_eve.py` / `package_outfits.py` 的产物），输出
-`<out>\<名字>\`：`.pmx` + `textures\`（相对路径，整个文件夹可拷走）+ `preview*.png` +
-`_converted.blend`。末行打印 `SB_PMX_REPORT={json}`。
+`<out>\<名字>\`：`.pmx` + `textures\`（相对路径，整个文件夹可拷走）+ `_converted.blend`，末行打印
+`SB_PMX_REPORT={json}`；再跑 `preview_pmx_blender.py`（见下文「回读验证」）在同一文件夹出四张 `preview*.png`。
+**注意：它每次先清空 `<out>\<名字>\`**，预览要在导出之后重跑。
+
+现有产物（`D:\stellarblade_exports\pmx\`，日志在 `pmx\_logs\`，2026-09-25 全部按下面两处物理修复重导）：
+
+| 模型 | 高 | 骨 | 表情 | 刚体 / 关节 | 改成跟随骨骼的分叉根 | 取消的静止穿插 | 静止 60 帧链根最大漂移 |
+|---|---|---|---|---|---|---|---|
+| `Eve_Mod_VindictusFiona` | 1.73 m | 381 | 26 + ARKit 53 | 56 / 40 | `Hair_Root`、`Ab-TL-HairB01` | `HairTail_Root`/頭 9.1 cm，侧发 5 节 0.2–0.4 cm | 1.1 cm |
+| `Eve_Mod_GantzReika_A` | 1.72 m | 348 | 26 + ARKit 53 | 56 / 40 | 同上 | `HairTail_Root`/頭 9.4 cm，侧发 8 节 0.3–1.2 cm | 1.1 cm |
+| `Eve_Mod_GantzReika_B` | 1.71 m | 350 | 26 + ARKit 53 | 56 / 40 | 同上 | `HairTail_Root`/頭 9.4 cm，侧发 8 节 0.3–0.5 cm | 1.1 cm |
+
+三个都是撕裂 0、付与顺序违规 0、权重空洞 0、`stray_recipients` 空。
 
 **骨架转换整条复用 Rise of Eros 的 PMX worker**（`scripts/riseoferos/export_character_model_blender.py`，
 按函数 import，不复制）：Eve 也是 3ds Max Biped，槽位解析、肢体辅助骨按比例挂回（付与）、肩部权重
@@ -245,11 +277,29 @@ mmd_tools 以 12.5 倍导出、付与顺序回读检查，全部同一套代码�
 | Convert_to_MMD5 退役辅助骨时，把权重交给「起点最近、且是变形骨」的骨，而 UE 导进来的骨**全都**标成变形骨 | `Ab-NeckSub` 的脖子权重被分给了 `Sc_LookAtTarget`（挂在 Root 下的注视挂点）：头一转，脖子和领口的 94 个顶点留在原地，拉成一圈肤色的扁「领子」；另有一部分落到受物理驱动的侧发骨上 | ① 不带自身蒙皮的非 Biped 骨全部标成非变形（不能接权重）；② 用它自己的分类器预判会被退役的脊柱辅助骨（`Ab-NeckSub` / `Ab-*-Shoulder0` / `Ab-*-Trape0`），转换前把权重并进父骨——没有 UE 驱动时它们本来就跟父骨僵硬一起动，这是静止等价；③ 转换后审计「原来没权重、现在有了」的骨（`stray_recipients`，必须为空） |
 | 眼球是头网格里的两个球，100% 绑在头骨上 | MMD 的视线动作（両目 / 左目 / 右目）完全不起作用，头一转眼睛还直直盯着脸的正前方；眼球在 MMD 里还会接到眼皮投下的自阴影、没有眼神光（UE 靠高光 + 法线贴图，MMD 都没有），完全透明的 `EyeLight_Inst` 高光片以不透明度 1 写出，是一块挡在眼前、还会投影的隐形片 | `add_eye_bones()` 在每个眼球的旋转中心（后缘往前一个半径，包围盒中心被角膜顶偏了）建 `Bip001 L/R Eye`，眼球顶点改绑上去——正好是 ROE 解析器认的眼睛槽位写法，Convert_to_MMD5 改名为 `左目 / 右目`，ROE 流程自动加 `両目`（付与 1.0、变形层级 1，顺序检查 0 违规）；眼球材质关掉接收/投射自阴影、单面、加一张加算 sphere 眼神光（`catchlight_sphere()`：视线轴左上一颗小亮点 + 右下一颗淡的；第一版放在约 30° 外、太大，铺成一层白雾）；烘焙结果完全透明的材质一律不透明度 0 |
 | 脸是 MetaHuman 式头，52 个 **ARKit** 形态键、没有脸骨 | ROE 的骨骼表情插件无从下手 | 按配方混出 26 个 MMD 标准**顶点表情**（まばたき / 笑い / ウィンク / あいうえお / にやり / 眉 …），ARKit 原始形态也一起导出；表情面板里标准表情排最前 |
+| 头皮头发的根骨 `Hair_Root`（挂在「頭」下，带着 4 条刘海 + 2 条侧发链）被 mmd_cloth_physics 当成链的一节，建成了**纯物理**刚体（2026-09-25 发现） | 一开物理整片头皮头发往下掉：不动站着 60 帧就沉 12 cm，跳舞时每一帧都是光头、头发团在脑后（Fiona 的第一版 PMX 也是这样，当时没看出来） | `anchor_hub_roots()`：父骨无刚体或是「跟随骨骼」、自己是动态、且下面有 ≥2 条动态链的「分叉根」改成模式 0（跟随骨骼），链挂在跟着头走的锚点上；报告字段 `anchored_hub_roots`（马尾第一节 `Ab-TL-HairB01` 也按这条改成跟随骨骼，从第二节开始摆） |
+| 马尾上段的 `HairTail_Root`（Gantz 上蒙着 2,046 个顶点）在静止姿势下就嵌在头部碰撞球里 9.1–9.4 cm | 一开物理就被顶开，站着不动漂 9.3 cm | `release_rest_overlaps()`：静止时就嵌进「会碰撞的跟随骨骼碰撞体」超过 2 mm 的动态刚体，把那个碰撞组加进它的不碰撞列表（MMD 作者手工也是这么处理的）；报告字段 `released_rest_overlaps` |
+
+**回读验证**（`preview_pmx_blender.py`）：mmd_tools 带物理导回 PMX，在 `.pmx` 旁边出
+`preview.png`（正面）、`preview_morphs.png`（中性 + 11 个表情的脸部特写）、`preview_gaze.png`（`両目` 中性 /
+左右 20° / 上下 15°，按世界方向转，与骨骼 roll 无关）、`preview_dance.png`（套「来杯好茶」
+VMD、物理逐帧跑，取 150/400/650/900 帧），末行 `PMX_PREVIEW={json}`；其中 `rest_drop_test` 是不加动作站 60 帧
+后每条链第一节刚体的漂移，超过 3 cm 的会列出来（链根本该挂在固定锚点上）。VMD 按 mmd_tools 的 `margin`
+（默认 30 帧）导入，前面是从静止姿势过渡到舞蹈第一帧——`margin=0` 时人物一帧之内从静止姿势跳到舞蹈姿势，
+关节把每条头发链猛拽一下，之后整段都是刘海翻到头顶、马尾甩离头部的样子，但模型本身没问题（MMD 开播时按当时姿势
+重置物理，不会这样）。
+
+```powershell
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' -b --python preview_pmx_blender.py -- `
+  --pmx 'D:\stellarblade_exports\pmx\Eve_Mod_GantzReika_A\Eve_Mod_GantzReika_A.pmx'
+```
 
 表情配方在脚本顶部 `RECIPES`：`ウィンク` = 模型自己的左眼（ARKit `eyeBlinkLeft`），`あ/え/お` 带上
 `TeethLowerDown` 让下排牙跟着下巴走。实测（Vindictus Fiona）：高 21.7 单位 / 310 骨 / 22 材质 / 79 表情 /
 56 刚体（马尾 9 节 + 前发 + 短发束 + 两个胸部 + 身体碰撞体）/ 40 关节；两臂 37.3°、权重空洞 0、撕裂 0、付与顺序
-违规 0；导回 Blender 套「来杯好茶」舞蹈，四肢、马尾物理、表情逐项目检。
+违规 0；导回 Blender 套「来杯好茶」舞蹈，四肢、马尾物理、表情逐项目检。——那次舞蹈回读其实已经拍到了头发问题
+（第 2–5 帧都是光头、头发团在脑后），当时没看出来；2026-09-25 查明是上表最后两行的两处物理问题加上预览时
+`margin=0` 的首帧拽动，修好后三个模型全部重导，新的四张预览在各自文件夹里。
 
 视线：`両目` 转 ±20° 左右看、±15° 上下看都正常；这个角色眼球半径 1.8 cm，比真人大，往上看 15° 虹膜就基本进了上眼皮，往下看时上眼皮不跟随（MMD 模型的常态）。`eyeLook*` 形态键仍在「其它」里。裙子没有骨骼，跟随大腿和胯部，不做物理。
 胸部实测（导回 Blender 套舞蹈 570 帧）：相对上半身偏转平均 5.6° / 3.7°，最大 19° / 12°（关节限制内），

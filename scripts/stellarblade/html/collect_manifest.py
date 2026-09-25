@@ -3,7 +3,8 @@
 不开 Blender：export_outfit.ps1 / export_eve.ps1 每套都留了 validate_eve.py 的报告
 （<导出根>\\validation\\Eve_<包名>.json，含网格/骨骼/材质匹配/对齐误差），直接读。
 预览优先用 blender\\Eve_<包名>_gallery.png（render_blend_preview.py 出的亮预览），
-没有就退回 validation\\Eve_<包名>.png（验证渲染，偏暗）。
+没有就退回 validation\\Eve_<包名>.png（验证渲染，偏暗）。另外记下同名的
+xps\\<名>\\<名>.xps、pmx\\<名>\\<名>.pmx 和 PMX 回读预览（preview / _morphs / _gaze / _dance.png）。
 
   python collect_manifest.py [导出根目录] [manifest 输出路径]
 
@@ -21,6 +22,16 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "stellarblade_mod
 BLEND_DIR = os.path.join(ROOT, "blender")
 VAL_DIR = os.path.join(ROOT, "validation")
 PKG_DIR = os.path.join(ROOT, "packages")
+XPS_DIR = os.path.join(ROOT, "xps")          # blender2xps batch_export_blends.py 的输出
+PMX_DIR = os.path.join(ROOT, "pmx")          # export_pmx_blender.py + preview_pmx_blender.py 的输出
+PMX_PREVIEWS = (("preview.png", "正面"), ("preview_morphs.png", "表情"),
+                ("preview_gaze.png", "视线"), ("preview_dance.png", "跳舞"))
+
+
+def exported(folder, label, ext):
+    """<folder>\\<label>\\<label>.<ext> if it exists, else ''."""
+    path = os.path.join(folder, label, label + ext)
+    return path if os.path.isfile(path) else ""
 
 # 编号 -> 名称（docs/stellar-blade-eve-outfits.md，来源 Stellar Blade Modding Guide ID's Library）
 NAMES = {
@@ -75,6 +86,8 @@ PKG_RE = re.compile(r"^Eve_(CH_P_EVE_(.+))$")
 # Nexus 服装 Mod（README「Nexus 服装 Mod」一节；装在 ~mods，顶替哪套写在括号里）
 MOD_NAMES = {
     "Eve_Mod_VindictusFiona": "Vindictus Fiona（Nexus mod 1145，顶替 09 Planet Diving Suit）",
+    "Eve_Mod_GantzReika_A": "Gantz Reika A 全套战斗服（Nexus mod 3561，CNS 新增，不顶替原版）",
+    "Eve_Mod_GantzReika_B": "Gantz Reika B 露肤版（Nexus mod 3561，CNS 新增，不顶替原版）",
 }
 
 
@@ -146,6 +159,11 @@ def main():
             "armatures": totals.get("armatures", 0),
             "materials": len((pm.get("body_assignments") or {})),
             "morphs": (rep.get("source_morph_targets") or {}).get("source_count", 0),
+            # XPS / MMD 版本（目前只有 Nexus mod 服装做了）
+            "xps": exported(XPS_DIR, label, ".xps"),
+            "pmx": exported(PMX_DIR, label, ".pmx"),
+            "pmxPreviews": [[title, os.path.join(PMX_DIR, label, png)] for png, title in PMX_PREVIEWS
+                            if os.path.isfile(os.path.join(PMX_DIR, label, png))],
             "warnings": warnings,
         })
         print("[%d/%d] %s -> %s (%s)" % (i, len(blends), label, name, kind))

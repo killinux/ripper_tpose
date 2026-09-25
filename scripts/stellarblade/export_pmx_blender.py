@@ -578,6 +578,88 @@ def add_arkit_morphs(root, head):
     return [m[0] for m in made], skipped
 
 
+def anchor_hub_roots(arm):
+    """A physics body that is the hub of several chains must follow its bone, not fall.
+
+    Eve's ``Hair_Root`` (under 頭) carries the whole scalp and parents the four fringe
+    and two side chains; mmd_cloth_physics gave it a dynamic body like the chain links
+    below it.  Standing still, it sank 12 cm in 60 frames and took the scalp with it -
+    every dance frame showed a bald head with the hair balled up behind it (Fiona's
+    first PMX too).  Rule: a dynamic body whose parent bone is static or body-less and
+    whose bone has >= 2 child bones with dynamic bodies becomes mode 0 (bone follow), so
+    the chains hang from an anchor that moves with the head.  Returns the bone names."""
+    bodies = [o for o in bpy.context.scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
+    by_bone = {o.mmd_rigid.bone: o for o in bodies if o.mmd_rigid.bone}
+    fixed = []
+    for o in bodies:
+        rb = o.mmd_rigid
+        bone = arm.data.bones.get(rb.bone or "")
+        if rb.type == "0" or bone is None:
+            continue
+        parent_body = by_bone.get(bone.parent.name) if bone.parent else None
+        if parent_body is not None and parent_body.mmd_rigid.type != "0":
+            continue
+        dynamic_kids = [c for c in bone.children if c.name in by_bone and by_bone[c.name].mmd_rigid.type != "0"]
+        if len(dynamic_kids) >= 2:
+            rb.type = "0"
+            fixed.append("%s (%d chains)" % (bone.name, len(dynamic_kids)))
+    return fixed
+
+
+def _body_core(obj):
+    """(segment start, segment end, radius) of a rigid body in world space.  mmd_tools
+    builds capsules along local Z with size = (radius, cylinder height); a box counts as
+    its inscribed sphere (conservative: only a real overlap is reported)."""
+    rb = obj.mmd_rigid
+    size = rb.size
+    mw = obj.matrix_world
+    if rb.shape == "CAPSULE":
+        h = size[1] / 2.0
+        return mw @ Vector((0.0, 0.0, -h)), mw @ Vector((0.0, 0.0, h)), size[0]
+    if rb.shape == "SPHERE":
+        return mw.translation.copy(), mw.translation.copy(), size[0]
+    return mw.translation.copy(), mw.translation.copy(), min(size)
+
+
+def _segment_distance(a0, a1, b0, b1, samples=17):
+    """Minimum distance between segments a0-a1 and b0-b1 (sampled along a, exact on b)."""
+    best = float("inf")
+    d = b1 - b0
+    dd = d.length_squared
+    for i in range(samples):
+        p = a0.lerp(a1, i / (samples - 1))
+        t = 0.0 if dd < 1e-12 else max(0.0, min(1.0, (p - b0).dot(d) / dd))
+        best = min(best, (p - (b0 + d * t)).length)
+    return best
+
+
+def release_rest_overlaps(tolerance=0.002):
+    """A physics body that already sits INSIDE a bone-following collider it may collide
+    with gets shoved out the moment physics starts.  Eve's HairTail_Root (skinning the
+    upper ponytail, 2,046 vertices) overlaps the head sphere: standing still it was pushed
+    9.3 cm.  Such pairs stop colliding (the collider's group joins the body's no-collide
+    mask), as MMD modellers do by hand.  Returns 'body / collider (depth)' lines."""
+    bodies = [o for o in bpy.context.scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
+    statics = [o for o in bodies if o.mmd_rigid.type == "0"]
+    released = []
+    for d in bodies:
+        rd = d.mmd_rigid
+        if rd.type == "0":
+            continue
+        a0, a1, ra = _body_core(d)
+        for s in statics:
+            rs = s.mmd_rigid
+            gd, gs = rd.collision_group_number, rs.collision_group_number
+            if rd.collision_group_mask[gs] or rs.collision_group_mask[gd]:
+                continue                               # already never collide
+            b0, b1, rb_ = _body_core(s)
+            depth = ra + rb_ - _segment_distance(a0, a1, b0, b1)
+            if depth > tolerance:
+                rd.collision_group_mask[gs] = True
+                released.append("%s / %s (%.1f cm deep, group %d)" % (rd.name_j, rs.name_j, depth * 100, gs))
+    return released
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
@@ -639,6 +721,8 @@ def main():
     slot_names = {v for v in slots.values() if v}
     report["retired_helpers"] = sorted(weighted_before - weighted_bones(meshes) - slot_names)
     report["dropped_marker_physics"] = drop_marker_physics()
+    report["anchored_hub_roots"] = anchor_hub_roots(arm)
+    report["released_rest_overlaps"] = release_rest_overlaps()
     report["bust_physics"] = add_breast_physics(root, arm, meshes)
     report["rigid_bodies"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY")
     report["joints"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "JOINT")
