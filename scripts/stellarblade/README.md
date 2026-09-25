@@ -213,6 +213,44 @@ python package_outfits.py --index                                             # 
 产物：`D:\stellarblade_exports\packages\Eve_Mod_VindictusFiona\`（377 MB，30 张贴图 + 15 张附带）。
 朝向：Biped 骨名带连字符（`Bip001-L-Toe0`），按「脚趾指向」判前方时要按词匹配，不然人是侧着的。
 
+## 导出 MMD（PMX）：`export_pmx_blender.py`（2026-09-25，Vindictus Fiona 首个）
+
+```powershell
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' -b `
+  'D:\stellarblade_exports\packages\Eve_Mod_VindictusFiona\Eve_Mod_VindictusFiona.blend' `
+  --python export_pmx_blender.py -- --out D:\stellarblade_exports\pmx `
+  --model-name 'Eve Vindictus Fiona' --comment '出处/作者……（\n 换行）'
+```
+
+输入是任何一个组装好的 Eve `.blend`（`validate_eve.py` / `package_outfits.py` 的产物），输出
+`<out>\<名字>\`：`.pmx` + `textures\`（相对路径，整个文件夹可拷走）+ `preview*.png` +
+`_converted.blend`。末行打印 `SB_PMX_REPORT={json}`。
+
+**骨架转换整条复用 Rise of Eros 的 PMX worker**（`scripts/riseoferos/export_character_model_blender.py`，
+按函数 import，不复制）：Eve 也是 3ds Max Biped，槽位解析、肢体辅助骨按比例挂回（付与）、肩部权重
+放松、37° A-pose、Convert_to_MMD5 一键转换、身体碰撞体、`mmd_cloth_physics` 头发物理、撕裂检查、
+mmd_tools 以 12.5 倍导出、付与顺序回读检查，全部同一套代码。Eve 专属的只有下面这些，每条都是实打实
+踩出来的：
+
+| 问题 | 现象 | 处理 |
+|---|---|---|
+| Biped 骨名是连字符 `Bip001-L-Clavicle` | ROE 解析器和 Convert_to_MMD5 只认空格写法 | 改名（顶点组跟着改） |
+| 场景单位是厘米 | — | 缩成米再转 |
+| PSK 导进来人面朝 ±X | A-pose 绕世界 Y 轴放手臂，绕错轴把手臂拧成 57° / 49°；MMD 里人侧着站 | 按**两只脚**的脚尖方向转成面朝 -Y（单看一只脚有约 10° 外八偏差） |
+| UE 挂点骨离身体很远（无人机起点 6 m、`FX_GunFire_Rail_End` 在地下 22 m） | Convert_to_MMD5 认为骨架高于 10 m 就是厘米模型，**把整个人缩小 10 倍**（导出只有 2.2 个单位高） | 转换前删掉「自身和子骨都没有权重、且伸出身体包围盒 25%」的骨（22 根） |
+| mmd_tools 每个材质只留一张贴图 | 两个头发材质拿到灰度遮罩 `PonyTail_Alpha`（灰白头发），程序虹膜变全黑，口腔没贴图是灰的 | 转换**前**用 blender2xps 把节点算出来的颜色烘焙成贴图（转换后材质上多了 MMD 着色器组，blender2xps 会当成「原生处理」而不烘焙），转换后接成 `mmd_base_tex`；没贴图的用 Principled 底色 |
+| 半透明辅助壳（眼部遮挡、泪液、牙齿阴影） | 被写成不透明灰色，眼周一圈白、张嘴嘴里一片白 | alpha 0 |
+| mmd_tools 默认漫反射 0.4、高光 1.0 | 偏暗、皮肤像抹了油 | 漫反射 1、环境 0.5、高光 0.12（头发 0.3） |
+| 脸是 MetaHuman 式头，52 个 **ARKit** 形态键、没有脸骨 | ROE 的骨骼表情插件无从下手 | 按配方混出 26 个 MMD 标准**顶点表情**（まばたき / 笑い / ウィンク / あいうえお / にやり / 眉 …），ARKit 原始形态也一起导出；表情面板里标准表情排最前 |
+
+表情配方在脚本顶部 `RECIPES`：`ウィンク` = 模型自己的左眼（ARKit `eyeBlinkLeft`），`あ/え/お` 带上
+`TeethLowerDown` 让下排牙跟着下巴走。实测（Vindictus Fiona）：高 21.7 单位 / 310 骨 / 22 材质 / 79 表情 /
+54 刚体（马尾 9 节 + 前发 + 短发束 + 身体碰撞体）/ 38 关节；两臂 37.3°、权重空洞 0、撕裂 0、付与顺序
+违规 0；导回 Blender 套「来杯好茶」舞蹈，四肢、马尾物理、表情逐项目检。
+
+限制：Eve 没有眼球骨（眼球在头网格里只绑头骨），`左目/右目/両目` 不存在，VMD 的视线键不起作用；
+`eyeLook*` 形态键在「其它」里可以手动用。裙子没有骨骼，跟随大腿和胯部，不做物理。
+
 ## `validate_eve.py`
 
 脚本导入 Eve 的标准身体、完整 Face_003、默认发型和独立长马尾。身体/头发 PSK 会检查

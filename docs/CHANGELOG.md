@@ -14,6 +14,40 @@
 
 ---
 
+## 2026-09-25 — Stellar Blade：Eve（Vindictus Fiona）导出 MMD PMX
+
+### 新增 / 变化
+
+- 新增 `scripts/stellarblade/export_pmx_blender.py`：任何一个组装好的 Eve `.blend` → MMD 用的 PMX
+  （`.pmx` + 相对路径的 `textures\` + 三张预览 + `_converted.blend`）。骨架转换**按函数复用** Rise of Eros
+  的 PMX worker（槽位、辅助骨付与、37° A-pose、Convert_to_MMD5、碰撞体、`mmd_cloth_physics`、撕裂检查、
+  12.5 倍导出、付与顺序检查），只加 Eve 专属的准备和材质、表情两步。
+- 首个产物：`D:\stellarblade_exports\pmx\Eve_Mod_VindictusFiona\`（模型名 `Eve Vindictus Fiona`，说明里写明
+  mod 作者 zdimwit 与出处）。
+
+### 用户如何操作
+
+见 `scripts/stellarblade/README.md`「导出 MMD（PMX）」一节，一条 Blender 命令。
+
+### 实现原理与坑
+
+- **骨名连字符**：Eve 的 Biped 骨叫 `Bip001-L-Clavicle`，ROE 解析器和 Convert_to_MMD5 只认空格写法 → 改名。
+- **朝向**：PSK 导进来人面朝 ±X，A-pose 绕世界 Y 轴放手臂 → 绕错轴把手臂拧成 57°/49°，MMD 里人也是侧着的。
+  按两只脚的脚尖方向转成面朝 -Y（只看一只脚有约 10° 外八偏差）。
+- **整个人被缩小 10 倍**：UE 挂点骨离身体几米到几十米（无人机起点 6 m、`FX_GunFire_Rail_End` 在地下 22 m），
+  Convert_to_MMD5「骨架高于 10 m 当厘米模型处理」的保护误触发。转换前删掉无权重、伸出身体包围盒的骨（22 根）。
+- **材质**：mmd_tools 每个材质只留一张贴图，节点算颜色的材质全拿错了（头发拿到灰度遮罩成了灰白色、程序虹膜全黑、
+  口腔灰色）；半透明辅助壳写成不透明，眼周一圈白、嘴里一片白。转换**前**用 blender2xps 烘焙节点颜色
+  （转换后材质多了 MMD 着色器组，blender2xps 会跳过），辅助壳 alpha 0，漫反射 1 / 环境 0.5 / 低高光。
+- **表情**：脸是 ARKit 52 形态键、没有脸骨，由 ARKit 形态按配方混出 26 个 MMD 标准顶点表情，ARKit 原形态一并导出，
+  标准表情排在表情面板最前。
+
+### 验证
+
+文件级：高 21.7 单位、310 骨、22 材质、15 张贴图全部是相对路径且都在、79 表情、54 刚体 / 38 关节；两臂 37.3°、
+权重空洞 0、撕裂 0、付与顺序违规 0。导回 Blender（mmd_tools，带物理并 build）套「来杯好茶」VMD：正面朝向、
+五个舞蹈帧的四肢和胯部、后颈马尾根部、12 个表情（左右眼方向）逐张目检。
+
 ## 2026-09-24 — Stellar Blade：Nexus Mod「Vindictus Fiona」装进游戏并导出 Blender
 
 ### 新增 / 变化
