@@ -39,6 +39,15 @@ What is Eve-specific, done here before / after that sequence:
     右胸) and add_breast_physics() gives each a sphere at the skin's weighted centre, mode
     physics+bone, collision group 15 colliding with nothing, jointed at the bone head (inside
     the rib cage) to the nearest torso body with a rotation spring and limits (BUST);
+  * eyes: the eyeballs are two spheres inside the head mesh, 100% on the head bone, so
+    VMD gaze keys (両目 / 左目 / 右目) did nothing and the eyes stared along the face while
+    the dance looked elsewhere.  add_eye_bones() gives each eyeball a bone at its rotation
+    centre named ``Bip001 L/R Eye`` - the spelling the ROE resolver already maps to the
+    eye slots, so Convert_to_MMD5 renames them 左目 / 右目 and the ROE sequence adds 両目.
+    For MMD's renderer the eyeball stops receiving/casting self-shadow (the lids darkened
+    it), gets an additive sphere map for a catch-light (the UE eye relied on specular and
+    a normal map, neither of which MMD has), and a baked texture that is fully transparent
+    (EyeLight_Inst) becomes alpha 0 instead of an invisible card over the eyes;
   * the face is a MetaHuman-style head with the 52 ARKit blendshapes and no face bones,
     so expressions are real VERTEX morphs: the standard MMD set (まばたき, あいうえお,
     笑い, ウィンク, 眉 ...) is mixed from ARKit shapes (RECIPES below), and the ARKit
@@ -52,6 +61,7 @@ import importlib.util
 import json
 import math
 import os
+import re
 import shutil
 import sys
 
@@ -142,6 +152,7 @@ def prepare_eve(arm, meshes):
         raise RuntimeError("vertex groups did not follow the bone rename: %s" % missing[:5])
     height_cm = max((m.matrix_world @ Vector(c)).z for m in meshes for c in m.bound_box)
     dropped = drop_far_sockets(arm, meshes)
+    eyes = add_eye_bones(arm, meshes)
     undeformed = undeform_sockets(arm, meshes)
     # face -Y: rotate about Z so the foot->toe direction points along -Y.  Both feet,
     # averaged: one foot alone is splayed outwards (~10 degrees on Eve's left foot)
@@ -159,7 +170,64 @@ def prepare_eve(arm, meshes):
     bpy.context.view_layer.update()
     return {"renamed_bones": renamed, "height_cm": round(height_cm, 2),
             "turned_deg": round(math.degrees(turn), 1), "dropped_far_bones": dropped,
-            "undeformed_sockets": undeformed}
+            "undeformed_sockets": undeformed, "eye_bones": eyes}
+
+
+EYE_MAT_RE = re.compile(r"eye.*refract|eyeball", re.IGNORECASE)
+
+
+def add_eye_bones(arm, meshes):
+    """Bip001 L/R Eye at each eyeball's rotation centre; the eyeball vertices move onto
+    them.  Runs in the source frame (before the turn and the cm -> m bake)."""
+    bones = arm.data.bones
+    head_bone = bones.get("Bip001 Head")
+    lc, rc = bones.get("Bip001 L Clavicle"), bones.get("Bip001 R Clavicle")
+    if head_bone is None or lc is None or rc is None or "Bip001 L Eye" in bones:
+        return []
+    left_dir = (arm.matrix_world @ lc.head_local - arm.matrix_world @ rc.head_local).normalized()
+    up = Vector((0.0, 0.0, 1.0))
+    fwd = left_dir.cross(up).normalized()             # left x up = forward (right-handed)
+    made = []
+    for mesh in meshes:
+        slots = [i for i, sl in enumerate(mesh.material_slots)
+                 if sl.material and EYE_MAT_RE.search(sl.material.name)]
+        if not slots:
+            continue
+        verts = set()
+        for poly in mesh.data.polygons:
+            if poly.material_index in slots:
+                verts.update(poly.vertices)
+        head_pos = arm.matrix_world @ head_bone.head_local
+        world = {i: mesh.matrix_world @ mesh.data.vertices[i].co for i in verts}
+        for side, sign in (("L", 1.0), ("R", -1.0)):
+            ids = [i for i in verts if sign * (world[i] - head_pos).dot(left_dir) > 0]
+            if len(ids) < 20:
+                continue
+            pts = [world[i] for i in ids]
+            lat = [p.dot(left_dir) for p in pts]
+            ver = [p.z for p in pts]
+            dep = [p.dot(fwd) for p in pts]
+            radius = ((max(lat) - min(lat)) + (max(ver) - min(ver))) / 4.0
+            # the cornea bulges forward, so the bbox centre is not the pivot: back-most + r
+            centre = (left_dir * ((max(lat) + min(lat)) / 2.0) + up * ((max(ver) + min(ver)) / 2.0)
+                      + fwd * (min(dep) + radius))
+            name = "Bip001 %s Eye" % side
+            bpy.context.view_layer.objects.active = arm
+            bpy.ops.object.mode_set(mode="EDIT")
+            eb = arm.data.edit_bones.new(name)
+            inv = arm.matrix_world.inverted()
+            eb.head = inv @ centre
+            eb.tail = inv @ (centre + fwd * radius * 1.5)
+            eb.parent = arm.data.edit_bones["Bip001 Head"]
+            eb.use_deform = True
+            bpy.ops.object.mode_set(mode="OBJECT")
+            group = mesh.vertex_groups.get(name) or mesh.vertex_groups.new(name=name)
+            for vg in mesh.vertex_groups:
+                if vg != group:
+                    vg.remove(ids)
+            group.add(ids, 1.0, "REPLACE")
+            made.append("%s: %d verts, r=%.2f" % (name, len(ids), radius))
+    return made
 
 
 def weighted_bones(meshes):
@@ -331,7 +399,34 @@ def bake_node_colours(meshes, tex_dir):
     return out
 
 
-def fix_pmx_materials(meshes, baked):
+def catchlight_sphere(tex_dir, size=256):
+    """An additive MMD sphere map: black with a small glint up-left of the view axis
+    (sphere maps are indexed by the view-space normal) plus a faint lower-right one."""
+    import numpy as np
+
+    path = os.path.join(tex_dir, "eye_catchlight_sph.png")
+    if os.path.isfile(path):
+        return path
+    os.makedirs(tex_dir, exist_ok=True)
+    v, u = np.mgrid[0:size, 0:size].astype(np.float32) / (size - 1)
+    img = np.zeros((size, size), np.float32)
+    # a small crisp glint just up-left of the view axis: the first try (0.36/0.30, sigma
+    # 0.045) sat ~30 degrees off-axis where the eyeball's normals barely change, and spread
+    # into a milky film over the iris
+    for cu, cv, sigma, peak in ((0.43, 0.39, 0.018, 1.0), (0.59, 0.63, 0.011, 0.35)):
+        img += peak * np.exp(-((u - cu) ** 2 + (v - cv) ** 2) / (2 * sigma * sigma))
+    img = np.clip(img, 0.0, 1.0)
+    rgba = np.ones((size, size, 4), np.float32)
+    rgba[..., 0] = rgba[..., 1] = rgba[..., 2] = img
+    image = bpy.data.images.new("eye_catchlight_sph", size, size, alpha=False)
+    image.pixels.foreach_set(np.ascontiguousarray(rgba[::-1]).ravel())   # rows run bottom-up
+    image.filepath_raw = path
+    image.file_format = "PNG"
+    image.save()
+    return path
+
+
+def fix_pmx_materials(meshes, baked, tex_dir):
     """Give every material what MMD needs: one colour texture that really is the colour,
     alpha 0 on helper shells, and MMD lighting values."""
     from blender2xps import materials as b2m
@@ -354,10 +449,25 @@ def fix_pmx_materials(meshes, baked):
             mm.ambient_color = (0.5, 0.5, 0.5)
             mm.specular_color = (0.12, 0.12, 0.12)
             mm.shininess = 12.0
+            if mat.name in baked and baked[mat.name][1] > 0.99:
+                mm.alpha = 0.0                        # nothing to draw (EyeLight_Inst)
+                report["shells"].append(mat.name + " (fully transparent bake)")
+                continue
+            if EYE_MAT_RE.search(mat.name):
+                # MMD: the lids would shade the eyeball, and the UE eye got its life from
+                # specular + a normal map; a sphere map is how MMD eyes get a catch-light
+                mm.enabled_self_shadow = False
+                mm.enabled_drop_shadow = False
+                mm.enabled_self_shadow_map = False
+                mm.ambient_color = (0.6, 0.6, 0.6)
+                mm.is_double_sided = False            # the back of the eyeball is inside the head
+                FnMaterial(mat).create_sphere_texture(catchlight_sphere(tex_dir))
+                mm.sphere_texture_type = "2"            # add
+                report.setdefault("eyes", []).append(mat.name)
             if mat.name in baked:
                 path, cut, size = baked[mat.name]
                 FnMaterial(mat).create_texture(path)
-                if cut > 0.02:                        # strand cards: seen from both sides
+                if cut > 0.02 and not EYE_MAT_RE.search(mat.name):   # strand cards: both sides
                     mm.is_double_sided = True
                 if "hair" in mat.name.lower():
                     mm.specular_color = (0.3, 0.3, 0.3)
@@ -534,7 +644,7 @@ def main():
     report["joints"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "JOINT")
     report["distortion"] = roe.mesh_distortion(before, meshes)
     report["hidden_materials"] = roe.hide_transparent_materials(meshes)
-    report["materials"] = fix_pmx_materials(meshes, baked)
+    report["materials"] = fix_pmx_materials(meshes, baked, os.path.join(out_dir, "textures"))
     if head is not None:
         report["vertex_morphs"], report["morphs_skipped"] = add_arkit_morphs(root, head)
 
