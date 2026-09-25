@@ -14,6 +14,7 @@
 | Dead or Alive 6 | KTGL v2 RDB + G1M/G1T | [`doa6/`](doa6/) | `doa6\export_full.ps1` |
 | Virt-A-Mate 1.22 | Unity 资源包 + `.var`（DAZ Genesis 2 人体 / 自定义网格） | [`vam/`](vam/) | `vam\export_vam_models.ps1` |
 | Vindictus: Defying Fate（2024-03 Pre-Alpha） | Unreal 5.3 IoStore（`.utoc/.ucas`，索引 AES 加密） | [`vindictus/`](vindictus/) | `vindictus\export_model.ps1` |
+| NARAKA: BLADEPOINT（永劫无间） | Unity 2019.4 AssetBundle（改头的 UnityFS，不加密） | [`naraka/`](naraka/) | `naraka\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -81,6 +82,12 @@ PSK + PNG + 材质参数，`build_blend.py` 把各部件的骨架子集并成一
 头发/眼睛/皮肤/服装材质，出 `.blend` + 预览；`vindictus\html\index.html` 是画廊。详见
 [`vindictus/README.md`](vindictus/README.md)。
 
+NARAKA: BLADEPOINT（永劫无间）的 StreamingAssets 是 12,818 个哈希命名的 bundle——改了文件头的 UnityFS
+（签名、LZ4 编号 6、4 KB 对齐），没加密。`naraka/` 只用 UnityPy + lz4：`naraka_bundle.py` 按需解压，
+`naraka_manifest.py` 读 `AppRes.info` 清单还原资源路径，`list_models.py` 列 3,578 个模型（29 位英雄的 834 套外观、
+发型、怪物 / NPC、武器），`export_model.py` 把外观 + 配套发型 + 默认脸挂到同一副骨架上出 `.blend`（+ FBX）与预览。
+详见 [`naraka/README.md`](naraka/README.md) 与 [NARAKA 提取](../docs/naraka-bladepoint-extraction.md)。
+
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
 Archive Tool 源码），TMC/TMCL 经 Noesis（32 位 + doa5pc 插件）转 FBX+DDS；DOA6 用
@@ -102,5 +109,5 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。

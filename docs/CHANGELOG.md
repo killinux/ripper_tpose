@@ -14,6 +14,71 @@
 
 ---
 
+## 2026-09-25 — Stellar Blade：Gantz Reika（CNS mod）导出 + PMX 头发物理修复 + 画廊列出 XPS / PMX
+
+### 新增 / 变化
+
+- 装上 Nexus mod 3561「Gantz Reika (CNS)」（Hawkins）：`SB\Content\Paks\~mods\Hawkins_GantzReika\`。这是 CNS 类 mod，
+  新增一套服装、不顶替原版；游戏里要看到还得装 UE4SS for Stellar Blade 与 CNS（mod 1496）。
+- 两个版本（A 全套战斗服、B 露肤版）导出 Blender（`packages\Eve_Mod_GantzReika_A|B\`）、XPS（`xps\…`）、PMX（`pmx\…`）。
+- `build_standalone.py`：`_ORM` 与 `_ARM` 同样处理（G 粗糙 / B 金属），皮肤 `_ORSS` 取 G 作粗糙度，`Emissive` 接自发光。
+- `export_pmx_blender.py` 修两处头发物理（`anchor_hub_roots()`、`release_rest_overlaps()`），Vindictus Fiona 与 Gantz A / B 全部重导。
+- 新增 `preview_pmx_blender.py`：带物理导回 PMX，出 `preview.png` / `_morphs` / `_gaze` / `_dance`，并报告静止 60 帧的链根漂移。
+- 画廊卡片列出 XPS / PMX 路径和四张回读预览链接，附录新增「Nexus 服装 mod → Blender / XPS / MMD」一节。
+
+### 用户如何操作
+
+见 `scripts/stellarblade/README.md`「Nexus 服装 Mod」（含 CNS 小节）与「导出 MMD（PMX）」；PMX 导完再跑一次
+`preview_pmx_blender.py` 看四张预览。
+
+### 实现原理与坑
+
+- CNS mod 的资源在 `/Game/OutfitMods/<名>/`，`*.dekcns.json` 的 `OutfitPaths` 列出各变体网格；UE Viewer 照常导，
+  每个变体按普通服装组装（网格只到脖子，用 Eve 的 Face_003 + 发型 + 马尾）。
+- 头皮头发的根骨 `Hair_Root`（「頭」下，带 4 条刘海 + 2 条侧发链）被 mmd_cloth_physics 建成纯物理刚体，不动站着 60 帧就沉
+  12 cm、跳舞时像光头 → 「父骨固定、自己动态、下面 ≥2 条动态链」的分叉根改成跟随骨骼（马尾第一节 `Ab-TL-HairB01` 同理）。
+- 马尾上段的 `HairTail_Root` 静止时就嵌在头部碰撞球里 9.1–9.4 cm，一开物理就被顶开 → 静止时嵌进会碰撞的跟随骨骼碰撞体
+  超过 2 mm 的动态刚体，把那个碰撞组加进它的不碰撞列表。
+- 预览的坑：`import_vmd(margin=0)` 让第一帧从静止姿势直接跳到舞蹈姿势，关节把每条头发链猛拽一下，之后整段都像头发坏了
+  （刘海翻上头顶、马尾甩离头部），模型本身没问题；预览改用 30 帧 margin。Fiona 第一版的舞蹈预览其实已经拍到光头，当时没看出来。
+
+### 验证
+
+三个 PMX：撕裂 0、付与顺序违规 0、权重空洞 0、`stray_recipients` 空、26 个 MMD 表情；导回 Blender 静止 60 帧链根最大漂移
+1.1 cm（修前 12 cm），跳舞 4 帧、12 个表情、5 个视线方向目检。Gantz 两版 XPS 用 `xpsdump.py` 回读 verify OK；
+两版组装、重接材质都 0 缺图。
+
+## 2026-09-25 — NARAKA: BLADEPOINT（永劫无间）：模型列表 + 导出脚本
+
+### 新增 / 变化
+
+- 新增 `scripts/naraka/`：`list_models.py` 按清单列出 3,578 个可导出模型（29 位英雄的 834 套外观、643 款发型、175 个怪物 /
+  NPC、1,526 把武器……），可按组 / 家族 / 英雄 / 关键词筛选，出 CSV / JSON / HTML 画廊；`export_model.py` 把外观 + 配套发型 +
+  默认脸拼成 `.blend`（+ FBX）并渲预览，怪物、NPC、武器、单件发型同样能导。
+- 文档：`scripts/naraka/README.md`（用法、家族 ↔ 英雄表）、`docs/naraka-bladepoint-extraction.md`（原理与坑）。
+
+### 用户如何操作
+
+`python scripts\naraka\list_models.py`（摘要，`--hero 宁红夜`、`--html` …），
+`python scripts\naraka\export_model.py --outfit ch_f_ming_haikou_lv_s0`（`--family` / `--all-outfits` / `--prefab` 批量）。
+
+### 实现原理与坑
+
+- bundle 是改了头的 UnityFS：签名 `15 1E 1C 0D 0D 23 21 00`、压缩编号 6 = LZ4、数据块 4 KB 对齐、头部尺寸带偏移，不加密。
+  按需解压（一套外观要拉约 200 个 bundle，公共包最大 1.7 GB）；`AppRes.info` 清单给出哈希文件 ↔ 资源路径。
+- UnityPy 的 Mesh 类读这个游戏会报错，顶点流从 typetree 自己解。
+- 外观网格的骨骼按「变换路径的 CRC32」对到骨架 `ch_dummy_body`；散装骨（胸、裙、飘带）按哈希或绑定姿势找父骨
+  （先比位置：飘带链存的是甩起来的姿势）；发型和脸是运行时网格（`AvatarFaceMeshData`），按绑定姿势自上而下认骨。
+- 发色取 `hair_custom_data` 的 `BaseColorA`（与游戏物品图标核对过），`_MainSHMap` 不是颜色；虹膜、眉毛贴花按着色器参数
+  烘进贴图；`_NormalBentMap` 当普通法线会满脸斑块；`*_cb` / `*_cf` 双层布料按游戏的剔除设置处理。
+- 家族 ↔ 英雄：29 位英雄（`herocareerdata_img`），开服 6 位的家族按外观系列命名（mangjianke = 宁红夜 …），
+  由英雄选择图标和同时带两个名字的资源路径确定；另 6 位只确认了拼音。
+
+### 验证
+
+32 个外观家族各一套 + 石狼、金色狂战士、宋兵 + 两把武器 + 一款默认发型，共 40 个导出，全部 0 根未解析骨，预览逐个目检；
+清单解析出的 12,818 个 bundle 与磁盘一一对应、目录全部能解。
+
 ## 2026-09-25 — Stellar Blade PMX：眼睛（眼球骨 + 视线 + MMD 下的眼神光与阴影）
 
 ### 新增 / 变化
