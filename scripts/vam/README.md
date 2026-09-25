@@ -298,10 +298,13 @@ VaM/Unity：米，Y 向上，+Z 朝前，+X 是角色的**右**（用脚尖方�
 cd E:\code\othercode\ripper_tpose\scripts\vam
 python tests\test_vam_lib.py        # 纯 Python，合成 .var/.vab/.vmb/dump fixture，末行 VAM_LIB_TEST=PASS
 python tests\test_vam_duf.py        # 反方向的 DSON 写入器，末行 VAM_DUF_TEST=PASS
+python tests\test_vam_items.py      # 直接写物品（§9）：包裹 / 朝向 / morph / 脸部工具，末行 VAM_ITEMS_TEST=PASS
 ```
 
 `test_vam_duf.py` 除了合成 fixture，还会在能找到 VaM 安装时拿 `VL_13.Lashes_2.1` 里那对
 真实 DUF / VAB 复核坐标换算，并要求 `check_duf` 接受 VaM 自己接受过的文件。
+`test_vam_items.py` 在能找到 VaM 安装时，会把前 60 个不带布料模拟的 `.vab` 用 `write_vab` 重写，
+要求逐字节一致（全量 224 件是手动跑的）。
 
 集成验证（2026-09-05，本机 119 个包）：`Angela`（Female Custom + 4 件皮肤层）、
 `Cloud`（Male 4 + 6 件衣服）、`Preset_Alivia`（Kayla 皮肤全默认贴图，148 个 morph）、
@@ -395,7 +398,7 @@ T-pose 再导手臂上的件，要么就只导躯干/头/腿上的件。脚同�
 边长比 p99 到 24.8 倍、嘴唇 16.2 倍，8204 个头部面里 4.68% 法线翻转，侧面渲出来鼻子直接没了。原因是
 **对应关系**不对而不是目标面不全（把口腔、眼球补进目标只会更糟）。只有躯干+腿那部分能用：头
 （z 1.50–1.60）、手臂（|x| 0.145–0.21）、脚（z 0.09–0.17）用 smoothstep 衰减冻住，剩下 6570 个顶点，
-边长比 p99 1.465、只有 37 个面翻转，渲出来是个正常身体。要真做脸得上带地标的 wrap 变形，最近点不够。
+边长比 p99 1.465、只有 37 个面翻转，渲出来是个正常身体。要真做脸得上带地标的 wrap 变形，最近点不够。（后来按地标做成了，见 [§9](#9-直接写-vam-物品把游戏角色整套搬进来bring_to_vampy)。）
 
 ### DSON 写了什么，怎么确定的
 
@@ -440,3 +443,156 @@ dx, dy, dz], …]}}`，`parent` 指向 `Genesis2Female.dsf#GenesisFemale-1`（�
   `CreateHairSim`，这一步是交互的，没法脚本化。
 - **n-gon 会被三角化**（DSON 最多四边形），会在结果里报数量。
 - CUA 那条路要 Unity 2018.1.9f1，本机没装，暂时没做。
+
+## 9. 直接写 VaM 物品：把游戏角色整套搬进来（`bring_to_vam.py`）
+
+§8 的 `.duf` 只是创作器的**输入**：游戏里还得 Import + Store，才会出现在衣服列表里。这一节换个做法：
+直接写出 VaM 自己存的 `.vam / .vaj / .vab`，放进 `Custom\` 就能在衣服、头发列表和外观预设里看到，
+完全不经过创作器。第一个例子是 Vindictus: Defying Fate 的 Fiona，素材是我们自己从游戏里导出的
+`Fiona.blend`（UE5 / MetaHuman 骨架，四件盔甲 + 头发 + 脸）。
+
+### 用法
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\vam
+$blender = "D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
+
+# ① 从 .blend 导出蒙皮网格、骨骼、权重、材质；眼球是程序化材质，顺手把它的底色烘成一张图
+& $blender -b D:\vindictus_exports\blend\Fiona\Fiona.blend --factory-startup `
+    -P blender_dump_skinned.py -- D:\vam_imports\FionaDF\_src --bake MI_Fiona_Face01_EyeBall
+
+# ② 拟合、写物品 / morph / 贴图 / 预设，渲预览和缩略图；--install 同时拷进 VaM
+python bring_to_vam.py --profile fiona_df --install
+```
+
+进游戏：选一个女性 Person → Appearance → Presets → `VindictusDF` → **`Preset_Fiona DF`**。每件东西也能在
+Clothing / Hair 列表里单独找到（作者 `VindictusDF`）。
+
+产物在 `D:\vam_imports\FionaDF\vam\Custom\` 下，`--install` 原样拷到 VaM 的 `Custom\`：
+
+| 路径 | 内容 |
+|---|---|
+| `Clothing\Female\VindictusDF\Fiona DF Armor Top` / `Armor Bottom` / `Gauntlets` / `Boots` | `.vam/.vaj/.vab` + 贴图 + 缩略图 |
+| `Hair\Female\VindictusDF\Fiona DF Hair` | 网格头发（HairFemale） |
+| `Atom\Person\Morphs\female\VindictusDF\Fiona DF Body` / `Fiona DF Head` | `.vmi/.vmb` |
+| `Atom\Person\Textures\VindictusDF\Fiona DF\` | 脸部漫反射 `Fiona DF Face D.png`、眼睛 `Fiona DF Eyes D.png` |
+| `Atom\Person\Appearance\VindictusDF\Preset_Fiona DF.vap/.jpg` | 外观预设 |
+
+`D:\vam_imports\FionaDF\_preview\` 是 Blender 按 VaM 的规则重建出来的样子（物品从 `.vab` 的包裹记录重建、
+两个 morph 打开、贴上预设里的脸和眼睛）：全身正/侧/背、头、脸三个角度、脚/手/胸特写。
+
+换角色：在 `PROFILES` 里加一项——每件衣服是哪个物体、要排除哪些皮肤材质、离皮肤留多少间隙，以及脸的
+物体和材质名。骨架目前只认 UE5 / MetaHuman 的骨骼名（`rig: ue5`）。
+
+### 物品格式（逐字节验证过）
+
+- **`.vab`** = DAZMesh（顶点、UV、接缝映射表、多边形）+ `"DAZSkinWrap" "1.0" "Normal"` +
+  `"DAZSkinWrapStore" "1.0"`（每个 UV 顶点一条 40 字节记录：三角形号、三个顶点号、6 个系数）+ `.vaj` 里每个
+  `DAZSkinWrapMaterialOptions` 组一段 `MaterialOptions` 面索引 + 结尾一个字节（1 = 后面跟布料模拟数据）。接缝映射表
+  是**三元组** `{基础顶点, UV 顶点, 首个多边形}`（§5 的解析按二元组读，碰巧不影响，因为它按标记找包裹段）。
+  `vam_items.write_vab` 把本机装的 **224 件**不带布料模拟的物品全部重写得**逐字节一致**。
+- **包裹记录**：位置 = v1 + N·f0 + T1·f1 + T2·f2（N 为朝外单位法线，T1 = 重心 − v1，T2 = N × T1，系数按 |T|² 归一），
+  法线的三个系数用同一框架。三角形编号是 Unity 子网格的顺序：多边形按材质稳定排序，四边形拆成 (0,1,2)(0,2,3)。
+  我们选的最近三角形总是不比 VaM 自己选的远，重建误差 1e-8 m。
+- **`.vam`**：itemType、uid `<作者>:<名字>`、displayName、creatorName、tags、isRealItem；**`.vaj`**：storables
+  （uid + Style / WrapControl / Sim / ItemControl / Material<材质名>）。头发物品（HairFemale）的 storable 前缀是
+  uid + `CustomScalp`。预设里引用散装物品：`{"id": "Custom/Clothing/Female/<作者>/<件>/<件>.vam", "internalId": uid}`。
+- **morph**：`.vmi` JSON + `.vmb`（int32 数量，再每条 {int32 顶点号, float3 位移}，VaM 空间、米）。女性身体 morph 只能动
+  前 21556 个顶点。`formulas` 里 `BoneCenterX/Y/Z` 的值是**米、VaM 轴**——拿作者们的 morph 标定过：`lEye` 的值正好等于
+  x < 0 那只眼球顶点的平均位移（`KSE-ZERO - Body` 完全相等，`KJL03` 差 0.2 mm 以内）。
+- **预设里的皮肤和眼睛**：`textures.faceDiffuseUrl`、`irises.customTexture_MainTex`（整张眼睛贴图：上半眼白、
+  下半两个虹膜）、`FemaleEyelashes."Diffuse Color"`（HSV）。散装文件写 `Custom/...` 相对路径，`.var` 包里才是
+  `SELF:/Custom/...`；morph 的 uid 同理。
+
+### 身体怎么对上
+
+1. **骨架重定向**：UE5 的每根变形骨映射到 G2F 的关节（脊柱按弧长分配），每段骨一个仿射（旋转 + 沿骨缩放），用角色
+   自己的权重做线性混合蒙皮——A-pose 摆成 VaM 的 T-pose，四肢长度也对上。**脊柱只平移**：UE 的 spine_05 → neck_01
+   往后仰 37°，一旋转，围巾尾巴就甩到身后去了。前脚掌按「脚掌骨 → 鞋尖」映射到 G2F 的「脚趾 → 趾尖」，为高跟设计的
+   靴子也能包住 VaM 的平脚。头部骨用脸拟合的相似变换（见下），头发就落在拟合后的头上。
+2. **静止体 morph**（关键一步）：VaM 穿衣服时照样画身体，G2F 胸大臀宽，盔甲会被顶穿。把盔甲往外推会把硬甲片推瘪、
+   裙甲外翻；反过来，把 G2F **往里收**到每件衣服的间隙以内，这个形状存成 morph `Fiona DF Body`，所有物品都对着它算
+   包裹。预设把 morph 开到 1，VaM 重建出来的盔甲就是原样：不穿模，也不变形。
+   - 收缩上限按**皮肤材质**分部位（躯干 10 cm、手指 3 mm……），并且不超过到该部位骨轴距离的一定比例——3 cm 粗的脚踝
+     收 3 cm，三角形就翻过去了。
+   - 每个衣服点固定在**起始身体**上离它最近的三角形上。在收缩中的身体上重新找的话，胸甲的点会从深收的乳尖跳到上方
+     坡面，乳尖照样顶穿。
+   - 大三角形内部也加采样点：一整块平板的顶点都在外面，中间照样会被顶穿。
+   - **皮肤这一侧也要查**：衣服点只推它锚定的那个三角形，旁边的小凸起只分到平滑溢出来的量——乳头尖收了 65 mm，
+     旁边的乳晕只收了 15 mm，还在胸甲前面 17 mm。所以躯干、臀、脖子、肩、腿、前臂的每个皮肤顶点还要落在离它最近的
+     硬质衣服点后面至少一个间隙。手脚不做：它们上限只有几毫米，自己又多褶，这条规则让脚上翻面的三角形多了 4 倍。
+     头发不算：它薄、透，发根本来就扎在头皮里；耳朵只许收 3 mm——头发穿过耳朵很正常，耳朵收 2 cm 会皱成一团。
+   - 收缩方向用平滑过的法线场（约 5 cm），小凸起整体往后退，不会被各自朝侧面的法线扯开。
+3. **包裹记录的朝向**（这个坑最隐蔽）：记录的法线 N 是三角形法线，按皮肤的顶点法线定朝向——VaM 是在**当时的**身体上
+   定的。静止体收得很深，有的三角形在收缩后翻了面或者和顶点法线接近垂直，用基础身体的法线算出来的记录到了 VaM 里
+   朝向就反了，顶点被甩到皮肤另一侧、偏出两倍的法向偏移。第一阶段装进去的五件都有：上衣 146、下装 135、护手 296、
+   靴子 6、头发 369 个顶点偏出 5 mm 以上，最远 20 cm（耳边头发炸开就是它）。现在记录按静止体自己的法线算，并且只锚在
+   「在基础 / 起始 / 静止三种形状里朝向都明确（|cos| ≥ 0.5）且一致」的三角形上（排除约 4% 的皮肤三角形）；流程最后
+   用写出去的 `.vmb` 叠出身体、从 `.vab` 重建每一件做自检，五件都在 0.3 mm 表面偏移之外 ≤ 0.002 mm。
+4. **最近三角形**用均匀网格加速：取 6 个最近顶点周围的三角形算精确距离，远于一个格子的点改走暴力搜索。身体用 3 cm
+   格子，和暴力搜索比 25 mm 内完全一致；脸这种密网格用 1.5 倍中位边长（Fiona 的脸 7.5 mm），在 10 万个贴图像素上和
+   64 候选的暴力搜索逐点一致（1 倍时有 341 个点选错）。查询分块，一块不超过约 2000 万个点-顶点对——2048 的贴图一次
+   就是 290 万个点，不分块要 3.5 GB。
+
+### 脸（`face_fit.py`）
+
+§8 里说过，最近点投影会把脸投烂，所以这里按地标来：
+
+1. **地标**：两边用同一套规则——眼内/外角、眼球中心、上下眼睑中点、嘴角、耳朵、鼻根、鼻尖、鼻翼、上下唇、下巴、
+   额头、头顶、后脑、颧骨。G2F 这边从材质岛取（Lacrimals = 内眼角，Tear = 下眼睑，Lips、Ears、Sclera），Fiona 这边
+   用 MetaHuman 的 `FACIAL_*` 骨头（EyeCornerInner/Outer、LipCorner、Ear、EyelidUpperA2/LowerA2）投到皮肤上；
+   鼻翼、下巴这些纯几何的规则两边共用。
+2. **相似变换**（Umeyama）把 Fiona 的脸搬到 G2F 的头上：**保留 VaM 的头的大小**，只借形状。Fiona 的头小一圈：
+   s = 1.102，转 2.5°，地标残差中位 3.3 mm。
+3. **薄板样条**（φ = r）：从 G2F 的地标到变换后的 Fiona 地标，作用于整个头，顺着脖子往下淡出。
+4. **表面贴合**：脸、嘴唇、鼻孔、头皮的顶点拉向 Fiona 皮肤的最近点，位移先在 G2F 网格上平滑再施加，由粗到细 6 轮
+   （平滑 30 → 1 次），最后中位 0.04 mm。有了样条，对应关系已经对了，鼻子不会再被剪切掉。三条护栏：
+   - 两边表面朝向差超过 60° 的点对不拉（否则内唇被拉到外唇上，嘴唇翻折）；
+   - **耳朵不拉**，跟着周围皮肤的位移走：耳朵的褶在别人的耳朵上找不到对应，投上去边长拉到 11.6 倍、21 个三角形翻面；
+     睫毛、泪线、泪阜、口腔同样跟着附近皮肤走（不跟的话，睫毛会离开眼睑最多 4 mm）；
+   - 最后在翻面的三角形及其两圈邻居里把位移做调和平均，直到没有翻面（头皮接耳朵处、嘴角共 33 个，2 轮清零）。
+5. **眼球**整体平移到 Fiona 的眼球中心（约 1 mm），morph 里同时写 `lEye/rEye` 的 BoneCenter，VaM 转眼珠的支点跟着走。
+6. 结果写成 morph `Fiona DF Head`。
+
+**脸部贴图**：G2F 的脸部贴图（Face、Lips、Nostrils 三个材质；耳朵和头皮在躯干贴图上）按 UV 光栅化，每个像素在拟合后
+的头上找 Fiona 皮肤的最近点，按她自己的 UV 采她的漫反射。2048² 共 290 万个像素，到 Fiona 皮肤的距离中位 0.14 mm。然后：
+
+- **发底**：Fiona 的贴图在发际线以上画了一层深棕色的「发底」，金发底下露出来就是黑发根。眉毛以上、眼角外侧比皮肤暗的
+  像素换成底模角色（Evey）的皮肤；替换区往外扩约 4 mm 再羽化，盖住发际线那圈发灰的过渡。
+- **接缝**：脸在接缝处接的是 Evey 的躯干贴图（脖子、耳朵、头皮），所以沿外缘 5% 宽的一圈，把低频颜色比（线性光）
+  过渡到 Evey 的；脸中间只带 30%，雀斑、疤、痣、嘴唇都保留。
+- **眉毛**是贴在皮肤上的发片：每个发片顶点投到拟合后的头上取 G2F 的 UV，再在这个 UV 空间里按发片自己的 UV 光栅化，
+  用 ODI 的 R 通道做覆盖率叠上去（透射率相乘，发片的先后顺序无关）。
+- **虹膜**：Fiona 的眼球材质是程序化的（从调色板取色 + 纹理 + 节点画的瞳孔和角膜缘），所以在 dump 时用 Cycles 把它的
+  Base Color 烘成一张图（`--bake`），再按半径映射进底模的眼睛贴图：两边都自动量出瞳孔边和虹膜外缘，这一圈对那一圈，
+  瞳孔和眼白保留底模的。
+- 睫毛用 VaM 自己的，在预设里调成棕色。
+
+底模选 **Evey**：和 Fiona 的脸同色相，亮约 5%。它的皮肤是 "UV: Base Female"——我们烘的就是这套 UV，换底模时必须选
+同一套 UV 的角色（Candy、Evey、Female 1、Janie、Kayla、Lexi、Tina……）。
+
+### 实测（Fiona）
+
+| 项 | 结果 |
+|---|---|
+| 头部相似变换 | s = 1.102，旋转 2.5°，地标残差中位 3.3 mm（最大 12.0 mm，在耳朵） |
+| 表面贴合 | 6 轮后中位 0.04 mm、p95 0.59 mm；每轮 110–225 个点对因朝向不符被丢弃；翻面 33 → 0 |
+| 头部 morph `Fiona DF Head` | 8836 个顶点；眼球平移约 1.1 mm，lEye / rEye 的 BoneCenter 一并写入 |
+| 头部网格质量（对比基础 G2F） | 脸、嘴唇、鼻孔、耳朵、头皮、睫毛、脖子全部 0 翻面；耳朵边长比最大 2.4（改前 11.6） |
+| 脸部贴图 | 2048²，2,894,074 个像素，到 Fiona 皮肤中位 0.15 mm / p95 0.63 mm；发底替换占 33.3%；眉毛 3592 片全部贴皮（高出皮肤中位 1.9 mm） |
+| 虹膜映射 | G2F 瞳孔边 0.084–0.087 / 外缘 0.209–0.210（UV 半径）← Fiona 0.065 / 0.190 |
+| 静止体 morph `Fiona DF Body` | 15,027 个顶点，收缩 p95 46.3 mm、最大 96.1 mm |
+| 物品 | 上衣 17,063 顶点 / 28,842 面，下装 7,296 / 11,723，护手 7,676 / 15,092，靴子 6,450 / 12,068，头发 28,492 / 40,856 |
+| 自检：`.vab` 在「基础 + 两个 morph」上重建 | 五件都在 0.3 mm 表面偏移之外 ≤ 0.002 mm（修前五件共 952 个顶点偏出 5 mm 以上，最远 20 cm） |
+| 胸甲遮挡 | 正面看过去 194 个乳头顶点被胸甲挡住 194 个（修前 50 个露在外面，最远 17 mm） |
+| 整条流程 | 约 6 分钟（其中脸部贴图 4 分钟），含 Blender 预览和缩略图 |
+
+### 还没做的
+
+- `Fiona DF Body` 是**只为穿盔甲准备的收缩体型**：盔甲下面约 500 个皮肤三角形被收得翻了面（手 184、躯干 131、胸 64、脚 58、指甲趾甲 58），
+  穿着时看不见；**脱掉盔甲时把这个 morph 调回 0**。
+- 靴子是为高跟设计的，VaM 的脚是平的：脚趾会从护脚甲前端下面露出来（第一阶段就这样）。可以在 VaM 里把脚尖往下压一点。
+- 没有布料模拟（盔甲本来就是硬的）；头发是网格头发，不会飘。
+- 脸的法线 / 高光贴图还是 Evey 的（G2F 的 UV 位置不变，嘴唇、鼻翼对得上；只是眉毛的凹凸留在 Evey 的眉毛位置）。
+- 只做了女性，骨架只认 UE5 命名。
+- 格式是逐字节验证的，拟合结果是在 Blender 里按 VaM 的规则重建出来检查的；**还没在 VaM 里亲眼看过**。

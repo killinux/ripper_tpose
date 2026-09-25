@@ -43,6 +43,82 @@
 495 / 495 成功，26 分钟，共 41 GB。只有沈妙 `lv_s14` 的发型有 8 根骨按最近位置配上（偏 4.2–4.4 cm，预览看不出）。
 按家族拼的 17 张缩略图总览（`_list\overview\`）逐张看过，没有坏的。
 
+## 2026-09-25 — VaM：把游戏角色整套搬进 VaM（直接写物品，不经过创作器）——Vindictus Fiona
+
+### 新增 / 变化
+
+- `scripts/vam/` 新增一条「游戏角色 → VaM」的线：
+  - `bring_to_vam.py`：流程（profile `fiona_df`）；
+  - `vam_items.py`：`.vam / .vaj / .vab` 与 morph（`.vmi / .vmb`）的写出；
+  - `face_fit.py`：脸（头部 morph、脸部贴图、眉毛、虹膜）；
+  - `blender_dump_skinned.py`：从 `.blend` 导出蒙皮网格、骨骼、材质，`--bake` 把程序化材质的底色烘成图；
+  - `blender_preview_items.py`：在 Blender 里按 VaM 的规则重建（物品从 `.vab` 的包裹记录重建，morph 可叠加，贴上预设的
+    脸和眼睛），渲预览和缩略图。
+- Vindictus: Defying Fate 的 Fiona 已装进 VaM（作者 `VindictusDF`）：
+  - 四件盔甲 + 头发，直接出现在衣服 / 头发列表里；
+  - 体型 morph `Fiona DF Body` 和头部 morph `Fiona DF Head`；
+  - 脸部 / 眼睛贴图；
+  - 外观预设 `Preset_Fiona DF`，底模 Evey。
+- 9-06 那条 `.duf` 路（`import_to_vam.ps1`）保留，它产出的只是创作器的输入。
+
+### 用户如何操作
+
+VaM 里选一个女性 Person → Appearance → Presets → `VindictusDF` → `Preset_Fiona DF`。脱掉盔甲时把 morph
+`Fiona DF Body` 调回 0（它是只为穿盔甲准备的收缩体型）。重新生成或换角色见 `scripts/vam/README.md` §9：
+先跑 `blender_dump_skinned.py`（带 `--bake <眼球材质>`），再跑 `python bring_to_vam.py --profile fiona_df --install`。
+
+### 实现原理与坑
+
+- **物品格式**：`.vab` 的接缝映射表是三元组；包裹记录是「三角形 + 三个顶点 + 法线/切向框架里的 6 个系数」，三角形按
+  Unity 子网格顺序编号。本机 224 件不带布料模拟的物品用 `write_vab` 重写，与原文件逐字节一致。
+- **静止体 morph**：盔甲往外推会把硬甲片推瘪、裙甲外翻，所以反过来把 G2F 往里收到每件衣服的间隙以内，存成
+  `Fiona DF Body`，物品对着它算包裹，预设开到 1，盔甲原样重建。
+  - 收缩上限按皮肤材质分部位，并按到骨轴的距离封顶。
+  - 衣服点固定在起始身体的三角形上，大三角形内部也加采样点。
+  - 皮肤这一侧也要查：衣服点只推它锚定的三角形，乳头尖旁边的乳晕原本还在胸甲前面 17 mm。
+  - 收缩方向用平滑过的法线场；耳朵最多收 3 mm。
+- **包裹记录的朝向**（修了第一阶段的 bug）：记录的法线按皮肤顶点法线定朝向，VaM 是在当时的身体上定的。
+  - 静止体收得深，部分三角形翻面或与顶点法线接近垂直，用基础身体法线算的记录在 VaM 里朝向反了。
+  - 第一阶段装进去的五件共 952 个顶点被甩到皮肤另一侧（最远 20 cm），耳边头发炸开就是它。
+  - 现在按静止体自己的法线算，并只锚在三种形状下朝向都明确的三角形上；流程最后用写出去的 `.vmb` 和 `.vab` 自检。
+- **脸按地标来**（9-06 试过最近点投影，会把鼻子剪掉）。
+  - 步骤：G2F 从材质岛找地标、Fiona 用 MetaHuman 的 `FACIAL_*` 骨 → 相似变换（保留 VaM 的头大小）→ 薄板样条
+    → 由粗到细的表面贴合。
+  - 贴合的三条护栏：
+    - 朝向差超过 60° 的点对不拉（否则嘴唇翻折）；
+    - 耳朵不拉，跟着周围走（投上去会皱成一团）；
+    - 最后把翻面处的位移调和平均清零。
+  - 睫毛、泪线、口腔跟着附近皮肤走。眼球整体平移，morph 里写 `lEye/rEye` 的 BoneCenter（已拿作者们的 morph 标定：
+    米、VaM 轴）。
+- **脸部贴图**：烘到 G2F 的 Face/Lips/Nostrils 上，每个像素取 Fiona 皮肤的最近点、按她的 UV 采色。
+  - Fiona 在发际线上画的深棕「发底」换成底模皮肤并羽化，否则金发下露黑发根。
+  - 外缘一圈把颜色过渡到底模的：脸在耳朵、脖子、头皮处接的是 Evey 的躯干贴图。
+  - 眉毛发片在 G2F 的 UV 空间里重新光栅化，按 ODI 覆盖率叠上。
+  - 虹膜：Fiona 的眼球材质是程序化的，先用 Cycles 烘出底色，再按「瞳孔边 → 虹膜外缘」的半径映射进底模的眼睛贴图。
+- **最近三角形搜索**：2048 贴图一次查 290 万个点，现在分块，不分块要 3.5 GB。密网格的格子用 1.5 倍中位边长，与 64 候选
+  暴力搜索逐点一致，快约 4 倍。
+- **顺手修的旧文档**：本文件 TFD 与 ROE 两节有六行路径（`D:\tfd_exports\blend`、`scripts\firstdescendant`、`.\find_aes_key.py`、`\aes_key.txt`、
+  `D:\roe_exports\j01\blend`）在早先写入时，反斜杠转义被吃成了制表 / 退格 / 换页 / 响铃 / 回车字符，已改回。
+
+### 验证
+
+- **写出与自检**
+  - `write_vab` 对本机 224 件物品逐字节一致。
+  - 流程末尾的自检：用写出去的两个 `.vmb` 叠出身体、从 `.vab` 重建五件，全部在 0.3 mm 表面偏移之外
+    ≤ 0.002 mm。同一检查对第一阶段装进 VaM 的版本报出 952 个顶点偏出 5 mm 以上。
+- **头部拟合**
+  - 地标残差中位 3.3 mm，表面贴合后中位 0.04 mm。
+  - 脸、嘴唇、鼻孔、耳朵、头皮、睫毛、脖子全部 0 翻面；耳朵边长比最大 2.4，改前 11.6。
+  - 头部 morph 8836 个顶点。
+- **脸部贴图**：290 万个像素到 Fiona 皮肤中位 0.15 mm；眉毛 3592 片全部贴皮。
+- **胸甲遮挡**：从正面看，194 个乳头顶点全部被挡住；改前有 50 个露在外面，最远 17 mm。
+- **Blender 预览目检**：全身正 / 侧 / 背、头、脸三个角度、手 / 胸 / 脚特写，按 VaM 规则重建、贴预设贴图。
+  - 头发不再炸开，耳朵干净。
+  - 胸甲不透肉。
+  - 虹膜是 Fiona 的绿褐色，眉毛、疤、痣都在。
+- **已知问题**：靴子为高跟设计，脚趾从护脚甲前端下露出。
+- **尚未在 VaM 里亲眼看过。**
+
 ## 2026-09-25 — Stellar Blade：Gantz Reika（CNS mod）导出 + PMX 头发物理修复 + 画廊列出 XPS / PMX
 
 ### 新增 / 变化
@@ -204,6 +280,50 @@
 文件级：高 21.7 单位、310 骨、22 材质、15 张贴图全部是相对路径且都在、79 表情、54 刚体 / 38 关节；两臂 37.3°、
 权重空洞 0、撕裂 0、付与顺序违规 0。导回 Blender（mmd_tools，带物理并 build）套「来杯好茶」VMD：正面朝向、
 五个舞蹈帧的四肢和胯部、后颈马尾根部、12 个表情（左右眼方向）逐张目检。
+
+## 2026-09-24 — HoneySelect 2 (Libido DX)：模型列表 + 导出（单件 / 底模 / 角色卡，直接读 bundle）
+
+### 新增
+
+- `scripts/honeyselect2/list_models.py`：列出男女底模、31 类共 812 件带网格的物品（脸型 / 衣服 / 头发 /
+  饰品）和 `UserData\chara` 的 15 张角色卡（每张穿戴了什么）；`--category/--group/--search/--sex` 筛选，
+  `--json/--csv` 导出清单，`--html` 生成带 812 张游戏缩略图、可搜索的列表页，`--exported` 标出已导出的。
+- `scripts/honeyselect2/export_model.py`：`--item fo_top:28`（单件，自带骨骼；`--with-body` 穿在底模上）、
+  `--body female|male`、`--card <卡>`（`--nude` 去掉衣服和饰品）、`--all-cards`、`--all-items --group/--category`；
+  产物 `D:\hs2_exports\{cards,bodies,items}\…\<名>.blend` + 正面 / 3/4 / 脸部预览（`--fbx` 另出 FBX）。
+- `build_blend.py`（Blender 3.6 无头）、`hs2_data.py`（清单 / 依赖 / 角色卡）、`hs2_bundle.py`（prefab 拼装与
+  蒙皮烘焙）、`hs2_msgpack.py`（免装 msgpack）。
+- 画廊 `scripts/honeyselect2/html/make_gallery.py` → `html/index.html`：按角色卡·穿好 / 角色卡·裸 / 底模 / 单件
+  分类、可搜索，每张卡片有正面 / 3/4 / 脸部预览、组成物品、规格、`.blend` 链接；缩略图写在
+  `D:\hs2_exports\_gallery\thumbs`，页面只用 `file://`，游戏素材不进仓库。
+
+### 用户操作
+
+```bash
+cd scripts\honeyselect2
+python list_models.py                 # 看有什么
+python list_models.py --html          # 缩略图列表 D:\hs2_exports\_list\index.html
+python export_model.py --card HS2_ill_F_000 [--nude]
+python export_model.py --item so_hair_b:9 --item ao_glasses:0
+```
+
+### 实现原理
+
+物品清单是 `list\characustom` 里 MessagePack 编码的 `ChaListData`（`MainAB` + `MainData` = 包 + prefab）；
+角色卡是 PNG 后的 `【AIS_Chara】` 块。按游戏的拼法：骨架 `p_cf_anim`（男女共用，身体挂点都在它上面），身体网格、
+脸、衣服的骨骼拷贝按名字并上去，头骨挂 `cf_J_Head_s`、头发挂 `N_hair_Root`、饰品挂 `N_*`；每个蒙皮顶点按
+`Σ w·(World×BindPose)·v` 烘到静止姿势。材质按贴图通道重建：衣服分色遮罩在清单 `ColorMaskTex` 里（黑 = 颜色 1、
+R/G/B = 颜色 2/3/4），头发主贴图不带颜色（颜色全来自卡），眉毛 / 乳晕 / 阴毛走脸与身体的 UV1 / UV2，颜色一律
+sRGB→线性。详见 [HoneySelect 2 提取](honey-select-2-extraction.md)。
+
+### 验证
+
+15 张角色卡穿好 + 裸、男女底模、31 类各第一件单独导出（外加 `--with-body` 抽测）全部 PASS、无警告，每份
+约 3–7 秒；逐张看了预览。修过的问题：颜色没转线性（整体发白）、只读 R 的眉毛遮罩在脸上盖出暗色矩形、
+眼睑影子壳被当成白色眼影、prefab 根存成 inactive 导致整件为空、内置 Sphere 网格、饰品挂点缺失（改用
+`p_cf_anim`）、卡里饰品位移单位是 0.1（F_007 的鞭子原先飘在 60 cm 外）。体型滑块、衣服图案、脸部妆、衣服下的身体遮罩未做。
+
+---
 
 ## 2026-09-24 — Stellar Blade：Nexus Mod「Vindictus Fiona」装进游戏并导出 Blender
 
@@ -386,14 +506,14 @@ Viessa（622 骨 / 13 槽 / 26 张贴图 / 111 morph）、Bunny、皮肤 Bunny_C
   编目 **2067 个模型**：33 个后裔（含 Ultimate）、1075 套皮肤、201 怪、54 Boss、99 NPC、250 武器、
   248 配饰、宠物/载具。`--kind` / `--char` / `--resolve` / `--json` / `--raw` 筛选。
 - `export_model.ps1` + `build_blend.py`：解析 → UE Viewer(`-game=first`) 导 PSK/PSKX → Blender 合骨架、
-  渲预览、存 `.blend`，产物在 `D:	fd_exportslend\<id>\`。
+  渲预览、存 `.blend`，产物在 `D:\tfd_exports\blend\<id>\`。
 - `find_aes_key.py`：从 shipping exe 重建 AES key（Nexon 用8 条 `mov imm32` 运行时拼出，非明文）。
 
 ### 用户如何操作
 
 ```
-cd scriptsirstdescendant
-python .ind_aes_key.py --out D:	fd_exports\_keyses_key.txt   # 一次性，~60s
+cd scripts\firstdescendant
+python .\find_aes_key.py --out D:\tfd_exports\_keys\aes_key.txt   # 一次性，~60s
 python .\list_models.py --kind descendant
 .\export_model.ps1 Bunny
 ```
@@ -412,7 +532,7 @@ python .\list_models.py --kind descendant
 
 后裔 Bunny（270 骨 / 111438 顶点，单块合并网格）、皮肤 Bunny_CMN_001（Body+Head+Face → 348 骨）、
 怪 MOB_CMN_1001_A001（101 骨）均一条命令跑通，渲图目检。key 已由 find_aes_key.py 重建（只存
-`D:	fd_exports\_keyses_key.txt`，不入仓）。
+`D:\tfd_exports\_keys\aes_key.txt`，不入仓）。
 
 ## 2026-09-19 — Rise of Eros：67 套「套装」(suit) 全部拼成独立 .blend（直接读 bundle）
 
@@ -489,10 +609,10 @@ python .\list_models.py --kind descendant
 ```
 .\extract_character.ps1 j01 -ExportTextures
 python suit_parts.py --game "<AssetBundles>" --id j01 --suit prouniform
-blender --background --factory-startup --python assemble_suit_blender.py --     --root <提取目录> --tex <贴图目录>     --out D:oe_exports\j01lend\pc_j01_prouniform.blend     --base pc_j01_nk --parts <逗号分隔部件名> --glb 1
+blender --background --factory-startup --python assemble_suit_blender.py --     --root <提取目录> --tex <贴图目录>     --out D:\roe_exports\j01\blend\pc_j01_prouniform.blend     --base pc_j01_nk --parts <逗号分隔部件名> --glb 1
 ```
 
-产物：`D:oe_exports\j01lend\pc_j01_prouniform.blend`（内嵌贴图）+ 三视图预览 + `glb\`。
+产物：`D:\roe_exports\j01\blend\pc_j01_prouniform.blend`（内嵌贴图）+ 三视图预览 + `glb\`。
 
 ### 实现原理与坑
 

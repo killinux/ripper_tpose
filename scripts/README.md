@@ -63,7 +63,7 @@ Operation LOVECRAFT: Fallen Doll 是 UE4.26 游戏，单个 AES 加密 pak（pak
 [Fallen Doll 提取调研](../docs/fallen-doll-extraction.md)。
 
 Virt-A-Mate 没有传统意义的「角色模型文件」：一个 Look = 游戏自带的 Genesis 2 基础人体
-（`VaM_Data\StreamingAssets_per`）+ 一串 morph 增量（`.vmb`）+ 皮肤贴图 + 若干件衣服网格
+（`VaM_Data\StreamingAssets\a_per`）+ 一串 morph 增量（`.vmb`）+ 皮肤贴图 + 若干件衣服网格
 （`.vab`），全部散落在 `AddonPackages\*.var`（zip）和场景 JSON 里。`vam\export_vam_models.ps1`
 把这些拼回一个带材质的 `.blend` + 预览图，`-List` 列出全部 Look / 衣服 / 头发，`-Only` /
 `-Index` 按名字或序号转；发丝头发按造型引导线转成 Blender 曲线（近似），挂在骨骼上的
@@ -72,6 +72,9 @@ DAZSkinWrapStore 在 morph 后的身体上重建（和 VaM 运行时一样）。
 `vam\html\make_gallery.py` 生成画廊 `vam\html\index.html`。反方向有
 `vam\import_to_vam.ps1`：把 Blender 网格写成 VaM 游戏内 Clothing / Hair Creator 能导入的
 DAZ `.duf`（贴身由 VaM 自己算），以及 Genesis 2 体型 morph `.dsf`，不需要 DAZ Studio 或 Unity。
+`vam\bring_to_vam.py` 更进一步：直接写 VaM 自己存的 `.vam/.vaj/.vab` 物品、morph 和外观预设，把游戏角色
+整套搬进 VaM（第一个是 Vindictus Fiona：四件盔甲 + 头发 + 体型 + 按地标拟合的脸和烘到 G2F 上的脸部贴图），
+不经过游戏内创作器。
 格式细节见 [`vam/README.md`](vam/README.md)。
 
 Vindictus: Defying Fate 还没发售，`vindictus/` 针对的是 archive.org 上的 2024-03 Pre-Alpha
