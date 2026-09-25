@@ -23,7 +23,7 @@ from PIL import Image
 THUMB_WIDTH = 720
 THUMB_QUALITY = 82
 PAGE_NAME = "index.html"
-KIND_LABELS = {"official": "本体服装", "dlc": "联动 DLC", "nude": "裸模（mod）", "other": "其它"}
+KIND_LABELS = {"official": "本体服装", "dlc": "联动 DLC", "nude": "裸模（mod）", "mod": "Nexus 服装 mod", "other": "其它"}
 
 
 def parse_args():
@@ -160,7 +160,7 @@ def render(models, source_root):
     characters = len({m["char"] for m in models})
     warned = sum(1 for m in models if m["warnings"])
     mods = sum(1 for m in models if m["kind"] != "official")
-    kinds = [k for k in ("official", "dlc", "nude", "other") if any(m["kind"] == k for m in models)]
+    kinds = [k for k in ("official", "dlc", "mod", "nude", "other") if any(m["kind"] == k for m in models)]
     per_char = {}
     for m in models:
         per_char[m["char"]] = per_char.get(m["char"], 0) + 1

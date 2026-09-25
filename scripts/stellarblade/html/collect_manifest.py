@@ -72,6 +72,12 @@ VARIANT_NAMES = {
 PKG_RE = re.compile(r"^Eve_(CH_P_EVE_(.+))$")
 
 
+# Nexus 服装 Mod（README「Nexus 服装 Mod」一节；装在 ~mods，顶替哪套写在括号里）
+MOD_NAMES = {
+    "Eve_Mod_VindictusFiona": "Vindictus Fiona（Nexus mod 1145，顶替 09 Planet Diving Suit）",
+}
+
+
 def outfit_name(suffix):
     """suffix 形如 45_TypeB / 09_V02 / Nikke_06 / 28NH_typeB -> (显示名, 组编号)"""
     s = suffix
@@ -112,6 +118,8 @@ def main():
         if m:
             name, group = outfit_name(suffix)
             kind = "dlc" if suffix.startswith(("Nier_", "Nikke_")) else "official"
+        elif label in MOD_NAMES:
+            name, group, kind = MOD_NAMES[label], "Mod", "mod"
         else:
             name, group, kind = label.replace("Eve_", ""), "Eve", ("nude" if "Nude" in label else "other")
         warnings = []
