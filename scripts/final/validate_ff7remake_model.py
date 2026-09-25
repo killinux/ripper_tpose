@@ -20,6 +20,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 
 import bpy
@@ -35,6 +36,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True)
     parser.add_argument("--render", default="")
     parser.add_argument("--report", default="")
+    # mod exports: textures/.mat under this root win over same-named ones in --asset-root
+    parser.add_argument("--overlay-root", default="")
+    # {material instance: {parameter: texture}} (ff7_mod_export.py, from "umodel -dump")
+    parser.add_argument("--material-params", default="")
     return parser.parse_args(argv)
 
 
@@ -48,6 +53,9 @@ def operator_exists(module_name: str, operator_name: str) -> bool:
 
 
 def import_psk(path: str):
+    if path.lower().endswith((".gltf", ".glb")):
+        # FF7R-mesh-importer output (mod meshes the Remake UE Viewer build cannot read)
+        return bpy.ops.import_scene.gltf(filepath=path)
     if operator_exists("psk", "import_file"):
         return bpy.ops.psk.import_file(filepath=path)
     if operator_exists("import_scene", "psk"):
@@ -146,9 +154,25 @@ def material_basename(name: str) -> str:
     return name
 
 
-def wire_materials(meshes, material_dir: str, asset_root: str):
+# Mods re-texture body slots with another piece's maps: Remake #967 puts the MarineCharm
+# textures on PC0002_01_Skin (the suit), and that material's list then also carries
+# MarineCharm_A - which its opaque skin shader never reads.  Wired as alpha it cut holes
+# through the torso (the hair behind showed through).  For mod exports a body-like slot
+# gets no _A mask; hair / lashes / brows / charms keep theirs.
+MOD_OPAQUE_SLOT = re.compile(r"skin|body|suit|dress|tops|bottoms|pants|head|face", re.IGNORECASE)
+MOD_ALPHA_SLOT = re.compile(r"hair|lash|brow", re.IGNORECASE)
+
+
+OPACITY_PARAM = re.compile(r"^(opacity|opacitymask|coverage|alpha|alphamask|transparency)$", re.IGNORECASE)
+
+
+def wire_materials(meshes, material_dir: str, asset_root: str, overlay_root: str = "", params=None):
     index = image_index(asset_root)
     mat_index = material_index(asset_root)
+    overlay_mats = {}
+    if overlay_root:
+        index.update(image_index(overlay_root))          # the mod's own textures win
+        overlay_mats = material_index(overlay_root)
     wired = []
     missing = []
     handled = set()
@@ -159,7 +183,7 @@ def wire_materials(meshes, material_dir: str, asset_root: str):
                 continue
             handled.add(material.name)
             base_name = material_basename(material.name)
-            mat_path = os.path.join(material_dir, base_name + ".mat")
+            mat_path = overlay_mats.get(base_name.lower(), os.path.join(material_dir, base_name + ".mat"))
             if not os.path.isfile(mat_path):
                 mat_path = mat_index.get(base_name.lower(), mat_path)
             properties = parse_material(mat_path)
@@ -174,7 +198,16 @@ def wire_materials(meshes, material_dir: str, asset_root: str):
                 candidate = diffuse_name[:-2] + "_A"
                 if candidate.lower() in properties.get("_refs", set()):
                     alpha_name = candidate
+            table = (params or {}).get(base_name)
+            if table is not None:
+                # parameter names known: only a texture bound to an opacity-type parameter
+                # ("0:5:DetailOpacity" is an emissive-detail mask, not coverage)
+                masks = [tex for key, tex in table.items()
+                         if tex and OPACITY_PARAM.match(re.sub(r"^[0-9:]+", "", key))]
+                alpha_name = next((m for m in masks if m == alpha_name), masks[0] if masks else "")
             alpha = resolve_image(index, alpha_name) if alpha_name else ""
+            if alpha and table is None and overlay_root and MOD_OPAQUE_SLOT.search(base_name)                     and not MOD_ALPHA_SLOT.search(base_name):
+                alpha = ""
 
             material.use_nodes = True
             nodes = material.node_tree.nodes
@@ -303,7 +336,12 @@ def main():
             polygon.use_smooth = True
         mesh.data.update()
 
-    materials, missing = wire_materials(meshes, material_dir, asset_root)
+    overlay_root = os.path.abspath(args.overlay_root) if args.overlay_root else ""
+    params = {}
+    if args.material_params and os.path.isfile(args.material_params):
+        with open(args.material_params, encoding="utf-8") as handle:
+            params = json.load(handle)
+    materials, missing = wire_materials(meshes, material_dir, asset_root, overlay_root, params)
     minimum, maximum = create_preview_scene(meshes, render_path)
     armature = armatures[0]
     weighted_groups = set()

@@ -34,6 +34,12 @@ INTERGRADE》的最终导出工具。两款游戏都使用 Unreal，但封包和
 | `ff7r_mesh_importer_large_mesh_cm.patch` | FF7R-mesh-importer v0.2.1 补丁：大网格 32 位索引和厘米坐标 |
 | `tests/test_ff7rebirth_helpers.py` | Rebirth Blender 插件的纯 Python 辅助逻辑测试 |
 | `tests/test_export_ff7rb_worker.py` | 批量 worker 的眼球烘焙/重采样数学与格式契约测试（无需 Blender） |
+| `ff7rb_cli_export.py` | Rebirth 无界面导出：CUE4Parse CLI（打补丁重编，见下）写出 FModel 同构目录，重建材质表；`--mod` 用硬链接暂存目录挂 mod |
+| `cue4parse_ff7_mod_tangents.patch` | CUE4Parse 补丁：Rebirth mod 网格（原版 UE 4.26 烘焙，8 字节切线）也能读 |
+| `nexus_mod_batch.py` | Nexus mod 批量下载辅助：公开 GraphQL 选文件、生成浏览器下载清单页、从下载目录复制解压 |
+| `ff7_mod_export.py` | 两作 mod → .blend（Remake：mod 单独挂载 + glTF 兜底；Rebirth：CLI 暂存目录，含 DRESSCODE 插件 mod）+ 画廊条目 |
+| `export_ff7_pmx_blender.py` | FF7 角色 .blend → MMD PMX（复用 Stellar Blade / ROE 的 PMX 链，加 SE 骨骼槽位、胸部支点、裙摆骨转大腿） |
+| `ff7_mod_pmx_batch.py` | 批量出 mod 的 PMX + MMD 预览，并把 XPS / PMX 路径写进画廊条目 |
 
 ## 2. 公共准备
 
@@ -600,3 +606,14 @@ ACTRHEAD
   [FModel Getting Started](https://github.com/4sval/FModel/wiki/Getting-Started)
 - UE Viewer 官方项目：
   [UE Viewer / UModel](https://www.gildor.org/en/projects/umodel)
+
+---
+
+# C. Nexus mod 与 Rebirth 无界面导出（2026-09-25）
+
+两作的 Nexus mod 导出到 Blender / XPS / PMX，以及 Rebirth 画廊从 71 补到 85，完整做法、坑和验证见
+[`docs/ff7-nexus-mods-export.md`](../../docs/ff7-nexus-mods-export.md)。要点：
+
+- Rebirth 不再必须开 FModel：`ff7rb_cli_export.py` 用打过补丁的 CUE4Parse CLI（`E:/tools/cue4parse_cli_ff7/cue4parse.exe`）导出，材质表从材质实例链 + 基础材质默认参数重建；
+- mod 的 Blender 导出：`ff7_mod_export.py remake|rebirth`；XPS 用 blender2xps；PMX 用 `ff7_mod_pmx_batch.py`；
+- 画廊：两个 `collect_manifest.py` 都会读 `D:/ff7remake_exports/mods/gallery_mods.json` / `D:/ff7rebirth_exports/mods/gallery_mods.json`，Rebirth 还会读 `cli_materialized`。

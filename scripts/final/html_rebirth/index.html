@@ -93,22 +93,22 @@ td code, li code, p code { font-family: Consolas, monospace; }
 <body>
 <header>
   <h1>FF7 Rebirth 模型导出总览</h1>
-  <div class="sub">生成于 2026-09-06 13:16 · 导出根目录 <code>D:\ff7rebirth_exports\materialized</code> ·
+  <div class="sub">生成于 2026-09-25 20:27 · 导出根目录 <code>D:\ff7rebirth_exports\materialized</code> ·
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
-    <div class="stat"><b>71</b><span>已转模型</span></div>
-    <div class="stat"><b>14</b><span>覆盖角色</span></div>
-    <div class="stat"><b>9</b><span>过场/蛤蟆变体</span></div>
-    <div class="stat"><b>6.8 GB</b><span>blend 总体积</span></div>
-    <div class="stat"><b>7</b><span>有告警</span></div>
+    <div class="stat"><b>98</b><span>已转模型</span></div>
+    <div class="stat"><b>15</b><span>覆盖角色</span></div>
+    <div class="stat"><b>35</b><span>过场/蛤蟆变体</span></div>
+    <div class="stat"><b>9.0 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>20</b><span>有告警</span></div>
   </div>
 </header>
 
 <div class="toolbar">
   <input id="q" type="search" placeholder="搜索角色、服装名、包编号或路径…（按 / 聚焦）">
-  <select id="chr"><option value="">全部角色</option><option value="Aerith">Aerith (12)</option><option value="Barret">Barret (5)</option><option value="CaitSith">CaitSith (2)</option><option value="Cid">Cid (1)</option><option value="Cloud">Cloud (12)</option><option value="Debumoogle">Debumoogle (4)</option><option value="RedXIII">RedXIII (4)</option><option value="Sephiroth">Sephiroth (2)</option><option value="Sonon">Sonon (1)</option><option value="Tifa">Tifa (8)</option><option value="Toad">Toad (9)</option><option value="Vincent">Vincent (1)</option><option value="Yuffie">Yuffie (7)</option><option value="Zack">Zack (3)</option></select>
+  <select id="chr"><option value="">全部角色</option><option value="Aerith">Aerith (13)</option><option value="Barret">Barret (6)</option><option value="CaitSith">CaitSith (2)</option><option value="Cid">Cid (1)</option><option value="Cloud">Cloud (17)</option><option value="Debumoogle">Debumoogle (5)</option><option value="RedXIII">RedXIII (5)</option><option value="Reika">Reika (5)</option><option value="Sephiroth">Sephiroth (3)</option><option value="Sonon">Sonon (2)</option><option value="Tifa">Tifa (17)</option><option value="Toad">Toad (10)</option><option value="Vincent">Vincent (1)</option><option value="Yuffie">Yuffie (8)</option><option value="Zack">Zack (3)</option></select>
   <button class="chip on" data-kind="">全部</button>
-  <button class="chip" data-kind="official">主服装</button><button class="chip" data-kind="toad">蛤蟆形态</button>
+  <button class="chip" data-kind="official">主服装</button><button class="chip" data-kind="cutscene">过场专用（PC7xxx）</button><button class="chip" data-kind="toad">蛤蟆形态</button><button class="chip" data-kind="variant">血迹/泪痕贴片</button><button class="chip" data-kind="mod">Nexus mod</button>
   <button class="toggle" id="warnOnly">只看告警</button>
   <span class="count" id="count"></span>
 </div>
@@ -124,6 +124,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 196160 顶点 · 595 骨骼 · 14 材质（0 透明） · 125.6 MB</dd>
             <dt>blend</dt>
@@ -141,6 +142,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · ZackCostume</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 191145 顶点 · 659 骨骼 · 13 材质（0 透明） · 141.6 MB</dd>
             <dt>blend</dt>
@@ -158,6 +160,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · Soldier</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 69344 顶点 · 458 骨骼 · 11 材质（0 透明） · 94.1 MB</dd>
             <dt>blend</dt>
@@ -175,6 +178,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · SoldierSenior</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 70888 顶点 · 458 骨骼 · 12 材质（0 透明） · 103.2 MB</dd>
             <dt>blend</dt>
@@ -192,6 +196,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · SoldierNoHelmet</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 176209 顶点 · 574 骨骼 · 11 材质（0 透明） · 133.6 MB</dd>
             <dt>blend</dt>
@@ -209,6 +214,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · CostaClothing</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 177594 顶点 · 512 骨骼 · 11 材质（0 透明） · 132.2 MB</dd>
             <dt>blend</dt>
@@ -226,6 +232,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · CostaClothing2</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 177569 顶点 · 551 骨骼 · 10 材质（0 透明） · 125.5 MB</dd>
             <dt>blend</dt>
@@ -243,6 +250,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · Loveless</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 191763 顶点 · 593 骨骼 · 11 材质（0 透明） · 143.7 MB</dd>
             <dt>blend</dt>
@@ -260,11 +268,66 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · ZackCostumeDirty</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 191145 顶点 · 655 骨骼 · 13 材质（0 透明） · 118.4 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_12_Cloud_ZackCostumeDirty.blend" title="D:\ff7rebirth_exports\materialized\PC0000_12_Cloud_ZackCostumeDirty.blend">D:\ff7rebirth_exports\materialized\PC0000_12_Cloud_ZackCostumeDirty.blend</a>
                 <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_12_Cloud_ZackCostumeDirty.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_13_cloud_cutbroodcheek cloud cutbroodcheek pc0000_13 d:\ff7rebirth_exports\cli_materialized\pc0000_13_cloud_cutbroodcheek.blend" data-kind="variant" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_13_Cloud_CutBroodCheek_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_13_Cloud_CutBroodCheek.jpg" alt="PC0000_13_Cloud_CutBroodCheek"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_13_Cloud_CutBroodCheek</h3><span class="badge badge-mod">血迹/泪痕贴片</span><span class="badge badge-code">PC0000_13</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · CutBroodCheek</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 2668 顶点 · 591 骨骼 · 1 材质（0 透明） · 3.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_13_Cloud_CutBroodCheek.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0000_13_Cloud_CutBroodCheek.blend">D:\ff7rebirth_exports\cli_materialized\PC0000_13_Cloud_CutBroodCheek.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0000_13_Cloud_CutBroodCheek.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_14_cloud_cutbroodpalm cloud cutbroodpalm pc0000_14 d:\ff7rebirth_exports\cli_materialized\pc0000_14_cloud_cutbroodpalm.blend" data-kind="variant" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_14_Cloud_CutBroodPalm_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_14_Cloud_CutBroodPalm.jpg" alt="PC0000_14_Cloud_CutBroodPalm"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_14_Cloud_CutBroodPalm</h3><span class="badge badge-mod">血迹/泪痕贴片</span><span class="badge badge-code">PC0000_14</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · CutBroodPalm</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 747 顶点 · 620 骨骼 · 1 材质（0 透明） · 5.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_14_Cloud_CutBroodPalm.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0000_14_Cloud_CutBroodPalm.blend">D:\ff7rebirth_exports\cli_materialized\PC0000_14_Cloud_CutBroodPalm.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0000_14_Cloud_CutBroodPalm.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_15_cloud_cutbroodbackofhand cloud cutbroodbackofhand pc0000_15 d:\ff7rebirth_exports\cli_materialized\pc0000_15_cloud_cutbroodbackofhand.blend" data-kind="variant" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_15_Cloud_CutBroodBackOfHand_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_15_Cloud_CutBroodBackOfHand.jpg" alt="PC0000_15_Cloud_CutBroodBackOfHand"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_15_Cloud_CutBroodBackOfHand</h3><span class="badge badge-mod">血迹/泪痕贴片</span><span class="badge badge-code">PC0000_15</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · CutBroodBackOfHand</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 872 顶点 · 591 骨骼 · 1 材质（0 透明） · 7.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_15_Cloud_CutBroodBackOfHand.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0000_15_Cloud_CutBroodBackOfHand.blend">D:\ff7rebirth_exports\cli_materialized\PC0000_15_Cloud_CutBroodBackOfHand.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0000_15_Cloud_CutBroodBackOfHand.blend">复制</button></dd>
           </dl>
         </div>
       </article>
@@ -277,6 +340,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · LovelessNoMask</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 189956 顶点 · 593 骨骼 · 11 材质（0 透明） · 54.2 MB</dd>
             <dt>blend</dt>
@@ -294,6 +358,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · ZackCostumeAge21</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 191145 顶点 · 655 骨骼 · 13 材质（0 透明） · 132.9 MB</dd>
             <dt>blend</dt>
@@ -311,11 +376,30 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cloud · ZackCostumeDirtyAge21</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 191145 顶点 · 655 骨骼 · 13 材质（0 透明） · 134.6 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0000_19_Cloud_ZackCostumeDirtyAge21.blend" title="D:\ff7rebirth_exports\materialized\PC0000_19_Cloud_ZackCostumeDirtyAge21.blend">D:\ff7rebirth_exports\materialized\PC0000_19_Cloud_ZackCostumeDirtyAge21.blend</a>
                 <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0000_19_Cloud_ZackCostumeDirtyAge21.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0000_25_cloud_cutbroodcheek2 cloud cutbroodcheek2 pc0000_25 d:\ff7rebirth_exports\cli_materialized\pc0000_25_cloud_cutbroodcheek2.blend" data-kind="variant" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_25_Cloud_CutBroodCheek2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0000_25_Cloud_CutBroodCheek2.jpg" alt="PC0000_25_Cloud_CutBroodCheek2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0000_25_Cloud_CutBroodCheek2</h3><span class="badge badge-mod">血迹/泪痕贴片</span><span class="badge badge-code">PC0000_25</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · CutBroodCheek2</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 6531 顶点 · 595 骨骼 · 1 材质（0 透明） · 4.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0000_25_Cloud_CutBroodCheek2.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0000_25_Cloud_CutBroodCheek2.blend">D:\ff7rebirth_exports\cli_materialized\PC0000_25_Cloud_CutBroodCheek2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0000_25_Cloud_CutBroodCheek2.blend">复制</button></dd>
           </dl>
         </div>
       </article>
@@ -328,6 +412,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Barret · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 119140 顶点 · 523 骨骼 · 13 材质（0 透明） · 150.0 MB</dd>
             <dt>blend</dt>
@@ -345,6 +430,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Barret · Corel</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 97131 顶点 · 397 骨骼 · 13 材质（0 透明） · 148.2 MB</dd>
             <dt>blend</dt>
@@ -362,6 +448,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Barret · Sailor</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 55512 顶点 · 358 骨骼 · 10 材质（0 透明） · 51.0 MB</dd>
             <dt>blend</dt>
@@ -379,6 +466,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Barret · Loveless</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 132685 顶点 · 546 骨骼 · 12 材质（0 透明） · 134.6 MB</dd>
             <dt>blend</dt>
@@ -396,6 +484,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Barret · Bandage</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 94913 顶点 · 381 骨骼 · 13 材质（0 透明） · 148.0 MB</dd>
             <dt>blend</dt>
@@ -413,6 +502,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 188921 顶点 · 536 骨骼 · 12 材质（0 透明） · 134.7 MB</dd>
             <dt>blend</dt>
@@ -430,6 +520,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · NoGlove</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 180779 顶点 · 536 骨骼 · 11 材质（0 透明） · 121.0 MB</dd>
             <dt>blend</dt>
@@ -447,6 +538,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · Soldier</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 71501 顶点 · 447 骨骼 · 11 材质（0 透明） · 89.4 MB</dd>
             <dt>blend</dt>
@@ -464,6 +556,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · SoldierNoHelmet</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 166259 顶点 · 495 骨骼 · 13 材质（0 透明） · 135.8 MB</dd>
             <dt>blend</dt>
@@ -481,6 +574,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · CostaClothing</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 192945 顶点 · 595 骨骼 · 11 材质（0 透明） · 133.4 MB</dd>
             <dt>blend</dt>
@@ -498,6 +592,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · CostaClothing2</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 177865 顶点 · 638 骨骼 · 10 材质（0 透明） · 116.9 MB</dd>
             <dt>blend</dt>
@@ -515,6 +610,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · Loveless</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 180211 顶点 · 521 骨骼 · 11 材质（0 透明） · 116.1 MB</dd>
             <dt>blend</dt>
@@ -532,6 +628,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Tifa · ChangingClothes</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 172865 顶点 · 536 骨骼 · 11 材质（0 透明） · 118.8 MB</dd>
             <dt>blend</dt>
@@ -549,6 +646,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 189382 顶点 · 718 骨骼 · 9 材质（0 透明） · 129.0 MB</dd>
             <dt>blend</dt>
@@ -566,6 +664,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · Dirty</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 203458 顶点 · 685 骨骼 · 9 材质（0 透明） · 142.3 MB</dd>
             <dt>blend</dt>
@@ -583,6 +682,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · Soldier</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 87463 顶点 · 439 骨骼 · 10 材质（0 透明） · 90.7 MB</dd>
             <dt>blend</dt>
@@ -600,6 +700,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · SoldierNoHelmet</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 165984 顶点 · 491 骨骼 · 10 材质（0 透明） · 125.9 MB</dd>
             <dt>blend</dt>
@@ -617,6 +718,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · CostaClothing</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 185968 顶点 · 590 骨骼 · 11 材质（0 透明） · 130.6 MB</dd>
             <dt>blend</dt>
@@ -634,6 +736,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · CostaClothing2</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 181082 顶点 · 465 骨骼 · 9 材质（0 透明） · 119.1 MB</dd>
             <dt>blend</dt>
@@ -651,6 +754,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · Loveless</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 184087 顶点 · 521 骨骼 · 11 材质（0 透明） · 122.2 MB</dd>
             <dt>blend</dt>
@@ -668,6 +772,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · NoRibbon</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 183052 顶点 · 753 骨骼 · 9 材质（0 透明） · 128.4 MB</dd>
             <dt>blend</dt>
@@ -685,6 +790,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · CutNoJacket</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 168678 顶点 · 548 骨骼 · 8 材质（0 透明） · 109.7 MB</dd>
             <dt>blend</dt>
@@ -702,6 +808,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · ChangingClothes</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 184656 顶点 · 684 骨骼 · 9 材质（0 透明） · 127.6 MB</dd>
             <dt>blend</dt>
@@ -719,11 +826,30 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · NoJacketNoRibbon</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 162348 顶点 · 640 骨骼 · 8 材质（0 透明） · 108.5 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0003_14_Aerith_NoJacketNoRibbon.blend" title="D:\ff7rebirth_exports\materialized\PC0003_14_Aerith_NoJacketNoRibbon.blend">D:\ff7rebirth_exports\materialized\PC0003_14_Aerith_NoJacketNoRibbon.blend</a>
                 <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0003_14_Aerith_NoJacketNoRibbon.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0003_18_aerith_noribbonblood aerith noribbonblood pc0003_18 d:\ff7rebirth_exports\cli_materialized\pc0003_18_aerith_noribbonblood.blend" data-kind="variant" data-chr="Aerith" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0003_18_Aerith_NoRibbonBlood_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0003_18_Aerith_NoRibbonBlood.jpg" alt="PC0003_18_Aerith_NoRibbonBlood"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0003_18_Aerith_NoRibbonBlood</h3><span class="badge badge-mod">血迹/泪痕贴片</span><span class="badge badge-code">PC0003_18</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Aerith · NoRibbonBlood</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 3981 顶点 · 718 骨骼 · 1 材质（0 透明） · 3.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0003_18_Aerith_NoRibbonBlood.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0003_18_Aerith_NoRibbonBlood.blend">D:\ff7rebirth_exports\cli_materialized\PC0003_18_Aerith_NoRibbonBlood.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0003_18_Aerith_NoRibbonBlood.blend">复制</button></dd>
           </dl>
         </div>
       </article>
@@ -736,6 +862,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Aerith · LovelessSing</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 200945 顶点 · 641 骨骼 · 10 材质（0 透明） · 127.4 MB</dd>
             <dt>blend</dt>
@@ -753,6 +880,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>RedXIII · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 129090 顶点 · 361 骨骼 · 13 材质（0 透明） · 58.2 MB</dd>
             <dt>blend</dt>
@@ -770,6 +898,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>RedXIII · Once2</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 129503 顶点 · 361 骨骼 · 13 材质（0 透明） · 65.5 MB</dd>
             <dt>blend</dt>
@@ -787,11 +916,30 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>RedXIII · Soldier</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 70490 顶点 · 305 骨骼 · 14 材质（0 透明） · 81.7 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0004_05_RedXIII_Soldier.blend" title="D:\ff7rebirth_exports\materialized\PC0004_05_RedXIII_Soldier.blend">D:\ff7rebirth_exports\materialized\PC0004_05_RedXIII_Soldier.blend</a>
                 <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0004_05_RedXIII_Soldier.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0004_06_redxiii_oncehologram redxiii oncehologram pc0004_06 d:\ff7rebirth_exports\cli_materialized\pc0004_06_redxiii_oncehologram.blend" data-kind="official" data-chr="RedXIII" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0004_06_RedXIII_OnceHologram_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0004_06_RedXIII_OnceHologram.jpg" alt="PC0004_06_RedXIII_OnceHologram"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0004_06_RedXIII_OnceHologram</h3><span class="badge badge-code">PC0004_06</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>RedXIII · OnceHologram</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 119597 顶点 · 361 骨骼 · 13 材质（0 透明） · 34.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0004_06_RedXIII_OnceHologram.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0004_06_RedXIII_OnceHologram.blend">D:\ff7rebirth_exports\cli_materialized\PC0004_06_RedXIII_OnceHologram.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0004_06_RedXIII_OnceHologram.blend">复制</button></dd>
           </dl>
         </div>
       </article>
@@ -804,6 +952,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>RedXIII · Dirty</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 129141 顶点 · 361 骨骼 · 13 材质（0 透明） · 77.9 MB</dd>
             <dt>blend</dt>
@@ -821,6 +970,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Yuffie · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 138247 顶点 · 590 骨骼 · 15 材质（0 透明） · 118.8 MB</dd>
             <dt>blend</dt>
@@ -838,6 +988,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Yuffie · Moogle</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 188752 顶点 · 828 骨骼 · 20 材质（0 透明） · 178.8 MB</dd>
             <dt>blend</dt>
@@ -855,6 +1006,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Yuffie · CostaClothing</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 101738 顶点 · 526 骨骼 · 10 材质（0 透明） · 93.8 MB</dd>
             <dt>blend</dt>
@@ -872,6 +1024,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Yuffie · WelcomeDance</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 109234 顶点 · 836 骨骼 · 11 材质（0 透明） · 99.9 MB</dd>
             <dt>blend</dt>
@@ -889,6 +1042,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Yuffie · BlackMantle</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 121403 顶点 · 880 骨骼 · 15 材质（0 透明） · 182.9 MB</dd>
             <dt>blend</dt>
@@ -906,6 +1060,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Yuffie · StandardAvatar</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 11187 顶点 · 110 骨骼 · 2 材质（0 透明） · 26.4 MB</dd>
             <dt>blend</dt>
@@ -923,6 +1078,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Yuffie · Loveless</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 105528 顶点 · 599 骨骼 · 11 材质（0 透明） · 95.8 MB</dd>
             <dt>blend</dt>
@@ -940,11 +1096,30 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Sonon · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 108106 顶点 · 614 骨骼 · 10 材质（0 透明） · 77.5 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0006_00_Sonon_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0006_00_Sonon_Standard.blend">D:\ff7rebirth_exports\materialized\PC0006_00_Sonon_Standard.blend</a>
                 <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0006_00_Sonon_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0006_91_sonon_bloodpsbl00910 sonon bloodpsbl00910 pc0006_91 d:\ff7rebirth_exports\cli_materialized\pc0006_91_sonon_bloodpsbl00910.blend" data-kind="variant" data-chr="Sonon" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0006_91_Sonon_BloodPSBL00910_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0006_91_Sonon_BloodPSBL00910.jpg" alt="PC0006_91_Sonon_BloodPSBL00910"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0006_91_Sonon_BloodPSBL00910</h3><span class="badge badge-mod">血迹/泪痕贴片</span><span class="badge badge-code">PC0006_91</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sonon · BloodPSBL00910</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 6736 顶点 · 614 骨骼 · 2 材质（0 透明） · 15.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0006_91_Sonon_BloodPSBL00910.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0006_91_Sonon_BloodPSBL00910.blend">D:\ff7rebirth_exports\cli_materialized\PC0006_91_Sonon_BloodPSBL00910.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0006_91_Sonon_BloodPSBL00910.blend">复制</button></dd>
           </dl>
         </div>
       </article>
@@ -957,6 +1132,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>CaitSith · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 107525 顶点 · 323 骨骼 · 5 材质（0 透明） · 51.7 MB</dd>
             <dt>blend</dt>
@@ -974,6 +1150,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>CaitSith · Loveless</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 120815 顶点 · 368 骨骼 · 5 材质（0 透明） · 53.9 MB</dd>
             <dt>blend</dt>
@@ -991,6 +1168,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Debumoogle · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 407559 顶点 · 244 骨骼 · 6 材质（0 透明） · 102.9 MB</dd>
             <dt>blend</dt>
@@ -1008,6 +1186,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Debumoogle · CutL</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 407559 顶点 · 221 骨骼 · 4 材质（0 透明） · 101.4 MB</dd>
             <dt>blend</dt>
@@ -1025,6 +1204,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Debumoogle · CutM</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 407559 顶点 · 221 骨骼 · 4 材质（0 透明） · 101.4 MB</dd>
             <dt>blend</dt>
@@ -1042,6 +1222,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Debumoogle · CutS</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 407559 顶点 · 221 骨骼 · 4 材质（0 透明） · 101.4 MB</dd>
             <dt>blend</dt>
@@ -1059,6 +1240,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Zack · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 127091 顶点 · 678 骨骼 · 13 材质（0 透明） · 83.7 MB</dd>
             <dt>blend</dt>
@@ -1076,6 +1258,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Zack · AerithRibbon</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 129280 顶点 · 686 骨骼 · 14 材质（0 透明） · 103.3 MB</dd>
             <dt>blend</dt>
@@ -1093,6 +1276,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Zack · Dirty</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 128107 顶点 · 678 骨骼 · 13 材质（0 透明） · 82.6 MB</dd>
             <dt>blend</dt>
@@ -1110,6 +1294,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Sephiroth · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 112936 顶点 · 818 骨骼 · 10 材质（0 透明） · 68.8 MB</dd>
             <dt>blend</dt>
@@ -1127,6 +1312,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Sephiroth · Transform</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 156511 顶点 · 828 骨骼 · 11 材质（0 透明） · 53.7 MB</dd>
             <dt>blend</dt>
@@ -1144,6 +1330,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Vincent · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 197383 顶点 · 650 骨骼 · 14 材质（0 透明） · 171.4 MB</dd>
             <dt>blend</dt>
@@ -1161,11 +1348,30 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Cid · Standard</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 195630 顶点 · 453 骨骼 · 14 材质（0 透明） · 112.9 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0012_00_Cid_Standard.blend" title="D:\ff7rebirth_exports\materialized\PC0012_00_Cid_Standard.blend">D:\ff7rebirth_exports\materialized\PC0012_00_Cid_Standard.blend</a>
                 <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0012_00_Cid_Standard.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc0099_00_toad_standard toad standard pc0099_00 d:\ff7rebirth_exports\cli_materialized\pc0099_00_toad_standard.blend" data-kind="toad" data-chr="Toad" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC0099_00_Toad_Standard_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC0099_00_Toad_Standard.jpg" alt="PC0099_00_Toad_Standard"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC0099_00_Toad_Standard</h3><span class="badge badge-mod">蛤蟆形态</span><span class="badge badge-code">PC0099_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Toad · Standard</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 6430 顶点 · 201 骨骼 · 3 材质（0 透明） · 11.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC0099_00_Toad_Standard.blend" title="D:\ff7rebirth_exports\cli_materialized\PC0099_00_Toad_Standard.blend">D:\ff7rebirth_exports\cli_materialized\PC0099_00_Toad_Standard.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC0099_00_Toad_Standard.blend">复制</button></dd>
           </dl>
         </div>
       </article>
@@ -1178,6 +1384,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · Cloud</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 13898 顶点 · 200 骨骼 · 4 材质（0 透明） · 15.8 MB</dd>
             <dt>blend</dt>
@@ -1195,6 +1402,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · Barret</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 10422 顶点 · 200 骨骼 · 4 材质（0 透明） · 12.9 MB</dd>
             <dt>blend</dt>
@@ -1212,6 +1420,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · Tifa</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 10368 顶点 · 252 骨骼 · 3 材质（0 透明） · 13.1 MB</dd>
             <dt>blend</dt>
@@ -1229,6 +1438,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · Aerith</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 7751 顶点 · 215 骨骼 · 3 材质（0 透明） · 10.9 MB</dd>
             <dt>blend</dt>
@@ -1246,6 +1456,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · Yuffie</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 19363 顶点 · 200 骨骼 · 4 材质（0 透明） · 26.1 MB</dd>
             <dt>blend</dt>
@@ -1263,6 +1474,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · RedXIII</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 6978 顶点 · 206 骨骼 · 2 材质（0 透明） · 15.3 MB</dd>
             <dt>blend</dt>
@@ -1280,6 +1492,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · CaitSith</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 11017 顶点 · 247 骨骼 · 3 材质（0 透明） · 15.2 MB</dd>
             <dt>blend</dt>
@@ -1297,6 +1510,7 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · Mob</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 6904 顶点 · 201 骨骼 · 2 材质（0 透明） · 10.6 MB</dd>
             <dt>blend</dt>
@@ -1314,11 +1528,354 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </div>
           <dl>
             <dt>角色</dt><dd>Toad · Finn</dd>
+            
             <dt>规格</dt>
             <dd>1 网格 · 8173 顶点 · 212 骨骼 · 3 材质（0 透明） · 15.1 MB</dd>
             <dt>blend</dt>
             <dd><a href="file:///D:/ff7rebirth_exports/materialized/PC0099_91_Toad_Finn.blend" title="D:\ff7rebirth_exports\materialized\PC0099_91_Toad_Finn.blend">D:\ff7rebirth_exports\materialized\PC0099_91_Toad_Finn.blend</a>
                 <button class="copy" data-copy="D:\ff7rebirth_exports\materialized\PC0099_91_Toad_Finn.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc7000_00_cloud_standardcfend2 cloud standardcfend2 pc7000_00 d:\ff7rebirth_exports\cli_materialized\pc7000_00_cloud_standardcfend2.blend" data-kind="cutscene" data-chr="Cloud" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC7000_00_Cloud_StandardCFEnd2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC7000_00_Cloud_StandardCFEnd2.jpg" alt="PC7000_00_Cloud_StandardCFEnd2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC7000_00_Cloud_StandardCFEnd2</h3><span class="badge badge-mod">过场专用（PC7xxx）</span><span class="badge badge-code">PC7000_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Cloud · StandardCFEnd2</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 2388 顶点 · 80 骨骼 · 1 材质（0 透明） · 8.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC7000_00_Cloud_StandardCFEnd2.blend" title="D:\ff7rebirth_exports\cli_materialized\PC7000_00_Cloud_StandardCFEnd2.blend">D:\ff7rebirth_exports\cli_materialized\PC7000_00_Cloud_StandardCFEnd2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC7000_00_Cloud_StandardCFEnd2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc7001_00_barret_standardcfend2 barret standardcfend2 pc7001_00 d:\ff7rebirth_exports\cli_materialized\pc7001_00_barret_standardcfend2.blend" data-kind="cutscene" data-chr="Barret" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC7001_00_Barret_StandardCFEnd2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC7001_00_Barret_StandardCFEnd2.jpg" alt="PC7001_00_Barret_StandardCFEnd2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC7001_00_Barret_StandardCFEnd2</h3><span class="badge badge-mod">过场专用（PC7xxx）</span><span class="badge badge-code">PC7001_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Barret · StandardCFEnd2</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 5674 顶点 · 77 骨骼 · 1 材质（0 透明） · 6.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC7001_00_Barret_StandardCFEnd2.blend" title="D:\ff7rebirth_exports\cli_materialized\PC7001_00_Barret_StandardCFEnd2.blend">D:\ff7rebirth_exports\cli_materialized\PC7001_00_Barret_StandardCFEnd2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC7001_00_Barret_StandardCFEnd2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc7002_00_tifa_standardcfend2 tifa standardcfend2 pc7002_00 d:\ff7rebirth_exports\cli_materialized\pc7002_00_tifa_standardcfend2.blend" data-kind="cutscene" data-chr="Tifa" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC7002_00_Tifa_StandardCFEnd2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC7002_00_Tifa_StandardCFEnd2.jpg" alt="PC7002_00_Tifa_StandardCFEnd2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC7002_00_Tifa_StandardCFEnd2</h3><span class="badge badge-mod">过场专用（PC7xxx）</span><span class="badge badge-code">PC7002_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · StandardCFEnd2</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 2731 顶点 · 108 骨骼 · 1 材质（0 透明） · 5.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC7002_00_Tifa_StandardCFEnd2.blend" title="D:\ff7rebirth_exports\cli_materialized\PC7002_00_Tifa_StandardCFEnd2.blend">D:\ff7rebirth_exports\cli_materialized\PC7002_00_Tifa_StandardCFEnd2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC7002_00_Tifa_StandardCFEnd2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc7005_00_yuffie_standardcfend2 yuffie standardcfend2 pc7005_00 d:\ff7rebirth_exports\cli_materialized\pc7005_00_yuffie_standardcfend2.blend" data-kind="cutscene" data-chr="Yuffie" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC7005_00_Yuffie_StandardCFEnd2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC7005_00_Yuffie_StandardCFEnd2.jpg" alt="PC7005_00_Yuffie_StandardCFEnd2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC7005_00_Yuffie_StandardCFEnd2</h3><span class="badge badge-mod">过场专用（PC7xxx）</span><span class="badge badge-code">PC7005_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Yuffie · StandardCFEnd2</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 3816 顶点 · 90 骨骼 · 1 材质（0 透明） · 7.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC7005_00_Yuffie_StandardCFEnd2.blend" title="D:\ff7rebirth_exports\cli_materialized\PC7005_00_Yuffie_StandardCFEnd2.blend">D:\ff7rebirth_exports\cli_materialized\PC7005_00_Yuffie_StandardCFEnd2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC7005_00_Yuffie_StandardCFEnd2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc7008_00_debumoogle_standardcfend2 debumoogle standardcfend2 pc7008_00 d:\ff7rebirth_exports\cli_materialized\pc7008_00_debumoogle_standardcfend2.blend" data-kind="cutscene" data-chr="Debumoogle" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC7008_00_Debumoogle_StandardCFEnd2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC7008_00_Debumoogle_StandardCFEnd2.jpg" alt="PC7008_00_Debumoogle_StandardCFEnd2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC7008_00_Debumoogle_StandardCFEnd2</h3><span class="badge badge-mod">过场专用（PC7xxx）</span><span class="badge badge-code">PC7008_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Debumoogle · StandardCFEnd2</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 699 顶点 · 220 骨骼 · 1 材质（0 透明） · 5.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC7008_00_Debumoogle_StandardCFEnd2.blend" title="D:\ff7rebirth_exports\cli_materialized\PC7008_00_Debumoogle_StandardCFEnd2.blend">D:\ff7rebirth_exports\cli_materialized\PC7008_00_Debumoogle_StandardCFEnd2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC7008_00_Debumoogle_StandardCFEnd2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="pc7010_00_sephiroth_standardcfend2 sephiroth standardcfend2 pc7010_00 d:\ff7rebirth_exports\cli_materialized\pc7010_00_sephiroth_standardcfend2.blend" data-kind="cutscene" data-chr="Sephiroth" data-warn="0">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/cli_materialized/PC7010_00_Sephiroth_StandardCFEnd2_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/PC7010_00_Sephiroth_StandardCFEnd2.jpg" alt="PC7010_00_Sephiroth_StandardCFEnd2"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>PC7010_00_Sephiroth_StandardCFEnd2</h3><span class="badge badge-mod">过场专用（PC7xxx）</span><span class="badge badge-code">PC7010_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Sephiroth · StandardCFEnd2</dd>
+            
+            <dt>规格</dt>
+            <dd>1 网格 · 2541 顶点 · 108 骨骼 · 1 材质（0 透明） · 5.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/cli_materialized/PC7010_00_Sephiroth_StandardCFEnd2.blend" title="D:\ff7rebirth_exports\cli_materialized\PC7010_00_Sephiroth_StandardCFEnd2.blend">D:\ff7rebirth_exports\cli_materialized\PC7010_00_Sephiroth_StandardCFEnd2.blend</a>
+                <button class="copy" data-copy="D:\ff7rebirth_exports\cli_materialized\PC7010_00_Sephiroth_StandardCFEnd2.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod1613_reika_final_gantz_reika_dresscode_for_1_005 reika reika_final · gantz reika (dresscode) for 1.005 reika_final d:/ff7rebirth_exports/mods\1613_gantz_reika_dresscode\11104_gantz_reika_dresscode_for_1_005\mod1613_reika_final_gantz_reika_dresscode_for_1_005.blend" data-kind="mod" data-chr="Reika" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005.jpg" alt="mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">Reika_Final</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Reika · Reika_Final · Gantz Reika (Dresscode) for 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/1613" target="_blank" rel="noopener">Gantz - Reika (DRESSCODE)</a> · Gantz Reika (Dresscode) for 1.005 · 作者 Supersees12</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 109568 顶点 · 1827 骨骼 · 12 材质（0 透明） · 248.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005.blend" title="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005.blend">D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Final_Gantz_Reika_Dresscode_for_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod1613_reika_finalcomplet_gantz_reika_dresscode_for_1_005 reika reika_finalcomplet · gantz reika (dresscode) for 1.005 reika_finalcomplet d:/ff7rebirth_exports/mods\1613_gantz_reika_dresscode\11104_gantz_reika_dresscode_for_1_005\mod1613_reika_finalcomplet_gantz_reika_dresscode_for_1_005.blend" data-kind="mod" data-chr="Reika" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005.jpg" alt="mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">Reika_Finalcomplet</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Reika · Reika_Finalcomplet · Gantz Reika (Dresscode) for 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/1613" target="_blank" rel="noopener">Gantz - Reika (DRESSCODE)</a> · Gantz Reika (Dresscode) for 1.005 · 作者 Supersees12</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 121277 顶点 · 1381 骨骼 · 12 材质（0 透明） · 261.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005.blend" title="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005.blend">D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Finalcomplet_Gantz_Reika_Dresscode_for_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod1613_reika_nude_gantz_reika_dresscode_for_1_005 reika reika_nude · gantz reika (dresscode) for 1.005 reika_nude d:/ff7rebirth_exports/mods\1613_gantz_reika_dresscode\11104_gantz_reika_dresscode_for_1_005\mod1613_reika_nude_gantz_reika_dresscode_for_1_005.blend" data-kind="mod" data-chr="Reika" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005.jpg" alt="mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">Reika_NUDE</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Reika · Reika_NUDE · Gantz Reika (Dresscode) for 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/1613" target="_blank" rel="noopener">Gantz - Reika (DRESSCODE)</a> · Gantz Reika (Dresscode) for 1.005 · 作者 Supersees12</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 93609 顶点 · 1381 骨骼 · 12 材质（0 透明） · 241.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005.blend" title="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005.blend">D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_NUDE_Gantz_Reika_Dresscode_for_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod1613_reika_viesassuitnosuit_gantz_reika_dresscode_for_1_005 reika reika_viesassuitnosuit · gantz reika (dresscode) for 1.005 reika_viesassuitnosuit d:/ff7rebirth_exports/mods\1613_gantz_reika_dresscode\11104_gantz_reika_dresscode_for_1_005\mod1613_reika_viesassuitnosuit_gantz_reika_dresscode_for_1_005.blend" data-kind="mod" data-chr="Reika" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005.jpg" alt="mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">Reika_ViesassuitNosuit</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Reika · Reika_ViesassuitNosuit · Gantz Reika (Dresscode) for 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/1613" target="_blank" rel="noopener">Gantz - Reika (DRESSCODE)</a> · Gantz Reika (Dresscode) for 1.005 · 作者 Supersees12</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 157767 顶点 · 1827 骨骼 · 11 材质（0 透明） · 207.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005.blend" title="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005.blend">D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_ViesassuitNosuit_Gantz_Reika_Dresscode_for_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod1613_reika_viesassuit_gantz_reika_dresscode_for_1_005 reika reika_viesassuit · gantz reika (dresscode) for 1.005 reika_viesassuit d:/ff7rebirth_exports/mods\1613_gantz_reika_dresscode\11104_gantz_reika_dresscode_for_1_005\mod1613_reika_viesassuit_gantz_reika_dresscode_for_1_005.blend" data-kind="mod" data-chr="Reika" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005.jpg" alt="mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">Reika_Viesassuit</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Reika · Reika_Viesassuit · Gantz Reika (Dresscode) for 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/1613" target="_blank" rel="noopener">Gantz - Reika (DRESSCODE)</a> · Gantz Reika (Dresscode) for 1.005 · 作者 Supersees12</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 189829 顶点 · 1381 骨骼 · 11 材质（0 透明） · 220.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/1613_Gantz_Reika_DRESSCODE/11104_Gantz_Reika_Dresscode_for_1_005/mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005.blend" title="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005.blend">D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\1613_Gantz_Reika_DRESSCODE\11104_Gantz_Reika_Dresscode_for_1_005\mod1613_Reika_Viesassuit_Gantz_Reika_Dresscode_for_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_pc0002_00_tifa_gantz_basic_suit tifa tifa gantz basic suit pc0002_00 d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\3992_tifa_gantz_basic_suit\mod817_pc0002_00_tifa_gantz_basic_suit.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/3992_Tifa_GANTZ_Basic_Suit/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit.jpg" alt="mod817_PC0002_00_Tifa_GANTZ_Basic_Suit"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_PC0002_00_Tifa_GANTZ_Basic_Suit</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">PC0002_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Tifa GANTZ Basic Suit</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ Basic Suit · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 120475 顶点 · 536 骨骼 · 9 材质（0 透明） · 87.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/3992_Tifa_GANTZ_Basic_Suit/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\3992_Tifa_GANTZ_Basic_Suit\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\3992_Tifa_GANTZ_Basic_Suit\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\3992_Tifa_GANTZ_Basic_Suit\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_pc0002_00_tifa_gantz_basic_suit_skimpy tifa tifa gantz basic suit - skimpy pc0002_00 d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\4035_tifa_gantz_basic_suit_skimpy\mod817_pc0002_00_tifa_gantz_basic_suit_skimpy.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/4035_Tifa_GANTZ_Basic_Suit_Skimpy/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy.jpg" alt="mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">PC0002_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Tifa GANTZ Basic Suit - Skimpy</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ Basic Suit - Skimpy · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 131214 顶点 · 536 骨骼 · 10 材质（0 透明） · 115.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/4035_Tifa_GANTZ_Basic_Suit_Skimpy/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\4035_Tifa_GANTZ_Basic_Suit_Skimpy\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\4035_Tifa_GANTZ_Basic_Suit_Skimpy\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\4035_Tifa_GANTZ_Basic_Suit_Skimpy\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_pc0002_00_tifa_gantz_basic_suit_skimpy_standard_ha tifa tifa gantz basic suit - skimpy - standard hair pc0002_00 d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\4036_tifa_gantz_basic_suit_skimpy_standard_hair\mod817_pc0002_00_tifa_gantz_basic_suit_skimpy_standard_ha.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/4036_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Hair/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha.jpg" alt="mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">PC0002_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Tifa GANTZ Basic Suit - Skimpy - Standard Hair</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ Basic Suit - Skimpy - Standard Hair · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 194674 顶点 · 536 骨骼 · 10 材质（0 透明） · 130.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/4036_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Hair/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\4036_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Hair\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\4036_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Hair\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\4036_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Hair\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Skimpy_Standard_Ha.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_pc0002_00_tifa_gantz_basic_suit_standard_hair tifa tifa gantz basic suit - standard hair pc0002_00 d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\3995_tifa_gantz_basic_suit_standard_hair\mod817_pc0002_00_tifa_gantz_basic_suit_standard_hair.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/3995_Tifa_GANTZ_Basic_Suit_Standard_Hair/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair.jpg" alt="mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">PC0002_00</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · Tifa GANTZ Basic Suit - Standard Hair</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ Basic Suit - Standard Hair · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 183935 顶点 · 536 骨骼 · 9 材质（0 透明） · 102.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/3995_Tifa_GANTZ_Basic_Suit_Standard_Hair/mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\3995_Tifa_GANTZ_Basic_Suit_Standard_Hair\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\3995_Tifa_GANTZ_Basic_Suit_Standard_Hair\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\3995_Tifa_GANTZ_Basic_Suit_Standard_Hair\mod817_PC0002_00_Tifa_GANTZ_Basic_Suit_Standard_Hair.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_fullsuit_tifa_gantz_dresscode_1_005 tifa fullsuit · tifa gantz - dresscode - 1.005 fullsuit d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\10163_tifa_gantz_dresscode_1_005\mod817_fullsuit_tifa_gantz_dresscode_1_005.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005.jpg" alt="mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">fullsuit</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · fullsuit · Tifa GANTZ - DRESSCODE - 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ - DRESSCODE - 1.005 · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 184347 顶点 · 536 骨骼 · 8 材质（0 透明） · 115.0 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_fullsuit_Tifa_GANTZ_DRESSCODE_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_fullsuit_purple_tifa_gantz_dresscode_1_005 tifa fullsuit_purple · tifa gantz - dresscode - 1.005 fullsuit_purple d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\10163_tifa_gantz_dresscode_1_005\mod817_fullsuit_purple_tifa_gantz_dresscode_1_005.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005.jpg" alt="mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">fullsuit_purple</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · fullsuit_purple · Tifa GANTZ - DRESSCODE - 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ - DRESSCODE - 1.005 · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 120828 顶点 · 536 骨骼 · 8 材质（0 透明） · 100.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_fullsuit_purple_Tifa_GANTZ_DRESSCODE_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_skimpy_tifa_gantz_dresscode_1_005 tifa skimpy · tifa gantz - dresscode - 1.005 skimpy d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\10163_tifa_gantz_dresscode_1_005\mod817_skimpy_tifa_gantz_dresscode_1_005.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005.jpg" alt="mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">skimpy</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · skimpy · Tifa GANTZ - DRESSCODE - 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ - DRESSCODE - 1.005 · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 195025 顶点 · 536 骨骼 · 9 材质（0 透明） · 142.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_skimpy_Tifa_GANTZ_DRESSCODE_1_005.blend">复制</button></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="mod817_skimpy_purple_tifa_gantz_dresscode_1_005 tifa skimpy_purple · tifa gantz - dresscode - 1.005 skimpy_purple d:/ff7rebirth_exports/mods\817_gantz_basic_suit_tifa\10163_tifa_gantz_dresscode_1_005\mod817_skimpy_purple_tifa_gantz_dresscode_1_005.blend" data-kind="mod" data-chr="Tifa" data-warn="1">
+        <a class="shot" href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005_preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///D:/ff7rebirth_exports/materialized/_gallery/thumbs/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005.jpg" alt="mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005</h3><span class="badge badge-warn" title="缺底色贴图：PC0002_00_Jewelry">告警 1</span><span class="badge badge-mod">Nexus mod</span><span class="badge badge-code">skimpy_purple</span><span class="badge badge-code" title="FModel 导不出，ff7rb_cli_export.py 补导">CLI 补导</span>
+          </div>
+          <dl>
+            <dt>角色</dt><dd>Tifa · skimpy_purple · Tifa GANTZ - DRESSCODE - 1.005</dd>
+            <dt>mod</dt><dd><a href="https://www.nexusmods.com/finalfantasy7rebirth/mods/817" target="_blank" rel="noopener">GANTZ Basic Suit (Tifa)</a> · Tifa GANTZ - DRESSCODE - 1.005 · 作者 TheWolfster</dd><dt>导出</dt><dd><a href="file:///D:/ff7rebirth_exports/mods/xps/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005.xps">XPS</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005.pmx">PMX</a> · <a href="file:///D:/ff7rebirth_exports/mods/pmx/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005/preview_dance.png">PMX 舞蹈预览</a></dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 131506 顶点 · 536 骨骼 · 9 材质（0 透明） · 128.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///D:/ff7rebirth_exports/mods/817_GANTZ_Basic_Suit_Tifa/10163_Tifa_GANTZ_DRESSCODE_1_005/mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005.blend" title="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005.blend">D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005.blend</a>
+                <button class="copy" data-copy="D:/ff7rebirth_exports/mods\817_GANTZ_Basic_Suit_Tifa\10163_Tifa_GANTZ_DRESSCODE_1_005\mod817_skimpy_purple_Tifa_GANTZ_DRESSCODE_1_005.blend">复制</button></dd>
           </dl>
         </div>
       </article>

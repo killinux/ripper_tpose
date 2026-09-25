@@ -3,66 +3,121 @@
 不开 Blender：材质化 worker 已把网格/骨骼/材质/缺贴图统计写进 manifest，这里只补上
 预览图路径（render_blend_preview.py 出的 <变体>_preview.png）、角色/服装拆分和告警。
 
-  python collect_manifest.py [materialized 目录] [输出 manifest]
+  python collect_manifest.py [materialized 目录] [输出 manifest] [--extra 目录 ...] [--mods mods 清单]
 
-默认读 D:\\ff7rebirth_exports\\materialized\\ff7rb_models_manifest.json，
-写 <同目录>\\ff7rebirth_gallery_manifest.json。只存本机路径与统计，不含游戏素材。
+默认读 D:/ff7rebirth_exports/materialized/ff7rb_models_manifest.json，
+写 <同目录>/ff7rebirth_gallery_manifest.json。只存本机路径与统计，不含游戏素材。
+
+--extra：其它材质化目录（默认 D:/ff7rebirth_exports/cli_materialized，即 ff7rb_cli_export.py
+走 CUE4Parse CLI 补出来的、FModel 导不出的变体）。同名变体以 extra 里的 PASS 为准，
+所以 FModel 那边的 FAIL / NO_MODEL 条目会被补上。
+--mods：Nexus mod 的画廊条目（ff7_mod_export.py 写的 gallery_mods.json），kind = mod。
 """
 
+import argparse
 import json
 import os
 import re
-import sys
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else r"D:\ff7rebirth_exports\materialized"
-OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, "ff7rebirth_gallery_manifest.json")
-SRC = os.path.join(ROOT, "ff7rb_models_manifest.json")
+DEFAULT_ROOT = r"D:\ff7rebirth_exports\materialized"
+DEFAULT_EXTRA = [r"D:\ff7rebirth_exports\cli_materialized"]
+DEFAULT_MODS = r"D:\ff7rebirth_exports\mods\gallery_mods.json"
 
 # PC0002_08_Tifa_CostaClothing -> 编号 PC0002_08 / 角色 Tifa / 变体 CostaClothing
 LABEL_RE = re.compile(r"^(PC\d{4}_\d{2})_([A-Za-z0-9]+)_(.+)$")
+PATCH_RE = re.compile(r"blood|cutbrood|tear|wet", re.IGNORECASE)
+
+
+def load_results(root, route):
+    path = os.path.join(root, "ff7rb_models_manifest.json")
+    if not os.path.isfile(path):
+        return []
+    with open(path, encoding="utf-8-sig") as f:
+        src = json.load(f)
+    out = []
+    for r in src.get("results", []):
+        r = dict(r)
+        r["_route"] = route
+        out.append(r)
+    return out
+
+
+def entry_for(r):
+    label = r.get("variant", "")
+    if r.get("status") != "PASS":
+        return None
+    blend = (r.get("outputs") or {}).get("blend") or r.get("output") or ""
+    if not blend or not os.path.isfile(blend):
+        return None
+    m = LABEL_RE.match(label)
+    code, char, variant = (m.group(1), m.group(2), m.group(3)) if m else ("", label, "")
+    preview = os.path.splitext(blend)[0] + "_preview.png"
+    warnings = []
+    if r.get("missingBase"):
+        warnings.append("缺底色贴图 %d：%s" % (len(r["missingBase"]), "; ".join(map(str, r["missingBase"][:4]))))
+    if r.get("simplified"):
+        warnings.append("材质做了简化：%s" % r["simplified"])
+    if r.get("armatures") != 1:
+        warnings.append("骨架数 %s" % r.get("armatures"))
+    kind = "official"
+    if char == "Toad":
+        kind = "toad"
+    elif code.startswith("PC7"):
+        kind = "cutscene"
+    elif PATCH_RE.search(variant) and (r.get("vertices") or 0) < 30000:
+        kind = "variant"                      # 贴在身体上的血迹/泪痕小网格，不是整个人
+    return {
+        "label": label, "code": code, "char": char, "variant": variant, "kind": kind,
+        "route": r.get("_route", "FModel"),
+        "blend": blend,
+        "preview": preview if os.path.isfile(preview) else "",
+        "blendSize": os.path.getsize(blend),
+        "meshes": r.get("meshes", 0), "vertices": r.get("vertices", 0), "polygons": r.get("polygons", 0),
+        "bones": r.get("bones", 0), "materials": r.get("materials", 0),
+        "alphaMaterials": 0, "textures": r.get("texturesFound", 0),
+        "warnings": warnings,
+    }
 
 
 def main():
-    with open(SRC, encoding="utf-8-sig") as f:
-        src = json.load(f)
-    results = []
-    for r in src.get("results", []):
-        label = r.get("variant", "")
-        if r.get("status") != "PASS":
-            continue
-        blend = (r.get("outputs") or {}).get("blend") or r.get("output") or ""
-        if not blend or not os.path.isfile(blend):
-            continue
-        m = LABEL_RE.match(label)
-        code, char, variant = (m.group(1), m.group(2), m.group(3)) if m else ("", label, "")
-        preview = os.path.splitext(blend)[0] + "_preview.png"
-        warnings = []
-        if r.get("missingBase"):
-            warnings.append("缺底色贴图 %d：%s" % (len(r["missingBase"]), "; ".join(map(str, r["missingBase"][:4]))))
-        if r.get("simplified"):
-            warnings.append("材质做了简化：%s" % r["simplified"])
-        if r.get("armatures") != 1:
-            warnings.append("骨架数 %s" % r.get("armatures"))
-        kind = "official"
-        if char == "Toad":
-            kind = "toad"
-        elif code.startswith("PC7"):
-            kind = "cutscene"
-        results.append({
-            "label": label, "code": code, "char": char, "variant": variant, "kind": kind,
-            "blend": blend,
-            "preview": preview if os.path.isfile(preview) else "",
-            "blendSize": os.path.getsize(blend),
-            "meshes": r.get("meshes", 0), "vertices": r.get("vertices", 0), "polygons": r.get("polygons", 0),
-            "bones": r.get("bones", 0), "materials": r.get("materials", 0),
-            "alphaMaterials": 0, "textures": r.get("texturesFound", 0),
-            "warnings": warnings,
-        })
-    results.sort(key=lambda x: x["label"])
-    manifest = {"game": "FINAL FANTASY VII REBIRTH", "sourceRoot": ROOT, "results": results}
-    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("root", nargs="?", default=DEFAULT_ROOT)
+    ap.add_argument("out", nargs="?", default=None)
+    ap.add_argument("--extra", action="append", default=None, help="其它材质化目录（可重复）")
+    ap.add_argument("--mods", default=DEFAULT_MODS, help="Nexus mod 画廊条目 JSON（不存在就跳过）")
+    a = ap.parse_args()
+    out_path = a.out or os.path.join(a.root, "ff7rebirth_gallery_manifest.json")
+    extras = a.extra if a.extra is not None else DEFAULT_EXTRA
+
+    by_label = {}
+    for r in load_results(a.root, "FModel"):
+        e = entry_for(r)
+        if e:
+            by_label[e["label"]] = e
+    for root in extras:
+        for r in load_results(root, "CUE4Parse CLI"):
+            e = entry_for(r)
+            if e:
+                by_label[e["label"]] = e          # extra 的 PASS 补上 FModel 的 FAIL / NO_MODEL
+    results = sorted(by_label.values(), key=lambda x: x["label"])
+
+    mods = []
+    if a.mods and os.path.isfile(a.mods):
+        with open(a.mods, encoding="utf-8-sig") as f:
+            for e in json.load(f).get("results", []):
+                if e.get("blend") and os.path.isfile(e["blend"]):
+                    e = dict(e, kind="mod")
+                    pv = e.get("preview") or ""
+                    e["preview"] = pv if pv and os.path.isfile(pv) else ""
+                    e["blendSize"] = os.path.getsize(e["blend"])
+                    mods.append(e)
+    manifest = {"game": "FINAL FANTASY VII REBIRTH", "sourceRoot": a.root, "extraRoots": extras,
+                "results": results + sorted(mods, key=lambda x: x["label"])}
+    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=1)
-    print("MANIFEST=%s (%d 条，%d 张预览)" % (OUT, len(results), sum(1 for x in results if x["preview"])))
+    print("MANIFEST=%s (%d 条，其中 CLI 补 %d、mod %d；%d 张预览)" % (
+        out_path, len(manifest["results"]), sum(1 for x in results if x["route"] != "FModel"), len(mods),
+        sum(1 for x in manifest["results"] if x["preview"])))
 
 
 if __name__ == "__main__":

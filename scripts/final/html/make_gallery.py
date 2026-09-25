@@ -23,7 +23,7 @@ from PIL import Image
 THUMB_WIDTH = 720
 THUMB_QUALITY = 82
 PAGE_NAME = "index.html"
-KIND_LABELS = {"official": "主服装", "variant": "泪痕/血迹贴片", "toad": "蛤蟆形态"}
+KIND_LABELS = {"official": "主服装", "variant": "泪痕/血迹贴片", "toad": "蛤蟆形态", "mod": "mod"}
 
 
 def parse_args():
@@ -97,6 +97,8 @@ def collect(manifest_path, thumb_dir, force):
             "materials": entry.get("materials") or 0,
             "alpha": entry.get("alphaMaterials") or 0,
             "warnings": list(entry.get("warnings") or []),
+            "mod": entry.get("mod") or {},
+            "exports": {k: entry.get(k) for k in ("xps", "pmx", "pmx_preview") if entry.get(k)},
         })
     models.sort(key=lambda m: m["label"])
     return manifest, models
@@ -116,6 +118,19 @@ def render_card(model):
         badges += '<span class="badge badge-mod">%s</span>' % esc(KIND_LABELS[model["kind"]])
     if model["code"]:
         badges += '<span class="badge badge-code">%s</span>' % esc(model["code"])
+    mod = model["mod"]
+    mod_row = ""
+    exports = model.get("exports") or {}
+    export_links = " · ".join('<a href="%s">%s</a>' % (esc(file_uri(exports[k])), label)
+                              for k, label in (("xps", "XPS"), ("pmx", "PMX"), ("pmx_preview", "PMX 舞蹈预览"))
+                              if exports.get(k))
+    if mod:
+        name = esc(mod.get("name", ""))
+        if mod.get("url"):
+            name = '<a href="%s" target="_blank" rel="noopener">%s</a>' % (esc(mod["url"]), name)
+        mod_row = "<dt>mod</dt><dd>%s%s%s</dd>" % (
+            name, (" · " + esc(mod["file"])) if mod.get("file") else "",
+            (" · 作者 " + esc(mod["author"])) if mod.get("author") else "")
 
     search_blob = esc(" ".join([model["label"], model["char"], model["variant"], model["code"], model["blend"]]).lower())
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["label"]))
@@ -129,6 +144,7 @@ def render_card(model):
           </div>
           <dl>
             <dt>角色</dt><dd>{chr} · {variant}</dd>
+            {mod_row}{export_row}
             <dt>规格</dt>
             <dd>{meshes} 网格 · {vertices} 顶点 · {bones} 骨骼 · {materials} 材质（{alpha} 透明） · {size}</dd>
             <dt>blend</dt>
@@ -144,7 +160,8 @@ def render_card(model):
            meshes=model["meshes"], vertices=model["vertices"], bones=model["bones"],
            materials=model["materials"], alpha=model["alpha"],
            size=human_size(model["blend_size"]),
-           blend_uri=esc(blend_uri), blend=esc(model["blend"]))
+           blend_uri=esc(blend_uri), blend=esc(model["blend"]), mod_row=mod_row,
+           export_row=("<dt>导出</dt><dd>%s</dd>" % export_links) if export_links else "")
 
 
 def render(models, source_root):
@@ -153,7 +170,7 @@ def render(models, source_root):
     characters = len({m["char"] for m in models})
     warned = sum(1 for m in models if m["warnings"])
     mods = sum(1 for m in models if m["kind"] != "official")
-    kinds = [k for k in ("official", "variant", "toad") if any(m["kind"] == k for m in models)]
+    kinds = [k for k in ("official", "variant", "toad", "mod") if any(m["kind"] == k for m in models)]
     per_char = {}
     for m in models:
         per_char[m["char"]] = per_char.get(m["char"], 0) + 1

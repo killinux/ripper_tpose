@@ -14,6 +14,49 @@
 
 ---
 
+## 2026-09-25 — FF7 Remake / Rebirth：GANTZ 主题 mod 导出到 Blender / XPS / PMX，Rebirth 画廊补齐 85 个
+
+### 新增 / 变化
+
+- 两作 Nexus 上 GANTZ 主题的 4 个 mod（Remake #967、#1707；Rebirth #817、#1613）共 11 个文件，导出成 21 个
+  `.blend`（Remake 8、Rebirth 13），其中 19 个再出 XPS 和 PMX（附加包单独套在原版上的 2 个只进画廊）。
+- 新脚本（`scripts/final/`）：`nexus_mod_batch.py`（公开 GraphQL 选文件 → 浏览器下载清单页 → 从下载目录复制解压）、
+  `ff7_mod_export.py`（mod → .blend + 画廊条目；Remake 单独挂载 + glTF 兜底，Rebirth CLI 暂存目录，含 DRESSCODE 插件 mod，
+  `--combine` 附加包组合）、`ff7rb_cli_export.py`（Rebirth 无界面导出 + 材质表重建）、`export_ff7_pmx_blender.py` +
+  `ff7_mod_pmx_batch.py`（FF7 → PMX + MMD 预览）、`cue4parse_ff7_mod_tangents.patch`（CUE4Parse 读 mod 网格）。
+- Rebirth 画廊 71 → 85：FModel 读不了的 13 个 Player 主模型 + 红十三全息版改走 CUE4Parse CLI，Player 主模型全齐。
+- Remake 画廊加「mod」分类：GANTZ 这批 + 8 月手动导出的 zzTifaNudeNatural；两个画廊的 mod 卡片带 Nexus 链接和
+  XPS / PMX / PMX 舞蹈预览链接。
+- 现有工具的改动：`validate_ff7remake_model.py` 加 `--overlay-root`、能导入 glTF；`ff7rebirth_tools.py` 认
+  `OxygenSaturation`（血迹贴花颜色）、薄玻璃壳和无光照全息材质、读材质表里的父链；`export_ff7rb_model_blender.py`
+  认 `FF7RB_EXTRA_ROOTS`；两个 `collect_manifest.py` / `make_gallery.py` 读 mod 条目和 CLI 路线结果。
+
+### 用户如何操作
+
+见 `docs/ff7-nexus-mods-export.md` 第 8 节命令速查。产物在 `D:\ff7remake_exports\mods\`、`D:\ff7rebirth_exports\mods\`
+（各自的 `xps\`、`pmx\` 子目录），画廊 `scripts/final/html/index.html`、`scripts/final/html_rebirth/index.html`。
+
+### 实现原理与坑
+
+- mod 网格：Remake 的专用 UE Viewer v8 对四个 GANTZ 网格都报 `LODModels.Num() == LODInfo.Num()`，自动走 FF7R-mesh-importer；
+  Rebirth 的 mod 网格是原版 UE 4.26 烘的 8 字节切线，CUE4Parse 只认 SE 的 4 字节压缩切线（`RawArray item size mismatch:
+  expected 8, serialized 4`），补丁按元素大小分流，重编的 CLI 在 `E:\tools\cue4parse_cli_ff7`（.NET 10 SDK 装在 `E:\tools\dotnet`）。
+- CLI 写的材质 JSON 全是 `{}`：沿材质实例父链重建，**必须带上基础材质的贴图参数默认值**，否则 worker 把头发的透明遮罩
+  猜给了头和上衣，脸是透的。
+- DRESSCODE 插件挂在 `End/Mods/<插件>/Content`，CLI 却按对象路径写文件；网格在 MetaData 目录；condition 辅助网格跳过。
+- PMX：SE 骨骼槽位、4 节脊椎并 3 节、104 根脸部骨并进頭（暂无表情 morph）、眼球骨直接用、胸部物理骨的支点从脊椎后
+  12 cm 挪到各自胸部里 8 cm、`*_Spo` 不进布料物理、TheWolfster 两个战斗服的大腿护甲从裙摆骨转给大腿（`--skirt-to-legs`）。
+- Remake 透明遮罩：.mat 不带参数名，#967 整套衣服所在材质引用的 `MarineCharm_A` 其实绑在 `DetailOpacity`（不透明着色器的自发光细节遮罩），当透明度后全身被挖空；改为 `umodel -dump` 读材质实例参数名（`material_params.json`），只认 Opacity / Coverage / Alpha 类参数。破洞要用绿色背景渲染才看得出来。
+- 下载：Nexus 新存储的文件名是 `名 模组号 版本 时间 随机串.ext`（空格），和旧的连字符格式都认；E:\Downloads 只复制不动。
+- blender2xps 骨骼别名表补了 SE 命名（blender2xps 仓库单独提交），XPS 姿势能套上。
+
+### 验证
+
+- Blender：21 个 mod 模型 + 14 个 CLI 补导模型逐张看预览（脸部特写两轮：透明脸、Reika 白眼、DRESSCODE 版眼睛都修过）。
+- XPS：19 / 19 导出成功，身高 1.726。
+- PMX：见 `docs/ff7-nexus-mods-export.md` 第 5 节的结果表（撕裂、付与顺序、静止漂移、刚体数），舞蹈帧与大腿护甲特写目检。
+- CUE4Parse 补丁不影响官方网格：蛤蟆 psk 与 0.2.0 发布版逐字节同大小。
+
 ## 2026-09-25 — NARAKA: BLADEPOINT：全部女性外观批量导出 + 并行批导脚本
 
 ### 新增 / 变化

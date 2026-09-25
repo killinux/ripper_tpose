@@ -365,8 +365,12 @@ def main():
     character_root = os.path.normpath(
         os.path.join(variant_root, "..", ".."))
     common_root = os.path.join(character_root, "Common")
+    # FF7RB_EXTRA_ROOTS (os.pathsep list): more folders for material tables + name guessing.
+    # A DRESSCODE plugin mod keeps its own materials in End/Mods/<Plugin>, but its meshes
+    # also use base-game ones (PC0002_00_Eye, Common mouth) that were exported elsewhere.
+    extra_roots = [p for p in os.environ.get("FF7RB_EXTRA_ROOTS", "").split(os.pathsep) if p]
     narrow_roots = module.unique_existing_roots(
-        variant_root, common_root if os.path.isdir(common_root) else "")
+        variant_root, common_root if os.path.isdir(common_root) else "", *extra_roots)
     textures = module.discover_files_many(narrow_roots, module.IMAGE_EXTENSIONS)
     material_records = module.load_material_records(narrow_roots)
     index_roots = (module.unique_existing_roots(character_root)

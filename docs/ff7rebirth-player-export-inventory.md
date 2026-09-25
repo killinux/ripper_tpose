@@ -28,6 +28,8 @@ FModel 无法导出的 13 个（都在读 SkeletalMesh 时报 `Read incorrect am
 过场版（Cloud / Barret / Tifa / Yuffie / Debumoogle / Sephiroth）。需要 CUE4Parse 端按 tangent
 `itemSize` 选 8/16 字节精度的 reader 修复，本仓库不改 FModel。
 
+**2026-09-25 补全：85 / 85 全部进画廊。** 上面 13 个加上材质化失败的 `PC0004_06_RedXIII_OnceHologram`，改用 CUE4Parse CLI（`scripts/final/ff7rb_cli_export.py`，CUE4Parse 1.2.2 起能读这些网格）导出到 `D:/ff7rebirth_exports/cli_exports`，材质表从材质实例链重建，再用 `export_ff7rb_models.ps1 -SourceRoot` 材质化到 `D:/ff7rebirth_exports/cli_materialized`，14 / 14 PASS。CFEnd2 那 6 个是复古 Q 版低多边形模型，血迹那 6 个是贴片小网格，红十三全息版按无光照全息材质出青蓝色。做法和坑见 [`ff7-nexus-mods-export.md`](ff7-nexus-mods-export.md) 第 3、6 节。
+
 ## 1. 统计口径
 
 这里的“导出”是指 **FModel 从 FF7 Rebirth 的 IoStore 包读取资源并写到磁盘**，

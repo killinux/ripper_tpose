@@ -57,6 +57,9 @@ SEMANTIC_TEXTURE_KEYS = {
     "base": (
         "PM_Diffuse", "BaseColor", "Base_Color", "Diffuse", "Albedo",
         "IrisColor", "Color",
+        # blood decals (RMI_Surface_Subsurface_Blood_Coverage_Wide_Decal) carry their
+        # colour here; PC0000_13 borrows Sonon's PC0006_91_Blood_D from another folder
+        "OxygenSaturation",
     ),
     "normal": (
         "Normal", "NormalMap", "PM_Normals", "IrisNormal", "ScrelaNormal",
@@ -186,6 +189,8 @@ def load_material_records(roots):
             "aliases": material_name_aliases(name),
             "path": path,
             "textures": textures,
+            # parent chain, only in tables rebuilt by ff7rb_cli_export.py (FModel omits it)
+            "chain": [str(c) for c in (payload.get("_chain") or [])],
         })
     return records
 
@@ -684,6 +689,44 @@ def best_texture(material_name, textures, role):
     return scored[0][1]
 
 
+def prepare_hologram(material, coverage_path, force=False):
+    """RMI_Surface_Unlit_Hologram_* (Red XIII "Once" hologram): an unlit tinted projection
+    whose colour comes from shader parameters, so there is no colour map to wire.  Flat cyan
+    base + emission; the Coverage mask (hair/fur cards) as alpha when there is one."""
+    material.use_nodes = True
+    if force:
+        clear_generated_nodes(material)
+    nodes = material.node_tree.nodes
+    principled = next((node for node in nodes if node.type == "BSDF_PRINCIPLED"), None)
+    if principled is None:
+        principled = nodes.new("ShaderNodeBsdfPrincipled")
+    output = next((node for node in nodes if node.type == "OUTPUT_MATERIAL"), None)
+    if output is None:
+        output = nodes.new("ShaderNodeOutputMaterial")
+    if not output.inputs["Surface"].is_linked:
+        material.node_tree.links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    rgb = nodes.new("ShaderNodeRGB")
+    rgb.name = rgb.label = GENERATED_NODE_PREFIX + "HologramColor"
+    rgb.location = (-500, 200)
+    rgb.outputs[0].default_value = (0.35, 0.75, 1.0, 1.0)
+    material.node_tree.links.new(rgb.outputs[0], principled.inputs["Base Color"])
+    emission = socket_named(principled, "Emission")
+    if emission is not None:
+        material.node_tree.links.new(rgb.outputs[0], emission)
+    strength = socket_named(principled, "Emission Strength")
+    if strength is not None:
+        strength.default_value = 0.8
+    alpha_socket = socket_named(principled, "Alpha")
+    if alpha_socket is not None:
+        if coverage_path:
+            connect_image(material, principled, coverage_path, alpha_socket, (-650, -760), non_color=True)
+        else:
+            alpha_socket.default_value = 0.55
+    material.blend_method = "HASHED"
+    material.use_screen_refraction = False
+    return True
+
+
 def prepare_material(material, textures, material_records=None,
                      texture_index=None, force=False):
     if not material:
@@ -708,6 +751,8 @@ def prepare_material(material, textures, material_records=None,
     eye_iris = texture_for("eye_iris") if eye_material else ""
     had_base_texture = material_has_base_texture(material)
     base = eye_sclera or texture_for("base")
+    if not base and record and any("hologram" in c.lower() for c in record.get("chain", [])[1:]):
+        return prepare_hologram(material, texture_for("opacity"), force)
     if (force and not base) or (not had_base_texture and not base):
         return False
     if force:
@@ -842,6 +887,20 @@ def prepare_material(material, textures, material_records=None,
         if alpha_socket.is_linked:
             material.blend_method = "HASHED"
             material.use_screen_refraction = False
+    elif alpha_socket and record and any("glass" in c.lower() for c in record.get("chain", [])[1:]):
+        # A thin-glass shell (a mod's separate cornea, a visor): UE draws it with the
+        # glass shader, i.e. almost only reflections.  Its colour map is usually a flat
+        # white with a solid alpha (Gantz Reika "cafe_glass": blanco.png), which as
+        # Alpha made a white shell over the eyes.  A faint constant alpha instead.
+        for link in list(alpha_socket.links):
+            material.node_tree.links.remove(link)
+        alpha_socket.default_value = 0.08
+        rough = socket_named(principled, "Roughness")
+        if rough is not None and not rough.is_linked:
+            rough.default_value = 0.05
+        material.blend_method = "HASHED"
+        material.use_screen_refraction = False
+        changed = True
     elif any(token in material.name.lower()
               for token in ("hair", "lash", "brow", "glass", "cloth")) and alpha_socket:
         alpha_output = base_node.outputs.get("Alpha") if base_node else None
