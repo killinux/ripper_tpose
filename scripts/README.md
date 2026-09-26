@@ -30,6 +30,9 @@ Blender 插件也彼此独立：
   形态键（UE Viewer 截断的蒙皮权重先从游戏包补全），注册到 Faceit，用 iPhone Face Cap 实时驱动；已有 ARKit 形态键的模型
   只做注册。步骤见 [`docs/faceit-arkit-guide.md`](../docs/faceit-arkit-guide.md)，Vindictus 的脸部数据用
   `vindictus\extract_face_data.py` 提取。
+- FFVII Remake 的 MMD 表情：`scripts\blender_addons\ff7_face_morphs`，侧边栏 **MMD** —— 用游戏自己的表情姿势和口型数据
+  生成 43 个 MMD 表情（形态键 → PMX 顶点表情），可以一键在后台导出带表情的 PMX；数据用 `final\ff7_face_data.py` 从游戏提取。
+  使用说明见 [`docs/ff7-face-morphs-usage.md`](../docs/ff7-face-morphs-usage.md)。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
 按清单批量「提取 + Blender 材质化」36 个 Player 包，画廊在 `final\html\`；

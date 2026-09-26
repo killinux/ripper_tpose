@@ -59,6 +59,40 @@
 4. **验证**：Rebirth 37 个模型 blend / XPS / PMX 全部读回检查；画廊里每个 `file:///` 链接逐个检查（Remake 213、Rebirth 555、
    GANTZ 197、清单页 143，0 失效）；归档自检（Remake 30/30、Rebirth 111/111）。
 
+## 2026-09-26 — FF7 Remake：PMX 加上 MMD 表情（游戏自己的表情姿势 + 口型数据，先在一个模型上试验）
+
+1. **新增**：`export_ff7_pmx_blender.py --face-data <json>` 让 Remake 模型的 PMX 带上 43 个顶点表情——
+   目 10（まばたき、笑い、ウィンク…）、眉 6、口 13（あいうえお、ん、ワ、にっこり…）和游戏整脸表情 14 个。
+   形状全部来自游戏数据：`Motion/Player/PC0002_Tifa/Facial00/F_*`（25 个单帧、非叠加的表情姿势）和
+   `LipSync/LipMap/Player/PC0002_Tifa/Tifa_Default`（HSFLipMap：aa/ee/oo/sh/fv/ln/bmp 七个口型的嘴部骨骼通道）。
+   新脚本 `scripts/final/ff7_face_data.py`（从游戏提取表情数据，内含 unversioned 属性的 HSFLipMap 解析器）、
+   `ff7_face_poses_blender.py`（在官方 PSK 骨架上取样姿势）、`ff7_face_morph_sheet.py`（逐个渲染表情对照图）。
+   **Blender 插件 `scripts/blender_addons/ff7_face_morphs`（FF7 Face Morphs）**：侧栏 MMD 标签页里查找表情数据、
+   分析模型、按 目/眉/口/其他 生成表情（每类可调强度）、预览、清除、一键后台导出带表情的 PMX、手动转换用的
+   "转换前暂存 / 恢复并登记"；批量脚本调的是插件里同一个 `core.py`。说明：`docs/ff7-face-morphs.md`（原理）、
+   **`docs/ff7-face-morphs-usage.md`（使用说明：MMD 里读模型 / 打表情关键帧 / 套 VMD、43 个表情一览、面板每个按钮、
+   三种流程、命令行、常见问题）**、插件 README。
+2. **用户操作**：先 `python scripts/final/ff7_face_data.py --out E:\game_export\FF7Remake\_meta\face\PC0002_Tifa.json`，
+   再给 `export_ff7_pmx_blender.py` 加 `--face-data <json>`（可选 `--face-strength EYEBROW=1.5`）；或者在 Blender
+   里启用插件（已用目录联接装进 Blender 3.6 的 addons），打开模型 .blend 点按钮。表情数据是游戏数据，放在仓库外。
+3. **原理**：姿势换成"相对 C_FaceBase_a 的刚体变化"并换算到脸部坐标系；表情 = 姿势 × F_Idle01⁻¹（游戏平静脸
+   不是绑定姿势：舌头差 5 mm）；按眼 / 眉 / 嘴区域取骨骼；在脸部骨骼并进头骨之前摆姿势、取蒙皮网格差值存成形态键。
+   Convert_to_MMD5 的 `_bake_pose_delta_to_rest()` 会跳过带形态键的网格（FF7 全身一个网格，手臂会烘不上），
+   所以 A 字姿势前暂存形态键、转换后恢复。不加 `--face-data` 时行为和以前完全一样。
+4. **验证**：试验模型 `mod1707_PC0002_00_Tifa_Gantz_Basic_Suit_Skimpy_Hair_and_Ma` →
+   `E:\game_export\FF7Remake\_face_trial\`（原 PMX 未动）：43 个表情，转换中脸部 0 位移，mmd_tools 读回面板正确、
+   越界索引 0、"表情"框 43 项；撕裂 0、付与顺序 0、刚体 80 / 关节 64、静止漂移 0.9 cm；17 MB → 34 MB；
+   舞蹈 VMD（meeynara手势舞）驱动眨眼 / 单眨 / 笑眼 / 口型，按峰值帧渲染确认。仓库脚本重新从游戏提取的数据和
+   试验用数据一致（矩阵差 8e-5）。插件：后台 Blender 逐个调用按钮全部通过（暂存/恢复逐位相同，模拟转向 + 缩放后
+   恢复误差 6e-8，清除不碰别的形态键，面板导出带眉 1.5 倍：眉表情正好 1.50 倍、其余与试验版相同、撕裂 0），面板
+   draw() 用模拟布局检查无错；实际界面没在窗口里看过，也没在 MMD 本体里打开过。
+5. **修正（写使用说明时发现）**：`.blend` 里已经生成过表情时，面板上取消的类别在导出时仍会进 PMX（mmd_tools 导出
+   网格上所有形态键）。现在 `export_ff7_pmx_blender.py` 在生成前先清掉插件生成过的形态键（报告字段
+   `face_morphs_cleared`）。验证：全部 43 个生成后取消"口""其他"再导出 → PMX 读回正好 16 个（目 10 + 眉 6），撕裂 0。
+   另外统计了本机 `E:\Downloads` 的 320 个 VMD：246 个带表情关键帧，其中 217 个（88%）用到的表情这个模型全有。
+
+---
+
 ## 2026-09-26 — CRISIS CORE –FINAL FANTASY VII– REUNION：模型列表 + 导出 .blend / XPS / PMX（新游戏），女性角色全部导出
 
 ### 新增 / 变化

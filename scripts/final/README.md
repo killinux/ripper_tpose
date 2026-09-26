@@ -623,3 +623,14 @@ ACTRHEAD
 - Rebirth mod 的材质表和贴图常不在网格自己的目录：替换网格用标准服 / 别的角色目录的材质，Dresscode 插件共用同一文件里另一个插件的材质，材质实例还会引用网格导出时没带出来的原版贴图。`ff7_mod_export.py` 让 worker 看整个导出的角色目录和所有插件目录，`ff7rb_cli_export.py` 补导材质表里缺的贴图，worker 不再给法线 / 粗糙度 / 金属度 / 透明这类贴图按名字找替身（2026-09-26，详见文档第 10 节）。
 - 要配套文件才完整的 mod 用 `--combine`（两作都支持）：`ff7_mod_export.py rebirth --combine 10356+10357`（#1352 的紧身衣 + 它单独的 TifaSkin 插件）。
 - Remake 画廊在 D 盘导出归档删掉以后也能重新生成：`collect_manifest.py` 把 D 盘上没有的条目从 `E:/game_export/FF7Remake/_meta/ff7remake_models_manifest.json` 补回来，`make_gallery.py` 沿用归档里的缩略图；生成后跑 `python scripts\archive\archive_exports.py ff7remake`（归档新导出 + 把链接改到 E 盘）。
+
+# D. Remake 的 MMD 表情（2026-09-26，试验中）
+
+PMX 可以带上游戏自己的表情：`ff7_face_data.py` 从游戏提取角色的表情姿势（`Motion/Player/<角色>/Facial00/F_*`）和
+口型（`LipSync/LipMap/Player/<角色>/<名字>_Default`），`export_ff7_pmx_blender.py --face-data <json>` 在脸部骨骼
+并进头骨之前把它们烘成形态键，PMX 里就是 43 个顶点表情（まばたき、あいうえお、眉……）。
+`ff7_face_morph_sheet.py -- --face-data <json> --out <dir>` 可以只渲染对照图。同一套代码也是 Blender 插件
+[`scripts/blender_addons/ff7_face_morphs`](../blender_addons/ff7_face_morphs/README.md)（生成、预览、强度、
+一键后台导出带表情的 PMX）。目前只在 `mod1707_..._Skimpy_Hair_and_Ma` 上试过，做法和验证见
+[`docs/ff7-face-morphs.md`](../../docs/ff7-face-morphs.md)，使用说明（MMD 里怎么用、表情一览、插件按钮、常见问题）见
+[`docs/ff7-face-morphs-usage.md`](../../docs/ff7-face-morphs-usage.md)。

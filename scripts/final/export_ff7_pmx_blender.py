@@ -14,12 +14,16 @@ this file only adds what the Square Enix rig needs:
   * four spine bones for three MMD slots: C_Spine_c is merged into C_Spine_b, giving
     upper body / upper body 2 / upper body 3 = C_Spine_a / b / d;
   * the face rig (every bone under C_FaceBase_a / C_FaceBase_b except the eyes) is merged
-    into the head: there are no face morphs yet, and the add-on classifier would hand that
-    skin to the nearest bone head - the eye bones - so the lids would follow the gaze;
+    into the head: the add-on classifier would hand that skin to the nearest bone head - the
+    eye bones - so the lids would follow the gaze.  With --face-data the game's expressions
+    are baked into shape keys first (the FF7 Face Morphs add-on, scripts/blender_addons/
+    ff7_face_morphs), so the PMX gets real vertex morphs (まばたき, あいうえお, 眉 ... + the
+    game's whole-face poses);
   * the PSK / glTF import faces +X in centimetres: turned to face -Y, scaled to metres.
 
   blender -b X.blend --python export_ff7_pmx_blender.py -- --out <dir> [--name N]
-          [--model-name M] [--comment C]
+          [--model-name M] [--comment C] [--skirt-to-legs] [--face-data <face json>
+          [--face-categories EYE,EYEBROW,MOUTH,OTHER] [--face-strength EYEBROW=1.5 ...]]
 Prints FF7_PMX_REPORT={json}.  Writes <out>/<name>/<name>.pmx + textures/ + _converted.blend.
 """
 import argparse
@@ -50,6 +54,8 @@ def load(path, name):
 
 
 sb = load(SB_SCRIPT, "sb_pmx")
+sys.path.insert(0, os.path.join(REPO, "scripts", "blender_addons"))
+from ff7_face_morphs import core as face_morphs  # noqa: E402  (the FF7 Face Morphs add-on: same code by hand)
 sb.BUST["bones"] = (("左胸", "L_Breast_a_Phy"), ("右胸", "R_Breast_a_Phy"))
 sb.EYE_MAT_RE = re.compile("(^|_)eye($|_)|ojos|eyeball", re.IGNORECASE)
 
@@ -315,6 +321,12 @@ def main():
     ap.add_argument("--comment", default="", help="model comment (credits / source)")
     ap.add_argument("--skirt-to-legs", action="store_true",
                     help="skin on the base outfit's skirt bones follows the nearest thigh (tight suits)")
+    ap.add_argument("--face-data", default="",
+                    help="face-data JSON (ff7_face_data.py): the game's expressions as MMD vertex morphs")
+    ap.add_argument("--face-categories", default="EYE,EYEBROW,MOUTH,OTHER",
+                    help="expression panels to build with --face-data")
+    ap.add_argument("--face-strength", action="append", default=[], metavar="PANEL=FACTOR",
+                    help="scale one panel's expressions, e.g. EYEBROW=1.5 (repeatable)")
     args = ap.parse_args(argv)
 
     roe = sb.load_worker()
@@ -336,6 +348,22 @@ def main():
     baked = sb.bake_node_colours(meshes, os.path.join(out_dir, "textures"))
     slots, missing_optional = resolve_ff7_slots(arm)
     report["missing_optional_slots"] = missing_optional
+    face_made, face_stash = [], {}
+    if args.face_data:                              # while the face bones still exist
+        strengths = {}
+        for item in args.face_strength:
+            panel, _sep, value = item.partition("=")
+            strengths[panel.strip().upper()] = float(value)
+        panels = tuple(c.strip().upper() for c in args.face_categories.split(",") if c.strip())
+        # keys left in the .blend by an earlier build (the add-on panel) would be exported too: the PMX
+        # gets exactly the panels / strengths asked for here
+        report["face_morphs_cleared"] = face_morphs.clear(meshes)
+        try:
+            face_made = face_morphs.build_shape_keys(arm, meshes, face_morphs.load_face_data(args.face_data),
+                                                     categories=panels, strengths=strengths)
+        except Exception as exc:                    # no FF7 face rig etc.: a PMX without expressions, reported
+            report["face_morph_error"] = str(exc)
+        report["face_morph_vertices"] = {m[0]: m[3] for m in face_made}   # "face_morphs" = the ROE add-on's
     report.update(prepare_ff7(arm, meshes, slots, args.skirt_to_legs))
 
     roe.enable_addon("mmd_tools")
@@ -351,6 +379,8 @@ def main():
     helper_plans, _helper_report = roe.plan_joint_helper_moves(arm, meshes, slots)
     report["reparented_helpers"] = roe.apply_joint_helper_moves(arm, helper_plans)
     report["relaxed_groups"] = roe.relax_shoulder_weights(arm, slots)
+    if face_made:                                   # the pose bakes below skip meshes with shape keys
+        face_stash = face_morphs.stash(meshes)
     report["arm_down_deg"] = roe.apose_arms(arm, meshes, slots)
     skin_before = roe.snapshot_skin(arm, meshes)
     try:                                           # SE support bones (*_Spo) are muscle helpers, never cloth
@@ -362,6 +392,8 @@ def main():
     names_before, weighted_before = set(arm.data.bones.keys()), sb.weighted_bones(meshes)
     root, stats = roe.convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans, skin_before)
     report.update(stats)
+    if face_stash:
+        report["face_morphs_restored"] = face_morphs.restore(meshes)
     report["stray_recipients"] = sorted((sb.weighted_bones(meshes) - weighted_before) & names_before)
     slot_names = {v for v in slots.values() if v}
     report["retired_helpers"] = sorted(weighted_before - sb.weighted_bones(meshes) - slot_names)
@@ -373,6 +405,8 @@ def main():
     report["distortion"] = roe.mesh_distortion(before, meshes)
     report["hidden_materials"] = roe.hide_transparent_materials(meshes)
     report["materials"] = sb.fix_pmx_materials(meshes, baked, os.path.join(out_dir, "textures"))
+    if face_made:
+        report["vertex_morphs"] = face_morphs.register_morphs(root, meshes)
 
     root.mmd_root.name = root.mmd_root.name_e = args.model_name or name
     root.name = args.model_name or name
