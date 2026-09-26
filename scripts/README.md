@@ -16,6 +16,7 @@
 | Vindictus: Defying Fate（2024-03 Pre-Alpha） | Unreal 5.3 IoStore（`.utoc/.ucas`，索引 AES 加密） | [`vindictus/`](vindictus/) | `vindictus\export_model.ps1` |
 | NARAKA: BLADEPOINT（永劫无间） | Unity 2019.4 AssetBundle（改头的 UnityFS，不加密） | [`naraka/`](naraka/) | `naraka\list_models.py` / `export_model.py` |
 | HoneySelect 2 (Libido DX) | Unity AssetBundle（`abdata\`，不加密）+ 角色卡 PNG | [`honeyselect2/`](honeyselect2/) | `honeyselect2\list_models.py` / `export_model.py` |
+| CRISIS CORE –FINAL FANTASY VII– REUNION | Unreal 4.27 IoStore（索引 AES 加密，要 usmap） | [`ccff7r/`](ccff7r/) | `ccff7r\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -105,6 +106,13 @@ NARAKA: BLADEPOINT（永劫无间）的 StreamingAssets 是 12,818 个哈希命�
 发型、怪物 / NPC、武器），`export_model.py` 把外观 + 配套发型 + 默认脸挂到同一副骨架上出 `.blend`（+ FBX）与预览。
 详见 [`naraka/README.md`](naraka/README.md) 与 [NARAKA 提取](../docs/naraka-bladepoint-extraction.md)。
 
+CRISIS CORE –FINAL FANTASY VII– REUNION 是 UE 4.27 IoStore，pak 索引 AES 加密（key 用
+`firstdescendant\find_aes_key.py` 从 exe 找，只放本地）、属性未版本化（用社区 usmap）。`ccff7r/` 全走 CUE4Parse CLI：
+`list_models.py` 列 266 个模型（主要角色 34、召唤兽 3、NPC 41、敌人 121、道具 67），`export_model.py <id>` 导 PSK + PNG +
+材质实例链 JSON，`build_blend.py` 按公共父材质分家族重建材质（MultiMask 通道在贴图上量过）、把武器拆成单独物体、渲预览，
+贴图打包后存到 `E:\game_export\CCFF7R\<组>\blend\<id>\`；`--xps --pmx` 再出 XPS（blender2xps）和 MMD PMX（FF7 那条转换链，
+NPC 没有脖子骨时补一根）。详见 [`ccff7r/README.md`](ccff7r/README.md)。
+
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
 Archive Tool 源码），TMC/TMCL 经 Noesis（32 位 + doa5pc 插件）转 FBX+DDS；DOA6 用
@@ -131,5 +139,5 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`、`ccff7r/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。

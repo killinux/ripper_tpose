@@ -59,6 +59,74 @@
 4. **验证**：Rebirth 37 个模型 blend / XPS / PMX 全部读回检查；画廊里每个 `file:///` 链接逐个检查（Remake 213、Rebirth 555、
    GANTZ 197、清单页 143，0 失效）；归档自检（Remake 30/30、Rebirth 111/111）。
 
+## 2026-09-26 — CRISIS CORE –FINAL FANTASY VII– REUNION：模型列表 + 导出 .blend / XPS / PMX（新游戏），女性角色全部导出
+
+### 新增 / 变化
+
+- 新目录 `scripts/ccff7r/`（Steam 版，build 10871899，`E:\SteamLibrary\steamapps\common\CCFF7R`）：
+  - `list_models.py`：直接从游戏容器列出 **266** 个模型——主要角色 34、召唤兽（DMW）3、NPC 41、敌人 121、道具 / 武器 67，
+    标出已导出的；`--details` 读出顶点、三角面、材质槽、身高；全量清单写到 `E:\game_export\CCFF7R\_meta\model_list.md`；
+  - `export_model.py`：CUE4Parse CLI 导 PSK + PNG + 材质实例 JSON → `build_blend.py`（Blender 3.6）建材质、渲全身和脸部预览、
+    贴图打包 → `E:\game_export\CCFF7R\<组>\blend\<id>\<id>.blend`（按归档约定，目录可单独拷走）；一个模型 6–10 秒；
+  - `export_model.py --xps --pmx`：再从 `.blend` 转 XPS（`export_xps_blender.py`，Blender2XPS）和 MMD PMX
+    （`export_pmx_blender.py`，FF7 / Stellar Blade 那条转换链 + CCFF7R 骨架适配），PMX 转完自动导回 Blender 套舞蹈跑物理渲预览；
+    `--preview-only` 只渲预览图不存 `.blend`（用来快速看一整类）；
+  - `ccff7r_common.py`（路径、CLI 调用、包清单缓存、模型发现、名字表）、`tests/test_ccff7r.py`（12 个离线测试）、`README.md`。
+- 全部 266 个模型的预览逐个看过，确认**女性模型 21 个**：主要角色 6（蒂法、爱丽丝、西丝妮 ×2、尤菲、吉莉安）、NPC 成年女性 10、
+  女孩 4、敌人 1（女神米涅瓦）。这 21 个都已导出 `.blend` + XPS + PMX（`E:\game_export\CCFF7R\<组>\{blend,xps,pmx}\<id>\`），
+  总览图 `E:\game_export\CCFF7R\_meta\female_models.png`。另有试验用的扎克斯 s12、萨菲罗斯 ×2、贝希摩斯、破坏剑（只有 `.blend`）。
+
+### 用户如何操作
+
+```
+cd scripts\ccff7r
+python list_models.py [--category named] [--find tifa zack*] [--details]
+python export_model.py tifa [aerith ...] [--category named] [--force] [--views] [--xps] [--pmx]
+python export_model.py --category npc --preview-only
+```
+
+一次性准备：AES key（`scripts\firstdescendant\find_aes_key.py` 对游戏 exe 和 `pakchunk0`，41 秒，存
+`E:\tools\ccff7r\_keys\`，不进仓库）+ usmap（TheNaeem/Unreal-Mappings-Archive 的 `CCFF7R/Mappings.usmap`，存
+`E:\tools\ccff7r\mappings\`）。详见 `scripts/ccff7r/README.md`。
+
+### 实现原理与坑
+
+- UE 4.27.2 IoStore，pak 索引 AES 加密，属性未版本化：不带 key CLI 列出 0 个资源，不带 usmap 每个包都是
+  `Could not load standard asset`。社区 usmap 是 2022-12-17（发售后第 4 天）的，比当前 build 旧，但网格 / 贴图 / 材质实例
+  都是引擎类，实测全部能解析。
+- 每个角色文件夹一个 `SK_CH_<id>` + 一个 `_SW` 版：几何完全相同，只换了 `*_Lite` 简化材质，默认导主模型。
+- CLI 按网格导出时材质文件是空的 `{}`（同 Rebirth）：另用 `-f json` 导网格和整条材质实例链，子覆盖父合并参数；1,945 个
+  角色材质实例全部来自 8 类公共父材质（`MI_ch_*`，小写 ch），据此分 7 个家族还原。通道是在贴图上量出来的：standard 的
+  MultiMask R = 金属度（破坏剑刃口、护肩包边、铆钉）、G = 粗糙度、B = AO；skin 的 R = 次表面量（皮肤 ≈0.58）；`_MM2` 的
+  R = 自发光遮罩、G = 毛孔遮罩；眼睛贴图是完整眼球。
+- 头发：实例的 `Brightness`（Tifa 3.35）是给 UE 头发着色模型补亮的，原样乘到 Principled 上黑发变中灰；对比渲染后用
+  `Brightness^0.15`，高光 × 0.6。
+- 武器（破坏剑、正宗、手里剑）是身体网格的一部分，跟随的 `wpn` / `pivot` 骨在绑定姿势里在原点，T 姿势下平躺在脚边 →
+  拆成单独的 `<id>_weapon` 物体，预览不渲染它。
+- CLI 并行导出：同一个包出现两次（两个通配符都匹配）会并发写同一个文件，`IOException` 后整批中止 → 先去重再用 `-c` 列表。
+- 单位保持 UE 厘米，和 Rebirth / TFD 的 `.blend` 一致。
+- XPS：骨骼是 HumanIK 命名，blender2xps 的别名表本来就认，直接映射成 XPS 标准骨名（姿势能套），×0.01 成米。
+- PMX：HumanIK 名字对 MMD 槽位；镇民 / 村民 / 职员 / 女孩这类 NPC 骨架**没有脖子**（头挂在 `Spine1` 上）、没有手指脚趾 →
+  补一根不带权重的 `Neck`（MMD 必须有 首）；`hi_face` 下的脸部骨（除两眼）并进头；Tifa 的 `L_bustB → L_bustA` 合成一根挂
+  胸部物理（只有她有胸部骨）；转换器不认的缩写先改名（`skt` → `skirt`、`ribon` → `ribbon`、`mant` → `mantle`、
+  `Cloth` → `Cloak`），`Roll` / `Sub` 扭转辅助骨标成四肢辅助骨。
+- 女性判断：只有 Tifa 的骨架有胸部骨，不能靠骨骼；NPC 名字里 `b` / `d` 结尾的镇民、村民是女性（身高 168–170 cm），
+  `a` / `c` 是男性（184–187 cm），最后以预览图为准。
+
+### 验证
+
+- 9 个 `.blend` 用 `scripts/archive/blend_selfcheck.py` 自检：外部引用 0（贴图全打包）。
+- Tifa：全身 6 个角度 + 脸部 4 张特写；头发亮度 / 高光做了 4+4 组对比；靴子的橄榄棕是贴图本色（UV 取样 65/56/36）。
+- 6 个模型的衣服材质逐面取 MultiMask R：80–100% 的面 < 0.1，金属件（扣子、手里剑、刃口）> 0.65。
+- 女性 21 个：`.blend` 21、XPS 21、PMX 20。20 个 PMX 的网格撕裂全部为 0、骨骼继承顺序冲突 0，导回 Blender 套舞蹈跑物理
+  逐个看过（总览 `E:\game_export\CCFF7R\_meta\female_pmx_check.png`）；Tifa 两侧胸部物理，爱丽丝 66 / 西丝妮 48 / Tifa 42 个刚体
+  （头发、裙摆、项链），尤菲的短发是单节骨、头上的丝带在头部下面，都没挂上物理。米涅瓦**没有 PMX**：翅膀、旗帜、弓的骨骼
+  前后伸得比身高还远，ROE 转换器的方向检查（`bake_rig_transforms`：骨头 Z 跨度 < Y 跨度就拒绝）判她不是站立的——她是一整座
+  全身甲 Boss，MMD 骨架套不上，只出 `.blend` 和 XPS。西丝妮的手里剑（`tian_weapon`）不进 XPS / PMX。21 个共 2.25 GB。
+- `python -m unittest discover -s scripts/ccff7r/tests`：12 个测试通过。
+
+---
+
 ## 2026-09-26 — FF7 Rebirth：眼睛「大黑瞳」修复（虹膜贴图放大 2 倍）+ 借用材质从游戏重建
 
 ### 新增 / 变化
