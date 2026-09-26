@@ -99,6 +99,22 @@ class TextureResolutionTests(unittest.TestCase):
         self.assertEqual("opacity", ADDON.texture_role("PC0002_00_Hair_A.png"))
 
 
+class EyeIrisUvTests(unittest.TestCase):
+    def test_iris_map_edge_lands_on_the_mask_edge(self):
+        # the iris-only map spans +-0.5 around its centre; scaled by EYE_IRIS_UV_SCALE it must
+        # end where the sclera takes over (outer radius), not inside the pupil
+        edge_on_eye_uv = 0.5 / ADDON.EYE_IRIS_UV_SCALE
+        self.assertAlmostEqual(edge_on_eye_uv, ADDON.EYE_IRIS_OUTER_RADIUS, places=6)
+        self.assertLess(ADDON.EYE_IRIS_INNER_RADIUS, ADDON.EYE_IRIS_OUTER_RADIUS)
+
+    def test_split_eye_materials_are_eyes(self):
+        # Vincent: one material per eye
+        for name in ("PC0002_00_Eye", "PC0010_00_Eye_Large", "PC0011_00_EyeL", "PC0011_00_EyeR"):
+            self.assertTrue(ADDON.is_eye_material_name(name), name)
+        for name in ("PC0002_00_Eyebrow", "PC0002_00_Eyelash", "PC0011_00_EyebrowRock"):
+            self.assertFalse(ADDON.is_eye_material_name(name), name)
+
+
 class ImageColorSpaceTests(unittest.TestCase):
     def test_reused_base_image_is_reset_to_srgb(self):
         image = types.SimpleNamespace(

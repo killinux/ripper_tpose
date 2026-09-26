@@ -14,6 +14,56 @@
 
 ---
 
+## 2026-09-26 — FF7 Rebirth：眼睛「大黑瞳」修复（虹膜贴图放大 2 倍）+ 借用材质从游戏重建
+
+### 新增 / 变化
+
+- 修复：Rebirth 所有「眼白 + 虹膜」拼法的眼睛，瞳孔几乎占满虹膜、只剩一圈细边（Tifa、Aerith、Cloud、Sephiroth……
+  全部如此，Remake 没有）。`ff7rebirth_tools.py` 给虹膜贴图加一套以中心放大 2 倍的 UV（`FF7RB_EyeIrisUV`），
+  虹膜/眼白分界 0.18–0.22 → 0.225–0.25；导 FBX/GLB 时的眼睛烘焙（`export_ff7rb_model_blender.py`）同样处理。
+- 修复：Vincent 的眼睛材质 `PC0011_00_EyeL / EyeR` 没被认成眼睛，虹膜铺满整颗眼球。
+- 新脚本（`scripts/final/`）：
+  - `fix_ff7rb_eyes.py`：修已经导出的 `.blend`（只补节点，原地保存，`--backup` 先备份原件）；
+  - `ff7rb_rematerialize.py`：从游戏重建 `.blend` 里指定的材质（`--material` / `--no-base` / `--no-record`）——
+    模型借用别的角色目录的材质实例时导出没有材质表、贴图是按文件名猜的；
+  - `render_eye_closeup.py`：统一相机和灯光给眼睛拍特写 + 列出眼睛材质的节点和贴图。
+- `export_ff7_pmx_blender.py`：`.blend` 里打包的贴图先写到临时目录再导 PMX，存 `_converted.blend` 前再打包回去
+  （从 E 盘归档直接导 PMX 时整张脸是洋红色）。
+- `ff7rb_cli_export.py`：`.usmap` 在 D 盘找不到就用 E 盘归档里那份。
+- E 盘归档（`E:\game_export\FF7Rebirth`）已处理：98 个 `.blend` 里 70 个修了眼睛；Vincent、PC0010_10 Sephiroth 变身形态
+  （8 个材质）、PC0000_17 Cloud Loveless 无面具（10 个材质，原来整个模型是灰的）从游戏重建；Tifa #817 的 8 个 mod
+  重导 XPS / PMX；画廊预览图和缩略图重渲。原件备份在 `E:\_backup\ff7rebirth_eyes_20260926\`（73 个，约 7 GB）。
+
+### 用户如何操作
+
+```
+python scripts\final\fix_ff7rb_eyes.py <blend 或目录> [--backup <目录>] [--dry-run]
+python scripts\final\ff7rb_rematerialize.py <blend> --no-base --no-record [--backup <目录>] [--dry-run]
+blender -b X.blend --factory-startup --python scripts\final\render_eye_closeup.py -- --out <目录>
+```
+
+新导出的 Rebirth 模型不用再修（`ff7rebirth_tools.py` 已经按新做法生成）。详见 `docs/ff7rebirth-eye-fix.md`。
+
+### 实现原理与坑
+
+- Rebirth 的眼睛材质（`RMI_Surface_Eye_Migration` → `RM_Surface`，静态开关 `Eye_` / `EyeMigration_`，没有标量参数）
+  用两套贴图：眼白 `Common_Eye_Player_C` 贴在眼球 UV 上，`IrisColor` / `IrisNormal` / `IrisOcclusion` 是只有虹膜、
+  铺满整张的图。眼球网格只有一套 UV，缩放写在着色器里。
+- 倍数是量的：Remake 的同名 `PC0002_00_Eye_C` 是整只眼睛（瞳孔边缘 UV 半径 0.068、虹膜外缘 0.245），Rebirth 的虹膜图
+  瞳孔边缘 0.135、虹膜铺到 0.5；两边眼球 UV 布局和几何一致 → 2 倍，0.5 / 2 = 0.25 正好落在 Remake 的虹膜外缘。
+- 借用材质：FModel 只写模型自己目录下的材质表；`ff7rb_rematerialize.py` 用 CLI 列表按名字找到材质实例，
+  沿用 `ff7rb_cli_export.fix_materials` 重建表、导出贴图，再调用批量导出同一个 `prepare_material`。
+  全量检查后，其余缺底色的材质（SOLDIER 装的发光件、mod 借用的 Tifa 耳环）在游戏表里本来就没有底色贴图。
+- 归档后的 `.blend` 贴图是打包的：mmd_tools 导 PMX 按文件路径拷贴图，拷不到就只剩现烘的几张（洋红脸）；XPS 不受影响。
+
+### 验证
+
+- 眼睛特写（同一相机、灯光）修前 / 修后，Remake 同角色对照：Tifa、Aerith、Cloud、Sephiroth（竖瞳）、Vincent、
+  Sephiroth 变身、Cloud 17；修后瞳孔大小与 Remake 一致。
+- `fix_ff7rb_eyes.py` 幂等（第二遍 already ok），文件只多约 3 KB，仍是不压缩的 `BLENDER-v306`，无 `.blend1`。
+- Tifa #817 的 8 个 PMX：撕裂 0、付与顺序违规 0、静置漂移 0.9 cm、PMX 贴图表每项都在，`preview_gaze.png` 目检。
+- 单元测试 21 个通过（新增：虹膜按倍数采样、贴图边缘落在遮罩外缘、EyeL/EyeR 是眼睛而 Eyebrow/Eyelash 不是）。
+
 ## 2026-09-25 — FF7 Remake / Rebirth：GANTZ 主题 mod 导出到 Blender / XPS / PMX，Rebirth 画廊补齐 85 个
 
 ### 新增 / 变化

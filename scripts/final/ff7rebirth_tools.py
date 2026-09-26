@@ -80,8 +80,16 @@ SEMANTIC_TEXTURE_KEYS = {
     "eye_iris": ("IrisColor", "PC0002_00_Eye_C"),
 }
 GENERATED_NODE_PREFIX = "FF7RB_"
-EYE_IRIS_INNER_RADIUS = 0.18
-EYE_IRIS_OUTER_RADIUS = 0.22
+# The iris maps (IrisColor / IrisNormal / IrisOcclusion) are iris-only images: pupil in the
+# middle, iris filling the whole square.  The eye mesh has one UV set shared with the sclera
+# map, so RM_Surface's eye path (static switches Eye_ + EyeMigration_, no scalar parameters)
+# samples the iris maps at that UV scaled x2 about the centre.  Measured: the pupil edge sits
+# at 0.135 in the iris map and at 0.068 on Remake's full-eye texture (same mesh UV layout),
+# and the iris map's edge (0.5 -> 0.25) is where Remake's texture turns into sclera.  Sampled
+# unscaled, only the middle of the map (mostly pupil) showed: huge black pupils.
+EYE_IRIS_UV_SCALE = 2.0
+EYE_IRIS_INNER_RADIUS = 0.225
+EYE_IRIS_OUTER_RADIUS = 0.25
 SKIN_NORMAL_STRENGTH = 0.35
 DEFAULT_NORMAL_STRENGTH = 0.7
 
@@ -609,13 +617,17 @@ def connect_image(material, principled, path, socket, location, non_color=False)
     return node
 
 
+# Vincent's eyes are two materials, PC0011_00_EyeL / PC0011_00_EyeR ("eyel" / "eyer" tokens)
+EYE_NAME_TOKENS = {"eye", "eyel", "eyer"}
+
+
 def is_eye_material_name(name):
-    return "eye" in normalized_tokens(name)
+    return bool(EYE_NAME_TOKENS & set(normalized_tokens(name)))
 
 
 def normal_strength_for_material(name):
     tokens = set(normalized_tokens(name))
-    if tokens & {"skin", "head", "arms", "eye", "mouth"}:
+    if tokens & ({"skin", "head", "arms", "mouth"} | EYE_NAME_TOKENS):
         return SKIN_NORMAL_STRENGTH
     return DEFAULT_NORMAL_STRENGTH
 
@@ -642,6 +654,8 @@ def connect_eye_base(material, sclera_path, iris_path, socket):
     iris.label = os.path.basename(iris_path)
     iris.image = load_image(iris_path)
     iris.location = (-780, 80)
+    iris.extension = "EXTEND"
+    iris_uv = new_iris_uv_node(nodes)
 
     distance = nodes.new("ShaderNodeVectorMath")
     distance.name = GENERATED_NODE_PREFIX + "EyeDistance"
@@ -667,7 +681,8 @@ def connect_eye_base(material, sclera_path, iris_path, socket):
     mix.location = (-280, 240)
 
     links.new(uv.outputs["UV"], sclera.inputs["Vector"])
-    links.new(uv.outputs["UV"], iris.inputs["Vector"])
+    links.new(uv.outputs["UV"], iris_uv.inputs["Vector"])
+    links.new(iris_uv.outputs["Vector"], iris.inputs["Vector"])
     links.new(uv.outputs["UV"], distance.inputs[0])
     links.new(distance.outputs["Value"], iris_mask.inputs["Fac"])
     links.new(iris_mask.outputs["Color"], mix.inputs["Fac"])
@@ -675,6 +690,47 @@ def connect_eye_base(material, sclera_path, iris_path, socket):
     links.new(iris.outputs["Color"], mix.inputs[2])
     links.new(mix.outputs["Color"], socket)
     return sclera
+
+
+def new_iris_uv_node(nodes):
+    """Mapping node giving the iris maps their own UV: x EYE_IRIS_UV_SCALE about (0.5, 0.5)."""
+    node = nodes.new("ShaderNodeMapping")
+    node.name = GENERATED_NODE_PREFIX + "EyeIrisUV"
+    node.label = "FF7RB Iris UV (x%g about the centre)" % EYE_IRIS_UV_SCALE
+    node.vector_type = "POINT"
+    node.inputs["Scale"].default_value = (EYE_IRIS_UV_SCALE, EYE_IRIS_UV_SCALE, 1.0)
+    offset = 0.5 - 0.5 * EYE_IRIS_UV_SCALE
+    node.inputs["Location"].default_value = (offset, offset, 0.0)
+    node.location = (-1000, -40)
+    return node
+
+
+def repair_eye_iris_uv(material):
+    """Fix an eye graph built before EYE_IRIS_UV_SCALE existed (iris map sampled at the raw
+    eye UV).  Returns True when the material was changed; graphs that already have the iris
+    UV node, or that are not the generated sclera + iris mix, are left alone."""
+    if not material or not material.use_nodes or not material.node_tree:
+        return False
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    uv = nodes.get(GENERATED_NODE_PREFIX + "EyeUV")
+    mix = nodes.get(GENERATED_NODE_PREFIX + "EyeColorMix")
+    ramp = nodes.get(GENERATED_NODE_PREFIX + "EyeIrisMask")
+    if not (uv and mix and ramp) or nodes.get(GENERATED_NODE_PREFIX + "EyeIrisUV"):
+        return False
+    if not mix.inputs[2].is_linked:
+        return False
+    iris = mix.inputs[2].links[0].from_node
+    if iris.type != "TEX_IMAGE":
+        return False
+    iris_uv = new_iris_uv_node(nodes)
+    for link in list(iris.inputs["Vector"].links):
+        links.remove(link)
+    links.new(uv.outputs["UV"], iris_uv.inputs["Vector"])
+    links.new(iris_uv.outputs["Vector"], iris.inputs["Vector"])
+    iris.extension = "EXTEND"
+    ramp.color_ramp.elements[0].position = EYE_IRIS_INNER_RADIUS
+    ramp.color_ramp.elements[1].position = EYE_IRIS_OUTER_RADIUS
+    return True
 
 
 def best_texture(material_name, textures, role):

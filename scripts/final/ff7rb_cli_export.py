@@ -34,7 +34,12 @@ import sys
 # CUE4Parse.CLI rebuilt from joric/CUE4Parse.CLI ab447bb + scripts/final/cue4parse_ff7_mod_tangents.patch (E:/tools/_cli_src, .NET 10 SDK in E:/tools/dotnet); the 0.2.0 release cannot read mod meshes
 CLI = "E:/tools/cue4parse_cli_ff7/cue4parse.exe"
 GAME = r"D:\Program Files (x86)\Steam\steamapps\common\FINAL FANTASY VII REBIRTH"
-USMAP = r"D:\ff7rebirth_exports\mappings\FF7Rebirth-4.26-20260726-c838a8ac.usmap"
+USMAP_CANDIDATES = (
+    r"D:\ff7rebirth_exports\mappings\FF7Rebirth-4.26-20260726-c838a8ac.usmap",
+    # the E: archive keeps a copy (scripts/archive, 2026-09-26) - D:\ff7rebirth_exports may be deleted
+    r"E:\game_export\FF7Rebirth\_meta\mappings\FF7Rebirth-4.26-20260726-c838a8ac.usmap",
+)
+USMAP = next((p for p in USMAP_CANDIDATES if os.path.isfile(p)), USMAP_CANDIDATES[0])
 GAME_ENUM = "GAME_FinalFantasy7Rebirth"
 CONTAINER_EXT = (".pak", ".utoc", ".ucas", ".sig")
 QUOTE = chr(39)

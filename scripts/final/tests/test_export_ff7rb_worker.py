@@ -76,6 +76,25 @@ class BlendEyeArraysTest(unittest.TestCase):
         self.assertGreater(value, 0.1)
         self.assertLess(value, 0.9)
 
+    def test_iris_map_is_read_at_its_own_scaled_uv(self):
+        # iris-only map: "pupil" blue inside radius 0.3 of the map, red iris outside
+        size = 128
+        ys, xs = numpy.mgrid[0:size, 0:size]
+        radius = numpy.hypot((xs + 0.5) / size - 0.5, (ys + 0.5) / size - 0.5)
+        iris = solid(size, size, (1.0, 0.0, 0.0, 1.0))
+        iris[radius < 0.3] = (0.0, 0.0, 1.0, 1.0)
+        sclera = solid(size, size, (1.0, 1.0, 1.0, 1.0))
+        row = 64
+        col = int(round((0.5 + 0.20) * size - 0.5))    # eye-UV radius 0.20: inside the iris mask
+        scaled = WORKER.blend_eye_arrays(sclera, iris, inner=0.225, outer=0.25, iris_scale=2.0)
+        raw = WORKER.blend_eye_arrays(sclera, iris, inner=0.225, outer=0.25, iris_scale=1.0)
+        # x2: eye radius 0.20 reads the map at 0.40 -> iris red; unscaled it hits the "pupil"
+        self.assertGreater(scaled[row, col, 0], 0.9)
+        self.assertLess(scaled[row, col, 2], 0.1)
+        self.assertGreater(raw[row, col, 2], 0.9)
+        # the centre still shows the pupil
+        self.assertGreater(scaled[64, 64, 2], 0.9)
+
     def test_mismatched_sizes_use_larger_canvas(self):
         sclera = solid(32, 32, (1.0, 0.0, 0.0, 1.0))
         iris = solid(64, 64, (0.0, 1.0, 0.0, 1.0))

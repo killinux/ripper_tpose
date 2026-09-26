@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 
 import bpy
 from mathutils import Matrix, Vector
@@ -51,6 +52,43 @@ def load(path, name):
 sb = load(SB_SCRIPT, "sb_pmx")
 sb.BUST["bones"] = (("左胸", "L_Breast_a_Phy"), ("右胸", "R_Breast_a_Phy"))
 sb.EYE_MAT_RE = re.compile("(^|_)eye($|_)|ojos|eyeball", re.IGNORECASE)
+
+
+def unpack_images_to(folder):
+    """Packed images -> files in <folder>, image.filepath pointed there (the source blend is not saved).
+    mmd_tools' PMX export copies texture FILES; blends archived to E:/game_export keep their images
+    packed, and exporting straight from there gave a PMX folder holding only the freshly baked maps
+    (magenta face in MMD)."""
+    used, done = set(), 0
+    for image in bpy.data.images:
+        if image.source != "FILE" or not image.packed_file:
+            continue
+        stem, ext = os.path.splitext(os.path.basename(bpy.path.abspath(image.filepath)) or image.name)
+        ext = ext or ".png"
+        name, n = stem + ext, 1
+        while name.lower() in used:
+            n += 1
+            name = "%s_%d%s" % (stem, n, ext)
+        used.add(name.lower())
+        path = os.path.join(folder, name)
+        with open(path, "wb") as fh:
+            fh.write(bytes(image.packed_file.data))
+        image.filepath = path
+        image.unpack(method="REMOVE")
+        done += 1
+    return done
+
+
+def repack_images_from(folder):
+    """Pack every image still read from <folder> so the saved _converted.blend stays standalone."""
+    root, done = os.path.normcase(os.path.abspath(folder)), 0
+    for image in bpy.data.images:
+        if image.source == "FILE" and not image.packed_file and image.filepath:
+            path = os.path.normcase(os.path.abspath(bpy.path.abspath(image.filepath)))
+            if path.startswith(root) and os.path.isfile(path):
+                image.pack()
+                done += 1
+    return done
 
 
 def pick(bones, *names):
@@ -293,6 +331,8 @@ def main():
     report = {"name": name, "pmx": path, "source": bpy.data.filepath}
     if os.path.isdir(out_dir):                      # a generated folder: start clean
         shutil.rmtree(out_dir)
+    unpack_dir = tempfile.mkdtemp(prefix="ff7_pmx_images_")
+    report["unpacked_images"] = unpack_images_to(unpack_dir)
     baked = sb.bake_node_colours(meshes, os.path.join(out_dir, "textures"))
     slots, missing_optional = resolve_ff7_slots(arm)
     report["missing_optional_slots"] = missing_optional
@@ -358,7 +398,9 @@ def main():
         raise RuntimeError("PMX not written: %s" % path)
     report["grant_order_violations"] = roe.verify_grant_order(path)
     report["bytes"] = os.path.getsize(path)
+    report["repacked_images"] = repack_images_from(unpack_dir)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out_dir, name + "_converted.blend"))
+    shutil.rmtree(unpack_dir, ignore_errors=True)
     print("FF7_PMX_REPORT=" + json.dumps(report, ensure_ascii=False, default=str), flush=True)
 
 

@@ -40,6 +40,9 @@ INTERGRADE》的最终导出工具。两款游戏都使用 Unreal，但封包和
 | `ff7_mod_export.py` | 两作 mod → .blend（Remake：mod 单独挂载 + glTF 兜底；Rebirth：CLI 暂存目录，含 DRESSCODE 插件 mod）+ 画廊条目 |
 | `export_ff7_pmx_blender.py` | FF7 角色 .blend → MMD PMX（复用 Stellar Blade / ROE 的 PMX 链，加 SE 骨骼槽位、胸部支点、裙摆骨转大腿） |
 | `ff7_mod_pmx_batch.py` | 批量出 mod 的 PMX + MMD 预览，并把 XPS / PMX 路径写进画廊条目 |
+| `fix_ff7rb_eyes.py` | 修已导出的 Rebirth .blend 的「大黑瞳」：虹膜贴图补一套放大 2 倍的 UV（[`docs/ff7rebirth-eye-fix.md`](../../docs/ff7rebirth-eye-fix.md)） |
+| `ff7rb_rematerialize.py` | 从游戏重建 .blend 里指定的材质（`--material` / `--no-base` / `--no-record`）：借用别的目录的材质实例、按文件名猜错的贴图 |
+| `render_eye_closeup.py` | Blender 后台：统一相机和灯光给眼睛拍特写，并列出眼睛材质的节点和贴图（两作 / 修前修后对比用） |
 
 ## 2. 公共准备
 

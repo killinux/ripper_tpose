@@ -83,22 +83,27 @@ def resample_nearest(array, width, height):
     return array[rows][:, cols]
 
 
-def blend_eye_arrays(sclera, iris, inner=0.18, outer=0.22):
+def blend_eye_arrays(sclera, iris, inner=0.225, outer=0.25, iris_scale=2.0):
     """Reproduce the FF7RB_EyeColorMix graph: sclera outside, iris inside.
 
     The generated ColorRamp runs white->black between ``inner`` and ``outer``
     UV distance from (0.5, 0.5) with EASE interpolation, approximated here by
-    smoothstep.  Fac=1 selects the iris (mix input 2).
+    smoothstep.  Fac=1 selects the iris (mix input 2).  The iris map is read
+    at its own UV, ``iris_scale`` times the eye UV about the centre (the
+    FF7RB_EyeIrisUV mapping node; ff7rebirth_tools.EYE_IRIS_UV_SCALE).
     """
     import numpy as np
 
     height = max(sclera.shape[0], iris.shape[0])
     width = max(sclera.shape[1], iris.shape[1])
     sclera = resample_nearest(sclera, width, height)
-    iris = resample_nearest(iris, width, height)
     ys, xs = np.mgrid[0:height, 0:width]
     u = (xs + 0.5) / width
     v = (ys + 0.5) / height
+    iris_h, iris_w = iris.shape[:2]
+    iris_rows = np.clip(((v - 0.5) * iris_scale + 0.5) * iris_h, 0, iris_h - 1).astype(int)
+    iris_cols = np.clip(((u - 0.5) * iris_scale + 0.5) * iris_w, 0, iris_w - 1).astype(int)
+    iris = iris[iris_rows, iris_cols]
     distance = np.sqrt((u - 0.5) ** 2 + (v - 0.5) ** 2)
     t = np.clip((outer - distance) / max(outer - inner, 1e-6), 0.0, 1.0)
     factor = (t * t * (3 - 2 * t))[..., None]
@@ -154,18 +159,22 @@ def bake_layered_eyes(module, meshes, texture_dir):
         if not (sclera_node and sclera_node.image
                 and iris_node and iris_node.image):
             raise RuntimeError("眼球混合节点缺少贴图: %s" % material.name)
-        inner, outer = 0.18, 0.22
+        inner = module.EYE_IRIS_INNER_RADIUS
+        outer = module.EYE_IRIS_OUTER_RADIUS
         mask = find_generated(material, "EyeIrisMask")
         if mask is not None and len(mask.color_ramp.elements) >= 2:
             inner = mask.color_ramp.elements[0].position
             outer = mask.color_ramp.elements[1].position
+        # the graph's own iris UV node wins; a graph without one samples the iris unscaled
+        iris_uv = find_generated(material, "EyeIrisUV")
+        iris_scale = iris_uv.inputs["Scale"].default_value[0] if iris_uv is not None else 1.0
         sclera = image_pixels(bpy.path.abspath(sclera_node.image.filepath))
         iris = image_pixels(bpy.path.abspath(iris_node.image.filepath))
         os.makedirs(texture_dir, exist_ok=True)
         baked_path = os.path.join(
             texture_dir, "%s_eye_baked.png" % material.name.replace(" ", "_"))
         baked_image = save_pixels(
-            blend_eye_arrays(sclera, iris, inner, outer), baked_path)
+            blend_eye_arrays(sclera, iris, inner, outer, iris_scale), baked_path)
 
         principled = next((node for node in material.node_tree.nodes
                            if node.type == "BSDF_PRINCIPLED"), None)
