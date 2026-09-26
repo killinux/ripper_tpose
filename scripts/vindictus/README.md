@@ -70,6 +70,18 @@ python .\make_gallery.py         # -> html\index.html
 - AES key：脚本从 `VINDICTUS_AES_KEY` 环境变量或 `E:\tools\vindictus\_download\aes_key.txt` 读。
   换机器或丢了就 `python .\find_aes_key.py --out <路径>` 重新算（80 秒）。key 别放进仓库。
 
+### 用 iPhone Face Cap 驱动表情（Faceit）
+
+`python .\extract_face_data.py --face Fiona` 把脸的 DNA 和原始网格包取到 `E:\game_export\Vindictus\_meta\face\`，
+然后在 Blender 里用 `scripts\blender_addons\faceit_arkit` 插件：补全蒙皮权重 → 生成 52 个 ARKit 形态键 → 注册到 Faceit。
+步骤见 [`docs/faceit-arkit-guide.md`](../../docs/faceit-arkit-guide.md)。
+
+注意：UE Viewer 导出的脸每顶点只留 **4** 个骨骼权重，游戏里最多 **12** 个；`export_pmx.py` 做的 PMX 骨骼表情
+也建在截断的权重上，张嘴、单侧微笑、鼓腮时脸颊会起包。插件的「恢复完整权重」（`faceit_arkit/ue_weights.py`）能补回来。
+
+`.dna` 是什么、里面各段存了什么、RigLogic 每帧怎么由它算出表情（PMX 表情和 Faceit 插件共用这套原理），
+见 [`docs/metahuman-dna.md`](../../docs/metahuman-dna.md)。
+
 ## 已验证环境
 
 ```text

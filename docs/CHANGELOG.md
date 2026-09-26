@@ -14,6 +14,27 @@
 
 ---
 
+## 2026-09-26 — Faceit ARKit 插件：52 个 ARKit 表情 + Faceit 实时捕捉（iPhone Face Cap）；补全 UE Viewer 截断的蒙皮权重
+
+1. **新增**：
+   - `scripts/blender_addons/faceit_arkit/`（Blender 插件，侧栏 **ARKit**；`cli.py` 命令行同一套函数）：
+     - 用 MetaHuman DNA 算出 52 个 ARKit 表情，存成形态键（ARKit → MetaHuman 控制量按 Epic 的 Live Link 映射；
+       mouthClose 以 jawOpen 为基准）；
+     - 从 UE5 烘焙网格包补全蒙皮权重：UE Viewer 每顶点只留 4 个，MetaHuman 脸最多 12 个，截断后表情全是鼓包；
+     - 注册到 Faceit：脸部网格、52 个目标（别的写法也认）、头部骨骼、实时源（Face Cap 端口 9001；眼睛走形态键）；
+     - 已有 ARKit 形态键的模型（如剑星 Eve，49 个）只做注册。
+   - `scripts/vindictus/extract_face_data.py`：从 Vindictus 容器取出脸的 DNA 和原始网格包（`--list` 查哪些脸带 DNA，目前只有 Fiona）。
+   - `E:\game_export\Vindictus\Fiona\blend\Fiona_BaseBody\Fiona_BaseBody_faceit.blend`：第一个做好的模型（用户自己复制的一份）。
+2. **用户如何操作**：[`docs/faceit-arkit-guide.md`](faceit-arkit-guide.md)（装插件、面板每个按钮、连 Face Cap、适配别的模型、批量命令）。
+   `.dna` 文件是什么、原理：[`docs/metahuman-dna.md`](metahuman-dna.md)（三层名字、文件各段及 Fiona 的实际数字、
+   RigLogic 每帧的计算、LOD、读取示例、相关工具）。
+3. **原理与兼容性**：见插件 README。DNA 求值与 `scripts/vindictus/metahuman_dna.py` 相同（插件里拷了一份，独立可用）；
+   权重恢复按特征读 UE 5.x zen 包（参考骨架、渲染分段、位置、可变权重 + 查找表），按顶点位置写回，只改被截断的顶点；
+   Faceit 按 2.3.40 的数据结构直接写（它的界面操作符在后台会报错）。需要 Blender 3.6 + Faceit。
+   **Fiona_BaseBody.blend、它的 XPS 和 `export_pmx.py` 做的 PMX 表情仍是截断的权重**，鼓包同样存在，未改。
+4. **验证**：52 个表情正面 / 3/4 对照图；数值核对左右和方向；权重恢复前后对照；插件输出与手工流程逐点一致；
+   Blender 窗口里用脚本冒充 Face Cap 发 OSC，Faceit 接收后形态键数值、转头轴向正确；Fiona 默认铠甲、剑星 Eve 各跑一遍。
+
 ## 2026-09-26 — FF7 Remake / Rebirth：Nexus 裸体 mod 批量导出（Rebirth 9 个 mod、37 个模型）；画廊在 D 盘导出删掉后可重建；GANTZ 跨游戏画廊
 
 1. **新增 / 修复**：

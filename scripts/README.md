@@ -24,7 +24,11 @@ Blender 插件也彼此独立：
 
 - ROE：`scripts\riseoferos\roe_xps_addon.py`，侧边栏 **ROE**；
 - FFVII Rebirth：`scripts\final\ff7rebirth_tools.py`，侧边栏 **FF7RB**；
-- Stellar Blade：`scripts\stellarblade\validate_eve.py`，Blender 3.6 后台组合验证。
+- Stellar Blade：`scripts\stellarblade\validate_eve.py`，Blender 3.6 后台组合验证；
+- 表情（跨游戏）：`scripts\blender_addons\faceit_arkit`，侧边栏 **ARKit** —— 用 MetaHuman DNA 生成 52 个 ARKit
+  形态键（UE Viewer 截断的蒙皮权重先从游戏包补全），注册到 Faceit，用 iPhone Face Cap 实时驱动；已有 ARKit 形态键的模型
+  只做注册。步骤见 [`docs/faceit-arkit-guide.md`](../docs/faceit-arkit-guide.md)，Vindictus 的脸部数据用
+  `vindictus\extract_face_data.py` 提取。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
 按清单批量「提取 + Blender 材质化」36 个 Player 包，画廊在 `final\html\`；
