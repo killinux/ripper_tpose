@@ -501,6 +501,22 @@ def setup_material(material):
         material.use_backface_culling = False
         return
 
+    # --- eyebrow / eyelash strands: ODI red channel is the coverage.  Checked before the hair rule: the lash instance
+    # (M_EyeLash_HigherLODs) has an "ODI Map" too and used to land in the hair branch - hair Root/Mid/Tip ramp with no
+    # FR map, i.e. a constant light-brown "Mid", so every lash looked pale / almost white
+    if "eyebrow" in parent or "eyelash" in parent or "eyelash" in low or "eyebrow" in low:
+        entry["kind"] = "brow"
+        odi = use(find_role(info, props, ("odi", "diffuse"), ("_odi",)) or info.get("Diffuse", ""))
+        color = props["vectors"].get("Color", props["vectors"].get("Hair Color", (0.06, 0.035, 0.02, 1)))
+        bsdf.inputs["Base Color"].default_value = (color[0], color[1], color[2], 1)
+        bsdf.inputs["Roughness"].default_value = 0.6
+        if odi:
+            img = tex_node(tree, odi, (-900, 0), non_color=True)
+            tree.links.new(channel(tree, img, "R", (-700, 0)), bsdf.inputs["Alpha"])
+            material.blend_method = "HASHED"
+            material.shadow_method = "HASHED"
+        return
+
     if "m_pc_hair" in parent or "mob_hair" in parent or "odi map" in {k.lower() for k in props["textures"]}:
         entry["kind"] = "hair"
         odi = use(find_role(info, props, ("odi",), ("_odi",)))
@@ -528,20 +544,6 @@ def setup_material(material):
         bsdf.inputs["Roughness"].default_value = props["scalars"].get("Roughness", 0.4)
         bsdf.inputs["Specular"].default_value = 0.4
         material.use_backface_culling = False
-        return
-
-    # --- eyebrow / eyelash strands: ODI red channel is the coverage
-    if "eyebrow" in parent or "eyelash" in low or "eyebrow" in low:
-        entry["kind"] = "brow"
-        odi = use(find_role(info, props, ("odi", "diffuse"), ("_odi",)) or info.get("Diffuse", ""))
-        color = props["vectors"].get("Color", props["vectors"].get("Hair Color", (0.06, 0.035, 0.02, 1)))
-        bsdf.inputs["Base Color"].default_value = (color[0], color[1], color[2], 1)
-        bsdf.inputs["Roughness"].default_value = 0.6
-        if odi:
-            img = tex_node(tree, odi, (-900, 0), non_color=True)
-            tree.links.new(channel(tree, img, "R", (-700, 0)), bsdf.inputs["Alpha"])
-            material.blend_method = "HASHED"
-            material.shadow_method = "HASHED"
         return
 
     # --- eye occlusion shell / tear line / fake reflection card: translucent helpers
@@ -963,15 +965,22 @@ if aligned:
     log("aligned secondary skeleton hierarchies to the UE facing: " + "; ".join(aligned))
 
 # A legacy base body brings its own (old, texture-less) head along; with the current face part in the file it
-# would poke through the new face, so cut it off: drop the vertices the old head / neck bones own.
+# would poke through the new face, so cut it off: drop the vertices the old head / neck bones own.  The body's
+# garment shell (the white tee / shorts, material "inner") is never cut: its collar vertices are neck-weighted
+# too, and cutting them left notches in the collar (fix_basebody_neck.py then lays the face's bib onto the old body).
+GARMENT_MATERIALS = {"inner"}
+
+
 def cut_legacy_head(mesh, subtree_bones):
     import bmesh
     head_groups = {g.index for g in mesh.vertex_groups if g.name in subtree_bones and ("head" in g.name.lower() or "neck" in g.name.lower())}
     if not head_groups:
         return 0
+    garment = {i for i, m in enumerate(mesh.data.materials) if m and m.name.split(".")[0].lower() in GARMENT_MATERIALS}
+    protected = {vi for p in mesh.data.polygons if p.material_index in garment for vi in p.vertices}
     doomed = []
     for v in mesh.data.vertices:
-        if v.groups and max(v.groups, key=lambda x: x.weight).group in head_groups:
+        if v.index not in protected and v.groups and max(v.groups, key=lambda x: x.weight).group in head_groups:
             doomed.append(v.index)
     if not doomed:
         return 0
@@ -986,6 +995,7 @@ def cut_legacy_head(mesh, subtree_bones):
 
 
 has_face_part = any(p["name"].lower() == "face" for p in PARTS)
+neck_fits = []
 if has_face_part and moved_meshes:
     legacy_bones = set()
     for b in base_arm.data.bones:
@@ -1003,6 +1013,22 @@ if has_face_part and moved_meshes:
                 if removed:
                     log("cut the old head off %s: %d vertices removed" % (part["name"], removed))
                     report["warnings"].append("%s: old head/neck removed (%d vertices) so the current face fits" % (part["name"], removed))
+                # the new face's neck / clavicle "bib" and the old body interpenetrate at the neck base: pull the bib
+                # onto the old body (by spine/clavicle weight), drop the old skin it covers (fix_basebody_neck.py);
+                # the bib's skin tone is matched after the materials are built
+                face_meshes = [m for p2, _a2, ms2 in imported if p2["name"].lower() == "face" for m in ms2]
+                neck_bone = base_arm.data.bones.get("neck_01")
+                if face_meshes and neck_bone and os.environ.get("VINDICTUS_NO_NECK_FIT") != "1":
+                    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                    from fix_basebody_neck import fit_face_to_body
+                    neck_pt = base_arm.matrix_world @ neck_bone.head_local
+                    unit = 0.01 if neck_pt.z > 10 else 1.0
+                    legacy = [m.name for m in mesh.data.materials if m and re.search(r"face|hair", m.name, re.I)]
+                    fit = fit_face_to_body(face_meshes[0], mesh, legacy_materials=legacy, unit=unit, log=log)
+                    neck_fits.append((face_meshes[0], mesh, fit.samples))
+                    if fit.moved or fit.deleted:
+                        report["warnings"].append("%s: face bib pulled onto the body (%d face verts, -%d body faces)"
+                                                  % (part["name"], fit.moved, fit.deleted))
 
 report["rig"] = {"bones": len(base_arm.data.bones), "added_from_parts": added,
                  "rest_pose_max_deviation": round(deviation, 4), "rest_pose_worst_bone": deviation_bone,
@@ -1024,6 +1050,10 @@ for mesh in meshes_all:
                 report["warnings"].append("material %s: %s" % (slot.material.name, exc))
                 log("material %s failed: %s" % (slot.material.name, exc))
 log("materials: %d (%d texture names unresolved)" % (len(seen), len(report["missing_textures"])))
+if neck_fits:
+    from fix_basebody_neck import match_bib_tone
+    for face_mesh, body_mesh, samples in neck_fits:
+        match_bib_tone(face_mesh, body_mesh, samples, log=log)
 
 # The default hair is hidden (kept in the file) when the "Head" part replaces it: list_models.py flags the
 # outfits whose head piece is a hairstyle or an enclosing helmet (spec "hide_hair"), and any Head part that

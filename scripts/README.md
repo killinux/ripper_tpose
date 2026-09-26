@@ -135,6 +135,13 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 [`gantz/`](gantz/README.md)：GANTZ（杀戮都市）主题 mod 导出的模型（FF7 Remake / FF7 Rebirth / Stellar Blade，5 个 mod、
 23 个模型）放在一页 `gantz\html\index.html`，数据全从 `E:\game_export` 归档读，`gantz\html\make_gallery.py` 生成。
 
+## 导出归档（`E:\game_export`）
+
+各游戏的导出默认落在 D 盘；做好的模型用 [`archive/archive_exports.py`](archive/README.md) 按
+`<游戏>\<角色>\<格式>\<造型>\` 归档到 `E:\game_export`：逐个 md5 校验，每个造型目录在 Blender 里打开自检（贴图外链的
+`.blend` 先把贴图收进目录再另存），账本记着哪些 D 盘文件已经归档，`E:\game_export\D盘可删除清单.md` 现算哪些 D 盘目录
+可以整个删（只拷不删，删由人来），画廊页里的 D 盘链接一并改到 E 盘。新导出了角色就再跑一次同样的命令。
+
 ## 开发辅助
 
 需要对已经打开且启动了 MCP 服务的 Blender 做本地诊断时，使用

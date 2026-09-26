@@ -211,6 +211,93 @@ blender -b X.blend --factory-startup --python scripts\final\render_eye_closeup.p
 - Tifa #817 的 8 个 PMX：撕裂 0、付与顺序违规 0、静置漂移 0.9 cm、PMX 贴图表每项都在，`preview_gaze.png` 目检。
 - 单元测试 21 个通过（新增：虹膜按倍数采样、贴图边缘落在遮罩外缘、EyeL/EyeR 是眼睛而 Eyebrow/Eyelash 不是）。
 
+## 2026-09-26 — 导出归档：D 盘各游戏的导出按「游戏\角色\格式\造型」搬到 `E:\game_export`
+
+### 新增 / 变化
+
+- 新目录 `scripts/archive/`：`archive_exports.py`（归档、自检、目录清单、D 盘可删除清单、改画廊链接）、`games.py`
+  （15 个游戏的规则：产物在哪、归到哪个角色 / 格式、哪些是能重新生成的中间产物）、`blend_selfcheck.py`、
+  `blend_package.py`、`tests/test_archive.py`、`README.md`。
+- `E:\game_export` 现在有 14 个游戏、1,589 个造型（按格式分共 1,914 个目录）、163 GB：Vindictus 31、The First Descendant 14、
+  Throne of Desire 17、DOA6 64、DOA5LR 291、FF7 Remake 45、FF7 Rebirth 98、Stellar Blade 151、VaM 68、NARAKA 517、
+  HoneySelect 2 66、Venus Vacation PRISM 9、Hotel VIP 8（2D）、Rise of Eros 210。每个造型目录都能单独打开。
+- `E:\game_export\D盘可删除清单.md`：D 盘 22 个导出目录都可以整个删，能腾出约 257 GB（`D:\ff7_mods` 的 153 GB 是 FF7 Rebirth
+  游戏 pak 的硬链接，删了只腾 2.8 GB；`D:\roe_exports` 标了“ROE_pmx 窗口还在用”）。`D:\vindictus_exports`、
+  `D:\vam_imports\FionaDF` 已由用户删除。
+- NARAKA：E 盘原来的 `outfits\<服装>` 同盘移动成 `NARAKA\<英雄>\blend\<服装>`（495 套），列表页链接一并改好。
+- 12 个画廊页（doa5lr、doa6、final、final/html_rebirth、firstdescendant、honeyselect2、hotelvip、riseoferos、stellarblade、
+  throneofdesire、vam、vindictus）里指向 D 盘的图片 / 模型链接改成 E 盘的归档位置。
+- `scripts/vam/README.md`：`bring_to_vam` 的源 `Fiona.blend` 改成 E 盘路径。
+
+### 用法
+
+```powershell
+cd scripts\archive
+python archive_exports.py --list
+python archive_exports.py <游戏> --dry-run      # 看分组
+python archive_exports.py <游戏>                # 或 all；新导出了角色就再跑一次，只拷新的 / 改过的
+python archive_exports.py --report              # 删 D 盘之前刷新可删除清单
+python archive_exports.py --relink              # 画廊重新生成后把链接再指回 E 盘
+```
+
+### 实现与兼容性
+
+- 只拷不删。边拷边算 md5，写 `.part` 再改名、读回再比；拷贝前后源文件大小 / 修改时间变了（别的窗口在写）就不记账。
+  账本 `<游戏>\_meta\ledger.json`，重跑按大小 + 修改时间跳过。
+- 自检在 E 盘这份上做：Blender 打开每个 `.blend`，`blend_paths(packed=False)` 的每个外部文件都得在造型目录里；
+  `.xps` / `.mesh` / `.pmx` 解析贴图表；VaM 查 `Custom/` 引用。缺的文件换算回 D 盘看：D 盘也没有 = 源文件本来就缺（提醒）。
+- 贴图外链的 `.blend`（FF7 Remake、各 PMX 目录的 `_converted.blend`、ROE 的跳舞场景）在 Blender 里把外部贴图 / 声音收进
+  造型目录后另存；按字节拷的 `.blend` 自检发现还指向目录外时自动改走这条路（ROE f10 / g10）。
+- 可删除清单扣掉硬链接（nlink > 1），两小时内有写入的目录加粗提醒。
+- 坑：Blender 3.6 的 `bpy.utils.blend_paths(packed=...)` 文档写反了（`packed=False` 才跳过已打包数据）；VSE 声音轨自己
+  还存着一份旧路径，只能按新路径重建声音轨；VaM 目录名里的 `[Looks]` 会被 `glob` 当成字符集；打包时存两次会留 `.blend1`。
+
+### 验证
+
+- `python scripts\archive\tests\test_archive.py` → `ARCHIVE_TEST=PASS`。
+- 1,914 个造型目录自检全部通过；从 E 盘打开 FF7 Remake 的 Cloud（打包过贴图）和 ROE 的 f10（自动补救过）渲染，贴图完整。
+- 重跑同一个游戏时所有文件都跳过；NARAKA 两个列表页 1,070 个相对链接改到新位置。
+- 之后按用户要求删掉了除 `D:\roe_exports` 以外的 23 个 D 盘目录（删之前逐个再核对一遍：每个文件都已归档且没改过、
+  或是登记过的中间产物，没有 junction / 符号链接，17 小时内没有写入），D 盘可用空间 97.7 GB → 311.9 GB。
+
+### 同时修了：Vindictus `Fiona_BaseBody` 的脖子接缝
+
+- 用户看了归档后的 `Fiona_BaseBody` 让再检查一下。归档本身没问题（E 盘 29 个文件和 D 盘原件 md5 一致），毛病在
+  09-13 的构建：新脸自带的颈部 / 锁骨“围兜”和旧身体互相穿插（前面浮在外面，穿着 T 恤时胸口一块方形肤色；后背沉在
+  里面），按权重切旧脖子时把 T 恤领口的 6 个顶点也切了，旧脖子皮和 100 个旧脸碎面露出来。
+- 用户的要求：这个素体要能脱掉 T 恤当裸体用，身体本身必须完整。前两轮都被否掉——第一轮按领口高度切掉整片围兜
+  （“脖子还是不对呀”，领口两侧各一条深色带）；第二轮按遮挡删（“把白衣服去掉，只看身体，脖子缺了一部分”）。
+- `scripts/vindictus/build_blend.py`：`cut_legacy_head()` 不再切衣服层（材质 `inner`）；随后调用新脚本
+  `scripts/vindictus/fix_basebody_neck.py`：`fit_face_to_body()` 把围兜按身体骨骼权重贴到旧身体表面（过渡带平滑、
+  外沿压进旧皮下面由旧皮盖住），重写挪过的顶点的自定义法线，删掉被围兜盖住的旧身体面和旧脸残片（删面前后旧身体的
+  法线原样写回）；材质建好后 `match_bib_tone()` 逐顶点匹配肤色（顶点颜色 `bib_tone` + Mix MULTIPLY）。原理和
+  试错过程见 `scripts/vindictus/README.md` 和脚本开头。脚本也能单独修已经构建好的 .blend；环境变量
+  `VINDICTUS_NO_NECK_FIT=1` 关掉这一步（调试用）。
+- 第三版之后又修掉三处：按权重只贴一半留下的后背凹坑、没重写法线造成的后背围兜下沿弧线（挪完顶点后围兜和身体的
+  法线差 18°）、围兜外沿浮在旧皮上从侧面贴着肩膀看的一道细黑线；最后把过渡带拉宽并平滑，脖子根的折痕变柔和。
+- 验证：藏掉 T 恤和穿着两种状态，正 / 3/4 / 侧 / 后 / 俯视各看 70 cm 全身、45 cm 85 mm 近景和肩膀 7 cm 特写，材质效果、
+  白模、按材质上色都干净；贴好的围兜和旧身体法线差 0°，旧身体其余部分的法线变化 < 0.05°。
+- 重新解包（`export_model.ps1 Fiona_BaseBody -Force`）并构建，重新归档到
+  `E:\game_export\Vindictus\Fiona\blend\Fiona_BaseBody`（09-13 的原版备份在 `Vindictus\_meta\backup\Fiona_BaseBody_2026-09-13`），
+  画廊缩略图一并更新，临时的 `D:\vindictus_exports` 归档后删掉。
+- 之后按用户要求导出 XPS（先按手工教程第 4 节把 Biped 身体和 UE 脸并成一副骨架），摆姿势时发现左肩领口有皮肤从
+  T 恤里穿出来：围兜只贴了形状，权重还是脸的。`fix_basebody_neck.py` 加了两步——贴好的围兜改用旧身体在同一点的
+  骨骼权重（过渡带按 t 混合，领口附近按离衣服的距离用身体权重），T 恤在盖住围兜的地方往外放到至少 4 mm（XPS 每顶点
+  只存 4 个权重，围兜插值来的权重被截断后会多偏 2 mm 左右）；V 领下面过渡带里 8 个离衣服不到 2 mm 的顶点往里收。
+  静止姿势的形状、法线、肤色都不变。重新构建、归档。
+- 用户让检查眼睛：眼球、虹膜、瞳孔、眼皮贴合都正常，**睫毛发白**。原因在 `build_blend.py` 的材质分类顺序——睫毛
+  实例（`M_EyeLash_HigherLODs_Inst`）有 `ODI Map`，先命中了头发规则，接了头发的发根→发梢渐变却没有 FR 贴图驱动，
+  一直是中间的浅棕色。改成眉毛 / 睫毛的判断放在头发前面，Base Color 用实例里的 `Color`（0.0039，接近黑）。
+  Fiona_BaseBody 已重建、重新导出 XPS 并归档（烘焙出的睫毛贴图 RGB ≈ 13/255）。归档里另外 15 个用 Fiona 脸的模型
+  （Fiona、PCF_001～010、PCF_001_Temp、PCF_012、PCF_067、Shiningwill_legacy）和它们的 XPS 也是白睫毛，等用户决定是否批量重建；
+  Lethita、PCM_BaseBody 本来就对。
+- 新的 XPS：`E:\game_export\Vindictus\Fiona\xps\Fiona_BaseBody\`（1013 骨、9 个部件、高 1.75，警告 0，脸部皮肤烘焙时
+  把肤色修正一起带进贴图）。验证：用 XNALara 导入插件读回 Blender，静止穿着 / 脱掉 T 恤、弯腰 + 转头 + 抬左臂的
+  姿势都渲染检查；Blender 里 30 个姿势（每只手臂三个轴 ±45°、锁骨、头、脊柱）从 T 恤外往里打射线，脸 / 围兜穿出
+  从 19 处降到 2 处（都在手臂绕自身轴拧 45° 的极端姿势），旧身体本身在这些姿势里穿 T 恤的地方远比这多。
+
+---
+
 ## 2026-09-25 — FF7 Remake / Rebirth：GANTZ 主题 mod 导出到 Blender / XPS / PMX，Rebirth 画廊补齐 85 个
 
 ### 新增 / 变化

@@ -458,7 +458,7 @@ cd E:\code\othercode\ripper_tpose\scripts\vam
 $blender = "D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
 
 # ① 从 .blend 导出蒙皮网格、骨骼、权重、材质；眼球是程序化材质，顺手把它的底色烘成一张图
-& $blender -b D:\vindictus_exports\blend\Fiona\Fiona.blend --factory-startup `
+& $blender -b E:\game_export\Vindictus\Fiona\blend\Fiona\Fiona.blend --factory-startup `
     -P blender_dump_skinned.py -- D:\vam_imports\FionaDF\_src --bake MI_Fiona_Face01_EyeBall
 
 # ② 拟合、写物品 / morph / 贴图 / 预设，渲预览和缩略图；--install 同时拷进 VaM
