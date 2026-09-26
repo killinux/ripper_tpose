@@ -59,6 +59,50 @@
 4. **验证**：Rebirth 37 个模型 blend / XPS / PMX 全部读回检查；画廊里每个 `file:///` 链接逐个检查（Remake 213、Rebirth 555、
    GANTZ 197、清单页 143，0 失效）；归档自检（Remake 30/30、Rebirth 111/111）。
 
+## 2026-09-26 — Vindictus：XPS → PMX 带表情（MetaHuman DNA）、胸部物理、头发物理
+
+1. **新增**：
+   - `scripts/vindictus/metahuman_dna.py`：
+     - 从游戏 IoStore 容器里直接取出脸网格包里嵌的 MetaHuman DNA（UE Viewer 不导出）；
+     - 解析 DNA v2.1；
+     - 按 RigLogic 的方式求值：原始控制 → PSD → 关节增量 → 正向运动学。
+   - `scripts/vindictus/export_pmx.py`：XPS → Convert to MMD 5（教程 6.10 的槽位修正）→ 両目 →
+     26 个标准 MMD 骨骼表情（由 DNA 算出）→ 身体碰撞体 + 胸部 + 头发物理 → PMX（12.5 倍）+ 报告 JSON。
+2. **用户如何操作**：
+   1. `python scripts\vindictus\metahuman_dna.py extract --out <dna>`；
+   2. `blender -b --python scripts\vindictus\export_pmx.py -- --xps <xps> --dna <dna> --out <目录>`。
+
+   说明在 `scripts/vindictus/README.md`「导出 PMX」，教程 6.6、6.10 加了指引。
+
+   同一天 Convert to MMD 5 插件窗口也做了一套通用做法（XPS 标准名识别、胸部 / 头发物理按钮）。
+   - 两边对比和合并建议：`docs/vindictus-fiona-pmx-approaches.md`；
+   - 重测脚本：`scripts/vindictus/checks/`；
+   - 教程 6.10 补注：插件是新版时不用手改槽位。
+3. **原理**：
+   - **表情**：DNA 的中性骨架先拟合到模型骨架上（相似变换）。每个表情按配方（星刃那套 ARKit 配方，换成 MetaHuman 的控制名）求出每根 `FACIAL_*` 骨从静止到摆好的变化，换算成骨骼表情的位移和旋转。
+   - **胸部**：刚体布局按用户的 MMD 模板（乳奶1/乳奶2）：`bust_1` 放静态体，`bust_2` 放动态球，关节 ±10°。
+     - 另加角度弹簧 450（按 MMD 单位算，静止下坠约 3°）。不加弹簧时乳房一直压在限位上，看起来下坠还带凹痕。
+     - 游戏里 `bust_2` 的权重最高只有 0.24，放大到 0.75。放大倍数随权重平方增长，边缘几乎不变。T 恤同样处理。
+   - **头发**：用 mmd_cloth_physics 建 46 条发束，改用 `ornament` 预设。每条从根部起，骨尾还在眼睛下方 3 cm 以上的部分跟随头骨（139 个刚体），下面的参与物理（105 个）。
+4. **兼容性**：
+   - 依赖 Convert to MMD 5、mmd_tools、XNALaraMesh、mmd_cloth_physics，以及 ROE worker 的 `add_both_eyes_bone` / `release_rest_overlaps` / `verify_grant_order`（只调用，不改）。
+   - 目前只在 Fiona 的脸上验证过。
+5. **验证**（Fiona_BaseBody）：
+   - **转换**：15/15 步，1107 根骨，付与计算顺序 0 处违规，PMX 6.4 MB。
+   - **DNA 拟合**：620 根骨，平均误差 0.38 mm。
+   - **表情**：26 个逐个渲染检查，眨眼、单眼、笑眼、眉毛、あいうえお 都正确；「にやり」在 1.0 时脸颊鼓包，改成 0.8。
+   - **头发**：
+     - 用原来的 `hair` 预设时，头顶斜扫到侧面的长发束站着不动就滑下来盖到脸上（发梢 24 cm）；
+     - 关掉头发和身体的碰撞后照样滑，排除了碰撞的原因；
+     - 改成跟随头皮之后，站立时发梢最多 5 cm，四个方向看发型不变。
+   - **胸部**：
+     - 不加弹簧（模板原样）时：站立下坠 13°，跳舞时右侧上缘折出凹痕；
+     - 弹簧 120：按 MMD 单位仍下坠 10°；
+     - 弹簧 450：静止下坠 3°。
+     - 「来杯好茶摇一摇」这支舞里，弹簧 450～1500 胸部都常被甩到限位，这是舞本身的效果。
+     - 权重改成中心放大后，第 80、360 帧的变形消失。
+   - **注意**：mmd_tools 按 0.08 导回米制时不改重力，Blender 里的物理预览比 MMD 硬得多。物理的判断都以 MMD 单位（导入缩放 1.0）为准。
+
 ## 2026-09-26 — FF7 Remake：PMX 加上 MMD 表情（游戏自己的表情姿势 + 口型数据，先在一个模型上试验）
 
 1. **新增**：`export_ff7_pmx_blender.py --face-data <json>` 让 Remake 模型的 PMX 带上 43 个顶点表情——
@@ -210,6 +254,47 @@ blender -b X.blend --factory-startup --python scripts\final\render_eye_closeup.p
 - `fix_ff7rb_eyes.py` 幂等（第二遍 already ok），文件只多约 3 KB，仍是不压缩的 `BLENDER-v306`，无 `.blend1`。
 - Tifa #817 的 8 个 PMX：撕裂 0、付与顺序违规 0、静置漂移 0.9 cm、PMX 贴图表每项都在，`preview_gaze.png` 目检。
 - 单元测试 21 个通过（新增：虹膜按倍数采样、贴图边缘落在遮罩外缘、EyeL/EyeR 是眼睛而 Eyebrow/Eyelash 不是）。
+
+## 2026-09-26 — 文档：Vindictus Fiona 全手工导出教程（游戏文件 → Blender → XPS / PMX）
+
+### 新增 / 变化
+
+- `docs/vindictus-fiona-manual-export.md`：以 `Fiona_BaseBody` 为例，每一步都在图形界面里手工完成，覆盖：
+  - UE Viewer 解包（UE 5.3、key 从文件读、三个包的路径）；
+  - Blender 手工组装：导入 PSK、素体转正、合并骨架、切旧头保留 T 恤、照 `.props.txt` 建材质；
+  - 修脖子：用修改器做到和 `fix_basebody_neck.py` 一样的效果；
+  - 把 Biped 身体和 UE 脸并成一副骨架；
+  - Blender2XPS 导出 XPS；
+  - Convert to MMD 5 + mmd_tools 导出 PMX。
+
+  每节都写了对应的自动脚本，最后是常见问题表。`scripts/vindictus/README.md` 加了链接。
+- 教程新增 6.10「直接从 XPS 转 PMX」，从 XNALaraMesh 导入开始：
+  - 先清掉骨架缩放；
+  - 自动识别后要改 4 行槽位：センター、下半身、頭、目；
+  - 一键转换后在左下角面板取消勾选「自动识别骨架」，状态栏应显示 15/15 步，16/16 说明槽位被盖掉了；
+  - 材质不用改，贴图自动带上。
+- `scripts/vindictus/fix_basebody_neck.py`：
+  - 命令行加 `--face` / `--body`，可以对物体名不同的手工组装文件跑；
+  - 旧身体的三角面改存普通元组，不再引用网格数据。输出不变。
+
+### 验证
+
+- 在 Blender 3.6.15 后台，用 GUI 按钮调用的同一批操作符，把第 2、4、5、6 节的关键步骤重放了一遍：
+  - 骨数和自动构建一致（1027）；
+  - 并成一副骨架后，XPS 标准骨名都落在 Biped 骨上；
+  - Convert to MMD 5 15/15 步，PMX 回读 1088 根骨、高 21.9。
+- 第 3 节在没做脖子修复的构建上重放，和脚本结果对比：各段偏移中位数相差 < 0.06 cm，外沿都压在旧皮下 0.05 cm，
+  贴图、白模渲染看不出差别。
+- 脚本改动前后，同一输入的输出逐位一致；在手工组装的文件上用 `--face/--body` 跑通。
+- 6.10 用归档的 `Fiona_BaseBody.xps` 重放：
+  - 转换：15/15 步，1099 根骨，0 个权重孔；
+  - PMX 回读：1103 根骨，高 21.90，9 个材质都有贴图；
+  - 缩放没清就转：PMX 有 214.8 单位高；
+  - 摆姿势：抬臂、抬腿时被拉长的边，原始 XPS 和转换后一样多（如抬臂 60° 都是 9 条），来自源权重；
+  - 撤销后改过的槽位能恢复：在有界面的 Blender 里验证过。
+- 没实测的部分（UE Viewer 对话框、GUI 里手搭材质、両目、胸部物理、在 XPS / PMXEditor / MMD 里查看等）在文档里逐条标了「未实测」。
+
+---
 
 ## 2026-09-26 — 导出归档：D 盘各游戏的导出按「游戏\角色\格式\造型」搬到 `E:\game_export`
 

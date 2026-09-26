@@ -70,6 +70,56 @@ python .\make_gallery.py         # -> html\index.html
 - AES key：脚本从 `VINDICTUS_AES_KEY` 环境变量或 `E:\tools\vindictus\_download\aes_key.txt` 读。
   换机器或丢了就 `python .\find_aes_key.py --out <路径>` 重新算（80 秒）。key 别放进仓库。
 
+### 全手工做一遍（不跑脚本）
+
+[`docs/vindictus-fiona-manual-export.md`](../../docs/vindictus-fiona-manual-export.md) 以 `Fiona_BaseBody` 为例，
+从 UE Viewer 解包，到 Blender 里手工组装（转正、合骨架、切旧头、建材质、修脖子、并成一副骨架），
+再到手工导出 XPS 和 PMX。每一步都给了菜单路径和数值，并写明对应的自动脚本。
+
+### 导出 PMX（带表情、胸部物理、头发物理）
+
+```powershell
+python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从游戏容器里取脸的 DNA（几秒）
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' -b --python .\export_pmx.py -- `
+    --xps E:\game_export\Vindictus\Fiona\xps\Fiona_BaseBody\Fiona_BaseBody.xps `
+    --dna <目录>\SK_Fiona_Face01.dna --out <输出目录> --model-name Fiona
+```
+
+`export_pmx.py` 做的事：
+1. **转换**：XPS → Convert to MMD 5，和教程 6.10 的手工步骤一样。
+   - 清骨架缩放；
+   - 改 4 行槽位：センター 清空、下半身、頭、目；
+   - 一键转换时关掉自动识别。
+2. **両目**：沿用 ROE worker 的 `add_both_eyes_bone`。
+3. **表情**：Vindictus 的玩家脸是 MetaHuman，没有形态键，表情靠 RigLogic 驱动约 630 根 `FACIAL_*` 骨。
+   - 驱动数据在脸网格包里的 `DNAAsset` 中，UE Viewer 不导出。`metahuman_dna.py` 直接从 IoStore 容器里把它切出来，解析 DNA v2.1。
+   - 求值和 RigLogic 一样：原始控制 → PSD（带权输入相乘，限制在 0～1）→ 关节增量（每组一个稠密矩阵，LOD 0）→ 正向运动学。
+   - 26 个标准 MMD 表情（まばたき、笑い、ウィンク、あいうえお、眉毛……）各按一组控制值求值，再把每根骨从静止到摆好的变化写成骨骼表情。
+   - 求值前先把 DNA 的中性骨架拟合到模型骨架上：620 根骨，平均误差 0.38 mm。
+4. **物理**：
+   - **身体碰撞体**：用 Convert to MMD 5 的。
+   - **胸部**：刚体布局按你的 MMD 模板（`标准骨骼与刚体.pmx` 的 乳奶1/乳奶2）：
+     - `Bip001_*_bust_1` 上放静态球，`bust_2` 上放动态球；
+     - 关节 ±10°，碰撞组不和任何东西碰。
+     - **关节加了角度弹簧 450**。模板不带弹簧，站着时重力把乳房一直压在 10° 限位上，看起来整体下坠，右侧上缘还折出一道凹痕。
+       弹簧值按 MMD 单位算：1 单位约 8 cm，重力 9.8 单位/s²，球离转轴约 1.56 单位。450 时静止只下坠约 3°，晃动频率约 2 Hz。
+       星刃 Fiona 用的 120 在按米制导入的 Blender 预览里看着没问题，按 MMD 单位导入（1.0）实测会下坠 10°。
+     - **权重**：游戏里 `bust_2` 的皮肤权重最高只有 0.24，刚体晃起来皮肤只动几毫米。所以放大到最高 0.75，多出的从同一顶点的其它骨扣。
+       放大倍数随权重平方增长：峰值放大 3.1 倍，边缘（峰值的 30%）只放大约 1.2 倍。整体按一个倍数放大时，边缘过渡变陡，晃起来上缘会折出凹痕。
+       T 恤按同样规则处理，跟着皮肤走。
+   - **头发**：用 mmd_cloth_physics 建发束。
+     - `FACIAL_*` 算身体骨：MetaHuman 发际线的关节名字里带 Hair，但它们是脸皮。
+     - 波波头改用 `ornament`（保形）预设。
+     - 每条发束从根部起，只要骨尾还在耳线以上（双眼下方 3 cm）就跟着头骨走，从第一节低于耳线开始才参与物理。原因见下面「已验证」。
+5. **导出**：按 12.5 倍导出 PMX 并复制贴图，查付与的计算顺序，另存转换后的 `.blend` 和 `.pmx.report.json`。
+
+Convert to MMD 5 插件那边（另一个窗口）同时做了一套通用的做法：
+- 骨架识别优先认 XPS 标准名；
+- 新增胸部、头发物理按钮。
+
+两边的逐项对比、实测数据和合并建议见 [`docs/vindictus-fiona-pmx-approaches.md`](../../docs/vindictus-fiona-pmx-approaches.md)。
+重测用的脚本在 [`checks/`](checks/)。
+
 ### 用 iPhone Face Cap 驱动表情（Faceit）
 
 `python .\extract_face_data.py --face Fiona` 把脸的 DNA 和原始网格包取到 `E:\game_export\Vindictus\_meta\face\`，
@@ -221,6 +271,7 @@ python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\
 
 - 静态网格贴图是 virtual texture，UE Viewer 导不出（角色不受影响）；Nanite 只有基础几何；
   umodel 不导 morph target（脸包里的 MetaHuman `DNAAsset` 也不导），面部没有形态键。
+  表情可以从 DNA 算出来做成 PMX 骨骼表情，见上面「导出 PMX」。
 - 服装的 `Head` 部件五花八门：项链/颈圈（001、007、009）、耳机（002、004）、帽子（003、012）、发带（006）、
   发冠 + 头皮片（005，头发照常显示）、自带发型（001_Temp、008、010 里打包了 Fiona 的头发）、全盔（067、Lethita）。
   规则：Head 部件里有头发材质，或 `list_models.py` 的 `HEAD_REPLACES_HAIR`（067）标了的，才隐藏默认
@@ -237,10 +288,36 @@ python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\
 - 基础身体：`Fiona_BaseBody` 用的是 `Player/Fiona/Model/Mesh/SM_pc_fiona_basebody`（名字带 SM_ 其实是
   SkeletalMesh；旁边的 `SK_female_base` 反而是 Skeleton 资源，导不出网格）。它是旧版素体（白 T 恤 + 短裤，
   Biped 骨架，自带一个没贴图的旧头），脚本按上面的对齐规则转正后，把旧头/脖子（`Bip001_Head/Neck`
-  权重的 5.8 万顶点）切掉换成现在的脸，领口处能看到接缝。`PCM_BaseBody` 是新骨架的四件，直接能用。
+  权重的 5.8 万顶点）切掉换成现在的脸。`PCM_BaseBody` 是新骨架的四件，直接能用。
+- 素体换脸后的脖子接缝（2026-09-26 修，改了好几轮）：原来的毛病——① 新脸（MetaHuman 式的头）自带一圈颈部 / 锁骨
+  “围兜”，前面浮在旧身体外面 1 cm 左右（穿着 T 恤时胸口透出一块方形肤色），后背那片沉在旧身体里面 1 cm 左右；
+  ② 按主权重删旧脖子时，T 恤（材质 `inner`）领口的 6 个顶点也被当成脖子删了；③ 旧身体残留的脖子皮和 100 个旧脸
+  材质的碎面插在新脖子里；T 恤领口是照旧脖子做的，比新脖子宽。**这个素体要能脱掉 T 恤当裸体用**，身体本身必须是
+  完整的一层皮，不能靠衣服遮。现在 `cut_legacy_head()` 不碰 `inner` 的顶点，然后 `fix_basebody_neck.py`：
+  - `fit_face_to_body()`：围兜按“身体骨骼权重占比” w（spine / clavicle / upperarm）贴到旧身体表面上——w 从 0.05
+    到 0.95 平滑过渡，过渡带里的位移量再在网格上平滑（旧身体的脖子根比新脖子粗，带子窄了会折出一道棱）；围兜外沿
+    一圈压进旧皮下面 0.05 cm，由旧皮盖住边；挪过的顶点重写自定义法线（贴好的地方直接用旧身体在那一点的法线）；
+    被围兜盖住的旧身体面和旧脸碎面删掉，删面前后旧身体的自定义法线原样写回。
+  - `match_bib_tone()`（材质建好以后）：逐顶点把围兜的肤色往旧身体对应位置的肤色上靠——两张贴图各自模糊后取比值，
+    在网格上平滑，写进顶点颜色 `bib_tone`，脸皮肤材质的 Base Color 后面串一个 Mix MULTIPLY；只动色调，细节不变。
+  - 摆姿势（导 XPS 以后才看出来）：贴好的围兜改用旧身体在同一点的骨骼权重（Biped 骨），过渡带按 t 混合，领口边上
+    离 T 恤近的也用身体权重；T 恤在盖住围兜的地方往外放到至少 4 mm。不这么做，抬手、弯腰、转头时左肩领口的皮会从
+    T 恤里穿出来（围兜按脸的 UE 骨动、T 恤按 Biped 骨动；XPS 每顶点只存 4 个权重也会让围兜多偏 2 mm 左右）。
+    检查方法：同一个姿势下从 T 恤外面往里打射线，看先碰到衣服还是皮肤。
+  试错过程：第一轮按领口高度切掉整片围兜（领口比新脖子宽，两侧露出深色的旧皮，用户：“脖子还是不对”）；第二轮按
+  遮挡删（穿着 T 恤没问题，脱掉以后锁骨和后背一圈缺皮，用户：“把白衣服去掉，只看身体，脖子缺了一部分”）；第三轮
+  按 w 线性贴、没重写法线、肤色用全局一个比值（后背凹一块、围兜下沿一道弧）；围兜外沿浮在旧皮上面的那版从侧面
+  贴着肩膀看有一道细黑线（视线从缝里看到了围兜的背面）。自定义法线是相对周围面存的：挪顶点、删相邻的面都会让它
+  变，得自己算好写回。每一轮都在藏掉 T 恤和穿着两种状态下，用正 / 3/4 / 侧 / 后 / 俯视的材质效果、白模、按材质
+  上色的近景核对。已经构建好的 .blend 也可以直接修（参数见脚本开头）：
+  `blender -b <in.blend> --factory-startup --python fix_basebody_neck.py -- --out <out.blend>`。
 - 材质参数名匹配用整词：`"rma"` 曾经作为子串匹配到 `Normal Map`，把法线贴图当 ORM 接了进去
   （B 通道≈1 → 金属度 1），没有 ARM 参数的服装（PCF_012、旧版 Shiningwill 上衣、素体）全成了金属；
   `find_role(..., whole_words=True)` 修掉。
+- 睫毛（`MI_Fona_Face01_EyeLash`，父材质 `M_EyeLash_HigherLODs_Inst`）也有 `ODI Map` 参数，以前先命中了“有 ODI 就是头发”
+  那条规则：接上头发的发根→发梢渐变，却没有 FR 贴图驱动，一直取中间的浅棕色，所有用 Fiona 脸的模型睫毛都发白。
+  2026-09-26 起眉毛 / 睫毛的判断放在头发前面，Base Color 用材质实例的 `Color`（睫毛 0.0039，接近黑）。
+  判断材质类型的规则有先后，特征重叠的（都有 ODI）要把更具体的放前面。
 - `T_pc_fiona_basebody_01_D`（`M_female_skin_body_01` 的基色）是 virtual texture 导不出，这类皮肤材质用纯肤色代替；
   BC6H 贴图 UE Viewer 写成 `.hdr`（PCF_012 的 `_B` 基色），已按 `.hdr` 索引。
 - 眼球是近似：没有折射（游戏用角膜折射 + 视差），虹膜半径 0.2 是按这批头的眼裂宽度定的
@@ -270,3 +347,16 @@ python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\
   `PCM_001_Temp` 的整体网格 `SK_PCM_001_Temp`（把脸、发、五件都合在一起的副本）被 `list_models.py` 跳过；
   三套男装是 Swordwind / RoyalArmy 的 NPC 甲（分层材质，面甲、锁子甲、羽饰头盔、红披风都对）；四只豺狼人
   的毛、皮、甲、眼都有色，狗头人首领的重甲和钩爪正常；白模的三个见上一节。狗头人其余 6 条只有武器，没有导。
+- **`export_pmx.py`（2026-09-26，Fiona_BaseBody）**：
+  - 转换 15/15 步，1107 根骨，付与计算顺序 0 处违规，PMX 6.4 MB；26 个骨骼表情；264 个刚体、246 个关节。
+  - **表情**：两遍检查。
+    - 在转换后的 `.blend` 里逐个渲染：眨眼、单眼、笑眼、眉毛、あいうえお 都正确；「にやり」在 1.0 时脸颊鼓包，改成 0.8。
+    - 把 PMX 重新导入，用 mmd_tools 的表情滑块驱动（VMD 走的就是这条路）：效果相同。
+  - **头发**：
+    - 用原来的 `hair` 预设，站着不动 1 秒，从分缝扫到侧面的长发束（`Fiona_hair_d_*`）就滑下来盖到脸上。
+    - 关掉头发和身体的碰撞后照样滑，排除了碰撞的原因。头部碰撞体只是下巴高度一个 7 cm 的球，挡不住头顶的头发。
+    - 改成贴头皮的部分跟随头骨（139 个刚体跟随、105 个晃动）后，站立时发梢最多 5 cm，四个方向看发型不变。
+  - **胸部**：在 MMD 单位下跑「来杯好茶摇一摇」这支摇晃很大的舞（480 帧）。
+    - 不管弹簧设 450 还是 1500，胸部大部分时间都被甩到限位，这是这支舞本身的效果。
+    - 权重改成中心放大以后，第 80、360 帧的变形消失，其余帧和不加物理的版本几乎一样。
+  - **注意**：mmd_tools 按 0.08 导回米制时不改重力，Blender 里的物理预览比 MMD 硬得多。要看接近 MMD 的效果，得按 1.0 导入 PMX 和 VMD。
