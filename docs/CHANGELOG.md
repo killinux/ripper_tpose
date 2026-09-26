@@ -14,6 +14,30 @@
 
 ---
 
+## 2026-09-26 — FF7 Remake / Rebirth：Nexus 裸体 mod 批量导出（Rebirth 9 个 mod、37 个模型）；画廊在 D 盘导出删掉后可重建；GANTZ 跨游戏画廊
+
+1. **新增 / 修复**：
+   - **Rebirth mod 材质**：替换网格用的是标准服或别的角色目录里的材质，Dresscode 插件共用同一文件里另一个插件的材质。
+     `ff7_mod_export.py` 让 worker 看整个导出的角色目录和所有插件目录；`ff7rb_cli_export.py` 补导材质表里缺的原版贴图，
+     并且始终用硬链接暂存目录（游戏 `~mods` 里的替换 mod 不再混进官方模型的导出）；`ff7rebirth_tools.py` 不再给法线 /
+     粗糙度 / 金属度 / 透明这类贴图按名字找替身（#1198 的皮肤曾因此变成镜面）。
+   - `ff7_mod_export.py`：`--combine` 两作都支持（`rebirth --combine 10356+10357` = #1352 紧身衣 + 它单独的 TifaSkin 插件）；
+     角色按 mod 名 + 文件名 + 目录一起识别。`ff7_mod_pmx_batch.py`：几路并行时写 manifest 不再互相覆盖。
+   - **Remake**：`validate_ff7remake_model.py` 认出 mod 重画的遮罩（#1364 比基尼、#1358 蕾丝透视裙不再是不透明的紫裙）；
+     透明材质的阴影用 HASHED（被遮罩隐藏的几何不再投黑影）；mod 材质缺的漫反射 / 法线从原版材质继承。
+     `fix_ff7remake_tifa_gloves.py` 只比较骨骼头的位置（mod 身体经 glTF 导入，骨骼轴向不同，原来手套一律套不上）。
+   - **画廊**：两个 `collect_manifest.py` 在 D 盘导出删掉后从 E 盘归档的 manifest 补回条目，`make_gallery.py` 沿用归档里的
+     缩略图。Remake 53 张卡片（修好 35 张官方卡片的失效链接），Rebirth 135 张。
+   - **新画廊** `scripts/gantz/html/`：GANTZ 主题 mod 导出的 23 个模型（FF7 Remake / Rebirth / 剑星），卡片上有 blend / XPS / PMX
+     的完整路径和 PMX 检查结果（胸部 / 头发物理、表情）。
+   - `html/nexus_nude_mods.html`：本机游戏在 Nexus 上的裸体 mod 清单，标注已装进游戏 / 已导出。
+2. **用户如何操作**：[`docs/ff7-nexus-mods-export.md`](ff7-nexus-mods-export.md) 第 8–10 节（Rebirth 的 mod 种类和安装、
+   导出命令、画廊与归档）；`scripts/final/README.md` 新增三条；GANTZ 画廊见 `scripts/gantz/README.md`。
+3. **兼容性**：官方模型的导出行为不变（暂存目录只是不再读游戏的 `~mods`）；画廊脚本在 D 盘导出还在时和以前一样。
+   Dresscode 框架（Reunion Mod Loader + Dresscode）和 #1352、#2335 的配套文件还没下载，这两个 mod 未导出。
+4. **验证**：Rebirth 37 个模型 blend / XPS / PMX 全部读回检查；画廊里每个 `file:///` 链接逐个检查（Remake 213、Rebirth 555、
+   GANTZ 197、清单页 143，0 失效）；归档自检（Remake 30/30、Rebirth 111/111）。
+
 ## 2026-09-26 — FF7 Rebirth：眼睛「大黑瞳」修复（虹膜贴图放大 2 倍）+ 借用材质从游戏重建
 
 ### 新增 / 变化

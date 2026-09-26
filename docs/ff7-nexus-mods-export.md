@@ -176,7 +176,8 @@ blender -b --python scripts\final\html\render_blend_preview.py -- D:\ff7rebirth_
 ## 7. 已知限制
 
 - PMX 没有表情 morph（脸部骨并进了頭）；视线（両目 / 左目 / 右目）可用。
-- 原版 Remake Tifa 标准服装没有手掌（手套是独立武器网格），原画廊就是这样，这次没动。
+- 原版 Remake Tifa 标准服装没有手掌（手套是独立武器网格），原画廊里的官方卡片还是这样；mod 导出（PC0002_00）
+  从 2026-09-26 起自动装原版手套（见第 9 节）。
 - 血迹贴片颜色偏暗：`OxygenSaturation` 本来是给着色器算血色的参数图，不是颜色图。
 - PMX 只在 Blender 里导回验证过，还没在 MMD / PMXEditor 里实际打开。
 - Reika 的夸张身材是 mod 本身的设计。
@@ -196,7 +197,177 @@ python scripts\final\ff7_mod_export.py register --game remake --blend X.blend --
 # PMX（+ 预览）
 python scripts\final\ff7_mod_pmx_batch.py remake
 python scripts\final\ff7_mod_pmx_batch.py rebirth
-# 画廊
+# 画廊（Remake 的 D 盘导出归档删掉以后照样能跑，见第 9 节末尾），然后归档到 E 盘 + 链接改到 E 盘
 python scripts\final\html\collect_manifest.py && python scripts\final\html\make_gallery.py
 python scripts\final\html_rebirth\collect_manifest.py && python scripts\final\html_rebirth\make_gallery.py
+python scripts\archive\archive_exports.py ff7remake
+# Remake 原版资源（key 只放仓库外）
+python scripts\firstdescendant\find_aes_key.py --exe <游戏>\End\Binaries\Win64\ff7remake_.exe ^
+    --pak <游戏>\End\Content\Paks\pakchunk0-WindowsNoEditor.pak --out E:\tools\umodel_ff7remake\_keys\ff7remake_aes.txt
+$env:FF7REMAKE_AES_KEY = (Get-Content E:\tools\umodel_ff7remake\_keys\ff7remake_aes.txt -Raw).Trim()
+scripts\final\ff7remake_export.ps1 -Package <包路径> ... -OutputRoot D:\ff7remake_exports\player
 ```
+
+## 9. 2026-09-26：Remake 的 Tifa 裸体 mod（8 个）
+
+用户从 Nexus 裸体 mod 清单里挑了 8 个 Remake 的 Tifa mod，在浏览器里下载，要求装进游戏并导出 Blender / XPS / PMX。
+`nexus_mod_batch.py select --mods finalfantasy7remake:589=2357,...` 按文件号选（先用 `modFiles` 把下载文件名对上文件号），
+`collect` 复制解压到 `D:\ff7_mods\remake\`，然后照第 2、4、5 节出模型。
+
+| mod | 文件 | 改的服装 | 样子 |
+|---|---|---|---|
+| #589 Tifa 4K Hi-Poly Nude Mod（Jenovation） | v1.3 | 紫裙 PC0002_01 | 全裸 |
+| #661 Tifa Nude Natural（SweetFluff3D） | 8.0.0 | 标准服 PC0002_00 | 去掉上衣和吊带，留手套、丝袜、靴子 |
+| #1312 Tifa Nude By ShinyRoseMods | Second Upload | 标准服 | 裸体 + 手套、丝袜、靴子 |
+| #1266 Nude Thicc Tifa | Tifa Nude Thicc | 紫裙 | 丰满型全裸 |
+| #382 Nude-ish Tifa | tifa_seminude | 紫裙（只有贴图） | 紫裙贴图改成暴露的蓝色小衣服 |
+| #1343 Tifa Nude Smaller Proportions | Shorter Hair | 紫裙 | 小一号身材的全裸、短发 |
+| #668 Topless Tifa | Topless Tifa | 标准服 | 上空，吊带短裙、手套、丝袜、靴子 |
+| #1358 Tifa Seethrough Dress | pink | 紫裙 | 粉色蕾丝透视裙（镂空花纹在 mod 自带的遮罩 `PurpleDress_A` 里，第 10 节修正前导出成了不透明的裙子），项链被 mod 藏掉 |
+
+**装进游戏**：同一套衣服同时只能一个 mod 生效（同名网格 / 贴图谁后加载谁赢，混装会出现 A 的网格配 B 的贴图）。
+标准服的 #661 本来就装着（和这次下载的逐字节相同），紫裙装了 #589；其余解压在 `D:\ff7_mods\remake\<mod>\<文件>\x\`，
+换的时候把 .pak 拷进 `~mods`、删掉同一套衣服的另一个。#382 只有紫裙贴图，也不能和紫裙网格类的一起装。
+
+**原版 key**：Remake 原版 pak 的索引是加密的（pak v4），以前是手动 `Read-Host` 输入。这次用
+`scripts/firstdescendant/find_aes_key.py` 扫 `End\Binaries\Win64\ff7remake_.exe`，43 秒找到（exe 里用 dword 立即数拼出来，
+不是连续的 32 字节），用 pak 索引解出挂载点 `../../../` 验证。key 存在仓库外 `E:\tools\umodel_ff7remake\_keys\`。
+`D:\ff7remake_exports` 被归档窗口清掉以后，mod 导出要的原版资源按包重新提取：两套衣服的网格（顺带材质和贴图）、
+手套武器 `WE0002_00`、`PC0002_01_MarineCharm` 材质，每个几秒。`ff7remake_export.ps1` 提取时会临时把 `~mods`
+里的 pak 改名停用、结束后改回。
+
+**这次修的三个坑**
+
+1. **批量导贴图被一个坏包打断**（#1343）：`umodel -export ... *` 遇到 mod 里读不了的包（缺 .uexp 的材质、武器蓝图）报
+   `TArray: index 1 is out of range`，随后把刚写出的贴图删掉——25 张只剩 5 张。mod 把换成裸体皮肤的贴图沿用了
+   `PC0002_01_PurpleDress_C` 这些原名，没导出来就退回原版，身体套上了紫裙的布料（像紫色紧身衣）。
+   现在批量导完按 `packages.json` 核对，缺的贴图 / 材质实例包逐个单独导。
+2. **遮罩把整段挖空**（#668）：作者把丝袜、靴子、护臂、耳环放在同一段里，用的是原版 `PC0002_00_Earring` 材质；
+   它的 Coverage 图 `BodyA_A` 只有耳环那几小块是白的，接成透明度以后这一段 98% 没了（没腿、没手臂）。Nexus 上作者的
+   游戏截图里这些都在。规则：**遮罩来自原版材质、又会把分到它的面挖掉 90% 以上**（每个面的角点和中心都落在 < 0.5
+   的像素上）时不接遮罩，报告里记 `masks_dropped`。mod 自己的材质实例里明确绑的 Coverage 照样生效——#1358 就是用它
+   把项链整段藏掉的；头发 / 睫毛 / 眉毛是细发丝贴片（角点和中心常落在发丝之间），不做这个检查。
+   走过的弯路：先按 UV 能对上 mod 的皮肤图集，把这一段改挂 mod 的 BodyA 材质，结果靴子和护臂成了肤色；
+   截图（`mod { thumbnailLargeUrl }`，不用登录）说明游戏里用的就是原版图集、只是没挖洞。
+3. **标准服没有手**（#661、#1312、#668）：游戏用独立的皮手套武器网格 `WE0002_00_Tifa_LeatherGlove` 画手。
+   `fix_ff7remake_tifa_gloves.py` 本来就能装，但它要求手套和身体每根骨的静止矩阵完全一致；mod 身体走
+   FF7R-mesh-importer 的 glTF 导入，骨头朝向约定和 PSK 导入器不同（骨头位置分毫不差，`R_Hand_a` 的 Y 轴一个沿手指、
+   一个沿世界 -X），整矩阵比较在 `R_Ring_a` 差 1.41 就拒绝了。手套是用身体自己的骨头蒙皮的（每根骨的姿势 × 静止的逆），
+   骨头朝向不影响，只需要位置一致——改成只比骨头头部位置，容差 1 mm。`ff7_mod_export.py` 对 PC0002_00 的 mod 模型
+   自动装手套、重渲预览。
+
+**验证**：8 个 .blend 预览逐个看过（和 #668 的 Nexus 游戏截图对照过）；XPS 8 个全部通过 blender2xps 自检（无权重顶点 0、
+权重未归一 0；#661 头发 / 头部、#1343 裙子单个部件超过 65535 顶点，只有很老的 XNALara 读不了）；PMX 8 个：
+
+| 模型 | 身高 m | 骨骼 | 刚体 / 关节 | 撕裂 | 付与 | 漂移 cm |
+|---|---:|---:|---:|---:|---:|---:|
+| mod1266 Tifa Nude Thicc | 1.726 | 396 | 76 / 58 | 0 | 0 | 1.5 |
+| mod1312 ShinyRose（Second Upload） | 1.726 | 480 | 80 / 64 | 0 | 0 | 0.9 |
+| mod1343 Tifa Nude Shorter Hair | 1.726 | 400 | 70 / 54 | 0 | 0 | 0.9 |
+| mod1358 Tifa seethrough pink dress | 1.726 | 400 | 100 / 82 | 0 | 0 | 1.4 |
+| mod382 tifa seminude | 1.726 | 421 | 100 / 82 | 0 | 0 | 1.4 |
+| mod589 Tifa 4K Hi-Poly Nude Mod v1.3 | 1.726 | 400 | 76 / 58 | 0 | 0 | 1.4 |
+| mod661 Tifa Nude Natural 8.0.0 | 1.726 | 480 | 80 / 64 | 0 | 0 | 0.9 |
+| mod668 Topless Tifa | 1.726 | 480 | 112 / 96 | 0 | 0 | 0.9 |
+
+胸部物理都是第 5 节那套（每侧一个球形刚体 + 弹簧关节）。跳舞预览（preview_dance.png）看过 #1266、#1312、#661、#668。
+PMX 同样只在 Blender 里导回验证过。
+
+**画廊和归档**：8 个都进了 Remake 画廊（`scripts/final/html/index.html`，45 → 53 张卡片，每张带 XPS / PMX / 舞蹈预览
+链接），`.blend` / XPS / PMX 归档到 `E:\game_export\FF7Remake\Tifa\{blend,xps,pmx}\<label>\`
+（`archive_exports.py ff7remake`：拷 304 个文件 3.05 GB，打包 16 个 .blend 的外部贴图，24 个造型自检全过，画廊链接改到 E 盘）。
+这时 D 盘的原版导出（`player\_blends`、`_gallery`）已经归档后删掉了，原来的两条画廊命令会停在「找不到 _blends」，
+而直接拿新的 `gallery_mods.json` 生成会只剩 8 张卡片。所以：
+
+- `collect_manifest.py`：D 盘上没有的条目沿用归档里的 manifest（`E:\game_export\FF7Remake\_meta\ff7remake_models_manifest.json`），
+  同名条目以 D 盘新导出的为准；
+- `make_gallery.py`：D 盘 `_gallery\thumbs` 不在时，缩略图读写归档里的 `_meta\gallery\thumbs`；预览图已经不在 D 盘时沿用已有的缩略图。
+
+生成的页面里 D 盘路径由归档那一步按账本逐个文件改到 E 盘。顺带修好了画廊原来的 35 张官方卡片：它们的 blend / 预览
+链接全指向 `Cloud\blend\PC0000_00_Cloud_Standard\` 下不存在的文件（70 个死链接）。原因在归档工具的改链接：
+`player\_blends` 是 36 个模型共用的源目录，它在账本对不上逐个文件时，会退回到「这个源目录只归档出一个造型」的
+目录级映射；某次只登记了 Cloud 标准服一个造型时改过链接，整个目录就都映射到了它的目录下，之后这些已经是 E 盘的
+链接不会再被改。检查办法：把页面里每个 `file:///` 链接解码后看文件在不在（这次 201 个链接，0 个不存在）。
+
+## 10. 2026-09-26（晚）：Rebirth 的 Tifa 裸体 mod（9 个）+ Remake 追加 2 个
+
+用户接着从清单里下了 11 个文件，要求 Rebirth 的「都装进去」，导出 Blender / XPS / PMX，补画廊。
+
+**先认清是哪一作**：文件名里的 mod 号两作都有（#575 在 Remake 是一首背景音乐，在 Rebirth 是 Tifa Nude Natural），
+要拿下载文件名 / 大小去两作的 `modFiles` 里对。11 个里 #1364、#884 其实是 Remake 的。
+
+| mod | 下载的文件 | 类型 | 导出的模型 |
+|---|---|---|---|
+| #575 Tifa Nude Natural (Dresscode)（SweetFluff3D） | 9.5.0（Dresscode V1.005） | Dresscode 插件 ×4 | 12：4 套衣服 × M / XL / XXL 身材 |
+| #1083 Tifa Striped Bikini (Dresscode)（hwahwa） | Dresscode Version | Dresscode 插件 BunnyOasis | 10：各色比基尼、上空、凉鞋款 |
+| #1369 Tifa topless in 4 variants (dresscode)（f80h） | 2.0.0 | Dresscode 插件 | 4：default / classic / costa1 / costa2 |
+| #1198 Eve Skin Suit (Dresscode)（hwahwa） | 1.1 | Dresscode 插件 | 1 |
+| #1352 Cybernetic Bondage（hwahwa） | 1.1 | Dresscode 插件 | 1，头和身体的材质在同 mod 另一个文件「PC0002 TifaSkin」里 |
+| #363 Tifa Hi-Poly Nude Mod port（jmedia） | Nude Tifa V1.8 | `~mods` 替换 | 8：PC0002_00 / 04 / 05 / 06 / 08 / 09 / 10 / 11 |
+| #679 Tifa Naked Re（nukog） | Tifa_Naked_Jiggle | `~mods` 替换 | 1：PC0002_00 |
+| #1361 Tifa ND alternative（ogadori） | a. Tifa ND alt | `~mods` 替换 | 1：PC0002_08 |
+| #2335 Tifa Nude（kuangsam135） | 9299 Tifa Nude (No Model) | `~mods`，只有新目录 `PC0002_99_Tifa_Nude` 的贴图和 4 个材质 | 0：模型在同 mod 的 9200（标准服）/ 9208（Costa）文件里 |
+| Remake #1364 Tifa Purple Seethrough Bikini（frostbitere） | 1.0 | `~mods` | 1：透视紫色比基尼 |
+| Remake #884 Tifa reforge by Aerosmith | reshape sandal 1.4 | `~mods`（紫裙；要 #597 才会盖到所有服装上） | 1：高模裸体 + 凉鞋 |
+
+**Rebirth 的两种 mod**：
+- Dresscode 插件：一个带 `<名>.uplugin` 的文件夹（`Content\Paks\WindowsNoEditor\<名>End-WindowsNoEditor.pak/utoc/ucas`），
+  放 `<游戏>\End\Mods\`。要先装 Reunion Mod Loader（#1061 主文件 + Game Instance Loader 的 pak 进 `~mods`）和
+  Dresscode（#1062），进游戏按 L3+R3 打开菜单换装。它是**加**服装、不替换，所以可以全部同时装。插件都是纯内容插件
+  （没有模块、没有依赖声明），框架没装时不会报错，只是选不到。
+- `~mods` 替换：直接盖原版服装，同一套衣服只能一个生效。#363 盖了 8 套，和 #679（标准服）、#1361（PC0002_08）冲突。
+
+**安装**（`D:\ff7_mods\installed_rebirth.json` 记了每个复制进去的文件）：`End\Mods` 放 8 个插件文件夹（#575 的 4 个 +
+#1198、#1352、#1369、#1083 各 1 个）；`~mods` 放 #363（覆盖面最全，也是 Remake 里装的 #589 的移植版）。
+#679、#1361 留在 `D:\ff7_mods\rebirth\` 随时可换。Remake 的两个都和已装的冲突（#1364 替换全部服装，#884 替换紫裙），没装。
+
+**这次修的坑**
+
+1. **mod 重画的透明遮罩被丢掉**（Remake #1364、#1358）。`validate_ff7remake_model.py` 对 mod 的「身体 / 衣服」类材质一律不接
+   `_A` 遮罩（防 #967 那种借来的遮罩），可这两个 mod 恰恰是把紫裙原版材质本来就在读的 `PC0002_01_PurpleDress_A` 重画了：
+   #1364 把裙身涂黑、只留比基尼，#1358 画成蕾丝镂空。新规则：mod 自己带了这张遮罩、原版材质又引用它，就接上，也不做
+   「挖掉九成」的检查（那条只针对原版遮罩）。第 9 节导出的 #1358 因此是不透明的粉裙，这次重导（blend / XPS / PMX）。
+2. 透明材质在 EEVEE 里仍按不透明投影：隐藏的裙身在大腿上投出暗斑。接了遮罩的材质 `shadow_method = "HASHED"`。
+3. mod 的材质实例只改遮罩（#1364 的 MarineCharm 只覆盖 Coverage）时，底色和法线要沿用原版实例，不再报「缺贴图」。
+4. **Rebirth：材质表写了、文件却没导出的贴图被「按名字找替身」**（#1198）。Eve_Skin 的金属度是原版
+   `PC0002_00_Skin_Mr`，网格导出没带它，worker 找了个名字最像的——紧身衣的 `ORM_B_metallic`，皮肤成了镜面。
+   `ff7rb_cli_export.py` 现在把材质表里引用、导出目录里没有的贴图再导一遍（每个 mod 补了几张到几十张）；
+   `ff7rebirth_tools.py` 对法线 / 粗糙度 / 金属度 / 透明 / 自发光，表里声明了却找不到时不再猜（底色照旧猜并记告警）。
+5. **Rebirth：材质表在别的目录**。#363 的 PC0002_04..11 身体、#1361 都用标准服目录的 `PC0002_00_Head/_Hair/_Arms`，
+   #1361 还用 Cloud 的 `PC0000_00_Shoulder`，worker 只看网格自己的目录 → 白模；#575 的四个插件共用只在
+   PrideOfSeventhHeaven 插件里的 `PC0002_00_Skin_NoScar_Hair` / `PC0002_00_HeadNN`，名字里带 Hair / Head，被配成了
+   原版头发的贴图（脸和身体上全是发丝）。`ff7_mod_export.py` 现在给每个网格的 `FF7RB_EXTRA_ROOTS` 加上整个导出的
+   角色目录、`End\Mods` 和同一文件的所有插件目录。
+6. 游戏里装了 `~mods` 替换以后，`ff7rb_cli_export.py` 导**原版**时直接读游戏目录会把 mod 也读进去；现在一律读
+   硬链接暂存目录（只链游戏自己的容器）。
+7. 需要配套文件的 mod：Rebirth 也支持 `--combine A+B`（B 一起挂载，模型只取 A 的）。#1352 等 TifaSkin（10357）下好后
+   `ff7_mod_export.py rebirth --combine 10356+10357`；#2335 等模型文件（11458）后 `--combine 11458+11457`。
+
+**顺带确认的**：#1083 叫 `BunnyOasis_nude` 的网格默认材质就是完整比基尼，叫 `000000FF` 的 Coverage 贴图其实全白——
+导出和 mod 数据一致。#1198 与 Nexus 作者截图对照过（奶白色紧身衣 + 铜色胸甲）。
+
+**验证**：Rebirth 37 个 .blend 的预览逐个看过（#1198、#575 对照了 Nexus 作者截图），XPS 37 个全过 blender2xps 自检
+（只有老问题：头发部件超过 65535 顶点）；Remake 三个（#1364、#884、重导的 #1358）同样出了 XPS / PMX。PMX：
+
+| mod | 模型数 | 身高 m | 骨骼 | 刚体 / 关节 | 撕裂 | 付与 | 漂移 cm |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Rebirth #575 | 12 | 1.721–1.741 | 1008–1012 | 78–167 / 62–151 | 0 | 0 | 0.8–0.9 |
+| Rebirth #1083 | 10 | 1.741 | 649 | 123 / 107 | 0 | 0 | 0.8 |
+| Rebirth #363 | 8 | 1.721–1.733 | 460–547 | 28–78 / 12–62 | 0 | 0 | 0.9（PC0002_05 为 2.9） |
+| Rebirth #1369 | 4 | 1.721–1.741 | 580–681 | 78–167 / 62–151 | 0 | 0 | 0.7–1.0 |
+| Rebirth #1198 | 1 | 1.721 | 885 | 78 / 62 | 0 | 0 | 0.9 |
+| Rebirth #679 | 1 | 1.721 | 1377 | 113 / 97 | 0 | 0 | 1.0 |
+| Rebirth #1361 | 1 | 1.731 | 949 | 80 / 64 | 0 | 0 | 0.9 |
+| Remake #1358 / #1364 / #884 | 3 | 1.726 | 400 | 100 / 82、100 / 82、70 / 54 | 0 | 0 | 1.4 / 1.4 / 0.9 |
+
+#363 的 PC0002_05 是士兵服款：头发收在头盔里，头发刚体只剩 28 个，漂移来自这几撮短发，跳舞预览正常。
+PMX 同样只在 Blender 里导回验证过。
+
+**画廊和归档**：Remake 画廊 53 → 55 张（#1358 换成透视版），Rebirth 画廊 98 → 135 张（本次 37 个）。两边都照第 9 节末尾的
+流程：`collect_manifest.py` + `make_gallery.py`（D 盘上没有的条目、缩略图沿用 E 盘归档）+ `archive_exports.py <游戏>`。
+Rebirth 的 `collect_manifest.py` 也加了同样的归档兜底。顺带把归档清单里两条过时的告警去掉：Cloud 17（缺底色 9）和
+Sephiroth 变身（缺底色 1）的材质在 09-26 已从游戏里重建（`ff7rb_rematerialize.py`），在 Blender 里核对过每个材质都有底色。
+
+**并行导出的坑**：XPS 用三个 Blender 并行时，第一版驱动把三个进程的输出都接到管道上、再按顺序等它们结束——后两个
+的管道缓冲区写满就卡住不动（CPU 0%），只有第一个在跑。每个进程的输出直接写日志文件就好。`ff7_mod_pmx_batch.py`
+现在写 `gallery_mods.json` 前先重读、只替换自己处理过的条目，几个 `--only` 批次可以同时跑。

@@ -165,6 +165,49 @@ MOD_ALPHA_SLOT = re.compile(r"hair|lash|brow", re.IGNORECASE)
 
 OPACITY_PARAM = re.compile(r"^(opacity|opacitymask|coverage|alpha|alphamask|transparency)$", re.IGNORECASE)
 
+# masks left off because they would have erased the geometry assigned to them (see below)
+MASKS_DROPPED: list[str] = []
+
+
+def mask_hidden_fraction(meshes, material, mask_path: str) -> float:
+    """Share of the faces using ``material`` that the mask would erase completely (every corner
+    and the centre on a texel below 0.5).
+
+    Mods park other pieces in a masked slot.  Remake #668 put Tifa's stockings, boots, arm guards
+    and earrings into one section on PC0002_00_Earring, whose Coverage map BodyA_A is black
+    everywhere except the earring cut-outs: wired as alpha, 98% of that section vanished (no legs,
+    no arms), while the mod's own in-game screenshots show all of it.  A mask that would hide
+    nearly everything it is given is not a mask for that geometry."""
+    import numpy as np
+
+    image = bpy.data.images.load(mask_path, check_existing=True)
+    width, height = image.size
+    if not width or not height:
+        return 0.0
+    pixels = np.empty(width * height * image.channels, dtype=np.float32)
+    image.pixels.foreach_get(pixels)
+    red = pixels.reshape(height, width, image.channels)[:, :, 0]
+
+    def texel(u, v):
+        return red[min(height - 1, int((v % 1.0) * height)), min(width - 1, int((u % 1.0) * width))]
+
+    total = hidden = 0
+    for mesh in meshes:
+        slots = {i for i, slot in enumerate(mesh.material_slots) if slot.material == material}
+        layer = mesh.data.uv_layers.active
+        if not slots or layer is None:
+            continue
+        uv = layer.data
+        for poly in mesh.data.polygons:
+            if poly.material_index not in slots:
+                continue
+            total += 1
+            corners = [uv[li].uv for li in poly.loop_indices]
+            centre = (sum(c[0] for c in corners) / len(corners), sum(c[1] for c in corners) / len(corners))
+            if texel(*centre) < 0.5 and all(texel(c[0], c[1]) < 0.5 for c in corners):
+                hidden += 1
+    return hidden / total if total else 0.0
+
 
 def wire_materials(meshes, material_dir: str, asset_root: str, overlay_root: str = "", params=None):
     index = image_index(asset_root)
@@ -187,6 +230,14 @@ def wire_materials(meshes, material_dir: str, asset_root: str, overlay_root: str
             if not os.path.isfile(mat_path):
                 mat_path = mat_index.get(base_name.lower(), mat_path)
             properties = parse_material(mat_path)
+            if base_name.lower() in overlay_mats:
+                # a mod material instance that only overrides a mask (#1364's MarineCharm: Coverage
+                # only) inherits the other textures from its parent, the game's own instance
+                base_props = parse_material(mat_index.get(base_name.lower(),
+                                                          os.path.join(material_dir, base_name + ".mat")))
+                for key in ("Diffuse", "Normal"):
+                    if not properties.get(key) and base_props.get(key):
+                        properties[key] = base_props[key]
             diffuse = resolve_image(index, properties.get("Diffuse", ""))
             normal = resolve_image(index, properties.get("Normal", ""))
             # 同名 _A 遮罩只在该材质的 .mat 确实引用它时才接 Alpha：
@@ -206,8 +257,29 @@ def wire_materials(meshes, material_dir: str, asset_root: str, overlay_root: str
                          if tex and OPACITY_PARAM.match(re.sub(r"^[0-9:]+", "", key))]
                 alpha_name = next((m for m in masks if m == alpha_name), masks[0] if masks else "")
             alpha = resolve_image(index, alpha_name) if alpha_name else ""
-            if alpha and table is None and overlay_root and MOD_OPAQUE_SLOT.search(base_name)                     and not MOD_ALPHA_SLOT.search(base_name):
-                alpha = ""
+            # A body-like slot of a mod keeps its _A only when the mod repainted the very mask the
+            # game's own material for that slot reads: #1364 blacks the purple dress out around a
+            # bikini, #1358 cuts it into lace (both ship PC0002_01_PurpleDress_A; the base
+            # PurpleDress .mat references it).  Anything else there is a borrowed mask (#967).
+            mod_edit = False
+            if alpha and table is None and overlay_root and MOD_OPAQUE_SLOT.search(base_name) \
+                    and not MOD_ALPHA_SLOT.search(base_name):
+                in_mod = os.path.normcase(os.path.abspath(alpha)).startswith(
+                    os.path.normcase(os.path.abspath(overlay_root)) + os.sep)
+                base_mat = mat_index.get(base_name.lower(), os.path.join(material_dir, base_name + ".mat"))
+                mod_edit = in_mod and alpha_name.lower() in parse_material(base_mat).get("_refs", set())
+                if not mod_edit:
+                    alpha = ""
+            # Only a mask the mod did NOT choose is tested: a Coverage map the mod binds in its own
+            # material instance is deliberate (#1358 blacks out the MarineCharm necklace that way).
+            # Hair / lash / brow cards are thin strands: a card's corners and centre often all fall
+            # between strands while the strands still cross it, so they are never tested either.
+            if alpha and table is None and not mod_edit and not MOD_ALPHA_SLOT.search(base_name):
+                share = mask_hidden_fraction(meshes, material, alpha)
+                if share >= 0.9:
+                    MASKS_DROPPED.append("%s: %s would hide %.0f%%" % (base_name, os.path.basename(alpha),
+                                                                        share * 100))
+                    alpha = ""
 
             material.use_nodes = True
             nodes = material.node_tree.nodes
@@ -227,10 +299,12 @@ def wire_materials(meshes, material_dir: str, asset_root: str, overlay_root: str
                     alpha_node = image_node(nodes, alpha, "Opacity Mask", "Non-Color")
                     links.new(alpha_node.outputs["Color"], principled.inputs["Alpha"])
                     material.blend_method = "HASHED"
+                    material.shadow_method = "HASHED"     # EEVEE: cut-away parts cast no shadow
                     material.use_screen_refraction = False
                 elif any(token in base_name.lower() for token in ("hair", "eyelash", "eyebrow")):
                     links.new(color.outputs["Alpha"], principled.inputs["Alpha"])
                     material.blend_method = "HASHED"
+                    material.shadow_method = "HASHED"
             else:
                 missing.append({"material": base_name, "kind": "Diffuse"})
 
@@ -377,6 +451,7 @@ def main():
         "bounds": {"min": list(minimum), "max": list(maximum)},
         "materials": materials,
         "missing_preview_textures": missing,
+        "masks_dropped": MASKS_DROPPED,
     }
     if args.report:
         report_path = os.path.abspath(args.report)

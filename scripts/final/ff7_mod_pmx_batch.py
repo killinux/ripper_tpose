@@ -44,6 +44,7 @@ def main():
     with open(manifest_path, encoding="utf-8") as fh:
         manifest = json.load(fh)
     skirt_ids = {int(x) for x in a.skirt_to_legs.split(",") if x.strip()}
+    touched = {}
     for e in manifest["results"]:
         m = re.match("^mod([0-9]+)_", e["label"])
         if not m or (a.only and a.only not in e["label"]) or (a.exclude and re.search(a.exclude, e["label"])):
@@ -87,7 +88,12 @@ def main():
         if os.path.isfile(pmx):
             e["pmx"] = pmx
             e["pmx_preview"] = os.path.join(root, "pmx", label, "preview_dance.png")
-    tmp = manifest_path + ".tmp"
+        touched[label] = e
+    # several batches may run side by side (--only per mod): merge into the file as it is now
+    with open(manifest_path, encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    manifest["results"] = [touched.get(x["label"], x) for x in manifest["results"]]
+    tmp = manifest_path + ".%d.tmp" % os.getpid()
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=1)
     os.replace(tmp, manifest_path)

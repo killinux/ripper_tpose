@@ -43,6 +43,9 @@ SELECTION = "D:/ff7_mods/selection.json"
 ROOTS = {"remake": "D:/ff7remake_exports/mods", "rebirth": "D:/ff7rebirth_exports/mods"}
 DOMAINS = {"remake": "finalfantasy7remake", "rebirth": "finalfantasy7rebirth"}
 REMAKE_BASE = "D:/ff7remake_exports/player/GameContents"
+# Tifa's default outfit has no hands: the game draws them with the separate leather-glove weapon
+# mesh.  ff7remake_export.ps1 -Package .../WE0002_00_Tifa_LeatherGlove/Model/WE0002_00.uasset
+GLOVE_DIR = os.path.join(REMAKE_BASE, "Character", "Weapon", "WE0002_00_Tifa_LeatherGlove")
 HELPER_SUFFIX = re.compile("(_(Skeleton|PhysicsAsset|BNM|KDI|vfx|Rig|Phy)|condition)$", re.IGNORECASE)   # Reika ships "Reika_FinalcompletCOndition"
 
 
@@ -142,6 +145,35 @@ def material_params(mount, pkgs):
     return out
 
 
+def missing_mod_assets(assets, pkgs):
+    """Texture / material-instance packages of the mod that left no file in mod_assets."""
+    have = {os.path.splitext(f)[0].lower() for _dp, _dn, files in os.walk(assets) for f in files
+            if f.lower().endswith((".png", ".tga", ".dds", ".hdr", ".mat"))}
+    return [p for p, cls in sorted(pkgs.items())
+            if {"Texture2D", "MaterialInstanceConstant"} & set(cls)
+            and os.path.splitext(os.path.basename(p))[0].lower() not in have]
+
+
+def attach_gloves(work, out_blend, label):
+    """Put the game's leather-glove mesh on a PC0002_00 (default outfit) body, re-render the
+    preview.  Returns a warning string, or "" when the gloves went on."""
+    psk = os.path.join(GLOVE_DIR, "Model", "WE0002_00.psk")
+    if not os.path.isfile(psk):
+        return "没有原版手套网格（%s），没装手套" % psk
+    report = os.path.join(work, label + "_gloves.json")
+    rc, log = run([BLENDER, "--background", out_blend, "--python", os.path.join(HERE, "enable_psk_addon.py"),
+                   "--python", os.path.join(HERE, "fix_ff7remake_tifa_gloves.py"), "--",
+                   "--glove", psk, "--textures", os.path.join(GLOVE_DIR, "Texture"),
+                   "--output", out_blend, "--report", report])
+    with open(os.path.join(work, label + "_gloves.log"), "w", encoding="utf-8") as fh:
+        fh.write(log)
+    if not os.path.isfile(report):
+        return "手套没装上（见 %s_gloves.log）" % label
+    run([BLENDER, "--background", "--python", os.path.join(HERE, "html", "render_blend_preview.py"),
+         "--", out_blend, "--force"])
+    return ""
+
+
 def remake_targets(pkgs):
     """Skeletal meshes the mod ships; for texture-only mods, the base meshes of the folders it retextures."""
     meshes = [p for p, cls in pkgs.items()
@@ -201,6 +233,7 @@ def remake_mesh(work, mount, assets, pkg, base_model, meta, force):
         fh.write(log)
     if not os.path.isfile(out_blend):
         return {"label": label, "status": "FAIL", "error": "Blender wrote no .blend", "log": log[-1200:]}
+    glove_note = attach_gloves(work, out_blend, label) if folder.startswith("PC0002_00_") else ""
     rep = load_json(report, {})
     mats = rep.get("materials") or []
     missing = rep.get("missing_preview_textures") or []
@@ -211,7 +244,10 @@ def remake_mesh(work, mount, assets, pkg, base_model, meta, force):
              "alphaMaterials": sum(1 for m in mats if m.get("alpha")),
              "warnings": (["缺贴图 %d：%s" % (len(missing), "; ".join("%s/%s" % (m.get("material"), m.get("kind"))
                                                                    for m in missing[:4]))] if missing else [])
-                         + (["UE Viewer 读不了这个 mod 网格（%s），走 glTF" % note] if note else []),
+                         + (["UE Viewer 读不了这个 mod 网格（%s），走 glTF" % note] if note else [])
+                         + ([glove_note] if glove_note else [])
+                         + (["透明遮罩会把整段挖空、按不透明处理：%s" % "; ".join(rep["masks_dropped"])]
+                            if rep.get("masks_dropped") else []),
              "route": route, "mod": meta, "package": pkg}
     register("remake", entry)
     return dict(entry, status="PASS")
@@ -240,6 +276,13 @@ def remake_file(key, st, sel, force, extra=()):
     if force or not os.path.isdir(assets):
         run([UMODEL, "-export", "-png", "-nomesh", "-noanim", "-game=ue4.18", "-path=" + mount,
              "-out=" + assets, "*"])
+    # One unreadable package aborts the whole "*" export - #1343 hit "TArray: index 1 is out of
+    # range" and UE Viewer then deleted the files it had just written, so 20 of its 25 textures
+    # never arrived and the base game's purple dress showed on the nude body.  Whatever is
+    # still missing is exported one package at a time.
+    for pkg in missing_mod_assets(assets, pkgs):
+        run([UMODEL, "-export", "-png", "-nomesh", "-noanim", "-game=ue4.18", "-path=" + mount,
+             "-out=" + assets, pkg], timeout=600)
     params = material_params(mount, pkgs)
     save_json(os.path.join(assets, "material_params.json"), params)
     targets = remake_targets(pkgs)
@@ -249,24 +292,35 @@ def remake_file(key, st, sel, force, extra=()):
 
 
 # ------------------------------------------------------------------ Rebirth
-def rebirth_file(key, st, sel, force):
+def rebirth_file(key, st, sel, force, extra=()):
+    """extra: [(fileId, collected entry)] mounted together with this file - #1352's bondage suit
+    takes its head and body materials from the separate "PC0002 TifaSkin" plugin (10357)."""
     x = os.path.join(st["dir"], "x")
     meta = mod_meta(sel, st["modId"], key)
+    mods = ["--mod", x]
+    for k2, st2 in extra:
+        mods += ["--mod", os.path.join(st2["dir"], "x")]
+        meta = dict(meta, file="%s + %s" % (meta.get("file") or key, mod_meta(sel, st2["modId"], k2).get("file") or k2),
+                    fileId="%s+%s" % (meta["fileId"], k2))
     if not glob.glob(os.path.join(x, "**", "*.utoc"), recursive=True):
         return [{"label": "file %s" % key, "status": "NO_CONTAINER"}]
     work = os.path.join(ROOTS["rebirth"], "%d_%s" % (st["modId"], slug(meta["name"])),
-                        "%s_%s" % (key, slug(meta.get("file") or key)))
+                        "%s_%s" % ("+".join([key] + [k for k, _ in extra]), slug(meta.get("file") or key)))
     cli = [sys.executable, os.path.join(HERE, "ff7rb_cli_export.py")]
-    _rc, listing = run(cli + ["--out", work, "--mod", x, "--list"], timeout=1800)
+    _rc, listing = run(cli + ["--out", work] + mods + ["--list"], timeout=1800)
     pkgs = sorted({l.strip() for l in listing.splitlines() if l.strip().lower().endswith(".uasset")})
     save_json(os.path.join(work, "packages.json"), pkgs)
     if not pkgs:
         return [{"label": "file %s" % key, "status": "NO_PACKAGES"}]
+    own = pkgs                                    # models come from this file, not from the add-on
+    if extra:
+        _rc, listing = run(cli + ["--out", work, "--mod", x, "--list"], timeout=1800)
+        own = {l.strip() for l in listing.splitlines() if l.strip().lower().endswith(".uasset")}
     # export every package of the mod against the staged game: a DRESSCODE plugin keeps its
     # meshes outside Model/ (End/Mods/<Plugin>/Content/MetaData/fullsuit), so let the export
     # tell which packages are skeletal meshes
     export = os.path.join(work, "export")
-    args = cli + ["--out", export, "--mod", x]
+    args = cli + ["--out", export] + mods
     for p in pkgs:
         args += ["--package", p]
     rc, log = run(args, timeout=3600)
@@ -281,7 +335,7 @@ def rebirth_file(key, st, sel, force):
             continue
         pkg = rel + ".uasset" if rel.startswith("End/") else             "End/Mods/%s/Content/%s.uasset" % (rel.split("/")[0], rel.split("/", 1)[1])   # plugin: object path
         code = os.path.basename(rel)
-        if pkg in pkgs and not HELPER_SUFFIX.search(code):   # the mod own meshes, no _Condition helpers
+        if pkg in own and not HELPER_SUFFIX.search(code):    # the mod own meshes, no _Condition helpers
             meshes.append((pkg, path))
     if not meshes:
         return [{"label": "file %s" % key, "status": "NO_MODEL", "packages": len(pkgs), "log": log[-800:]}]
@@ -303,8 +357,15 @@ def rebirth_file(key, st, sel, force):
             results.append({"label": label, "status": "SKIP", "blend": out_blend})
             continue
         env = dict(os.environ)
-        if pkg.startswith("End/Mods/"):           # plugin mesh: base-game materials exported next to it
-            env["FF7RB_EXTRA_ROOTS"] = os.path.join(export, "End", "Content", "Character")
+        # material tables and maps outside the mesh's own folder: the base-game materials exported next
+        # to it (#363's PC0002_04..11 bodies and #1361 wear PC0002_00_Head / _Hair / _Arms, even Cloud's
+        # PC0000_00_Shoulder - white models without them) and every other plugin of the same file
+        # (#575's four outfits share the skin and head materials only its PrideOfSeventhHeaven plugin
+        # ships; without them the worker matched "PC0002_00_Skin_NoScar_Hair" to the base hair)
+        plugins = [os.path.join(export, d) for d in sorted(os.listdir(export))
+                   if d not in ("End", "_raw_materials") and os.path.isdir(os.path.join(export, d))]
+        env["FF7RB_EXTRA_ROOTS"] = os.pathsep.join(
+            [os.path.join(export, "End", "Content", "Character"), os.path.join(export, "End", "Mods")] + plugins)
         rc, blog = run([BLENDER, "--background", "--python", os.path.join(HERE, "export_ff7rb_model_blender.py"),
                         "--", found[0], variant_root, out_blend, os.path.join(HERE, "ff7rebirth_tools.py"),
                         "export", "blend"], env=env)
@@ -318,9 +379,10 @@ def rebirth_file(key, st, sel, force):
         run([BLENDER, "--background", "--python", os.path.join(HERE, "html", "render_blend_preview.py"),
              "--", out_blend, "--force"])
         folder = rel.split("/")[-2] if rel.endswith("/Model") else (pkg.split("/")[2] if pkg.startswith("End/Mods/") else code)
+        # plugin meshes: the character from the mod / file / plugin name ("Eve Skin Suit" ships plugin Eve_Tifa)
+        names = " ".join([meta["name"], meta.get("file") or "", folder]).lower()
         char = (folder.split("_") + ["", "", ""])[2] if re.match("^PC[0-9]{4}_", folder) else next(
-            (w for w in ("Tifa", "Aerith", "Yuffie", "Reika", "Cloud", "Barret") if w.lower() in meta["name"].lower()),
-            folder)
+            (w for w in ("Tifa", "Aerith", "Yuffie", "Reika", "Cloud", "Barret") if w.lower() in names), folder)
         variant = meta.get("file") or ""
         if pkg.startswith("End/Mods/"):           # one plugin file ships several outfits: name the mesh
             variant = "%s · %s" % (code, variant)
@@ -357,7 +419,7 @@ def main():
     ap.add_argument("--only", nargs="*", default=[], help="file ids to (re)do")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--combine", action="append", default=[],
-                    help="remake: A+B mounts file B (an add-on) together with file A, e.g. 5649+5651")
+                    help="A+B mounts file B (an add-on) together with file A, e.g. remake 5649+5651, rebirth 10356+10357")
     ap.add_argument("--collected", default=COLLECTED)
     ap.add_argument("--selection", default=SELECTION)
     for opt in ("game", "blend", "preview", "report", "label", "code", "char", "variant",
@@ -382,7 +444,7 @@ def main():
         todo = [(k, st, []) for k, st in todo]
     for key, st, extra in todo:
         t0 = time.time()
-        rs = remake_file(key, st, sel, a.force, extra) if a.cmd == "remake" else rebirth_file(key, st, sel, a.force)
+        rs = (remake_file if a.cmd == "remake" else rebirth_file)(key, st, sel, a.force, extra)
         for r in rs:
             print("%-5s %-60s %s %s" % (r.get("status"), r.get("label"), r.get("route", ""),
                                         r.get("error", "")), flush=True)

@@ -221,6 +221,53 @@ def fix_materials(a, input_root, out):
     return fixed
 
 
+TEXTURE_EXT = (".png", ".tga", ".dds", ".hdr")
+NOT_EXPORTED = ("/Game/Renderer/Texture/", "/Engine/", "/Script/")   # renderer placeholders, engine defaults
+
+
+def exported_texture(out, object_path):
+    """Where the CLI wrote a texture: /Game/... by package path, a plugin's /X/... by object path."""
+    stems = [os.path.join(out, object_path_to_package(object_path)[:-len(".uasset")])]
+    if not object_path.startswith("/Game/"):
+        stems.append(os.path.join(out, object_path.split(".")[0].lstrip("/")))
+    for stem in stems:
+        for ext in TEXTURE_EXT:
+            if os.path.isfile(stem + ext):
+                return stem + ext
+    return ""
+
+
+def export_missing_textures(a, input_root, out):
+    """Textures a material table names that the mesh export did not write - a mod's material
+    instance pointing at base-game maps (#1198's Eve_Skin reads PC0002_00_Skin_Mr) - are exported
+    too; otherwise the worker had nothing but a look-alike from another material to go on."""
+    wanted = set()
+    for path in glob.glob(os.path.join(out, "**", "*.json"), recursive=True):
+        if "_raw_materials" in path:
+            continue
+        try:
+            with open(path, encoding="utf-8-sig") as fh:
+                data = json.load(fh)
+        except ValueError:
+            continue
+        textures = data.get("Textures") if isinstance(data, dict) else None
+        for ref in (textures or {}).values() if isinstance(textures, dict) else ():
+            if isinstance(ref, str) and ref.startswith("/") and not ref.startswith(NOT_EXPORTED) \
+                    and not exported_texture(out, ref):
+                wanted.add(object_path_to_package(ref))
+    if not wanted:
+        return []
+    try:
+        run_cli(a, input_root, sorted(wanted), out)
+    except RuntimeError:                          # one bad package: the rest one by one
+        for pkg in sorted(wanted):
+            try:
+                run_cli(a, input_root, [pkg], out)
+            except RuntimeError:
+                pass
+    return sorted(wanted)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True)
@@ -237,12 +284,15 @@ def main():
             raise SystemExit("--list needs --mod")
         print(run_cli(a, mod_only_root(a), ["*"], None, listing=True))
         return 0
-    input_root = build_stage(a) if a.mod else a.game
+    # always a stage of hard links: mods installed in the game's own Paks\~mods (replacers such as
+    # #363, which swaps all of Tifa's outfits) must not leak into an export of the official models
+    input_root = build_stage(a)
     if a.package:
         print(run_cli(a, input_root, a.package, a.out)[-600:])
     fixed = fix_materials(a, input_root, a.out)
+    textures = export_missing_textures(a, input_root, a.out)
     print("FF7RB_CLI_EXPORT=" + json.dumps({"out": a.out, "packages": a.package, "materials_fixed": fixed,
-                                          "input": input_root}))
+                                          "textures_added": len(textures), "input": input_root}))
     return 0
 
 

@@ -12,6 +12,10 @@
 走 CUE4Parse CLI 补出来的、FModel 导不出的变体）。同名变体以 extra 里的 PASS 为准，
 所以 FModel 那边的 FAIL / NO_MODEL 条目会被补上。
 --mods：Nexus mod 的画廊条目（ff7_mod_export.py 写的 gallery_mods.json），kind = mod。
+
+归档（scripts/archive）以后 D 盘的导出可能已经删了：D 盘上找不到的条目沿用归档里那份 manifest
+（E:/game_export/FF7Rebirth/_meta/ff7rebirth_gallery_manifest.json），画廊不会少卡片。这些条目的路径还是
+D 盘的，生成画廊后跑 ``archive_exports.py ff7rebirth``（或 ``--relink``）改到 E 盘。
 """
 
 import argparse
@@ -22,6 +26,7 @@ import re
 DEFAULT_ROOT = r"D:\ff7rebirth_exports\materialized"
 DEFAULT_EXTRA = [r"D:\ff7rebirth_exports\cli_materialized"]
 DEFAULT_MODS = r"D:\ff7rebirth_exports\mods\gallery_mods.json"
+ARCHIVED = r"E:\game_export\FF7Rebirth\_meta\ff7rebirth_gallery_manifest.json"
 
 # PC0002_08_Tifa_CostaClothing -> 编号 PC0002_08 / 角色 Tifa / 变体 CostaClothing
 LABEL_RE = re.compile(r"^(PC\d{4}_\d{2})_([A-Za-z0-9]+)_(.+)$")
@@ -111,8 +116,18 @@ def main():
                     e["preview"] = pv if pv and os.path.isfile(pv) else ""
                     e["blendSize"] = os.path.getsize(e["blend"])
                     mods.append(e)
+    kept = []
+    if os.path.isfile(ARCHIVED):
+        have = {x["label"] for x in results + mods}
+        with open(ARCHIVED, encoding="utf-8-sig") as f:
+            kept = [e for e in json.load(f).get("results", []) if e.get("label") not in have]
+        results = sorted(results + [e for e in kept if e.get("kind") != "mod"], key=lambda x: x["label"])
+        mods += [e for e in kept if e.get("kind") == "mod"]
+        if kept:
+            print("归档里补回 %d 条（D 盘上已经没有）" % len(kept))
     manifest = {"game": "FINAL FANTASY VII REBIRTH", "sourceRoot": a.root, "extraRoots": extras,
                 "results": results + sorted(mods, key=lambda x: x["label"])}
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=1)
     print("MANIFEST=%s (%d 条，其中 CLI 补 %d、mod %d；%d 张预览)" % (

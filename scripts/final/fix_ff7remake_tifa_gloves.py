@@ -74,11 +74,14 @@ def source_armature(mesh: bpy.types.Object, candidates: list[bpy.types.Object]):
 
 
 def matrix_difference(first, second) -> float:
-    return max(
-        abs(first.matrix_local[row][column] - second.matrix_local[row][column])
-        for row in range(4)
-        for column in range(4)
-    )
+    """Distance between the two bones' rest HEADS (armature space).
+
+    Only the position has to agree.  The glove is skinned by the body's own bone (pose @ rest^-1
+    of that bone), so the two imports may orient a bone differently: mod bodies come in through
+    FF7R-mesh-importer glTF, whose bone axes differ from the PSK importer's (R_Hand_a: Y along the
+    finger vs along world -X) while every head matches to 0.01 - comparing whole matrices refused
+    the gloves on every mod body (R_Ring_a 1.41)."""
+    return (first.matrix_local.to_translation() - second.matrix_local.to_translation()).length
 
 
 def validate_binding(mesh, imported_armature, body_armature):
@@ -353,7 +356,7 @@ def main():
             raise RuntimeError(
                 f"Body armature is missing {len(missing)} weighted glove bones: {missing[:8]}"
             )
-        if worst_difference > 0.01:
+        if worst_difference > 0.1:                  # 1 mm: the scene is in centimetres
             raise RuntimeError(
                 f"Glove rest pose differs at {worst_bone}: {worst_difference:.6f}"
             )

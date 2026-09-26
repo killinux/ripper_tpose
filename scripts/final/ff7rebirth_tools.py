@@ -79,6 +79,8 @@ SEMANTIC_TEXTURE_KEYS = {
     "eye_sclera": ("Color", "Common_Eye_Player_C"),
     "eye_iris": ("IrisColor", "PC0002_00_Eye_C"),
 }
+# roles never filled by a name guess when the material table declares a texture for them
+GUESS_FREE_ROLES = ("normal", "roughness", "metallic", "orm", "opacity", "emissive")
 GENERATED_NODE_PREFIX = "FF7RB_"
 # The iris maps (IrisColor / IrisNormal / IrisOcclusion) are iris-only images: pupil in the
 # middle, iris filling the whole square.  The eye mesh has one UV set shared with the sclera
@@ -319,6 +321,13 @@ def semantic_texture_paths(material_name, material_records, texture_index):
             if path:
                 resolved[role] = path
                 break
+        else:
+            # The table names a real map that was not exported: a look-alike found by name
+            # belongs to another material (#1198: the suit's ORM_B_metallic on Eve_Skin turned
+            # the skin into a mirror).  Leave such an input unconnected; colour maps (base,
+            # eye) are still guessed and a missing base colour is reported.
+            if meaningful_references and role in GUESS_FREE_ROLES:
+                placeholder_only_roles.add(role)
     return resolved, record, placeholder_only_roles
 
 

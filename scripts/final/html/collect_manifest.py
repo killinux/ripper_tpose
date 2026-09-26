@@ -10,6 +10,10 @@ manifest 只存本机路径与统计，不含任何游戏素材——和其它�
 
 --mods：mod 的画廊条目（ff7_mod_export.py 写的 gallery_mods.json，
 默认 D:/ff7remake_exports/mods/gallery_mods.json，不存在就跳过），kind = mod。
+
+归档（scripts/archive）以后 D 盘的导出可能已经删了：D 盘上找不到的条目沿用归档里那份 manifest
+（E:/game_export/FF7Remake/_meta/ff7remake_models_manifest.json），画廊不会少卡片。这些条目的路径还是 D 盘的，
+生成画廊后跑 ``archive_exports.py ff7remake``（或 ``--relink``）改到 E 盘。
 """
 
 import json
@@ -24,16 +28,19 @@ if MODS in ARGS:
 ROOT = ARGS[0] if len(ARGS) > 0 else "D:/ff7remake_exports/player"
 OUT = ARGS[1] if len(ARGS) > 1 else os.path.join(ROOT, "ff7remake_models_manifest.json")
 BLEND_DIR = os.path.join(ROOT, "_blends")
+ARCHIVED = "E:/game_export/FF7Remake/_meta/ff7remake_models_manifest.json"
 
 # 包目录名：PC0002_01_Tifa_PurpleDress -> 角色 Tifa，变体 PurpleDress，编号 PC0002_01
 LABEL_RE = re.compile(r"^(PC\d{4}_\d{2})_([A-Za-z0-9]+)_(.+)$")
 
 
 def main():
-    if not os.path.isdir(BLEND_DIR):
+    if not os.path.isdir(BLEND_DIR) and not os.path.isfile(ARCHIVED):
         raise SystemExit("找不到 _blends 目录: %s" % BLEND_DIR)
     results = []
-    blends = sorted(f for f in os.listdir(BLEND_DIR) if f.lower().endswith(".blend"))
+    blends = sorted(f for f in os.listdir(BLEND_DIR) if f.lower().endswith(".blend")) if os.path.isdir(BLEND_DIR) else []
+    if not blends:
+        print("%s 里没有 .blend（归档后删了？），官方条目沿用 %s" % (BLEND_DIR, ARCHIVED))
     for i, fname in enumerate(blends, 1):
         label = os.path.splitext(fname)[0]
         path = os.path.join(BLEND_DIR, fname)
@@ -91,6 +98,13 @@ def main():
                                      blendSize=os.path.getsize(e["blend"])))
         print("mods: %d 条（%s）" % (len(mods), MODS))
     results += sorted(mods, key=lambda x: x["label"])
+    if os.path.isfile(ARCHIVED):
+        have = {r["label"] for r in results}
+        with open(ARCHIVED, encoding="utf-8-sig") as f:
+            kept = [e for e in json.load(f).get("results", []) if e.get("label") not in have]
+        if kept:
+            print("归档里补回 %d 条（D 盘上已经没有）" % len(kept))
+            results = sorted(results + kept, key=lambda x: (x.get("kind") == "mod", x["label"]))
     manifest = {"game": "FINAL FANTASY VII REMAKE INTERGRADE", "sourceRoot": ROOT, "results": results}
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=1)

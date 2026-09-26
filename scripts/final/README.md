@@ -620,3 +620,6 @@ ACTRHEAD
 - Rebirth 不再必须开 FModel：`ff7rb_cli_export.py` 用打过补丁的 CUE4Parse CLI（`E:/tools/cue4parse_cli_ff7/cue4parse.exe`）导出，材质表从材质实例链 + 基础材质默认参数重建；
 - mod 的 Blender 导出：`ff7_mod_export.py remake|rebirth`；XPS 用 blender2xps；PMX 用 `ff7_mod_pmx_batch.py`；
 - 画廊：两个 `collect_manifest.py` 都会读 `D:/ff7remake_exports/mods/gallery_mods.json` / `D:/ff7rebirth_exports/mods/gallery_mods.json`，Rebirth 还会读 `cli_materialized`。
+- Rebirth mod 的材质表和贴图常不在网格自己的目录：替换网格用标准服 / 别的角色目录的材质，Dresscode 插件共用同一文件里另一个插件的材质，材质实例还会引用网格导出时没带出来的原版贴图。`ff7_mod_export.py` 让 worker 看整个导出的角色目录和所有插件目录，`ff7rb_cli_export.py` 补导材质表里缺的贴图，worker 不再给法线 / 粗糙度 / 金属度 / 透明这类贴图按名字找替身（2026-09-26，详见文档第 10 节）。
+- 要配套文件才完整的 mod 用 `--combine`（两作都支持）：`ff7_mod_export.py rebirth --combine 10356+10357`（#1352 的紧身衣 + 它单独的 TifaSkin 插件）。
+- Remake 画廊在 D 盘导出归档删掉以后也能重新生成：`collect_manifest.py` 把 D 盘上没有的条目从 `E:/game_export/FF7Remake/_meta/ff7remake_models_manifest.json` 补回来，`make_gallery.py` 沿用归档里的缩略图；生成后跑 `python scripts\archive\archive_exports.py ff7remake`（归档新导出 + 把链接改到 E 盘）。

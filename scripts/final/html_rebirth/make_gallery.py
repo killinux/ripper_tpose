@@ -23,6 +23,8 @@ from PIL import Image
 THUMB_WIDTH = 720
 THUMB_QUALITY = 82
 PAGE_NAME = "index.html"
+# scripts/archive 归档后 D 盘的 _gallery 可能已经删了，缩略图就读写归档里的这份
+ARCHIVED_THUMBS = r"E:\game_export\FF7Rebirth\_meta\gallery\thumbs"
 KIND_LABELS = {"official": "主服装", "cutscene": "过场专用（PC7xxx）", "toad": "蛤蟆形态",
                "variant": "血迹/泪痕贴片", "mod": "Nexus mod"}
 
@@ -59,7 +61,8 @@ def file_uri(path):
 
 def build_thumb(preview_path, thumb_path, force):
     if not preview_path or not os.path.isfile(preview_path):
-        return None
+        # 预览图已归档到 E 盘、D 盘那份删了：沿用已有的缩略图
+        return thumb_path if os.path.isfile(thumb_path) else None
     if (not force and os.path.isfile(thumb_path)
             and os.path.getmtime(thumb_path) >= os.path.getmtime(preview_path)):
         return thumb_path
@@ -569,6 +572,8 @@ def main():
     source_root = os.path.abspath(args.source_root)
     manifest_path = args.manifest or os.path.join(source_root, "ff7rebirth_gallery_manifest.json")
     thumb_dir = args.thumb_dir or os.path.join(source_root, "_gallery", "thumbs")
+    if not args.thumb_dir and not os.path.isdir(thumb_dir) and os.path.isdir(ARCHIVED_THUMBS):
+        thumb_dir = ARCHIVED_THUMBS               # 归档后 D 盘的 _gallery 删了：缩略图读写归档里的
     out_path = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), PAGE_NAME)
     if not os.path.isfile(manifest_path):
         raise SystemExit("找不到 manifest: %s\n先跑一次 collect_manifest.py" % manifest_path)

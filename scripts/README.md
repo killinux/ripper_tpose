@@ -115,6 +115,11 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 格式与实现细节见各自 [`doa5lr/README.md`](doa5lr/README.md)、[`doa6/README.md`](doa6/README.md)；
 产物索引见导出目录下的 `README.md`（`D:\doa5lr_exports\`、`D:\doa6_exports\`）。
 
+## 按主题的跨游戏画廊
+
+[`gantz/`](gantz/README.md)：GANTZ（杀戮都市）主题 mod 导出的模型（FF7 Remake / FF7 Rebirth / Stellar Blade，5 个 mod、
+23 个模型）放在一页 `gantz\html\index.html`，数据全从 `E:\game_export` 归档读，`gantz\html\make_gallery.py` 生成。
+
 ## 开发辅助
 
 需要对已经打开且启动了 MCP 服务的 Blender 做本地诊断时，使用
