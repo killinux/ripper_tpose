@@ -33,6 +33,10 @@ Blender 插件也彼此独立：
 - FFVII Remake 的 MMD 表情：`scripts\blender_addons\ff7_face_morphs`，侧边栏 **MMD** —— 用游戏自己的表情姿势和口型数据
   生成 43 个 MMD 表情（形态键 → PMX 顶点表情），可以一键在后台导出带表情的 PMX；数据用 `final\ff7_face_data.py` 从游戏提取。
   使用说明见 [`docs/ff7-face-morphs-usage.md`](../docs/ff7-face-morphs-usage.md)。
+- Rise of Eros 的游戏原始材质：`scripts\blender_addons\roe_game_materials`，侧边栏 **MMD**「ROE 游戏材质」。
+  - 导入 PMX（或 XPS / FBX）后一键换上游戏自己的完整材质：法线、金属度 / 光滑度 / AO、皮肤透光和毛孔、发色；
+  - 参数实时可调，能切回 MMD 着色，不影响再导出 PMX；
+  - 数据用 `riseoferos\hq_material_data.py` 从游戏包读取。说明见插件 README 和 [`docs/roe-hq-materials.md`](../docs/roe-hq-materials.md)。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
 按清单批量「提取 + Blender 材质化」36 个 Player 包，画廊在 `final\html\`；

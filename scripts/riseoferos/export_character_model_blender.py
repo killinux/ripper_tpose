@@ -11,6 +11,11 @@ Unlike ``export_nude_model_blender.py`` this worker makes no assumption that the
 body is a single combined nude mesh: it neither splits the body into six slots
 nor fails on a missing nude atlas, so it accepts any dressed HD/LD model.
 
+The .blend and its preview carry the game's full materials (hq_materials_blender.py:
+normal maps, metallic / smoothness / AO, skin detail normal and subsurface, the hair
+colour); the XPS gets diffuse x colour + AO lightmap + bump + specular (render group
+24 / 25), the PMX a colour texture with the hair colour and AO baked in, GLB the albedo.
+
 Usage:
   blender --background --python export_character_model_blender.py -- \
       <fbx>[;<fallback fbx>...] <texture_dir> <out.blend> <roe_xps_addon.py> \
@@ -37,6 +42,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "blender_addons"))
 import numpy as np
 from mathutils import Quaternion, Vector
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hq_materials_blender as hq_materials  # noqa: E402  (the game's full materials: hq_material_data.py)
 
 RESULT_PREFIX = "ROE_CHAR_EXPORT="
 
@@ -1875,6 +1883,19 @@ def main():
         for image in images})
     mismatches = family_mismatches(images, expected_family) if expected_family else []
 
+    # The game's full materials (normal map, metallic / smoothness / AO, skin detail normal and
+    # subsurface, hair colour and normal) for the .blend and its preview.  Reverted right after
+    # the .blend: XPS reads the maps recorded on the add-on's materials, PMX gets baked colour
+    # textures (use_pmx_textures below), GLB the albedo.  ROE_HQ_MATERIALS=0 turns it off.
+    hq_state, hq_report = [], None
+    if mode == "export" and os.environ.get("ROE_HQ_MATERIALS", "1") != "0":
+        try:
+            hq_state, hq_report = hq_materials.apply(
+                meshes, stem, export_root=os.path.dirname(os.path.dirname(
+                    os.path.dirname(output_path))))
+        except Exception as exc:  # never fail an export over it: the albedo materials stay
+            hq_report = {"error": str(exc)}
+
     outputs = {}
     preview_path = ""
     packed = []
@@ -1898,6 +1919,7 @@ def main():
             if not os.path.isfile(output_path):
                 raise RuntimeError("blend not written: %s" % output_path)
             outputs["blend"] = output_path
+        hq_materials.revert(hq_state)
         if "xps" in formats:
             # After the .blend: the operator bakes an eye PNG and copies the
             # sidecars from the images' file paths, which packing keeps intact.
@@ -1919,6 +1941,9 @@ def main():
             pmx_dir = os.path.join(output_root, "pmx", stem)
             # mmd_tools copies textures into <pmx dir>/textures; bake there
             # so the eye PNG is not duplicated at the root.
+            pmx_textures = hq_materials.use_pmx_textures(hq_state)  # albedo x colour x AO
+            if isinstance(hq_report, dict):
+                hq_report["pmx_textures"] = pmx_textures
             portable_eye = bake_portable_eye(
                 module, head, os.path.join(pmx_dir, "textures"))
             outputs["pmx"], mmd_convert = export_pmx(
@@ -1944,6 +1969,7 @@ def main():
         fused_head_eyes=fused_eyes,
         portable_eye=portable_eye,
         mmd_convert=mmd_convert,
+        hq_materials=hq_report,
         diagnostic=bpy.context.scene.roe.diagnostic_report,
     )
 

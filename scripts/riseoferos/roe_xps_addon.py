@@ -24,7 +24,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 bl_info = {
     "name": "ROE XPS Tools",
     "author": "ripper_tpose",
-    "version": (1, 1, 13),
+    "version": (1, 1, 14),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > ROE",
     "description": "Rise of Eros 角色: 导入 FBX / 修脸材质 / 导出 XPS",
@@ -559,6 +559,21 @@ def is_wing_slot(obj, slot_index, source_name=None):
 
     return has_wing_token(source_name) or has_wing_token(
         canonical_object_name(obj.name))
+
+
+def hq_export_maps(material):
+    """XPS textures that hq_materials_blender.py recorded on a slot's material (game material data:
+    diffuse x colour, AO lightmap, bump, specular), or {} for a plain albedo material."""
+    try:
+        maps = json.loads(material.get('roe_hq_xps', '')) if material else {}
+    except (TypeError, ValueError):
+        return {}
+    return {k: v for k, v in maps.items() if v and os.path.isfile(v)} if isinstance(maps, dict) else {}
+
+
+def hq_render_group(render_group):
+    """XNALara render group with diffuse + lightmap + bump + specular: 24, or 25 with alpha."""
+    return '25' if render_group in ('6', '7', '8', '9', '20', '21', '23', '25') else '24'
 
 
 def roe_xps_render_group(obj, slot_index, material):
@@ -2066,6 +2081,11 @@ class ROE_OT_export_xps(Operator):
                 '%s-%d' % (obj.name, slot_index), material)
 
         def simple_export_mat(name, image, source_material=None):
+            # Game material data (hq_materials_blender.py): the diffuse already carries the
+            # material colour (the hair colour lives there), plus AO / bump / specular below.
+            hq = hq_export_maps(source_material)
+            if hq.get('diffuse'):
+                image = bpy.data.images.load(hq['diffuse'], check_existing=True)
             image = image or flat_image(name, source_material)
             source_path = bpy.path.abspath(image.filepath)
             if not os.path.isfile(source_path):
@@ -2088,6 +2108,20 @@ class ROE_OT_export_xps(Operator):
             used_images.append(image)
             nt.links.new(t.outputs['Color'], grp.inputs['Diffuse'])
             nt.links.new(grp.outputs[0], out.inputs['Surface'])
+            linked = 0
+            for key, socket, y in (('lightmap', 'Lightmap', -150), ('bump', 'Bump Map', -400),
+                                   ('specular', 'Specular', -650)):
+                if not hq.get(key) or socket not in grp.inputs:
+                    continue
+                extra = bpy.data.images.load(hq[key], check_existing=True)
+                extra.colorspace_settings.name = 'Non-Color'
+                node = nt.nodes.new('ShaderNodeTexImage'); node.location = (-300, y)
+                node.image = extra
+                nt.links.new(node.outputs['Color'], grp.inputs[socket])
+                used_images.append(extra)
+                linked += 1
+            if linked:
+                m['roe_hq_rg'] = 1      # the caller switches to render group 24 / 25
             return m
 
         temps, temp_mats, hidden = [], [], []
@@ -2138,7 +2172,10 @@ class ROE_OT_export_xps(Operator):
                     else:
                         rg = '7' if material_uses_alpha(pm) else '5'
                     suffix = '-slot%d' % slot_index if len(used_slots) > 1 else ''
-                    part.name = '%s_%s%s_0.1' % (rg, base_name, suffix)
+                    spec = '0.1'
+                    if m.get('roe_hq_rg'):
+                        rg, spec = hq_render_group(rg), '0.4'
+                    part.name = '%s_%s%s_%s' % (rg, base_name, suffix, spec)
                     temps.append(part)
 
             # 复制 head 并按材质槽拆分
@@ -2169,7 +2206,10 @@ class ROE_OT_export_xps(Operator):
                         temp_mats.append(m)
                         for q in part.data.polygons:
                             q.material_index = 0
-                        part.name = '%s_%s_0.1' % (rg, xname)
+                        spec = '0.1'
+                        if m.get('roe_hq_rg'):
+                            rg, spec = hq_render_group(rg), '0.4'
+                        part.name = '%s_%s_%s' % (rg, xname, spec)
                         temps.append(part)
                 else:
                     dup = head.copy(); dup.data = head.data.copy()
@@ -2181,7 +2221,7 @@ class ROE_OT_export_xps(Operator):
                     dup.data.materials.clear()
                     dup.data.materials.append(m)
                     temp_mats.append(m)
-                    dup.name = '5_face_0.1'
+                    dup.name = '24_face_0.4' if m.get('roe_hq_rg') else '5_face_0.1'
                     temps.append(dup)
 
             # 输出目录可能不存在；贴图不在输出目录时复制过去（XPS 按 .mesh 同目录找贴图）
@@ -2245,6 +2285,54 @@ class ROE_OT_export_xps(Operator):
             self.report({'ERROR'}, "导出后没有找到文件: %s" % out_path)
             return {'CANCELLED'}
         self.report({'INFO'}, "XPS 已导出: %s" % out_path)
+        return {'FINISHED'}
+
+
+def _load_hq_module():
+    """hq_materials_blender.py: beside this add-on, in ROE_SCRIPTS, or in the repo."""
+    import importlib
+    import sys
+    for folder in (os.path.dirname(os.path.abspath(__file__)), os.environ.get('ROE_SCRIPTS', ''),
+                   r'E:\code\othercode\ripper_tpose\scripts\riseoferos'):
+        if folder and os.path.isfile(os.path.join(folder, 'hq_materials_blender.py')):
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            import hq_materials_blender
+            return importlib.reload(hq_materials_blender)
+    raise RuntimeError("找不到 hq_materials_blender.py：放在插件旁边，或设置环境变量 ROE_SCRIPTS")
+
+
+class ROE_OT_hq_materials(Operator):
+    bl_idname = "roe.hq_materials"
+    bl_label = "2.5 游戏原始材质（高精度）"
+    bl_description = ("挂完材质后再点：身体 / 皮肤 / 脸 / 头发换成游戏自己的完整材质（法线、金属度 / 光滑度 / AO、"
+                      "皮肤透光和毛孔、发色）；眼睛、睫毛、眉毛不变。材质数据用系统 Python + UnityPy 从游戏包读取，"
+                      "缓存在 D:\\roe_exports\\_hq_materials。之后导出 XPS 会带上法线 / AO / 高光贴图")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        p = context.scene.roe
+        meshes = [o for o in scene_meshes() if o.type == 'MESH']
+        if not meshes:
+            self.report({'ERROR'}, "没有模型：先导入 FBX 并挂材质")
+            return {'CANCELLED'}
+        stem = os.path.splitext(os.path.basename(bpy.path.abspath(p.fbx_path)))[0] if p.fbx_path else ''
+        if not re.match(r'pc_[a-z]\d+', stem.lower()):
+            match = next((re.match(r'pc_[a-z]\d+\w*', o.name.lower()) for o in meshes
+                          if re.match(r'pc_[a-z]\d+', o.name.lower())), None)
+            stem = match.group(0) if match else ''
+        if not stem:
+            self.report({'ERROR'}, "认不出角色代号（FBX 或网格名应以 pc_<字母><数字> 开头）")
+            return {'CANCELLED'}
+        try:
+            hq = _load_hq_module()
+            _state, report = hq.apply(meshes, stem)
+        except Exception as exc:
+            self.report({'ERROR'}, "游戏原始材质失败: %s" % exc)
+            return {'CANCELLED'}
+        p.diagnostic_report = "游戏原始材质：换了 %d 个槽；保留 %d；错误 %d" % (
+            len(report['upgraded']), len(report['kept']), len(report['errors']))
+        self.report({'INFO'} if not report['errors'] else {'WARNING'}, p.diagnostic_report)
         return {'FINISHED'}
 
 
@@ -2322,6 +2410,8 @@ class ROE_PT_panel(Panel):
         operator = repair.operator('roe.apply_materials', text="修复翅膀")
         operator.repair_scope = 'WING'
         layout.operator('roe.repair_eyes', icon='HIDE_OFF')
+        if p.workflow_mode != 'GENERIC':
+            layout.operator('roe.hq_materials', icon='SHADING_TEXTURE')
         report = layout.box()
         report.label(text="最近检查")
         for line in p.diagnostic_report.split('；')[:4]:
@@ -2369,7 +2459,7 @@ classes = (ROE_Props, ROE_OT_import_fbx, ROE_OT_apply_materials,
            ROE_OT_repair_eyes,
            ROE_OT_adopt_selection, ROE_OT_diagnose_model,
            ROE_OT_set_slot_override, ROE_OT_clear_slot_override,
-           ROE_OT_set_head_region,
+           ROE_OT_set_head_region, ROE_OT_hq_materials,
            ROE_OT_export_xps, ROE_OT_fix_xps_armature, ROE_PT_panel)
 
 

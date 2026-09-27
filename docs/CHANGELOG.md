@@ -14,6 +14,75 @@
 
 ---
 
+## 2026-09-27 — Rise of Eros：用游戏自己的完整材质（.blend 全套、XPS 带法线/AO/高光、PMX 烘发色和 AO、导入 PMX 后用的新插件）
+
+1. **精度检查结论**：几何、权重、贴图分辨率本来就是游戏里最高的。
+   - HD 模型，网格没有压缩，每顶点 4 根权重是游戏数据的上限，游戏本身没有形态键，顶点数和自定义法线完全一致。
+   - 差的是材质：原来的 .blend 只接了颜色贴图，法线、MGAC、皮肤和头发的专用贴图都没用上。
+2. **新增 / 变化**：
+   - `scripts/riseoferos/hq_material_data.py`（系统 Python + UnityPy）：从游戏包读取真正的材质，
+     即预制体上挂的只是占位材质 `default_material_armor` 背后那些。
+     读出贴图槽、平铺、参数、颜色，解码用到的贴图（无损），把 Unity DXT5nm 法线转成标准 RGB 法线，
+     缓存在 `D:\roe_exports\_hq_materials\`；各家族的包名不同，按规则找包。
+   - `scripts/riseoferos/hq_materials_blender.py`：按槽的颜色贴图（加上插件存下来的材质名）找到对应的游戏材质。
+     - 身体 / 服装：法线 + MGAC（R 金属度、G 光滑度、B AO），AO 也压高光；
+     - 皮肤：次表面 + 脸上平铺 70 倍的毛孔细节法线；
+     - 头发：发色 `_BaseColor`、发丝遮蔽、头发法线、alpha 裁切；
+     - 颜色按 sRGB 转线性；眼睛、眉毛 / 睫毛、泪膜保留插件材质。
+   - `export_character_model_blender.py`：挂完插件材质后接上这一步，预览图和 `.blend` 用新材质。
+     写完 `.blend` 换回插件材质，再导其他格式：
+     - **XPS**：插件导出时读材质上记的贴图，身体 / 皮肤 / 脸改用 XNALara render group 24，头发用 25，
+       各带 颜色（已乘发色）+ lightmap（AO）+ bump（法线，绿通道翻转：XPS 默认反 Y）+ specular；
+     - **PMX**：颜色贴图换成烘进发色和 AO 的那张（`use_pmx_textures()`）；
+     - GLB 不变。
+
+     出错不会让模型失败；`ROE_HQ_MATERIALS=0` 可以关掉。
+     这些格式用的贴图由 `hq_material_data.py` 预先算好，放在 `<缓存>\export\`。
+   - `roe_xps_addon.py`（v1.1.14）：
+     - 新按钮「**2.5 游戏原始材质（高精度）**」，手动操作和批量结果一样；
+     - 「3. 导出 XPS」读到游戏材质数据时，自动带上法线 / AO / 高光；
+     - 已装进本机 Blender 3.6 的 addons。原来的 v1.1.13 备份为 `roe_xps_addon.py.bak-v1.1.13-20260927`，
+       重启 Blender 生效。
+   - `export_character_models.ps1`：manifest 多一个 `hqMaterials`，控制台打印一行
+     `hq materials: N slots, kept K, errors E`。
+   - **新插件 `scripts/blender_addons/roe_game_materials`**（ROE Game Materials，侧栏 MMD 标签页「ROE 游戏材质」）：
+     给导入 Blender 的 PMX（或 XPS / FBX）换上同样的游戏完整材质，用来在 Blender 里做动画。
+     - 参数实时可调：法线、毛孔、AO、光滑度、金属度、皮肤透光、头发粗糙度、凹处高光压暗；
+     - 能在「游戏材质 / MMD 着色」之间切换；
+     - mmd_tools 的节点一个不删：插件另加一个输出节点，只切换哪个输出激活。所以再导出 PMX 不受影响，
+       在 mmd_tools 里改 MMD 材质也不会被它抢回输出；
+     - 认得新 PMX 的 `__pmx_diffuse` 贴图名，也认得以前导出的 PMX 用的游戏原颜色贴图名；
+     - 已用目录联接装进 Blender 3.6，需要在偏好设置里勾选。
+     - 同时 `hq_materials_blender.py` 加了 in_place 模式、`hq_*` 节点命名、`apply_params()` / `set_mode()` / `remove_hq()`；
+       批量导出用法不变。
+   - **修正发色**：头发颜色是 `_BaseColor` 乘灰色贴图，原来没乘。Luf（g 家族）的头发一直是浅灰，游戏里是深棕。
+   - a01 用它自己的脸部颜色贴图 `pc_a01_hd_face`：浅色头皮，配银发；公共的那张头皮是深灰。
+3. **用户操作**：
+   - `.\export_character_models.ps1 -Only <id> -Format blend,xps,pmx -Force` 重做全部格式
+     （只写 `blend` 就只重做 `.blend` + 预览）；
+   - 手动：ROE 插件按 1 导入 FBX → 2 准备材质 → **2.5 游戏原始材质** → 清理未使用数据 + 打包资源 → 另存为；
+     要 XPS 再点 3；步骤写在 `docs/roe-hq-materials.md`「手动操作」；
+   - 已有的 `.blend` 单独升级：`blender -b --factory-startup <旧.blend> --python hq_materials_blender.py -- <新.blend>`；
+   - 详见 `docs/roe-hq-materials.md` 和 `scripts/riseoferos/README.md` §5「游戏原始材质」、§6。
+4. **验证**：
+   - a01 试验：`E:\game_export\RiseOfEros\_hq_trial\pc_a01_hd\`，顶点数不变，贴图全部打包。
+   - g05 用批量脚本重导：PASS，42 秒，`6 slots, kept 4, errors 0`，.blend 31.9 → 77.6 MB。
+     旧文件备份在 `D:\roe_exports\_hq_materials\_old\g05\`。
+   - g05 XPS + PMX 带游戏材质（`_hq_trial\pc_g05_hd\export\`，原来的 XPS / PMX 没覆盖）：PASS，24 秒。
+     - XPS Tools 读回：render group 24 / 25，每个部件四张图齐全，眼睛 / 睫毛 / 眉毛不变；
+     - mmd_tools 读回：6 个槽用的都是烘好的颜色贴图；撕裂 0、付与顺序错误 0。
+   - 手动流程用插件按钮无头跑了一遍：全部 FINISHED，XPS 带齐四张图。
+   - 新插件：
+     - g05 bustB PMX 导入后，换了 6 个材质，保留 4 个；
+     - 切换、改 MMD 材质后，激活的仍是游戏材质输出；滑块实时生效；
+     - 再导出 PMX 的 7 张贴图不变；
+     - 老的 Inase a01 PMX 也能认，身体 / 皮肤分对，脸用了 a01 自己的贴图；
+     - 对比图 `_hq_trial\pc_g05_hd\pmx_mmd_vs_game.png`。
+   - 同一套灯光的对比图在 `_hq_trial\pc_a01_hd\` 和 `_hq_trial\pc_g05_hd\`（`formats_xps_pmx.png` 是 XPS / PMX 读回的渲染）。
+   - 其余模型还没重导。
+
+---
+
 ## 2026-09-26 — Faceit ARKit 插件：52 个 ARKit 表情 + Faceit 实时捕捉（iPhone Face Cap）；补全 UE Viewer 截断的蒙皮权重
 
 1. **新增**：

@@ -243,6 +243,7 @@ foreach ($entry in $entries) {
         fusedHeadEyes = $payload.fused_head_eyes
         familyMismatches = $payload.family_mismatches
         mmdConvert = $payload.mmd_convert
+        hqMaterials = $payload.hq_materials
         diagnostic = $payload.diagnostic
         error = $payload.error
         traceback = $payload.traceback
@@ -284,6 +285,18 @@ foreach ($entry in $entries) {
         if ($payload.family_mismatches) {
             Write-Host ("    foreign-family textures: " +
                 ($payload.family_mismatches -join ', ')) -ForegroundColor DarkYellow
+        }
+        # The game's full materials on the .blend (hq_materials_blender.py); an error there
+        # leaves the albedo materials and never fails the model.
+        if ($payload.hq_materials) {
+            if ($payload.hq_materials.error) {
+                Write-Host ("    hq materials: FAILED, albedo only - " + $payload.hq_materials.error) `
+                    -ForegroundColor DarkYellow
+            } else {
+                Write-Host ("    hq materials: " + @($payload.hq_materials.upgraded).Count + " slots, kept " +
+                    @($payload.hq_materials.kept).Count + ", errors " + @($payload.hq_materials.errors).Count) `
+                    -ForegroundColor DarkCyan
+            }
         }
         if (-not $ValidateOnly) {
             if ($payload.outputs.blend) {

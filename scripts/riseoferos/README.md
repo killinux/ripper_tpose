@@ -504,10 +504,55 @@ python prune_exports.py --apply    # 真删
 > [避坑手册 #17](../../docs/roe-material-pitfalls.md)）。旧版 `pack_images()` 会去碰
 > FBX 导入器创建、但没有任何材质使用的图片数据块，副本一删就打包失败。
 
+### 游戏原始材质（高精度，2026-09-27 起）
+
+`.blend` 和预览图用的是**游戏自己的完整材质**，不只是颜色贴图。几何、权重、贴图分辨率本来就是游戏里最高的，
+差的只是材质；做法和验证见 [roe-hq-materials.md](../../docs/roe-hq-materials.md)。
+
+- 法线贴图：游戏里是 Unity DXT5nm（R=1、G=B=Y、A=X），转成标准 RGB 法线后接上；
+- MGAC：R 金属度、G 光滑度、B 环境光遮蔽（A 是 G 的拷贝）；AO 同时压暗高光，免得凹处的光滑面反射整片天空；
+- 皮肤：次表面散射 + 脸上平铺 70 倍的毛孔细节法线；
+- 头发：`_BaseColor` 发色、发丝遮蔽、头发法线、按 `_Cutoff` 裁切。
+  发色原来没乘，g 家族（Luf）的头发因此一直是浅灰，游戏里是深棕；
+- 材质颜色按 sRGB 转线性，和游戏一样；
+- 眼睛、眉毛 / 睫毛、泪膜保留插件原来的材质。
+
+材质数据由 worker 自动调用 `hq_material_data.py`（系统 Python + UnityPy），直接从游戏包里读取，缓存在
+`D:\roe_exports\_hq_materials\`（`<id>.json` + 共享的 `textures\` + 各格式用的 `export\`），同一家族的头部贴图只解码一次。
+
+XPS 和 PMX 跑不了 Blender 节点，各带上格式本身能装的部分：
+
+| 格式 | 带什么 |
+|---|---|
+| XPS | XNALara render group **24**（带透明的是 **25**）：颜色（已乘发色）+ lightmap（AO）+ bump（法线，绿通道翻转：XPS 默认的切线空间就是反 Y）+ specular（光滑度开方）；眼睛 / 睫毛 / 眉毛照旧 5 / 7 |
+| PMX | 颜色贴图里烘进发色和 AO（MMD 没有法线、金属度、AO 输入） |
+| GLB | 仍是插件的颜色贴图材质 |
+
+这一步失败不会让模型失败：该模型保留颜色贴图材质，原因写在 manifest 的 `hqMaterials` 里，控制台也会打印一行。
+
+| 环境变量 | 作用 |
+|---|---|
+| `ROE_HQ_MATERIALS=0` | 关掉，恢复只有颜色贴图的旧材质 |
+| `ROE_HQ_CACHE` | 材质数据缓存目录（缺省 `<导出根目录>\_hq_materials`） |
+| `ROE_PYTHON` | 装了 UnityPy 的 Python（缺省 PATH 里的 `python`） |
+
+已经导出的 `.blend` 也可以单独升级，不用重跑整条流水线：
+
+```powershell
+& $blender -b --factory-startup <旧.blend> --python hq_materials_blender.py -- <新.blend>
+```
+
+`.blend` 会变大（法线图和 MGAC 也打包进去），g05 从 31.9 MB 变成 77.6 MB。手动操作时插件里是
+「**2.5 游戏原始材质（高精度）**」按钮（§6）。**导入 PMX 以后**在 Blender 里做动画的，用独立插件
+[`blender_addons/roe_game_materials`](../blender_addons/roe_game_materials/README.md)：
+- 侧栏 MMD 标签页「ROE 游戏材质」；
+- 一键换上同样的材质，参数可调，能切回 MMD 着色；
+- 不影响再导出 PMX。
+
 ### 限制
 
-与 §4 一样，本脚本不复刻 Unity 的 Toon/NPR Shader、MGAC 全通道和法线表现，
-“带材质”不等于游戏渲染器逐像素一致。预览图用 **Standard** 视图变换而不是 Blender
+“带材质”不等于游戏渲染器逐像素一致：游戏的眼睛着色器（虹膜视差、角膜缘）、头发的各向异性高光、
+皮肤 LUT 没有逐项复刻，AO 乘在底色上（游戏只压间接光）。预览图用 **Standard** 视图变换而不是 Blender
 默认的 Filmic——Filmic 会把 Albedo 图集去饱和，那样的预览没法用来判断有没有挂错图。
 
 ---
@@ -631,7 +676,17 @@ PMX 里 `ThighTwist` 已经挂到 `足D`，视频里还挂在 `上半身`。改�
 ## 6. roe_xps_addon.py —— HD 角色带材质 XPS（主推）
 
 安装见 §1。3D 视口按 `N` → **ROE** 页签，按序点：
-**1 导入 FBX → 2 检查并准备材质 → 3 导出 XPS(.mesh)**。
+**1 导入 FBX → 2 检查并准备材质 → 2.5 游戏原始材质（高精度）→ 3 导出 XPS(.mesh)**。
+
+**2.5 游戏原始材质（高精度，2026-09-27 起）**：身体 / 皮肤 / 脸 / 头发换成游戏自己的完整材质（法线、金属度 /
+光滑度 / AO、皮肤透光和毛孔、发色），和批量导出的 `.blend` 完全一样（同一个 `hq_materials_blender.py`）。
+第一次用某个角色时会调系统 Python + UnityPy 从游戏包读材质，要几十秒；之后走缓存 `D:\roe_exports\_hq_materials\`。
+点过它再「3 导出 XPS」，XPS 自动带上法线 / AO / 高光贴图（render group 24 / 25）；不点就和以前一样只有颜色贴图。
+详见 [roe-hq-materials.md](../../docs/roe-hq-materials.md)。
+
+**手动存 `.blend`**：先「文件 → 清理 → 清理未使用的数据（递归）」，再「文件 → 外部数据 → 打包资源」，最后另存为。
+不先清理的话，打包会对 FBX 导入器留下的、没有任何材质在用的图片报「找不到文件」（它们在
+`FBX_GameObjects` 里的副本被 `prune_exports.py` 删了），虽然不影响结果，但错误一大串。
 
 首次导入或不确定问题范围时使用完整的“检查并准备材质”。只有某一区域异常时，
 可分别点击 **“修复脸部 / 修复身体 / 修复翅膀”**；三个按钮只替换各自识别到的材质槽，
