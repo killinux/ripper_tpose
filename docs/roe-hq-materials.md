@@ -98,6 +98,10 @@ FBX ──插件挂颜色贴图材质──> 场景 ──hq_materials_blender.a
     高光强度 0.4；没有这个属性的槽（眼睛、睫毛、眉毛）照旧。
 - **插件按钮**：`roe_xps_addon.py` 新加「**2.5 游戏原始材质（高精度）**」，调的是同一个 `apply()`，
   手动和批量结果一样。
+  - v1.1.15 起导入的 PMX 也能点。mmd_tools 把 `pc_a08_hd.pmx` 的模型叫成 `Pc A08 Hd`（网格 `Pc A08 Hd_mesh`），
+    按钮依次从网格名、父物体（MMD 根）、FBX 路径、.blend 文件名认角色，都没有再看贴图名。
+  - 遇到 MMD 模型就原地加（`in_place=True`，和 ROE Game Materials 插件一样），刚体 / 关节网格跳过。
+  - v1.1.14 只认以 `pc_<字母><数字>` 开头的 FBX 网格名，导入 PMX 后点会报「认不出角色代号」。
 - **失败处理**：这一步出错不会让模型失败，该模型保留颜色贴图材质。
 
 ## 4. 验证
@@ -109,6 +113,8 @@ FBX ──插件挂颜色贴图材质──> 场景 ──hq_materials_blender.a
 | g05 全流程第一版（blend + XPS + PMX，写到临时目录） | PASS，32 秒；那时 XPS / PMX 还用颜色贴图材质，贴图和原产物完全相同（各 6 张），PMX 撕裂 0、付与顺序错误 0 |
 | g05 XPS / PMX 带游戏材质（`_hq_trial\pc_g05_hd\export\`，24 秒） | XPS Tools 读回：身体 / 皮肤 / 脸 = render group 24，头发 = 25，每个都有 Diffuse / Lightmap / Bump / Specular；眼睛 5、睫毛眉毛 7 不变。mmd_tools 读回：6 个槽用的都是烘好的颜色贴图，眼睛 / 睫毛 / 眉毛不变；撕裂 0、付与顺序错误 0 |
 | 手动流程（插件按钮 1 → 2 → 2.5 → 清理 + 打包 → 保存 → 3，无头跑） | 全部 FINISHED；2.5 换了 6 个槽；导出的 XPS 带齐四张图 |
+| a08 全格式（`_hq_trial\pc_a08_hd\export\`，blend + XPS + PMX，91 秒） | PASS；7 个槽换成游戏材质（身体 ×2、皮肤、脸、头发 ×3），保留 4，错误 0；PMX 烘了 5 张颜色贴图，mmd_tools 读回无误。和 09-06 的旧 PMX 比：顶点同为 53,213；表情 9 → 58（面部表情插件）；关节 75 → 103（裙子格子物理）。胸部仍是模板 A，旁边另有 `pc_a08_hd_bustB.pmx`（`tune_bust_pmx.py` 默认值：下垂 15°、±25°）。对比图 `_hq_trial\pc_a08_hd\pmx_old_vs_hq.png` |
+| 2.5 按钮点在导入的 a08 PMX 上（v1.1.15） | 认出 a08，原地换 7 个材质，激活游戏材质输出，`mmd_base_tex` 不变；a08 的 FBX 手动流程照旧全部 FINISHED |
 
 对比图（同一套灯光：预览用的灰色世界 + 两盏太阳光，Eevee）：`_hq_trial\pc_a01_hd\compare_old_vs_hq.png`、
 `_hq_trial\pc_g05_hd\compare_old_vs_hq.png`。看得出的区别：

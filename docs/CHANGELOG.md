@@ -79,7 +79,16 @@
      - 老的 Inase a01 PMX 也能认，身体 / 皮肤分对，脸用了 a01 自己的贴图；
      - 对比图 `_hq_trial\pc_g05_hd\pmx_mmd_vs_game.png`。
    - 同一套灯光的对比图在 `_hq_trial\pc_a01_hd\` 和 `_hq_trial\pc_g05_hd\`（`formats_xps_pmx.png` 是 XPS / PMX 读回的渲染）。
+   - a08 全格式（`_hq_trial\pc_a08_hd\export\`）：PASS，91 秒，换了 7 个槽，错误 0。
+     - 比 09-06 的旧 PMX 多了 49 个表情（9 → 58）和裙子格子物理（关节 75 → 103）；
+     - 另有胸部更软的 `pc_a08_hd_bustB.pmx`；
+     - 对比图 `pmx_old_vs_hq.png`。
    - 其余模型还没重导。
+5. **修正（同日）**：`roe_xps_addon.py` v1.1.15。
+   - 问题：导入 PMX 后点「2.5 游戏原始材质」报「认不出角色代号」。mmd_tools 把模型叫成 `Pc A08 Hd`，
+     而按钮只认 `pc_` 开头的 FBX 网格名。
+   - 修正：现在从网格名、父物体、文件名、贴图名依次认；遇到 MMD 模型就原地加材质，刚体 / 关节跳过。
+   - 已装进本机 addons，v1.1.14 备份为 `roe_xps_addon.py.bak-v1.1.14-20260927`。
 
 ---
 

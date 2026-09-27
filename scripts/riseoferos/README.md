@@ -682,6 +682,9 @@ PMX 里 `ThighTwist` 已经挂到 `足D`，视频里还挂在 `上半身`。改�
 光滑度 / AO、皮肤透光和毛孔、发色），和批量导出的 `.blend` 完全一样（同一个 `hq_materials_blender.py`）。
 第一次用某个角色时会调系统 Python + UnityPy 从游戏包读材质，要几十秒；之后走缓存 `D:\roe_exports\_hq_materials\`。
 点过它再「3 导出 XPS」，XPS 自动带上法线 / AO / 高光贴图（render group 24 / 25）；不点就和以前一样只有颜色贴图。
+导入的 **PMX** 也可以直接点（v1.1.15 起）：mmd_tools 把 `pc_a08_hd.pmx` 叫成 `Pc A08 Hd`，按钮会从模型名、
+父物体、文件名或贴图名认出角色，并像「ROE 游戏材质」插件一样原地加材质（MMD 贴图不动，再导出 PMX 不变）。
+v1.1.14 只认 FBX 导入的网格名，导入 PMX 后点会报「认不出角色代号」。
 详见 [roe-hq-materials.md](../../docs/roe-hq-materials.md)。
 
 **手动存 `.blend`**：先「文件 → 清理 → 清理未使用的数据（递归）」，再「文件 → 外部数据 → 打包资源」，最后另存为。

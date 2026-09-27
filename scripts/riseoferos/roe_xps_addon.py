@@ -24,7 +24,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 bl_info = {
     "name": "ROE XPS Tools",
     "author": "ripper_tpose",
-    "version": (1, 1, 14),
+    "version": (1, 1, 15),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > ROE",
     "description": "Rise of Eros 角色: 导入 FBX / 修脸材质 / 导出 XPS",
@@ -2312,25 +2312,40 @@ class ROE_OT_hq_materials(Operator):
 
     def execute(self, context):
         p = context.scene.roe
-        meshes = [o for o in scene_meshes() if o.type == 'MESH']
+        # model meshes only: an imported PMX also brings rigid-body / joint meshes (mmd_type != NONE)
+        meshes = [o for o in scene_meshes() if o.type == 'MESH' and getattr(o, 'mmd_type', 'NONE') == 'NONE']
         if not meshes:
-            self.report({'ERROR'}, "没有模型：先导入 FBX 并挂材质")
-            return {'CANCELLED'}
-        stem = os.path.splitext(os.path.basename(bpy.path.abspath(p.fbx_path)))[0] if p.fbx_path else ''
-        if not re.match(r'pc_[a-z]\d+', stem.lower()):
-            match = next((re.match(r'pc_[a-z]\d+\w*', o.name.lower()) for o in meshes
-                          if re.match(r'pc_[a-z]\d+', o.name.lower())), None)
-            stem = match.group(0) if match else ''
-        if not stem:
-            self.report({'ERROR'}, "认不出角色代号（FBX 或网格名应以 pc_<字母><数字> 开头）")
+            self.report({'ERROR'}, "没有模型：先导入 FBX 并挂材质（或导入 PMX）")
             return {'CANCELLED'}
         try:
             hq = _load_hq_module()
-            _state, report = hq.apply(meshes, stem)
         except Exception as exc:
             self.report({'ERROR'}, "游戏原始材质失败: %s" % exc)
             return {'CANCELLED'}
-        p.diagnostic_report = "游戏原始材质：换了 %d 个槽；保留 %d；错误 %d" % (
+        # The character id from the meshes and their parents (mmd_tools names an imported pc_a08_hd.pmx
+        # "Pc A08 Hd"), the FBX or the .blend; apply() falls back to the texture names.
+        names, pmx = [], False
+        for obj in meshes:
+            node = obj
+            while node is not None:
+                names.append(node.name)
+                pmx = pmx or getattr(node, 'mmd_type', 'NONE') == 'ROOT'
+                node = node.parent
+        names += [os.path.basename(bpy.path.abspath(p.fbx_path)) if p.fbx_path else '',
+                  bpy.path.basename(bpy.data.filepath)]
+        stem = next((n for n in names if hq.infer_cid(n)), '')
+        try:
+            # a PMX (mmd_tools model) gets the network inside its own materials, as with the ROE 游戏材质
+            # add-on: MMD shading stays switchable and a PMX re-export is unchanged
+            _state, report = hq.apply(meshes, stem, in_place=pmx)
+        except Exception as exc:
+            msg = str(exc)
+            if msg.startswith('cannot tell the character id'):
+                msg = "认不出角色代号：模型名、文件名、贴图名里都没有 pc_<字母><数字>（比如 pc_a08_hd）"
+            self.report({'ERROR'}, "游戏原始材质失败: %s" % msg)
+            return {'CANCELLED'}
+        p.diagnostic_report = "游戏原始材质（%s%s）：换了 %d 个槽；保留 %d；错误 %d" % (
+            report['character'], "，PMX 原地加，MMD 着色可在「ROE 游戏材质」面板切回" if pmx else "",
             len(report['upgraded']), len(report['kept']), len(report['errors']))
         self.report({'INFO'} if not report['errors'] else {'WARNING'}, p.diagnostic_report)
         return {'FINISHED'}
