@@ -177,8 +177,11 @@ blender -b --python scripts\riseoferos\roe_eros_preview.py -- <out.mp4> <女 pmx
 | Inase a08 | idle_02、react_01、react_02 | 同上 7 段 |
 
 每个文件夹都有 `export_summary.txt`（每段的往返检查）。展示和战斗两组各有一个拼好的对照视频和物理预览
-（g05：展示 4 段 17.6 秒、战斗 7 段 18.8 秒）。物理预览每段前面多 1 秒（`render_pmx_dance.py` 的 30 帧
-MARGIN），模型从静止姿势过渡到第一帧，免得物理链被一下甩飞。
+（g05：展示 4 段 17.6 秒、战斗 7 段 18.8 秒）。物理预览在每段前面先模拟 1 秒（`render_pmx_dance.py` 的
+30 帧 MARGIN），模型从静止姿势过渡到第一帧，免得物理链被一下甩飞。这 1 秒不渲染进视频：
+- 早先的视频带着它，倒下、破衣倒地这类躺着的动作，开头会先站起来再倒下去；
+- H 场景每段一开始，两人从站姿「掉」进画面，用户看到的是「头在中间掉下来」。
+`roe_refit_camera.py` 和 `roe_eros_preview.py` 现在都从动作的第一帧开始渲染。
 
 g04 的 VMD 先按 `_hq_trial` 的高清 PMX 生成，后来又按归档里的高清 PMX 重新生成了一遍。两个 PMX 来自同一版导出程序，
 旧的 9 月 6 日 PMX 也能用：

@@ -16,6 +16,11 @@ from mathutils import Vector
 out = sys.argv[sys.argv.index("--") + 1]
 scene = bpy.context.scene
 cam = scene.camera
+# render_pmx_dance.py puts VMD frame 0 at scene frame MARGIN + 1 and eases in from the rest pose before it.  The
+# lead-in is simulated (the cache is baked) but not shown: from the standing A-pose it made a lying clip (die, rip)
+# stand up and fall at the start, and an H scene drop its heads into the frame.
+LEAD_IN = 30
+scene.frame_start += LEAD_IN
 meshes = [o for o in scene.objects if o.type == "MESH" and o.visible_get()
           and not o.name.startswith("floor") and o.dimensions.length < 20]
 lo, hi = Vector((1e9,) * 3), Vector((-1e9,) * 3)

@@ -9,7 +9,8 @@ the PMX with its physics, Model.build() (otherwise no bone reads the simulation)
 30-frame lead-in (the bodies ease from the rest pose instead of being flung).  The VMD import selects only that
 model's objects: with everything selected one VMD would drive both.  Then MMD-like physics (mmd_physics/mmd_like.py),
 bake (a render on a live cache does not replay the stepped simulation), save the .blend beside the mp4, fit a
-three-quarter landscape camera to every mesh over the frame range, render.
+three-quarter landscape camera to every mesh over the motion, render the motion only: the lead-in is simulated
+but cut, since it starts from the standing rest pose.
 """
 import math
 import os
@@ -170,6 +171,9 @@ def main():
     scene.render.filepath = out_mp4
     bpy.context.preferences.filepaths.save_version = 0
     bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(os.path.splitext(out_mp4)[0] + ".blend"), check_existing=False)
+    # the lead-in is simulated (baked above) but not shown: it starts from the rest pose, so every part opened
+    # with both actors standing in the A-pose and dropping into the scene - "the head falls down in the middle"
+    scene.frame_start += MARGIN
     bpy.ops.render.render(animation=True)
     print("ROE_EROS_PREVIEW_DONE %s" % out_mp4)
 

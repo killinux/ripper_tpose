@@ -67,7 +67,8 @@ python scripts\riseoferos\render_roe_motion_videos.py a08 --what physics    # �
 | `preview_展示动作N段_MMD物理.mp4`、`battle\preview_…` | 带贴图和 MMD 式物理，按整段动作的范围取景 |
 | `_clips\videos\compare_<片段>.mp4`、`physics_<片段>.mp4` | 每段单独的视频 |
 
-物理预览走仓库里的 `render_pmx_dance.py`。每段开头有 30 帧从静止姿势过渡的引入段。
+物理预览走仓库里的 `render_pmx_dance.py`。每段开头有 30 帧从静止姿势过渡的引入段，用来让物理先稳定下来。
+这一段参与模拟，但不渲染进视频；早先的视频带着它，H 场景每段一开始，人就从站姿「掉」进画面。
 
 ## 3. H 场景
 
