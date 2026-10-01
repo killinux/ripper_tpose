@@ -37,6 +37,9 @@ Blender 插件也彼此独立：
   - 导入 PMX（或 XPS / FBX）后一键换上游戏自己的完整材质：法线、金属度 / 光滑度 / AO、皮肤透光和毛孔、发色；
   - 参数实时可调，能切回 MMD 着色，不影响再导出 PMX；
   - 数据用 `riseoferos\hq_material_data.py` 从游戏包读取。说明见插件 README 和 [`docs/roe-hq-materials.md`](../docs/roe-hq-materials.md)。
+- 布料撕裂（通用）：`scripts\blender_addons\cloth_tear`，侧边栏 **布料撕裂** —— B 站教程的两个布料修改器做法做成按钮：
+  布料沿裂缝按帧从一边撕到另一边，附一键示例；也能撕角色的衣服（衣服跟随身体、身体碰撞和地面、推力场、按模型尺寸调快）。
+  用法见插件 README，原理见 [`docs/cloth-tear-guide.md`](../docs/cloth-tear-guide.md)。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
 按清单批量「提取 + Blender 材质化」36 个 Player 包，画廊在 `final\html\`；
