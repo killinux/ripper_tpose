@@ -78,6 +78,21 @@ def build_thumb(preview_path, thumb_path, force):
     return thumb_path
 
 
+def pmx_note_of(mmd):
+    """Card note for a PMX from its conversion stats (manifest mmdConvert / <stem>.report.json)."""
+    if not mmd:
+        return ""
+    physics = mmd.get("physics") or {}
+    note = "%s 骨 · 刚体 %s · 关节 %s · 表情 %d" % (
+        mmd.get("bones", "?"), physics.get("rigid_bodies", "?"),
+        physics.get("joints", "?"), len(mmd.get("face_morphs") or []))
+    if mmd.get("weight_holes"):
+        note += " · 权重孔洞 %s" % mmd["weight_holes"]
+    if (mmd.get("distortion") or {}).get("torn"):
+        note += " · 拉伸边 %s" % mmd["distortion"]["torn"]
+    return note
+
+
 def collect(manifest_path, thumb_dir, force):
     with open(manifest_path, encoding="utf-8-sig") as handle:
         manifest = json.load(handle)
@@ -101,16 +116,7 @@ def collect(manifest_path, thumb_dir, force):
         if pmx and not os.path.isfile(pmx):
             pmx = ""
         mmd = entry.get("mmdConvert") or {}
-        pmx_note = ""
-        if pmx and mmd:
-            physics = mmd.get("physics") or {}
-            pmx_note = "%s 骨 · 刚体 %s · 关节 %s · 表情 %d" % (
-                mmd.get("bones", "?"), physics.get("rigid_bodies", "?"),
-                physics.get("joints", "?"), len(mmd.get("face_morphs") or []))
-            if mmd.get("weight_holes"):
-                pmx_note += " · 权重孔洞 %s" % mmd["weight_holes"]
-            if (mmd.get("distortion") or {}).get("torn"):
-                pmx_note += " · 拉伸边 %s" % mmd["distortion"]["torn"]
+        pmx_note = pmx_note_of(mmd) if pmx else ""
         # The dance preview is rendered in a separate pass, so one left over from
         # an earlier export shows defects the model no longer has.
         dance = ""
@@ -169,6 +175,14 @@ def collect_suits(source_root, thumb_dir, force):
         if not os.path.isfile(preview):
             preview = ""
         thumb = build_thumb(preview, os.path.join(thumb_dir, key + ".jpg"), force)
+        # export_suit_pmx_blender.py writes <id>/blend/pmx/<stem>/<stem>.pmx + .report.json, like the batch
+        stem = os.path.splitext(os.path.basename(blend))[0]
+        pmx = os.path.join(os.path.dirname(blend), "pmx", stem, stem + ".pmx")
+        pmx = pmx if os.path.isfile(pmx) else ""
+        pmx_note = ""
+        if pmx and os.path.isfile(pmx[:-4] + ".report.json"):
+            with open(pmx[:-4] + ".report.json", encoding="utf-8") as handle:
+                pmx_note = pmx_note_of(json.load(handle))
         excluded = entry.get("excluded") or {}
         # "SAVED <blend> meshes=14 packed=22 missing=[...]" from the assembler
         saved = entry.get("saved") or ""
@@ -189,6 +203,8 @@ def collect_suits(source_root, thumb_dir, force):
             "suit": entry.get("suit") or "",
             "base": entry.get("base") or "",
             "blend": blend,
+            "pmx": pmx,
+            "pmx_note": pmx_note,
             "preview": preview,
             "thumb": thumb or "",
             "blend_size": os.path.getsize(blend),
@@ -276,7 +292,15 @@ def render_suit_card(suit):
     if suit["warnings"]:
         badges += '<span class="badge badge-warn" title="%s">缺图 %d</span>' % (
             esc("; ".join(suit["warnings"])), len(suit["warnings"]))
-    search_blob = esc(" ".join([suit["key"], "suit 套装", suit["suit"], suit["base"], suit["blend"]]).lower())
+    search_blob = esc(" ".join([suit["key"], "suit 套装", suit["suit"], suit["base"], suit["blend"],
+                                suit["pmx"]]).lower())
+    pmx_row = ""
+    if suit["pmx"]:
+        pmx_row = ('<dt>PMX</dt>\n            <dd><a href="%s" title="%s">%s</a>\n'
+                   '                <button class="copy" data-copy="%s">复制</button>%s</dd>\n            '
+                   % (esc(file_uri(os.path.dirname(suit["pmx"]))), esc(suit["pmx"]), esc(suit["pmx"]),
+                      esc(suit["pmx"]), (' <span class="rigspec">%s</span>' % esc(suit["pmx_note"]))
+                      if suit["pmx_note"] else ""))
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(suit["key"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
     dressed = suit["parts"] - len(suit["excluded"])
@@ -292,7 +316,7 @@ def render_suit_card(suit):
             <dt>blend</dt>
             <dd><a href="{blend_uri}" title="{blend}">{blend}</a>
                 <button class="copy" data-copy="{blend}">复制</button></dd>
-            <dt>规格</dt>
+            {pmx_row}<dt>规格</dt>
             <dd>{parts} 个部件，穿好 {dressed} 个 · {meshes} 网格 · {packed} 贴图 · {size}</dd>
           </dl>
         </div>
@@ -301,7 +325,7 @@ def render_suit_card(suit):
            warn="1" if suit["warnings"] else "0",
            preview=esc(preview_uri), figure=figure, key=esc(suit["key"]),
            badges=badges, base=esc(suit["base"]), id=esc(suit["id"]), suit=esc(suit["suit"]),
-           blend_uri=esc(blend_uri), blend=esc(suit["blend"]),
+           blend_uri=esc(blend_uri), blend=esc(suit["blend"]), pmx_row=pmx_row,
            parts=suit["parts"], dressed=dressed, meshes=suit["meshes"],
            packed=suit["packed"], size=human_size(suit["blend_size"]))
 

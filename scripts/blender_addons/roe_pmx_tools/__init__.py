@@ -189,6 +189,7 @@ class ROEPMX_OT_prepare(bpy.types.Operator):
                 raise RuntimeError("rig lacks joints the MMD conversion needs: %s" % ", ".join(missing_required))
             before = work.edge_lengths(meshes)
             work.bake_rig_transforms(arm, meshes)
+            premerged = work.premerge_spine_helpers(arm, meshes, slots)
             helper_plans, helper_report = work.plan_joint_helper_moves(arm, meshes, slots)
             helpers = work.apply_joint_helper_moves(arm, helper_plans)
             relaxed = work.relax_shoulder_weights(arm, slots)
@@ -196,11 +197,11 @@ class ROEPMX_OT_prepare(bpy.types.Operator):
             skin_before = work.snapshot_skin(arm, meshes)
             _state.update(slots=slots, missing_optional=missing_optional, before=before,
                           helper_plans=helper_plans, helpers=helpers, relaxed=relaxed, apose=apose,
-                          skin_before=skin_before)
+                          skin_before=skin_before, premerged=premerged)
             settings.stage = 2
             _log(settings, "② Biped 前缀 %s, 可选骨位缺 %d 个" % (slots["lower_body_bone"].split(" ")[0], len(missing_optional)),
-                 "   辅助骨重新挂父级 %d 根, 肩膀松权重 %d 组, 手臂 %.1f°/%.1f°" % (
-                     _count(helpers), _count(relaxed), apose[0], apose[1]),
+                 "   脊柱饰骨并入父骨 %d 根, 辅助骨重新挂父级 %d 根, 肩膀松权重 %d 组, 手臂 %.1f°/%.1f°" % (
+                     len(premerged), _count(helpers), _count(relaxed), apose[0], apose[1]),
                  "   下一步: ③ 转 MMD（现在可在视口检查 A-pose 和肢体）")
         except Exception as exc:
             return _fail(self, settings, exc)
@@ -230,6 +231,7 @@ class ROEPMX_OT_convert(bpy.types.Operator):
             root, stats = work.convert_rig_to_mmd(arm, meshes, _state["slots"], _state["missing_optional"],
                                                   _state["helper_plans"], _state["skin_before"])
             stats["arm_down_deg"] = _state["apose"]
+            stats["premerged_helpers"] = _state.get("premerged", [])
             stats["reparented_helpers"] = _state["helpers"]
             stats["relaxed_groups"] = _state["relaxed"]
             stats["distortion"] = work.mesh_distortion(_state["before"], meshes)

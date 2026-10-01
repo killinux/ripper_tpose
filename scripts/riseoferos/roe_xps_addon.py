@@ -24,7 +24,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 bl_info = {
     "name": "ROE XPS Tools",
     "author": "ripper_tpose",
-    "version": (1, 1, 15),
+    "version": (1, 1, 16),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > ROE",
     "description": "Rise of Eros 角色: 导入 FBX / 修脸材质 / 导出 XPS",
@@ -78,6 +78,32 @@ def find_tex(tex_dir, pattern):
                     os.path.join(root, '**', candidate), recursive=True))
             if hits:
                 return hits[0]
+    return None
+
+
+# The i and j families ship no eyebrow texture: their pc_<f>_nk_eyebrow material
+# (lash and brow cards) points into another family's bundle - i at
+# pc_h_nk_eyebrow_rgbx_Albedo, j at pc_d_nk_eyebrow_rgbx_Albedo (the material's
+# _BaseMap resolved in the game's bundles, 2026-10-01).  Their face atlas paints
+# the brows and the eyeliner but no lashes, so without it j07 had none at all.
+EYEBROW_TEXTURE_FAMILY = {'i': 'h', 'j': 'd'}
+
+
+def find_family_tex(tex_dir, family, pattern):
+    """A shared head texture of another family, from a sibling character export
+    of that family (``D:\\roe_exports\\d01\\_textures`` for d): every character
+    of a family carries identical copies of the shared head textures."""
+    import glob
+    normalized = os.path.normpath(tex_dir)
+    root = (os.path.dirname(normalized)
+            if os.path.basename(normalized).lower().startswith('_textures')
+            else normalized)
+    for folder in sorted(glob.glob(os.path.join(os.path.dirname(root),
+                                                family + '[0-9]*'))):
+        textures = os.path.join(folder, '_textures')
+        hit = find_tex(textures, pattern) if os.path.isdir(textures) else None
+        if hit:
+            return hit
     return None
 
 
@@ -1481,6 +1507,10 @@ class ROE_OT_apply_materials(Operator):
         brow_tex = pick(*source_role_texture_patterns(head, 'brow'),
                         'pc_%s_nk_eyebrow*Albedo*.png' % bt if bt else None,
                         '*eyebrow*Albedo*.png')
+        if not brow_tex and bt in EYEBROW_TEXTURE_FAMILY:
+            family = EYEBROW_TEXTURE_FAMILY[bt]
+            brow_tex = pick('pc_%s_nk_eyebrow*Albedo*.png' % family) or find_family_tex(
+                tex_dir, family, 'pc_%s_nk_eyebrow*Albedo*.png' % family)
         hair_tex = pick(character_prefix + '_hair*Albedo*.png'
                         if character_prefix else None,
                         'pc_%s_nk_hair*Albedo*.png' % bt if bt else None,
@@ -1490,8 +1520,10 @@ class ROE_OT_apply_materials(Operator):
         print('[mat] textures: face=%s iris=%s brow=%s hair=%s' %
               (face_tex, iris_tex, brow_tex, hair_tex))
         if baked_face_strokes:
-            print('[mat] i/j-family eyebrows/eyeliner are baked into face Albedo; '
-                  'untextured stroke geometry will stay transparent')
+            print('[mat] i/j-family lash/brow texture (pc_%s_nk_eyebrow, another '
+                  'family\'s bundle) not found next to this export; the lash and '
+                  'brow cards stay transparent (the face atlas has brows and '
+                  'eyeliner, but no lashes)' % EYEBROW_TEXTURE_FAMILY.get(bt, '?'))
 
         no_tex = []
         processed_slots = 0

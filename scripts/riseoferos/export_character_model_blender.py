@@ -496,6 +496,73 @@ def bake_rig_transforms(arm, meshes):
         raise RuntimeError("armature is still not Z-up after applying transforms")
 
 
+def weighted_bones(meshes):
+    """Names of the vertex groups that carry any skin weight."""
+    weighted = set()
+    for mesh in meshes:
+        names = {group.index: group.name for group in mesh.vertex_groups}
+        for vertex in mesh.data.vertices:
+            for item in vertex.groups:
+                if item.weight > 1e-4 and item.group in names:
+                    weighted.add(names[item.group])
+    return weighted
+
+
+def premerge_spine_helpers(arm, meshes, slots):
+    """Merge the helpers Convert_to_MMD5 is about to retire into their parent bone.
+
+    Its classifier retires a skinned helper that hangs off the spine on the
+    midline ('merge') and hands each vertex's weight to the nearest bone *head*
+    among the deforming bones - hair and cloth chain bones included.  a08's
+    choker rides ``Collar``, a leaf under ``Bip001 Spine2``; the braid hangs from
+    the head right beside it, so the right half of the choker went to
+    ``Braid02`` / ``Braid03`` (85 vertices, up to 100%) and was dragged along
+    whenever the braid swung ("脖子和头发粘连").  ``restore_stray_weight_transfers``
+    cannot see that: the braid bones drove skin before, and the vertices' own
+    bone is gone.  In the game such a helper rides its parent rigidly, so the
+    parent is the exact rest-equivalent, and the add-on then finds nothing left
+    to redistribute.  Same pass as ``premerge_spine_helpers`` in
+    scripts/stellarblade/export_pmx_blender.py (Eve's neck base had gone to the
+    side-hair bones), which the FF7 and CCFF7R exporters run too.  Unlike that
+    copy, a helper hanging under another retired helper (a11 ``collar_B02``
+    under ``collar_B01``, c09 ``necklace_02`` under ``necklace_01``) goes past it
+    to the first bone that stays: merged into a bone the add-on then retires,
+    its weight would still be handed to the nearest head.  Needs the baked rig
+    (the classifier reads armature-space X as left/right, in metres).  Returns
+    "helper -> parent" lines.
+    """
+    from Convert_to_MMD5.convert.breast import BREAST_RE
+    from Convert_to_MMD5.convert.skirt import CLOTH_RE, HAIR_RE
+    from Convert_to_MMD5.helper_classifier import classify_helpers
+
+    prefix = (slots.get("lower_body_bone") or "Bip001").split(" ")[0]
+    weighted = weighted_bones(meshes)
+    # what the add-on retires: 'merge' helpers except named cloth / hair / breast bones (kept for physics)
+    retired = {name for name, kind in classify_helpers(arm.data, slots).items()
+               if kind == "merge" and not (CLOTH_RE.search(name) or HAIR_RE.search(name) or BREAST_RE.search(name))}
+    merged = []
+    for name in sorted(retired & weighted):
+        parent = arm.data.bones[name].parent
+        while parent is not None and (parent.name in retired or (
+                parent.name not in weighted and not parent.name.startswith(prefix))):
+            parent = parent.parent
+        if parent is None:
+            continue
+        for mesh in meshes:
+            source = mesh.vertex_groups.get(name)
+            if source is None:
+                continue
+            target = mesh.vertex_groups.get(parent.name) or mesh.vertex_groups.new(name=parent.name)
+            for vertex in mesh.data.vertices:
+                for item in vertex.groups:
+                    if item.group == source.index and item.weight > 0.0:
+                        target.add([vertex.index], item.weight, "ADD")
+            mesh.vertex_groups.remove(source)
+        arm.data.bones[name].use_deform = False
+        merged.append("%s -> %s" % (name, parent.name))
+    return merged
+
+
 def edge_lengths(meshes):
     """Local-space edge lengths per mesh, for the geometry-integrity check."""
     snapshot = {}
@@ -1594,6 +1661,7 @@ def export_pmx(path, meshes, armatures):
                            % ", ".join(missing_required))
     before = edge_lengths(meshes)
     bake_rig_transforms(arm, meshes)
+    premerged = premerge_spine_helpers(arm, meshes, slots)
     helper_plans, _helper_report = plan_joint_helper_moves(arm, meshes, slots)
     helpers = apply_joint_helper_moves(arm, helper_plans)
     relaxed = relax_shoulder_weights(arm, slots)
@@ -1602,6 +1670,7 @@ def export_pmx(path, meshes, armatures):
     root, stats = convert_rig_to_mmd(arm, meshes, slots, missing_optional,
                                      helper_plans, skin_before)
     stats["arm_down_deg"] = apose
+    stats["premerged_helpers"] = premerged
     stats["reparented_helpers"] = helpers
     stats["relaxed_groups"] = relaxed
     stats["distortion"] = mesh_distortion(before, meshes)

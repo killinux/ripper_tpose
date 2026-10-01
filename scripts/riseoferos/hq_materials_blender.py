@@ -18,7 +18,9 @@ its game material and builds the lit ones with all their inputs:
 Slot -> game material, by the slot's colour texture: a game material's _BaseMap (FBX import), or the
 export textures hq_material_data.py wrote (<material>__pmx_diffuse / __xps_diffuse: a PMX or XPS
 import).  The name the ROE add-on stored from the FBX (``roe_source_materials`` + per-face
-``roe_source_material_index``) breaks ties (body and skin share one albedo).
+``roe_source_material_index``) breaks ties (body and skin share one albedo); in a suit's file
+(pc_g01_yoga) the suit's own <material>@<suit> comes first, and a material uses its own copy of a
+texture whose name other data shares (hq_material_data "overrides", on every slot).
 
 Two ways of building:
   new materials (default)  one shared "HQ_<game>" material per game material replaces the slot's -
@@ -33,8 +35,12 @@ Two ways of building:
 Every node this module adds is named hq_*; apply_params() retunes them live (defaults: DEFAULT_PARAMS,
 multipliers on the game's own values).
 
-Standalone, for a .blend that was exported earlier:
-  blender -b --factory-startup <in.blend> --python hq_materials_blender.py -- <out.blend> [--cache DIR]
+Standalone, for a .blend that was exported earlier (the out path may be the in path):
+  blender -b --factory-startup <in.blend> --python hq_materials_blender.py -- <out.blend> [--cache DIR] [--preview] [--rebuild]
+--preview re-renders <out>_preview.png with the batch's own preview sheet (export_character_model_blender
+.render_preview) - the suits (export_suits.py) and the nude bases are upgraded this way.  A second run
+upgrades only what is still albedo-only; --rebuild builds the earlier run's materials again (after a
+data fix).
 """
 import json
 import os
@@ -145,16 +151,27 @@ def _base_map(mdef):
     return mdef["textures"].get("_BaseMap", {}).get("texture", "")
 
 
-def pick_material(materials, albedo, source, old_name):
+def pick_material(materials, albedo, source, old_name, suit=None):
     if not albedo:
         return None
     for suffix in EXPORT_SUFFIXES:                 # a PMX / XPS export texture names its material
         if albedo.lower().endswith(suffix):
             base = albedo[:-len(suffix)]
             return next((n for n in materials if safe_name(n) == base), None)
+    albedo = re.sub(r"__[0-9a-f]{8}(?=_rgbx_)", "", albedo)      # a material's own copy of a shared name
     cands = [n for n, d in materials.items() if _base_map(d).lower() == albedo.lower()]
+    # <name>@<suit>: the suit's own definition of a piece another suit names alike (hq_material_data)
+    own = [n for n in cands if suit and n.lower().endswith("@" + suit)]
+    cands = own or [n for n in cands if "@" not in n] or cands
     if source in cands:
         return source
+    if len(cands) > 1 and old_name:
+        # export_suits.py names a piece's material after the game one (+ "_mat", sometimes truncated):
+        # lynn_UniformStockings_obj001_transparenc_mat is the _transparency variant, not the opaque one
+        stem = re.sub(r"_mat$", "", re.sub(r"\.\d{3}$", "", old_name.lower()))
+        named = [n for n in cands if n.lower() == stem or (len(stem) >= 8 and n.lower().startswith(stem))]
+        if named:
+            return min(named, key=len)
     if len(cands) > 1:
         skin = "skin" in (old_name or "").lower()
         cands = [n for n in cands if ("skin" in n.lower()) == skin] or cands
@@ -228,7 +245,13 @@ def load_data(cid, cache, materials=(), albedos=(), python=None, log=print, game
                 if not maps or not all(os.path.isfile(os.path.join(cache, p)) for p in maps.values()):
                     return False
         # an albedo that is no game _BaseMap (eye iris, a prop from another bundle) stays unmatched on
-        # a re-run too, so it does not make the cache incomplete
+        # a re-run too, so it does not make the cache incomplete - except a shared piece
+        # (Common_<piece>_rgbx_Albedo) no run has looked up yet: its bundle is only read when asked for
+        looked = set(data.get("pieces", ()))
+        for a in albedos:
+            m = re.match(r"common_(.+?)_rgbx_albedo$", a.lower())
+            if m and m.group(1) not in looked:
+                return False
         return True
 
     data = None
@@ -236,7 +259,9 @@ def load_data(cid, cache, materials=(), albedos=(), python=None, log=print, game
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     summary = None
-    if data is None or not complete(data):
+    # schema 2 (2026-10-01) added the suits' component bundles, 3 the shared accessory pieces (found by
+    # albedo name), 4 the same-name textures told apart + <material>@<suit>: an older cache lacks those
+    if data is None or data.get("schema", 1) < 4 or not complete(data):
         cmd = [python or os.environ.get("ROE_PYTHON") or "python", DATA_SCRIPT, cid, "--out", cache,
                "--materials", ",".join(sorted(m for m in materials if m)),
                "--albedos", ",".join(sorted(a for a in albedos if a))]
@@ -311,14 +336,18 @@ class Builder:
     def material(self, game, old, target=None):
         """A new material for a game material (shared by its slots), or - with `target` - the same
         network added into `target` beside its own nodes, with its own output made the active one."""
-        if target is None and game in self.built:
-            return self.built[game]
+        if target is None and (game, self.uv) in self.built:
+            return self.built[(game, self.uv)]
         mdef = self.data["materials"][game]
         role = role_of(mdef)
         if role is None:
             return None
         tex, fl, col, kw = mdef["textures"], mdef["floats"], mdef["colors"], set(mdef["keywords"])
         override = self.data.get("overrides", {}).get(game, {})
+
+        def tname(slot):                    # the material's own copy when the name is shared (hq_material_data)
+            return override.get(slot, tex[slot]["texture"])
+
         if target is None:
             mat = bpy.data.materials.new("HQ_" + game)
             mat.use_nodes = True
@@ -332,8 +361,7 @@ class Builder:
         bsdf = n.new("ShaderNodeBsdfPrincipled", 550, 0, "bsdf")
         n.link(bsdf.outputs["BSDF"], out.inputs["Surface"])
         uv = n.new("ShaderNodeUVMap", -1300, 0, "uv", uv_map=self.uv)
-        albedo = self.tex(n, override.get("_BaseMap", tex["_BaseMap"]["texture"]), -900, 350, uv.outputs["UV"],
-                          "albedo")
+        albedo = self.tex(n, tname("_BaseMap"), -900, 350, uv.outputs["UV"], "albedo")
         tint = n.new("ShaderNodeMixRGB", -550, 350, "tint", blend_type="MULTIPLY")
         tint.inputs["Fac"].default_value = 1.0
         n.link(albedo.outputs["Color"], tint.inputs["Color1"])
@@ -345,7 +373,7 @@ class Builder:
         occ_slot = "_OcclusionMaskMap" if role == "hair" else "_MetallicGlossMap"
         sep = None
         if occ_slot in tex:
-            mask = self.tex(n, tex[occ_slot]["texture"], -900, 0, uv.outputs["UV"], "mask", non_color=True)
+            mask = self.tex(n, tname(occ_slot), -900, 0, uv.outputs["UV"], "mask", non_color=True)
             sep = n.new("ShaderNodeSeparateRGB", -650, 0, "sep")
             n.link(mask.outputs["Color"], sep.inputs["Image"])
             ao = n.new("ShaderNodeMath", -450, 150, "ao", operation="MULTIPLY_ADD")    # 1 - s + s * ao
@@ -408,7 +436,7 @@ class Builder:
         emission = col.get("_EmissionColor", [0.0, 0.0, 0.0, 1.0])
         if fl.get("_EnableEmission", 0.0) > 0.0 and max(emission[:3]) > 1e-4:
             if "_EmissionMap" in tex:
-                em_tex = self.tex(n, tex["_EmissionMap"]["texture"], -900, -1000, uv.outputs["UV"], "emission_tex")
+                em_tex = self.tex(n, tname("_EmissionMap"), -900, -1000, uv.outputs["UV"], "emission_tex")
                 em = n.new("ShaderNodeMixRGB", -550, -1000, "emission", blend_type="MULTIPLY")
                 em.inputs["Fac"].default_value = 1.0
                 n.link(em_tex.outputs["Color"], em.inputs["Color1"])
@@ -426,7 +454,7 @@ class Builder:
         # normal map (+ detail normal, blended in tangent space: UDN)
         detail_scale = 0.0
         if "_BumpMap" in tex and fl.get("_BumpScale", 1.0) > 0.0:
-            main = self.tex(n, tex["_BumpMap"]["texture"], -900, -400, uv.outputs["UV"], "normal_tex", normal=True)
+            main = self.tex(n, tname("_BumpMap"), -900, -400, uv.outputs["UV"], "normal_tex", normal=True)
             packed = main.outputs["Color"]
             detail = tex.get("_DetailNormalMap")
             if detail and fl.get("_DetailBumpScale", 0.0) > 0.0 and role == "skin":
@@ -434,7 +462,7 @@ class Builder:
                 mapping = n.new("ShaderNodeMapping", -1100, -700, "detail_map")
                 mapping.inputs["Scale"].default_value = (detail["scale"][0], detail["scale"][1], 1.0)
                 n.link(uv.outputs["UV"], mapping.inputs["Vector"])
-                det = self.tex(n, detail["texture"], -900, -700, mapping.outputs["Vector"], "detail_tex", normal=True)
+                det = self.tex(n, tname("_DetailNormalMap"), -900, -700, mapping.outputs["Vector"], "detail_tex", normal=True)
                 v1 = n.new("ShaderNodeVectorMath", -650, -400, "v1", operation="MULTIPLY_ADD")
                 n.link(main.outputs["Color"], v1.inputs[0])
                 v1.inputs[1].default_value = (2.0, 2.0, 2.0)
@@ -465,7 +493,7 @@ class Builder:
         if target is not None:
             set_active_output(mat, out)
         else:
-            self.built[game] = mat
+            self.built[(game, self.uv)] = mat
         return mat
 
 
@@ -566,9 +594,10 @@ def remove_hq(materials):
 
 # --- entry points --------------------------------------------------------------------------------------
 def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print, in_place=False, params=None,
-          cid=None, game=None):
+          cid=None, game=None, rebuild=False):
     """Build the game materials on the slots of `meshes`.  Returns (state, report); state is what
-    revert() needs to put the replaced materials back (empty for in_place)."""
+    revert() needs to put the replaced materials back (empty for in_place).  A slot that already has
+    one of these materials keeps it, unless `rebuild`."""
     slots = []                              # (obj, index, old material, colour texture, stored name)
     for obj in meshes:
         sources = slot_sources(obj)
@@ -583,26 +612,33 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
     names = sorted({s[4] for s in slots if s[4]})
     plain = [a for a in albedos if not a.lower().endswith(EXPORT_SUFFIXES)]
     data, summary = load_data(cid, cache, names, plain, python, log, game)
-    picks = [pick_material(data["materials"], albedo, source, old.name if old else "")
+    suit = re.match(r"pc_%s_(.+)$" % cid, (stem or "").lower())
+    suit = suit.group(1) if suit else None       # pc_g01_yoga -> yoga (accessory_components_pc_g01_suit_yoga)
+    picks = [pick_material(data["materials"], albedo, source, old.name if old else "", suit)
              for _obj, _index, old, albedo, source in slots]
     wanted = sorted({g for g in picks if g})
     if wanted:                              # PMX / XPS names resolve only once the definitions are read
         data, more = load_data(cid, cache, wanted, (), python, log, game)
         summary = more or summary
-    uv_names = {o.data.uv_layers[0].name for o in meshes if o.data.uv_layers}
-    builder = Builder(data, cache, sorted(uv_names)[0] if uv_names else "UVMap", params)
+    # each slot samples its own mesh's first UV layer: a suit's FBX pieces call it UVMap, the body UV0
+    builder = Builder(data, cache, "UVMap", params)
     state, upgraded, kept, errors, done = [], [], [], [], set()
     for (obj, index, old, albedo, source), game_mat in zip(slots, picks):
         label = "%s[%d]" % (obj.name, index)
+        if not in_place and old is not None and old.get("roe_hq_role"):
+            if not rebuild:
+                # an earlier run's material: a second run (pieces it could not resolve then) leaves it
+                upgraded.append("%s %s (%s, earlier run)" % (label, old.name, old["roe_hq_role"]))
+                continue
+            if game_mat is not None and not old.name.endswith("__replaced"):
+                old.name = old.name[:50] + "__replaced"     # the rebuilt one takes HQ_<game>, not .001
         if game_mat is None or (in_place and (old is None or old.name.startswith("mmd_"))):
             kept.append(label)
             continue
         if in_place and old.name in done:
             upgraded.append("%s %s (shared)" % (label, game_mat))
             continue
-        if len(obj.data.uv_layers) and obj.data.uv_layers[0].name != builder.uv:
-            errors.append("%s: UV map %s != %s" % (label, obj.data.uv_layers[0].name, builder.uv))
-            continue
+        builder.uv = obj.data.uv_layers[0].name if len(obj.data.uv_layers) else "UVMap"
         try:
             new = builder.material(game_mat, old, target=old if in_place else None)
         except Exception as exc:
@@ -677,12 +713,12 @@ def use_pmx_textures(state):
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     if not argv:
-        raise SystemExit("usage: -- <out.blend> [--cache DIR]")
+        raise SystemExit("usage: -- <out.blend> [--cache DIR] [--preview] [--rebuild]")
     out_path = os.path.abspath(argv[0])
     cache = argv[argv.index("--cache") + 1] if "--cache" in argv else None
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     stem = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
-    _state, report = apply(meshes, stem, cache=cache)
+    _state, report = apply(meshes, stem, cache=cache, rebuild="--rebuild" in argv)
     for img in {n.image for m in bpy.data.materials if m.use_nodes for n in m.node_tree.nodes
                 if n.type == "TEX_IMAGE" and n.image}:
         if not img.packed_file and os.path.isfile(bpy.path.abspath(img.filepath)):
@@ -691,6 +727,12 @@ def main():
     bpy.context.preferences.filepaths.save_version = 0      # no .blend1 next to the product
     bpy.ops.wm.save_as_mainfile(filepath=out_path, check_existing=False, compress=False)
     report["out"] = out_path
+    if "--preview" in argv:            # after the save: the preview camera / lights never reach the .blend
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import export_character_model_blender as worker  # noqa: E402  (the batch's own preview sheet)
+        root, stem_out = os.path.dirname(out_path), os.path.splitext(os.path.basename(out_path))[0]
+        report["preview"] = worker.render_preview(meshes, os.path.join(root, stem_out + "_preview.png"),
+                                                  os.path.join(root, "." + stem_out))
     print("ROE_HQ_BLEND=" + json.dumps(report, ensure_ascii=True))
 
 

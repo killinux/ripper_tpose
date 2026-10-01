@@ -68,6 +68,20 @@ FBX ──插件挂颜色贴图材质──> 场景 ──hq_materials_blender.a
     取贴图更大的那个；
   - 只解码选中材质用到的贴图，法线另存一份标准 RGB 版 `<名字>__nrm.png`；
   - 缓存：每个角色一个 `<id>.json`，`textures\` 所有角色共用，原子写入，并行跑也安全。
+  - 套装（2026-10-01 起）：再读 `accessory_components_pc_<id>_suit_*`（材质）+ `chara_tex_components_pc_<id>_suit_*`
+    （贴图），魔化（fm）套的共用部件读 `accessory_components_common_*`。腿环、臂毛、腿毛这些老部件在
+    `accessory_<8 位哈希>_common_<部件>.ab` 里，按颜色贴图名 `Common_<部件>_rgbx_Albedo` 找；
+    fm 这一组整组读（8 个小包）：臂毛的贴图放在 `…_common_fmmleghair_obj001` 包里，按名字对不上。
+    查过的部件记在 `<id>.json` 的 `pieces` 里，同一角色后面再跑别的套装也不会把它们丢掉。
+  - **名字不能当身份**（schema 4，2026-10-01）：
+    - 贴图：g01 HD 服装的 MGAC 也叫 `pc_g01_nk_body_rgbx_MGAC`，和裸体身体自己的那张同名。原来按名字只解码先遇到的那张，
+      g01 的套装和裸模身上就套了服装的 MGAC，皮肤上一块块深色斑。秘书装的胸罩，不透明版和透明版也是两张同名贴图。
+      现在每个槽记下它真正引用的对象（`source` = CAB + path_id）；一个名字下有内容不同的几张图时，
+      材质用自己那张，存成 `<主干>__<md5 前 8 位>_rgbx_<类型>`，写进 `overrides`。内容相同的拷贝照旧用原名。
+      全游戏跨包同名而内容不同的贴图有 35 个：HD / LD 两份、几个角色的套装部件、g01 这张，见 §6；
+    - 材质：两个套装可以有同名部件（g01 睡衣和瑜伽服都有 `Rouffe_Underwear_obj001`，一件黑蕾丝、一件白色运动款），
+      原来只留贴图大的那个，瑜伽服就用了睡衣的。现在每个套装自己的定义另存一份 `<材质>@<套装>`，
+      `pick_material()` 在 `pc_g01_yoga.blend` 里优先选 `…@yoga`。
 - `hq_materials_blender.py`：
   - **槽对应游戏材质**：以槽的颜色贴图为主键，去找 `_BaseMap` 是这张图的游戏材质。插件存的材质名
     （`roe_source_materials` 加每个面的 `roe_source_material_index`）只用来决胜负：身体和皮肤用的是同一张颜色贴图。
@@ -115,6 +129,10 @@ FBX ──插件挂颜色贴图材质──> 场景 ──hq_materials_blender.a
 | 手动流程（插件按钮 1 → 2 → 2.5 → 清理 + 打包 → 保存 → 3，无头跑） | 全部 FINISHED；2.5 换了 6 个槽；导出的 XPS 带齐四张图 |
 | a08 全格式（`_hq_trial\pc_a08_hd\export\`，blend + XPS + PMX，91 秒） | PASS；7 个槽换成游戏材质（身体 ×2、皮肤、脸、头发 ×3），保留 4，错误 0；PMX 烘了 5 张颜色贴图，mmd_tools 读回无误。和 09-06 的旧 PMX 比：顶点同为 53,213；表情 9 → 58（面部表情插件）；关节 75 → 103（裙子格子物理）。胸部仍是模板 A，旁边另有 `pc_a08_hd_bustB.pmx`（`tune_bust_pmx.py` 默认值：下垂 15°、±25°）。对比图 `_hq_trial\pc_a08_hd\pmx_old_vs_hq.png` |
 | 2.5 按钮点在导入的 a08 PMX 上（v1.1.15） | 认出 a08，原地换 7 个材质，激活游戏材质输出，`mmd_base_tex` 不变；a08 的 FBX 手动流程照旧全部 FINISHED |
+| 全部主模型（10-01，blend + XPS + PMX） | 124 PASS / 0 失败（另 18 个 NOMESH）；700 个槽换成游戏材质、保留 499、错误 0；归档 464/464 自检通过 |
+| a / g / j 的套装 + 裸模（10-01，就地升级） | 22 套 + 5 个裸模逐槽检查：全部是游戏材质或该保留的槽，没有灰色占位、没有缺贴图的睫毛；预览逐张看过；归档 51 个文件，自检 150/150。对比图 `_hq_trial\suits_agj\`（魔化耳朵、偶像装双丸子和睫毛、g01 皮肤斑块、22 套总图） |
+| a / g / j 的套装 + 裸模 PMX（10-01） | 26 个（22 套 + 4 个裸模）全部 PASS：撕裂 0、付与顺序错误 0、表情 58、胸部物理两侧、头发物理；26 个胸部 B 版；PMX 里引用的贴图全部存在（第一轮 3 个裸模的睫毛贴图是 C 盘死路径，已修）；衣服顶点被头发链拽住的扫描 0；26 个用 mmd_tools 读回渲染逐张看过；冷艳主管 PMX 和 .blend 预览对比无差异 |
+| 同名贴图核对（schema 4） | a/g/j 36 个角色的数据重读：需要各用各贴图的只有 g01（身体 MGAC、3 套内衣 / 胸罩）、g10（HD / LD）、j07 / j10（`_DissolveMap`，Blender 材质不用）。a/g/j 主模型实际用到的贴图和应有的逐张比对一致 |
 
 对比图（同一套灯光：预览用的灰色世界 + 两盏太阳光，Eevee）：`_hq_trial\pc_a01_hd\compare_old_vs_hq.png`、
 `_hq_trial\pc_g05_hd\compare_old_vs_hq.png`。看得出的区别：
@@ -137,7 +155,38 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 
 # 只看材质数据
 python hq_material_data.py g05 --out D:\roe_exports\_hq_materials --all
+
+# 套装 / 裸模（就地升级，--preview 重出预览图）
+& $blender -b --factory-startup D:\roe_exports\j01\blend\pc_j01_idol.blend `
+    --python fix_suit_slots_blender.py --python hq_materials_blender.py -- D:\roe_exports\j01\blend\pc_j01_idol.blend --preview
+# 已经升级过的文件：再跑一次只补还是颜色贴图的槽；数据修过以后加 --rebuild 全部重建
+
+# 套装 / 裸模的 PMX（和主模型同一套转换）+ 胸部 B 版
+& $blender -b --factory-startup D:\roe_exports\j01\blend\pc_j01_idol.blend `
+    --python export_suit_pmx_blender.py -- D:\roe_exports\j01\blend\pmx\pc_j01_idol\pc_j01_idol.pmx
+python ..\mmd_physics\tune_bust_pmx.py <.pmx> <同目录>\pc_j01_idol_bustB.pmx
 ```
+
+`export_suit_pmx_blender.py` 调主模型的 `export_pmx()`：Convert_to_MMD5 骨架、胸 / 布料 / 头发物理、58 个表情、撕裂门禁、
+付与顺序回读。转换前补三步，`.blend` 不保存：
+- 高清材质换成烘好的 PMX 颜色贴图（`roe_hq_pmx`），和主模型导 PMX 时一样；
+- 眼睛槽按材质名 `eye` 找，烘成贴图。套装的头在身体网格上，眼睛不在主模型的第 1 槽；
+- 挂在骨头上的部件改成 100% 蒙皮到那根骨。mmd_tools 只写顶点权重，不认物体父级。
+
+打包在 `.blend` 里、原文件已经不在的贴图，会先写到 PMX 旁边。裸模的睫毛贴图指向一个删掉的 C 盘临时目录，
+不这样做 PMX 里会存一个死路径。游戏本身给服装做了胸部骨骼权重（马甲、胸罩、外套都有），所以服装会跟着胸部物理动。
+
+`fix_suit_slots_blender.py` 补 10-01 之前拼好的套装 / 裸模的问题，放在升级前面跑，没问题的文件什么都不改：
+- i / j 族的睫毛、眉毛卡片是透明的（插件 v1.1.16 之前），按 `EYEBROW_TEXTURE_FAMILY` 换上 h / d 族的贴图；
+- 魔化耳朵 `FMRear_L/R`：存根里它的材质指向 `chara_mat_bare_pc_f01_fm_nk.ab` 的 `pc_f01_fm_nk_face`，拼装没读这个包，
+  所以是灰色。各家族脸部贴图的布局相同，连尖耳朵那块都有，所以换成本套装自己的脸部材质。
+  耳朵的顶点是按 f01 的身材建的（f01 头骨比别人低约 15 cm），别的角色身上它挂在锁骨处；
+  按头骨位置差平移，再绑到 `Bip001 Head`，和 f01 一样；
+- 偶像装双丸子的第 2 个材质槽，游戏里是角色头发 `pc_j_nk_hair`（在 `chara_mat_bare_pc_j_common_head.ab`，拼装也没读），
+  原来是灰色，换成头发网格的材质；
+- 一点权重都没有的蒙皮部件（a01 婚纱头纱、j01 新年装耳环、j01 降神装面纱）：游戏里它们只绑在自带的物理骨骼上，
+  拼装没把这些骨骼接上骨架。现在按 suit.json 的部位骨整体绑定（这 4 个都是 `Bip001 Head`），能跟着头动，没有自己的摆动。
+借来的 HQ 材质会复制一份，UV 节点改成部件自己的第一层 UV（部件叫 UVMap，身体 / 头发叫 UV0）。
 
 环境变量：
 - `ROE_HQ_MATERIALS=0`：关掉；
@@ -223,6 +272,25 @@ python hq_material_data.py g05 --out D:\roe_exports\_hq_materials --all
 - XPS 没有带脸上的毛孔细节法线。XNALara 的 render group 22 / 23 有 microbump 可以放，还没做；
   XPS 的效果只在 Blender 里用 XPS Tools 读回看过，没在 XNALara / XPS 本体里打开过。
 - PMX 格式本身没有法线和金属度，只能把发色和 AO 烘进颜色贴图；手动用 ROE PMX Tools 转的 PMX 不带这一步。
-- 目前只有 g05 用新脚本重新导出了（.blend 在原位置；XPS / PMX 在 `_hq_trial\pc_g05_hd\export\`，没覆盖原来的），
-  其余模型还是只有颜色贴图，要批量重跑 `-Format blend,xps,pmx -Force`。
-- 套装（`assemble_suit_blender.py`）和裸模（`export_nude_model_blender.py`）走的是另外两条路，还没接这一步。
+- 124 个主模型 10-01 全部用新脚本重导（blend + XPS + PMX），已归档到 `E:\game_export\RiseOfEros`。
+- 套装和裸模：`.blend` 就地升级（`hq_materials_blender.py`）。a / g / j 另外出了 PMX + 胸部 B 版（`export_suit_pmx_blender.py`），
+  XPS 都还没有。
+  - 用户 10-01 说只要 a / g / j：这三个角色的 22 套服装 + 5 个裸模逐槽查过、修过、归档了，
+    22 套 + 4 个裸模有 PMX（a00 的裸模就是主模型 a00，本来就有）；
+  - 拼装留下、还没修好的两处：
+    - **j01 新年装耳环**：左右两只都在头的正中间（藏在头里，看不见）。拼装按「离部位骨最近」挑摆放方式，
+      耳环该在耳朵旁边，被挑成了头骨处。游戏给左右两只各有一个摆放变换（左耳那个有约 8 cm 的侧向位移），
+      坐标约定还没弄清：照搬的话位置对了，但耳环会横躺着；
+    - **a01 婚纱头纱**：a01 的骨架只在 `chara_bare_pc_a01_nk_tutorial.ab` 里，`suit_bundle.load_skeleton` 原来只读
+      `chara_bare_pc_a01_nk.ab`（这个包里没有身体），所以头纱没有挂点，落在原点（脚边）。10-01 改成也读 `_tutorial` / `_prelude`，
+      重拼后头纱回到头上，但它是建模时的姿态（向后平伸）。游戏里靠它自己的 10 根物理骨骼垂下来，那套骨骼拼装没接上；
+  - 其余角色的套装 / 裸模在 D 盘上也升级了（批量在收到「只要 a g j」之前就跑完了），但**没检查、没归档**，已知还有：
+    - b / c / d / e / f / h / i / k / l / m 的魔化套：耳朵是灰色的（除 f01 外还挂在锁骨），腿环、臂毛、腿毛没换材质
+      → 跑一遍 `fix_suit_slots_blender.py` + `hq_materials_blender.py`；
+    - i01 的套装和裸模没有睫毛（拼装早于插件 v1.1.16），同上；
+    - b01 police / wulin、c01 bohemia / student、d01 archer / succubus、k01 combat / swim / weddingdress 有同名部件，
+      要 `--rebuild` 才会用上各自的贴图。
+- 以后重新拼套装（`export_suits.py --force`）会丢掉 `fix_suit_slots_blender.py` 的修改：耳朵、双丸子、i/j 睫毛、头纱 / 耳环的权重要再跑一次，PMX 也要重出。
+  根治要在 `suit_bundle.py` 里解析指向别的包的材质引用（存根引用了 `pc_f01_fm_nk_face`、`pc_j_nk_hair`），还没做。
+- 升级后的 `.blend` 里留着几张没人用的图片（被换掉的插件材质在保存那一刻还算它们的用户），指向原来的解包目录。
+  不影响打开和渲染，归档时会自动打包补齐。

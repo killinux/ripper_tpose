@@ -302,7 +302,8 @@ D:\roe_exports\character_models_manifest.json   # 全量清单
 > 一起启用），导出的 PMX 直接能吃 VMD。worker 里的四步：
 >
 > 1. **烘变换**：清掉 FBX 导入留下的父级空物体并应用旋转。骨架空间必须 Z 朝上，否则插件按几何识别时
->    会把腿认成手臂。
+>    会把腿认成手臂。紧接着把插件要删的脊柱饰骨（分类为 merge 的，如 a08 的 `Collar`）先并进父骨
+>    （`premerge_spine_helpers`，见下面「踩过的坑」）。
 > 2. **解析骨槽**（`resolve_roe_slots`）：ROE 全是 3ds Max Biped，但拼写不统一——男性裸模是 `Bip000`，
 >    部分服装骨架去掉空格（`LUpArm`/`LThigh`/`LCalf`），大小写也不一致（`Eyeball_L` 对 `eyeball_L`、
 >    `Breast_L` 对 `chest_L`），d09 的小腿甚至叫 `LCalfTwist`。所以按前缀 + 多拼写 + 大小写不敏感匹配，
@@ -315,6 +316,27 @@ D:\roe_exports\character_models_manifest.json   # 全量清单
 >    再加身体碰撞刚体和裙/披风/头发物理；最后按 12.5 导出。
 >
 > **踩过的坑（都已修，改动在 worker 里）**
+>
+> - **领口被辫子拽走**（`premerge_spine_helpers`，2026-09-27，用户报告「a08 导出的 pmx，脖子和头发粘连了」）：
+>   a08 的领口（choker）在游戏里挂在 `Collar` 上，这是 `Bip001 Spine2` 下的一根叶子饰骨。Convert_to_MMD5
+>   把这类居中的脊柱饰骨判为 merge 删掉，并把每个顶点的权重交给「骨头头部离它最近」的变形骨。头发和布料骨
+>   不会被删，但照样能接收权重。辫子正好从头上沿脖子右侧垂下，`Braid02` / `Braid03` 的头部贴着领口，于是
+>   领口右半圈 85 个顶点（最多 100%）挂到了辫子上：辫子一摆，领口就被拽出一条金片连到辫子上。
+>   游戏里的 FBX 没有这些权重，是转换加的。旧的 `restore_stray_weight_transfers` 看不到它：辫子骨本来就带着
+>   辫子的皮肤，而这些顶点原来的骨已经被删了。修法和 Stellar Blade（Eve 脖子根被交给侧发骨）一样：转换前
+>   把 merge 饰骨的权重并进它的父骨（游戏里它本来就跟着父骨一起动），插件就没有可转移的了。
+>   a08：`Collar -> Bip001 Spine2`，服装上挂头发物理骨的顶点 85 → 0，撕裂 0。
+>   对比图 `E:\game_export\RiseOfEros\_hq_trial\pc_a08_hd\neck_fix_before_after.png`。
+>
+>   饰骨成串时（a11 的 `collar_B02` 挂在 `collar_B01` 下，c09 的 `necklace_02` 挂在 `necklace_01` 下），
+>   要一直往上找到不会被删的骨；只并进上一级的话，那一级随后也被插件删掉，权重照样按「最近的骨」转走。
+>   Stellar Blade 那份原版没处理这一点。
+>
+>   **影响范围**（2026-09-27 扫了 `D:\roe_exports` 的 123 个 PMX）：20 个有服装顶点一半挂在从头上垂下的
+>   头发链、一半挂在躯干骨上。它们在游戏原始 FBX 里全是 0，都是转换加的：
+>   a08、a08_outfit1、a11、b09、c05、c09、d02、d06、d09、e05、e07、e10、f05、f05_outfit1、f06、f07、f09、
+>   h06、k04、k04_outfit1。f07 最多（1184 个顶点，`Collar` 和 `Buddhist beads*`），a11 次之（764 个）。
+>   抽查 a11 / c09 / f05 / f07 用新代码重导，全部降到 0，撕裂 0。其余的重导后同样修好。
 >
 > - **辅助骨的跟随比例**（`plan_joint_helper_moves` + `apply_helper_grants`，三次用户报告同一根因）：
 >   ROE 的肢体辅助骨挂在哪根骨上比较随意，但它们承担大量蒙皮，于是肢体一动、这部分皮肤留在原地。
@@ -385,10 +407,17 @@ D:\roe_exports\character_models_manifest.json   # 全量清单
 >   凡是被付与驱动的叶子骨（両目 的两只眼睛、所有部分跟随的辅助骨）都放到变形阶层 1。
 >   导出后会把 PMX 读回来逐条校验，违例记进 manifest 的 `grant_order_violations` 并在批量输出里报红。
 > - **纯透明槽要以 alpha 0 导出**（`hide_transparent_materials`）：头部被拆成 face/eye/lash/brow/eye_overlay
->   五个槽，没东西可画的槽挂的是一个裸 Transparent BSDF——`eye_overlay` 永远是，i/j 两个体型的
->   lash/brow 也是（这两族的脸部贴图已经把睫毛眉毛画进去了，所以没有单独的 eyebrow 贴图）。
->   PMX 没有混合模式，mmd_tools 写的是材质的 `mmd_material` 块，默认不透明的 0.8 灰，
+>   五个槽，没东西可画的槽挂的是一个裸 Transparent BSDF——`eye_overlay` 永远是（游戏里它是泪膜
+>   `pc_<族>_nk_tears`：透明度 0、只反光）。PMX 没有混合模式，mmd_tools 写的是材质的 `mmd_material` 块，默认不透明的 0.8 灰，
 >   于是 j10 的 10 590 个睫毛顶点在 MMD 里变成盖住眼睛的一块灰白。把 MMD alpha 设成 0 才是 PMX 里的「别画」。
+> - **i / j 两族的睫毛贴图在别的族的包里**（`EYEBROW_TEXTURE_FAMILY`，2026-10-01，用户报告「j07 的睫毛好像有问题」）：
+>   i/j 的贴图包里没有 eyebrow 贴图，插件原来以为这两族把睫毛和眉毛画进了脸部贴图，就把 lash/brow 设成透明。
+>   其实脸部贴图只画了眉毛和眼线，**没有睫毛**，于是 i/j 的模型一根睫毛都没有（j07 有 3530 个面的睫毛网格）。
+>   游戏包里 `pc_i_nk_eyebrow` / `pc_j_nk_eyebrow` 材质的 `_BaseMap` 是跨包引用：i 用 h 族的
+>   `pc_h_nk_eyebrow_rgbx_Albedo`，j 用 d 族的 `pc_d_nk_eyebrow_rgbx_Albedo`（按外部 CAB 名 + path_id 解析核实；
+>   其余 11 族都用自己的）。插件现在先在本角色贴图目录找，找不到就去同一导出根下那个族的兄弟角色
+>   （如 `D:\roe_exports\d01\_textures`）里找；都没有才保持透明。j07 修复前后对比：
+>   `E:\game_export\RiseOfEros\_hq_trial\pc_j07_hd\lash_fix_before_after.png`。
 > - **几何完整性门禁**：转换只做刚性旋转，边长本应保持，所以边长突变就是撕裂。`mesh_distortion` 用
 >   「边长 >3 倍 **且** 绝对增长 >包围盒对角线 0.8%」判定，实测能区分真撕裂（手腕 7 倍 / +33mm）和
 >   正常形变（腋下皱褶 2.4 倍 / +8mm）。结果记进 manifest，批量输出会报警。
@@ -814,6 +843,40 @@ python export_suits.py --sheet                     # 只重拼预览总图
 然后 `--only <id>:<suit> --force`。拼完 `python html\make_gallery.py` 重生成画廊，套装卡片会插在各自角色
 的卡片后面（工具栏「套装」筛选）。部件坐标系的五种情况、「穿好」规则、验证见
 [ROE 套装拼装](../../docs/roe-suit-assembly.md)。
+
+**游戏原始材质（2026-10-01）**：拼出来的套装只有颜色贴图，再就地升级一遍（套装加 `--preview` 重出预览图）：
+
+```powershell
+& $blender -b --factory-startup <套装.blend> --python fix_suit_slots_blender.py `
+    --python hq_materials_blender.py -- <同一个路径> --preview
+```
+
+`fix_suit_slots_blender.py` 补拼装留下的三处问题，没问题的文件什么都不改：
+- i / j 族睫毛透明：插件 v1.1.16 之前拼的；
+- 魔化耳朵：灰色，而且挂在锁骨上。耳朵是按 f01 的身材建的，材质指向 f01 的 fm 脸部材质；
+- 偶像装双丸子的第 2 个槽：其实是角色头发。
+
+前两处的材质引用都指向拼装没读的包。同名贴图 / 同名部件（g01 裸体身体的 MGAC、瑜伽服和睡衣的内衣）
+以前会串用，现在按引用对象区分，数据修过的文件用 `--rebuild` 重建。细节、各套装状态和其余角色的待办见
+[roe-hq-materials.md](../../docs/roe-hq-materials.md) §3、§5、§6。
+
+**PMX（2026-10-01）**：升级过的套装 / 裸模 `.blend` 走主模型同一套转换（`export_character_model_blender.export_pmx`：
+Convert_to_MMD5 骨架、胸 / 布料 / 头发物理、58 个表情、撕裂门禁、付与顺序回读），再按主模型的做法出一份胸部 B 版：
+
+```powershell
+& $blender -b --factory-startup D:\roe_exports\j01\blend\pc_j01_prouniform.blend `
+    --python export_suit_pmx_blender.py -- D:\roe_exports\j01\blend\pmx\pc_j01_prouniform\pc_j01_prouniform.pmx
+python ..\mmd_physics\tune_bust_pmx.py <上面的 .pmx> <同目录>\pc_j01_prouniform_bustB.pmx
+```
+
+`export_suit_pmx_blender.py` 在转换前补三步，`.blend` 不保存：
+- 高清材质换成烘好的 PMX 颜色贴图：发色和 AO 已乘进去，记在材质的 `roe_hq_pmx` 上；
+- 套装的头在身体网格上，眼睛槽按材质名 `eye` 找（不是主模型的第 1 槽），烘成贴图；
+- 挂在骨头上的部件（桂冠、戒指、角、耳朵…）改成 100% 蒙皮到那根骨。
+
+打包在 `.blend` 里、原文件已经不在的贴图（裸模的睫毛贴图指向早就删掉的 C 盘临时目录）先写到 PMX 旁边。
+裸模的 PMX 放在对应角色的 `<id>\blend\pmx\<stem>\` 下。拼装留下的两个问题见 roe-hq-materials.md §6：
+新年装耳环、婚纱头纱。
 
 ---
 

@@ -26,6 +26,11 @@ python tests\test_archive.py                      # 离线测试，最后一行 
 其它选项：`--dest`（默认 `E:\game_export`）、`--blender`（默认 3.6.15）、`--no-check`、`--workers`（拷贝线程，默认 4）、
 `--lanes`（并行 Blender 进程，默认 6）。
 
+`--only` 只拷造型本身，**不拷 `_meta` 下的东西**：画廊缩略图、manifest 都不动。画廊页的缩略图读的是
+`E:\game_export\<游戏>\_meta\gallery\thumbs\`，所以重生成画廊后接着跑 `--only` 的话，页面上还是旧缩略图。
+这时要么不带 `--only` 再跑一次，要么把改过的缩略图手动拷过去。2026-10-01 ROE 只归档 a/g/j 时就碰到过：
+22 张服装缩略图是手动拷的。
+
 ## 归档后的结构
 
 ```

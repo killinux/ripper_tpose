@@ -159,11 +159,24 @@ def load_skeleton(game, cid):
 
     Not the prefab's transforms -- those sit in whatever pose the bare bundle was
     saved in -- but the body mesh's bind poses: BindPose maps mesh space to bone
-    space, so its inverse is the bone's matrix in the (Z-up) model frame."""
-    path = os.path.join(game, "chara_bare_pc_%s_nk.ab" % cid)
+    space, so its inverse is the bone's matrix in the (Z-up) model frame.
+
+    chara_bare_pc_<id>_nk.ab first; when it holds no body renderer (a01: the body is only in
+    chara_bare_pc_a01_nk_tutorial.ab) the _tutorial / _prelude variants - without a skeleton no piece
+    rigged to its own bones gets an attach placement (a01 marry's veil lay on the floor)."""
     out = {}
-    if not os.path.isfile(path):
-        return out
+    first = os.path.join(game, "chara_bare_pc_%s_nk.ab" % cid)
+    variants = sorted(f for f in os.listdir(game) if re.match(r"chara_bare_pc_%s_nk_[a-z]+\.ab$" % cid, f))
+    for path in [first] + [os.path.join(game, f) for f in variants]:
+        if os.path.isfile(path):
+            out = _skeleton_from(path)
+            if out:
+                break
+    return out
+
+
+def _skeleton_from(path):
+    out = {}
     env = UnityPy.load(path)
     for obj in env.objects:
         if obj.type.name != "SkinnedMeshRenderer":
