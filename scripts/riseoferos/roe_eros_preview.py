@@ -8,20 +8,23 @@ two prefabs do.  Run it WITHOUT --factory-startup (mmd_tools comes from the user
 the PMX with its physics, Model.build() (otherwise no bone reads the simulation), morph sliders, the VMD with a
 30-frame lead-in (the bodies ease from the rest pose instead of being flung).  The VMD import selects only that
 model's objects: with everything selected one VMD would drive both.  Then MMD-like physics (mmd_physics/mmd_like.py),
-bake (a render on a live cache does not replay the stepped simulation), save the .blend beside the mp4, fit a
-three-quarter landscape camera to every mesh over the motion, render the motion only: the lead-in is simulated
-but cut, since it starts from the standing rest pose.
+a floor collider (roe_preview_scene.py: hair and breasts rest on the floor instead of hanging through it), bake (a
+render on a live cache does not replay the stepped simulation), save the .blend beside the mp4, fit a three-quarter
+landscape camera to the meshes over the motion, render the motion only: the lead-in is simulated but cut, since it
+starts from the standing rest pose.
 """
 import math
 import os
 import sys
 
 import bpy
-import numpy as np
 from mathutils import Vector
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mmd_physics"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "mmd_physics"))
+sys.path.insert(0, HERE)
 from mmd_like import mmd_like_physics  # noqa: E402
+from roe_preview_scene import add_floor_collider, motion_box  # noqa: E402
 
 SCALE = 0.08
 MARGIN = 30
@@ -51,42 +54,14 @@ def load_pair(pmx, vmd):
     return root
 
 
-def shown_points(o, deps):
-    """World positions of the mesh's vertices, minus those a scale morph has folded away (縮小_* at > 0.5: a00's
-    semen mesh, which the clip parks 1 m off and would otherwise stretch the framing)."""
-    ev = o.evaluated_get(deps)
-    n = len(ev.data.vertices)
-    co = np.empty(n * 3)
-    ev.data.vertices.foreach_get("co", co)
-    co = co.reshape(-1, 3)
-    keep = np.ones(n, bool)
-    keys = o.data.shape_keys
-    if keys is not None and len(o.data.vertices) == n:
-        base = np.empty(n * 3)
-        keys.reference_key.data.foreach_get("co", base)
-        for kb in keys.key_blocks:
-            if kb.name.startswith("縮小_") and kb.value > 0.5:
-                d = np.empty(n * 3)
-                kb.data.foreach_get("co", d)
-                keep &= np.abs(d - base).reshape(-1, 3).max(1) < 1e-6
-    m = np.array(ev.matrix_world)
-    return co[keep] @ m[:3, :3].T + m[:3, 3]
-
-
 def fit_camera(scene, camera):
-    """Every mesh over the motion (not the 30 lead-in frames, whose rest pose spreads the arms) inside a 1280x720
-    frame seen from YAW degrees round and slightly above; the distance comes from the box's projected corners."""
+    """What the meshes show over the motion (not the 30 lead-in frames, whose rest pose spreads the arms; a scale
+    morph's folded vertices and the outer 0.25% of the points per axis left out) inside a 1280x720 frame seen from
+    YAW degrees round and slightly above; the distance comes from the box's projected corners."""
     meshes = [o for o in scene.objects if o.type == "MESH" and o.visible_get()
               and not o.name.startswith("floor") and o.dimensions.length < 20]
-    lo, hi = Vector((1e9,) * 3), Vector((-1e9,) * 3)
-    for f in range(scene.frame_start + MARGIN, scene.frame_end + 1, 3):
-        scene.frame_set(f)
-        deps = bpy.context.evaluated_depsgraph_get()
-        for o in meshes:
-            pts = shown_points(o, deps)
-            if len(pts):
-                lo = Vector(map(min, lo, pts.min(0)))
-                hi = Vector(map(max, hi, pts.max(0)))
+    lo, hi = (Vector(v) for v in motion_box(scene, meshes, scene.frame_start + MARGIN, scene.frame_end, 3))
+    lo.z = max(lo.z, -0.05)
     centre = (lo + hi) / 2
     yaw = math.radians(YAW)
     back = Vector((math.sin(yaw), -math.cos(yaw), 0.18)).normalized()      # from the centre towards the camera
@@ -152,6 +127,7 @@ def main():
     floor_mesh.materials.append(floor_material)
 
     if scene.rigidbody_world is not None:
+        add_floor_collider(scene)      # the floor above is only a picture; the physics lands on this one
         cache = scene.rigidbody_world.point_cache
         with bpy.context.temp_override(scene=scene, point_cache=cache):
             bpy.ops.ptcache.bake(bake=True)

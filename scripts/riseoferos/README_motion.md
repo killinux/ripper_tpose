@@ -70,6 +70,11 @@ python scripts\riseoferos\render_roe_motion_videos.py a08 --what physics    # �
 物理预览走仓库里的 `render_pmx_dance.py`。每段开头有 30 帧从静止姿势过渡的引入段，用来让物理先稳定下来。
 这一段参与模拟，但不渲染进视频；早先的视频带着它，H 场景每段一开始，人就从站姿「掉」进画面。
 
+预览里的地板带碰撞体（`roe_preview_scene.py`，只在预览场景里，PMX 和 VMD 不变），裙摆、头发落到地上就停住。
+早先的地板只是一张画面，倒下、破衣倒地这类躺着的动作，裙摆会穿到地板下面。
+取景按 99.5% 的顶点算范围，个别甩出去的物理块不会把镜头拉远。
+整段都在地上的动作（破衣倒地，整段高度不到 0.8 米）从斜上方 35° 俯拍；平视的话，人躺在地上只看得到一条。
+
 ## 3. H 场景
 
 一部分服装带一段 H 场景，例如 g04 是 eros07（5 个阶段），a08 是 eros15（5 个阶段加 5 段过渡）。
@@ -166,8 +171,9 @@ MMD 的骨骼不能缩放，但有的动作会缩放道具。例如 g04 的展�
 | `pmx_bone_names.py` / `pmx_short_bone_names.py` | 骨骼名改短的规则 / 改已有 PMX 文件 |
 | `make_roe_vmd.py` | Blender：把动作套到 PMX 上、写 VMD、往返检查 |
 | `roe_vmd_compare.py` | Blender：对照视频（可以同时放多个模型） |
-| `roe_refit_camera.py` | Blender：物理预览按整段动作重新取景 |
+| `roe_refit_camera.py` | Blender：物理预览加地板碰撞体、重新烘焙，按整段动作重新取景 |
 | `roe_eros_preview.py` | Blender：多个模型一起的物理预览 |
+| `roe_preview_scene.py` | 两个预览共用：地板碰撞体、重新烘焙、取景范围 |
 
 原理（世界空间对齐、A 字站姿修正、肩膀位置帧、D 骨、帧号对齐、缩放表情等）和每个坑的来历，
 见 [docs/roe-motion-to-vmd.md](../../docs/roe-motion-to-vmd.md)。
