@@ -14,6 +14,44 @@
 
 ---
 
+## 2026-10-01 — Rise of Eros：游戏动作和 H 场景导出成 VMD；PMX 骨骼名改到 15 字节以内
+
+1. **起因**：
+   - 用户问「ROE的动作能导出来变成vmd么，让blender能导入mmd能使用的」，之后要了 g05、g04、a08 的全部动作，
+     并要求「写成一个动作导出脚本和生成视频的脚本」；
+   - 再之后：「要把 PMX 里超过 15 字节的骨骼名改短，H 场景的动作要做」。
+2. **新增：服装动作 → VMD**（`scripts/riseoferos/`）：
+   - `decode_roe_clip.py`：从资源包解码 Unity 动作片段。曲线按骨骼路径的 CRC32 绑定，有 Streamed / Dense / Constant
+     三种存储；
+   - `make_roe_vmd.py`（Blender）：套到我们的 PMX 上，写 VMD，再导回来逐帧对比游戏；
+   - 两个入口：`export_roe_motions.py <id>` 导出，`render_roe_motion_videos.py <id>` 出「游戏原版 vs PMX」对照视频
+     和物理预览；
+   - 动作会缩放的道具（g04 的扇子缩到 15%）用顶点表情还原（`pmx_add_scale_morph.py`、`roe_motion_scale.py`）。
+   - 已导出：g05、g04 各 11 段，a08 10 段（展示 + 战斗），在 `E:\game_export\RiseOfEros\<角色>\vmd\<stem>\`。
+3. **新增：H 场景**：
+   - 两个入口：`export_roe_eros.py <id>`、`render_roe_eros_videos.py <id>`；
+   - 女方套裸体底模 `pc_g01_nk_bs` / `pc_a01_nk_bs`，男方套 `pc_a00_nk`，两人都放在原点（游戏里也是这样摆的）；
+   - 场景运行时加上的私处形状做成女方的顶点表情（`roe_blendshapes.py`）。精液特效在游戏里缩到 0，给男方加了收起它的表情；
+   - 已导出 g04 的 eros07（5 段）、a08 的 eros15（10 段），在 `vmd\pc_<id>_hd\<场景>\`。g05 没有 H 场景。
+4. **修复：PMX 骨骼名**：
+   - VMD 给每根骨骼只留 15 字节名字。导出程序（`export_pmx()`、roe_pmx_tools ④）现在先把超长和截断后会撞名的名字
+     改短（`pmx_bone_names.py`：`Bip001 eyebrow_LC` → `eyebrow_LC`），原名存进英文名；
+   - 已有的 PMX 用 `pmx_short_bone_names.py` 原地改：E 盘 234 个、D 盘 285 个。原文件在
+     `_meta\pmx_old\longnames_20261001\`。
+   - 主导出程序遇到裸体底模（`_nk` / `_nk_bs`）时，先做裸体流程的身体/脸部拆分。原来整个躯干会套上脸部贴图。
+5. **用户如何操作**：见 `scripts/riseoferos/README_motion.md`。两个模型的 H 场景在 MMD 里都放在原点，各读各的 VMD。
+6. **实现原理与兼容性**：
+   - 原理见 `docs/roe-motion-to-vmd.md`；
+   - 改 PMX 的操作都是在文件末尾追加或改写名字，其他字节不动，重复运行不会重复加；
+   - 加表情时同时改 E 盘归档、`_bustB` 和 D 盘导出源，免得下次归档又被覆盖回去；
+   - 改名后，`tune_bust_pmx.py` 和各插件按日文标准名或正则找骨骼，不受影响。
+7. **验证**（每段都把 VMD 导回 PMX，和游戏逐帧比较）：
+   - **服装动作**：身体关节一般 ≤ 1 mm，大动作时腿 ≤ 14 mm（游戏的大腿挂在脊椎上）；
+   - **改名前后**：g04 react_01 能写关键帧的骨骼从 117 根增到 157 根；撞名从 40 根降到 0；头发旋转误差从 32.5° 降到 0.1° 以内；
+   - **H 场景**：男方身体 ≤ 2.3 mm，生殖器 0.1 mm；女方身体一般 ≤ 12 mm，eros07_p4 两腿最大分开时 25 mm；
+     胸部是物理骨，不在比较范围内；`下半身` 固定约 50 mm，是转换器挪了它的根；
+   - **对照视频**：每段一个、拼成合集，逐段抽帧看过。
+
 ## 2026-09-27 — Rise of Eros：用游戏自己的完整材质（.blend 全套、XPS 带法线/AO/高光、PMX 烘发色和 AO、导入 PMX 后用的新插件）
 
 1. **精度检查结论**：几何、权重、贴图分辨率本来就是游戏里最高的。

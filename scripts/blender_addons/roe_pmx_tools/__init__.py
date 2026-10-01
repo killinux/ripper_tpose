@@ -288,6 +288,7 @@ class ROEPMX_OT_export(bpy.types.Operator):
                     pass
                 stack.extend(obj.children)
             context.view_layer.objects.active = root
+            stats["short_bone_names"] = work.shorten_bone_names(root)      # VMD-addressable names
             bpy.ops.mmd_tools.export_pmx(filepath=path, scale=12.5, copy_textures=True, log_level="ERROR")
             if not os.path.isfile(path) or os.path.getsize(path) == 0:
                 raise RuntimeError("PMX not written: %s" % path)

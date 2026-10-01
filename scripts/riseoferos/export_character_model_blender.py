@@ -307,7 +307,7 @@ def bake_portable_eye(module, head, out_dir):
     """
     if head is None or len(head.material_slots) < 2:
         return {"status": "skipped", "reason": "no classified head/eye slot"}
-    eye_slot = 1
+    eye_slot = 2 if head.get("roe_nude_slots") else 1      # a split nude body has 'body' in front
     eye_material = head.material_slots[eye_slot].material
     iris_image = module.diffuse_image(eye_material) if eye_material else None
     iris_path = (bpy.path.abspath(iris_image.filepath)
@@ -1545,6 +1545,30 @@ def verify_grant_order(path):
     return violations
 
 
+def shorten_bone_names(root):
+    """PMX bone names a VMD can address: no name over 15 bytes of Shift-JIS, none sharing its first 15
+    bytes with another (pmx_bone_names.py: ``Bip001 eyebrow_LC`` -> ``eyebrow_LC``).  A VMD keeps only those
+    15 bytes, so ROE's 40-60 long helper / face / hair names were either undrivable in mmd_tools or clashed in
+    MMD (eight eyebrow bones all became ``Bip001 eyebrow_``).  The game name moves to the English name, which
+    ROE rigs leave empty.  Call it right before the mmd_tools export; returns ``old -> new`` lines."""
+    import pmx_bone_names
+
+    arm = next((o for o in root.children_recursive if o.type == "ARMATURE"), None)
+    if arm is None:
+        return []
+    # mmd_tools' _dummy_/_shadow_ helpers for grants never reach the PMX; leaving them out keeps the names
+    # identical to what pmx_short_bone_names.py gives the written file
+    bones = [pb for pb in arm.pose.bones if not getattr(pb, "is_mmd_shadow_bone", False)]
+    names = [pb.mmd_bone.name_j or pb.name for pb in bones]
+    mapping = pmx_bone_names.short_names(names)
+    for i, new in mapping.items():
+        mmd = bones[i].mmd_bone
+        if not mmd.name_e:
+            mmd.name_e = names[i]
+        mmd.name_j = new
+    return pmx_bone_names.describe(names, mapping)
+
+
 def export_pmx(path, meshes, armatures):
     """Write an MMD-ready PMX: Convert_to_MMD5 skeleton conversion + mmd_tools.
 
@@ -1596,6 +1620,7 @@ def export_pmx(path, meshes, armatures):
             pass
         stack.extend(obj.children)
     bpy.context.view_layer.objects.active = root
+    stats["short_bone_names"] = shorten_bone_names(root)
     # mmd_tools multiplies by ``scale`` on export (PMX = Blender units * scale),
     # so 12.5 turns a 1.7 m character into the usual ~21 PMX units; 0.08 would
     # produce a 0.14-unit model.
@@ -1818,6 +1843,13 @@ def main():
                empty_candidates=empty_candidates,
                error="no candidate FBX contains geometry (rig-only prefabs)")
         return
+    # A nude base (pc_g01_nk: the body the H scenes play on) keeps torso, face, eyes and mouth in one
+    # *_nk_body mesh, and the material pass above puts the face atlas on all of it; the nude worker's split
+    # gives the torso its body atlas back (slot 0 'body', eye slot 2, marked roe_nude_slots).
+    nude_split = None
+    if re.search(r"_nk(?:_bs)?$", stem, re.IGNORECASE):
+        from export_nude_model_blender import split_combined_nude_body
+        nude_split = split_combined_nude_body(module, texture_dir)
     armatures = module.related_armatures(meshes)
 
     id_match = re.match(r"pc_([a-z]\d+)", stem.lower())
@@ -1967,6 +1999,7 @@ def main():
         head_slots=head_slots,
         head_face_polygons=head_face_polygons,
         fused_head_eyes=fused_eyes,
+        nude_split=nude_split,
         portable_eye=portable_eye,
         mmd_convert=mmd_convert,
         hq_materials=hq_report,

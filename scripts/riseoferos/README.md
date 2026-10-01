@@ -673,6 +673,30 @@ PMX 里 `ThighTwist` 已经挂到 `足D`，视频里还挂在 `上半身`。改�
 ---
 
 
+## 5.7 游戏动作 → VMD（export_roe_motions.py / render_roe_motion_videos.py）
+
+把每套服装自带的展示动作和战斗动作导出成 VMD，套在本仓库导出的 PMX 上用（MMD，或 Blender + mmd_tools），
+再出「游戏原版 vs PMX」对照视频和带物理的预览：
+
+```powershell
+python scripts\riseoferos\export_roe_motions.py a08            # → E:\game_export\RiseOfEros\Inase\vmd\pc_a08_hd\
+python scripts\riseoferos\render_roe_motion_videos.py a08      # 同一文件夹里的视频
+python scripts\riseoferos\export_roe_eros.py a08               # H 场景：女方（裸体底模）+ 男方（a00）各一套 VMD → …\pc_a08_hd\eros15\
+python scripts\riseoferos\render_roe_eros_videos.py a08        # H 场景的两人对照视频和物理预览
+```
+
+用法、参数、输出结构、在 MMD/Blender 里怎么用、已知限制见 [README_motion.md](README_motion.md)；
+原理见 [docs/roe-motion-to-vmd.md](../../docs/roe-motion-to-vmd.md)。
+
+**PMX 骨骼名（2026-10-01）**：VMD 给每根骨骼只留 15 字节的名字。所以导出程序（`export_pmx()` 和 roe_pmx_tools ④）
+现在先把超长、截断后会撞名的骨骼名改短，再写 PMX：`Bip001 eyebrow_LC` → `eyebrow_LC`，原名存进骨骼的英文名。
+规则在 `pmx_bone_names.py`。已经导出的 PMX 用 `pmx_short_bone_names.py` 原地改过（E 盘 234 个、D 盘 285 个；
+备份在 `E:\game_export\RiseOfEros\_meta\pmx_old\longnames_20261001\`）。裸体底模（`_nk` / `_nk_bs`）走这个导出程序时，
+会先做裸体流程的身体/脸部拆分，否则整个躯干会套上脸部贴图。
+
+---
+
+
 ## 6. roe_xps_addon.py —— HD 角色带材质 XPS（主推）
 
 安装见 §1。3D 视口按 `N` → **ROE** 页签，按序点：
