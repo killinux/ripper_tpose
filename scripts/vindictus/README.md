@@ -85,6 +85,34 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
     --dna <目录>\SK_Fiona_Face01.dna --out <输出目录> --model-name Fiona
 ```
 
+**高清版**：直接从 `export_model.ps1` 建好的 `.blend` 出，贴图按原尺寸：
+
+```powershell
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' -b --python .\export_pmx.py -- `
+    --blend D:\vindictus_exports\blend\PCF_005\PCF_005.blend `
+    --dna E:\game_export\Vindictus\_meta\face\SK_Fiona_Face01.dna `
+    --out D:\vindictus_exports\pmx --model-name 'Fiona PCF_005'
+```
+
+`--blend` 比 `--xps` 多做的事（2026-10-02，PCF_005 第一个用它出）：
+- **原尺寸**：每个材质的颜色按它自己贴图的尺寸烘：服装、头发、身体皮肤 4096，脸、眼睛 2048，睫毛、眉毛 1024；
+  `--max-texture` 设上限。走 `--xps` 的话贴图是 XPS 里的，Blender2XPS 最多烘到 2048。
+- **AO 乘进颜色**：PMX 的材质只有一张颜色贴图，没有法线、粗糙度、AO 的输入。所以把 ARM 贴图 R 通道的 AO 乘进去，
+  和 ROE 的高清 PMX 一样（颜色 × 色调 × AO）。`--ao 0.5` 只乘一半。
+- **每个材质都烘**：Blender2XPS 平时把「色相 / 饱和度 / 明度」节点和接近白色（差 0.1 以内）的色调当成轻微调整，直接用原图。
+  这样脸和手丢掉了材质实例的 `Basecolor Brightness`（0.93、0.90）和偏粉的色调，身体皮肤的色调差得多一点被烘了，三处肤色不一样。
+- **共用材质拆开**：一个材质用在两个网格上（PCF_005 的腿 `MI_PCF_Lower01` 在脚和连衣裙两个网格里），
+  Blender2XPS 按网格分别烘、却按材质名存，后烘的盖掉先烘的，第一版 PMX 的腿只剩 4.7% 的像素，整条腿看不见。
+  现在第二个网格起各用一份拷贝（`<材质>_<网格>`）。
+- **裁切 alpha**：游戏和 `.blend` 里服装是 Masked 材质，alpha 只当遮罩：大于 1/3 就完全不透明。MMD 会把 alpha 当真透明度用。
+  PCF_005 的裙子 74% 的像素 alpha 在 1/3 到 0.99 之间，第一版 PMX 的裙子成了透出背景的灰色。现在 Masked 材质的 alpha
+  按材质自己的阈值烘成 0 / 1，不透明材质 alpha 全是 1；头发、睫毛、眼部的半透明壳保留原来的 alpha。
+- **颜色不乘 alpha**：Cycles 的图像节点在它的 Alpha 输出没接到着色器里时，给出的颜色是乘过 alpha 的。`.blend` 里 Alpha 接着
+  Principled，但烘焙只取 Base Color，于是颜色被乘了一次遮罩：裙子布料（alpha 0.4–0.6）烘出 0.49，原图是 0.87，PMX 里还是灰的。
+  烘之前把带 alpha 的贴图设成 Channel Packed（RGB 和 alpha 各管各的，UE 就是这样把不透明度打包进颜色图的）。
+  单独测过：同一张图只接颜色烘，普通模式 0.527，Channel Packed 0.870，和原图一样。ARM 这类非彩色贴图本来就不受影响，AO 一直是对的。
+- 中间的 XPS 写在 `<out>\<名字>\_xps\`，导完删掉（`--keep-xps` 保留）。转换后的 `<名字>_converted.blend` 改指向 PMX 旁边 `textures\` 里的贴图。
+
 `export_pmx.py` 做的事：
 1. **转换**：XPS → Convert to MMD 5，和教程 6.10 的手工步骤一样。
    - 清骨架缩放；
@@ -112,6 +140,24 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
      - 波波头改用 `ornament`（保形）预设。
      - 每条发束从根部起，只要骨尾还在耳线以上（双眼下方 3 cm）就跟着头骨走，从第一节低于耳线开始才参与物理。原因见下面「已验证」。
 5. **导出**：按 12.5 倍导出 PMX 并复制贴图，查付与的计算顺序，另存转换后的 `.blend` 和 `.pmx.report.json`。
+
+上面写的骨名是 `Fiona_BaseBody` 的（旧的 3ds Max Biped 身体）。**服装（`PCF_*`）和默认装是 UE5 的身体骨架**，脚本按有没有
+`Bip001_Pelvis` 自动判断，规则在 `RIGS` 里。和 Biped 版不同的地方：
+- **下半身 = pelvis**（XPS 里叫 `root hips`），センター 清空让插件新建一根空的。自动识别会把 pelvis 当成 センター，
+  转换时把它的蒙皮权重清掉：センター 和 下半身 都没有权重，胯部不跟 下半身 动（PCF_005：3235 个顶点、权重和 1207）。
+- **胸部 = `breast_physics_01` / `_02`**：游戏的胸是 `breast_l → breast_physics_01 → 02 → 03 → …`，02、03 下面还挂着一圈软组织骨。
+  皮肤挂在 02 和它下面所有骨上，按顶点加起来中心正好是 1.0，所以动态球放在 02 上，整个胸跟着摆，权重不用放大。
+  模板、±10°、弹簧 450 都和 Biped 版一样。
+- **裙子**：游戏把裙子根骨挂在 `spine_02`（上半身2）上，MMD 习惯挂在 下半身：弯腰时整条裙子会跟着上身翻起来，所以改挂到 下半身。
+  mmd_cloth_physics 按名字分组时只认大写的左右标记（`Skirt_L_01`），`Outfit005_skirt_a_01_l` 这种每条链都成了单独一件，
+  链与链之间没有横向关节，裙片会各摆各的、从中间分开。现在同一锚点下的 `*_skirt_<字母>_<序号>_<l|r>` 合成一圈
+  （PCF_005：14 条链、54 个刚体、54 个横向关节）。
+- **小腿扭转骨**：Convert to MMD 5 把 `unused_calf_twist_*` 的权重并进离它最近的 MMD 骨。`calf_twist_01` 在小腿下三分之一处，
+  离脚踝比离膝盖近，小腿下半截就跟着 足首 转了：穿高跟鞋跳舞时小腿从中间折断（舞蹈预览里看出来的）。
+  现在转换前先把它们的权重并进父骨（小腿 `leg left/right knee`），转换后归 ひざD（`merge_into_parent`，每侧 540）。
+  转换前后逐骨对过权重总量，别的辅助骨都并进了所在的部位（手臂扭转骨进 腕捩 / 手捩，是插件的正常做法）。
+- **不当布料的骨**：`breast_*`、脚趾（`bigtoe_01` 之类，原来被当成了飘带）。
+- 头发是同一套 Fiona 的头发，规则不变。头冠上的羽毛和耳环挂在 頭 下面、名字不像头发，mmd_cloth_physics 不给它们建物理，跟着头走。
 
 Convert to MMD 5 插件那边（另一个窗口）同时做了一套通用的做法：
 - 骨架识别优先认 XPS 标准名；

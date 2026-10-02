@@ -14,6 +14,62 @@
 
 ---
 
+## 2026-10-02 — Vindictus：PCF_005 出高清 PMX（原尺寸贴图 × AO、睫毛修好），`export_pmx.py` 能转服装的 UE 骨架
+
+1. **起因**：用户：「E:\game_export\Vindictus\Fiona\blend\PCF_005 这个导出高清版的pmx」。
+2. **查到的**：
+   - E 盘的 `PCF_005.blend` 是 09-13 建的，睫毛是白的（09-26 修的规则之后没重建过）。用现在的 `build_blend.py` 重建后睫毛是黑的；
+     09-19 加的 `Basecolor Saturation / Brightness` 规则这次也用上了：PCF_005 的材质实例写着饱和度 0.6，头冠从金色变成浅金。
+   - 现有 XPS 的颜色贴图烘成 2048，原图是 4096。PMX 只能带一张颜色贴图。
+   - `export_pmx.py` 只按 Fiona_BaseBody 的 Biped 身体写过。服装是 UE5 的身体骨架：
+     - 自动识别把 pelvis 当成 センター，转换时把胯部的蒙皮权重清掉了（3235 个顶点，权重和 1207），胯部不跟 下半身 动；
+     - 胸部是 `breast_physics_*` 一串，不是 `Bip001_*_bust_*`；
+     - 裙子的 14 条链被当成 14 件互不相连的布，脚趾被当成飘带；
+     - 小腿的扭转骨 `calf_twist_01` 在小腿下三分之一处，Convert to MMD 5 把它的权重并进离它最近的 足首D，
+       跳舞时脚一踮，小腿就从中间折断（舞蹈预览里看出来的）。
+   - 第一版 PMX 还有三个毛病，都出在 Blender2XPS / Cycles 烘焙这一步，E 盘现有的 XPS 也有：
+     - **腿看不见**：`MI_PCF_Lower01` 同时用在脚和连衣裙两个网格上，按网格分别烘、按材质名存，后烘的盖掉先烘的。
+       腿的贴图只剩 4.7% 的像素，E 盘那个 XPS 是 5.1%。
+     - **裙子发灰透底**：服装是 Masked 材质，布料的遮罩值是 0.4–0.6，进了 PMX 就成了半透明。
+       另外 Cycles 的图像节点在 Alpha 输出没接进着色器时给出的是乘过 alpha 的颜色，烘焙只取颜色，裙子布料从 0.87 烘成了 0.49。
+     - **脸和手没烘**：色相 / 饱和度节点和接近白色的色调被当成轻微调整，直接用了原图，脸、手、身体三处肤色对不上。
+3. **修改**：
+   - `scripts/vindictus/export_pmx.py`：
+     - 新增 `--blend`：直接从 `.blend` 出。
+       - 所有材质按自己贴图的尺寸烘（服装 4096，上限 `--max-texture`），乘 ARM 贴图的 AO（`--ao`，默认 1）；
+       - 共用的材质按网格拆成几份再烘；Masked 的 alpha 按材质阈值烘成 0 / 1，不透明材质 alpha 全 1；
+       - 带 alpha 的贴图按 Channel Packed 读（RGB 和 alpha 互不影响）；
+       - 中间 XPS 用完删掉（`--keep-xps` 保留），转换后的 `.blend` 改指向 PMX 旁边的贴图。
+     - 两套骨架规则（`RIGS`，按有没有 `Bip001_Pelvis` 自动选）。UE 身体：下半身 = pelvis；胸部的动态球放在 `breast_physics_02`，
+       它下面的软组织骨一起摆（按顶点合计，中心就是 1.0，权重不用放大）；`breast_*` 和脚趾不当布料；
+       转换前把小腿扭转骨的权重并进小腿（`merge_into_parent`，每侧 540），转换后归 ひざD。
+     - 裙子根骨改挂 下半身（游戏挂在 上半身2，弯腰时整条裙子会跟着翻）；同一锚点的裙子链合成一圈
+       （PCF_005：14 条链，54 个刚体，54 个横向关节）。
+     - Fiona_BaseBody 走 `--xps`，规则和以前一样。
+   - `scripts/vindictus/checks/physics_standing.py`：也统计 `breast_*` 和裙子骨。
+   - `scripts/archive/games.py`：Vindictus 归档认 `D:\vindictus_exports\pmx\<id>\`。
+   - 文档：`scripts/vindictus/README.md`「导出 PMX」，`docs/vindictus-fiona-pmx-approaches.md` 的 10-02 进展。
+4. **用户操作**：
+   - 模型：`E:\game_export\Vindictus\Fiona\pmx\PCF_005\PCF_005.pmx`，贴图在旁边的 `textures\`。
+     同目录还有 `preview.png`、表情总览 `PCF_005_expressions.jpg`、舞蹈预览 `PCF_005_dance.mp4` 和转换后的 `PCF_005_converted.blend`。
+   - 别的服装：先 `export_model.ps1 <id> -Force` 重建 `.blend`，再 `export_pmx.py --blend ...`，命令见 README。
+5. **原理**：PMX 材质只有一张颜色贴图，法线、粗糙度、AO 都没有入口，所以颜色 = 漫反射 × 色调 × AO，和 ROE 的高清 PMX 一样。
+   材质参数沿用 Convert to MMD 5 的默认值，也和 ROE 的 PMX 相同。
+6. **验证**：
+   - 导出 880 秒（同时有别的窗口在批量渲染）。PMX 8.6 MB，1600 根骨，26 个表情（DNA 拟合 620 根骨，平均误差 0.38 mm），386 个刚体、419 个关节，付与顺序 0 处违规；
+   - 烘出的颜色按 漫反射 × 饱和度 × 色调 × AO 逐像素核对：头冠误差 0.003，裙子 0.001。预乘的问题单独做了对照：
+     同一张图只接颜色烘，普通模式 0.527，Channel Packed 0.870，和原图一致；
+   - MMD 观感渲染：裙子白、腿完整（第一版无腿、第二版裙子灰，对比图在临时目录）；
+   - 站立 150 帧（MMD 单位）：头发发梢最多 5.2 cm，胸部偏 0.7–0.8°，裙摆下垂中位 4.7 cm、最多 11.5 cm，没有炸开的骨；
+   - 26 个表情逐个渲染核对；
+   - 转换前后按骨骼对比权重合计：除了小腿扭转骨，没有别的权重被并到别处；
+   - 舞蹈预览（芙宁娜版「来杯好茶摇一摇」，600 帧，MMD 物理）：修改前第 250、455 帧小腿从下三分之一处折断，修改后两帧都是直的，
+     第 455 帧正面、侧面特写也没有折痕；
+   - 归档：`archive_exports.py vindictus --only PCF_005`，21 个文件 0.15 GB，E 盘的 PMX 和 D 盘的 md5 一致，`.blend` 自检 1/1 通过（只引用自己目录里的贴图）；
+   - 还没在 MMD 本体里打开过。
+7. **没动的**：E 盘 PCF_005 的 blend / XPS 这一步还没换，还是 09-13 的版本：白睫毛，XPS 的腿贴图缺失、裙子颜色被 alpha 压暗。
+   用户定了换成新版，和其他服装的高清 PMX 一起重出。
+
 ## 2026-10-02 — 布料撕裂 1.2：撕完整件掉下来（套圈切开、饰品不挡、水平推力），加「全部清理」
 
 1. **起因**：用户照 Fiona 的分步演示自己练了一遍（`E:\Downloads\Fiona 18\Fiona 18 1001-1.blend`），然后说「继续 cloth_tear」。

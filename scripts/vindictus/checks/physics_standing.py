@@ -1,5 +1,6 @@
 """Standing-still physics check of a PMX: import with PHYSICS (env SCALE, default 1.0 = MMD units), build, step
-150 frames in the rest pose, report how far every physics-driven bone's tail moved (sag / blow-up) and the bust swing angle.
+150 frames in the rest pose, report how far every physics-driven bone's tail moved (sag / blow-up), the bust swing angle
+and the skirt (bones named *skirt*).
   blender -b --python physics_standing.py -- <file.pmx>     env: SCALE=1.0|0.08, NOHAIRCOLL=1"""
 import math
 import sys
@@ -48,8 +49,9 @@ worst = sorted(end.items(), key=lambda kv: -kv[1])[:10]
 CM = 0.08 * 100 / SCALE
 print("tail drift at frame 150: worst %s" % ", ".join("%s %.1f cm" % (n, d * CM) for n, d in worst))
 hair = [n for n in end if "hair" in n.lower()]
-bust = [n for n in end if "bust" in n.lower() or "胸" in arm.pose.bones[n].mmd_bone.name_j]
-for label, names in (("hair", hair), ("bust", bust)):
+bust = [n for n in end if "bust" in n.lower() or "breast" in n.lower() or "胸" in arm.pose.bones[n].mmd_bone.name_j]
+skirt = [n for n in end if "skirt" in n.lower()]
+for label, names in (("hair", hair), ("bust", bust), ("skirt", skirt)):
     if names:
         vals = sorted(end[n] for n in names)
         print("%s: %d bones, drift median %.1f cm, 90%% %.1f cm, max %.1f cm; frame 30 max %.1f, frame 60 max %.1f" % (
