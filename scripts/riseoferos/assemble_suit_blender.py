@@ -87,6 +87,14 @@ HELPER_BONE_RE = re.compile(r"muscle|geosphere|point_|nub|strand|helper|twist|pr
                             r"|nipple|breast|eye|mouth|tongue|teeth|jaw|hair", re.IGNORECASE)
 
 
+SIDE_RE = {"R": re.compile(r"(^|_)R(?=[A-Z_])|_R_obj|^Right"), "L": re.compile(r"(^|_)L(?=[A-Z_])|_L_obj|^Left")}
+
+
+def part_side(root_name):
+    """'R' / 'L' for one of a left-right pair (REarrings, NYearring_R_obj001, RightChineseKnot), else None."""
+    return next((side for side, pattern in SIDE_RE.items() if pattern.search(root_name)), None)
+
+
 def blender_matrix_from_unity(rows):
     unity = mathutils.Matrix([list(map(float, r)) for r in rows])
     return MIRROR_X @ (UNITY_TO_MODEL @ unity) @ MIRROR_X
@@ -192,12 +200,25 @@ def import_suit_part(part, base_arm, cache):
             candidates.append(("model-frame", flip, np.zeros(3)))
         if in_body_yup:
             candidates.append(("unity-world", flip @ raw[:3, :3], flip @ raw[:3, 3]))
-        if part.get("attach_matrix") and local:
-            # already in the model frame (body bind pose x the stub's bind placement)
+        side = part_side(part["root"]) if part.get("attach_matrix") else None
+        if part.get("attach_matrix") and (local or side):
+            # already in the model frame (body bind pose x the stub's bind placement).  A mesh
+            # authored in place gets this reading too when it is one of a pair: the stub moves
+            # the copy for the other side in its node, which only this reading applies (h01
+            # LEarrings, f01 RNippleTassel sat on top of their twin)
             att = np.array(part["attach_matrix"], dtype=np.float64)
             candidates.append(("attach:" + part.get("attach_bone", "?"), flip @ att[:3, :3], flip @ att[:3, 3]))
 
         area_bone = base_arm.data.bones.get(part.get("area_bone") or "")
+        right = base_arm.data.bones.get("Bip001 R Clavicle")
+        right_x = (base_arm.matrix_world @ right.head_local).x if right else -1.0
+
+        def wrong_side(lin, off):
+            # one of a pair ending up on the other half of the body
+            if side is None:
+                return False
+            cx = float((raw_verts @ lin.T + off).mean(axis=0)[0])
+            return abs(cx) > 0.01 and (cx * right_x > 0) != (side == "R")
 
         def bone_distance(lin, off):
             centre = mathutils.Vector((raw_verts @ lin.T + off).mean(axis=0).tolist())
@@ -206,7 +227,8 @@ def import_suit_part(part, base_arm, cache):
             bone = area_bone or nearest_bone(base_arm, centre)
             return ((base_arm.matrix_world @ bone.head_local) - centre).length if bone else 1e9
 
-        scored = [(bone_distance(lin, off) + (0.0 if i == 0 else 0.05), name, lin, off)
+        scored = [(bone_distance(lin, off) + (0.0 if i == 0 else 0.05) + (1.0 if wrong_side(lin, off) else 0.0),
+                   name, lin, off)
                   for i, (name, lin, off) in enumerate(candidates)]
         scored.sort(key=lambda s: s[0])
         _, chosen, linear, offset = scored[0]

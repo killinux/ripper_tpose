@@ -329,7 +329,10 @@ def main():
             except Exception:
                 name = obj.read().m_Name
             textures.setdefault(name, obj)
-            same_name[name].append(obj)
+            # grouped case-insensitively: the cache is a Windows folder, where k01 combat's
+            # Clara_Eyemask_obj001_rgbx_Albedo and 2025xmas's Clara_EyeMask_... are ONE file -
+            # whichever run came first gave the other suit its eye mask (black instead of teal)
+            same_name[name.lower()].append(obj)
             by_source[(obj.assets_file.name.lower(), int(obj.path_id))] = obj
 
     overrides = {}
@@ -359,7 +362,7 @@ def main():
 
     for n in found:
         for key, slot in found[n]["textures"].items():
-            objs = same_name.get(slot["texture"], [])
+            objs = same_name.get(slot["texture"].lower(), [])
             ref = by_source.get(tuple(slot.get("source") or ()))
             if len(objs) < 2 or ref is None or key in overrides.get(n, {}):
                 continue
