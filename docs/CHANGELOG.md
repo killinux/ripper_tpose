@@ -14,6 +14,74 @@
 
 ---
 
+## 2026-10-02 — Rise of Eros：服装和裸模全部出高清版 blend / PMX / XPS（h、i 除外），一条命令 `export_hq.py`；魔化部件按各自身材放
+
+1. **起因**：用户「h和i不转，其他都转出高清,blender,pmx,xps,非高清的都删除吧，并且归档，把画廊也修好」，
+   接着「agj也补xps，h i 非高清的先留着，E盘和D盘的相关的都删了，画廊里也补上，高清的转出的脚本是什么，后续可以人工转出指定的」。
+2. **新增**：
+   - `scripts/riseoferos/export_suit_xps_blender.py`：套装 / 裸模 `.blend` 出带游戏材质的 XPS，走主模型同一个导出
+     （插件「3. 导出 XPS」）：游戏材质的槽 render group 24 / 25（颜色 × 发色、AO、凹凸、高光）；挂骨部件先 100% 蒙皮；
+     材质不是不透明、贴图在自己 UV 上真有 ≥2% 面积透明的部件（头纱、透明丝袜、渔网、蕾丝）用 25，保留透明；
+     导完用 XNALaraMesh 读回自检，写 `<stem>.report.json`；
+   - `scripts/riseoferos/export_hq.py`：一条命令出高清版。名字写服装 `pc_b01_jeans` / `b01:jeans`、裸模 `pc_b01_nk_bs`、
+     主模型 `a08`；`--formats blend,pmx,xps`（默认全出）；`--list` 看 E 盘缺什么，`--todo --skip h,i` 全部补齐；
+     `--lanes N` 并行（同一角色一路）、`--budget` + `--skip-done` 分段跑；`--archive` / `--archive-only` 归档 + 画廊 + 缩略图 + 链接检查；
+     日志 `D:\roe_exports\_hq_runs\<stem>\`；
+   - 画廊（`html/make_gallery.py`）：套装卡片加 XPS 行；新增裸模卡片（工具栏「裸模」，有预览图的才上）；附录加 `export_hq.py` 用法。
+3. **修复**（`fix_suit_slots_blender.py`，在游戏材质那一步之前跑，存进 `.blend`）：
+   - **魔化部件**（耳朵、两对角、光环、臂毛、臂环、腿环、腿毛）是按 f01 的身材建的，拼装不论哪个角色都放在 f01 身上的位置：
+     c01 的羊角挂在脖子两侧、光环套在脸上、臂环离手臂 6 cm。现在每件按挂它的骨头（头、上臂、前臂、大腿、小腿）
+     相对 f01 的差平移，并改挂到这根骨头上（角原来挂在脸颊 / 嘴唇骨上）；10-01 只挪了耳朵；
+   - **魔化身体**（e01、f01、g01 的魔化套和魔化裸模的底模）的脸、头发、魔化耳朵还挂着家族共用贴图的，换成
+     `pc_<id>_fm_nk_face/_hair`：f01 魔化身体自带的角在普通脸部贴图里是灰米色，叠上游戏 AO 是黑的；魔化脸肤色更红、头发更浅；
+   - **裸模六槽标记** `roe_nude_slots`：c01 d01 f01 f01_fm g01_fm k01 l01 m01 存档时没带，插件导 XPS 会把身体当成脸、
+     漏掉眉毛（`export_suit_xps_blender.py` 也会补）；
+   - `export_suits.py`：清单改成写入前重读合并、原子替换，几个 `export_suits.py` 同时跑不会互相覆盖；加 `--no-sheet`；
+   - `export_suit_pmx_blender.py` / `fix_suit_slots_blender.py` 的入口加 `__main__` 判断，函数可以被别的脚本引用。
+4. **用户如何操作**：
+   ```powershell
+   cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+   python export_hq.py --list                      # 每个模型在 E 盘的状态
+   python export_hq.py pc_b01_jeans --archive      # 指定的模型出高清版并归档到 E 盘
+   python export_hq.py --todo --skip h,i --lanes 4 # 以后想补 h、i：去掉 --skip
+   ```
+   详见 `scripts/riseoferos/README.md` §8.5。
+5. **实现原理与兼容性**：
+   - 套装的 blend = `export_suits.py --force` 重拼 + 修槽 + 游戏材质 + 预览；裸模的 blend = 修槽 + 游戏材质重建（`--rebuild`）。
+     `--keep-blend` 不重拼、裸模不重建，只补修槽；
+   - XPS / PMX 都从游戏材质版 `.blend` 出：PMX 用烘好的 `roe_hq_pmx` 颜色贴图，XPS 用 `roe_hq_xps` 的四张图；
+   - 并行时同一角色的模型在同一路：它们共用 `_hq_materials\<id>.json`；
+   - 魔化部件只平移不旋转，各角色骨头朝向差别很小；f01 自己的平移量是 0；
+   - 重出 PMX 会丢掉别的脚本后加的东西（g04 扇子缩小、a08 大剑、a01 / g01 裸模的 H 场景表情），脚本会提醒；
+     这次没有重出 a01 / g01 / g01_fm 裸模的 PMX。
+6. **结果与验证**：
+   - 75 个模型全部通过：36 套服装 + 10 个裸模整套（blend + PMX + 胸部 B 版 + XPS）；f01 2024 圣诞、f01 新年、k01 战斗补 PMX + XPS；
+     a / g / j 的 22 套服装 + 4 个裸模补 XPS，其中 3 套魔化装因为部件位置重出了 blend / PMX，g01 魔化裸模重出 blend（头发）+ XPS；
+   - 每套从重拼到 XPS 37–164 秒（平均 77 秒），4 路并行整批约 18 分钟；
+   - PMX：撕裂 0、付与顺序 0、两侧都有胸部物理，表情 58 个（c01 的 56 个）；XPS：缺贴图 0、零权重顶点 0；游戏材质错误 0；
+   - 每套新旧预览并排看过；XPS 读回渲染（a01 婚纱、b01 牛仔）和 `.blend` 一致；魔化部件和身体的距离量过，修完和 f01 一样
+     （臂环 2 mm，修之前 6 cm）；f01 魔化的角、e01 魔化的脸纹、g01 魔化的头发和红眼都对；
+   - 发现但没改：f01 2024 圣诞装每条腿有两条一模一样的渔网袜（obj001 / obj002 两个变体都穿上了），哪条是游戏里显示的还不知道。
+7. **归档与清理**：
+   - `export_hq.py --archive-only <75 个>`：拷贝 3957 个文件 / 13.6 GB 到 `E:\game_export\RiseOfEros`，自检 229/229，
+     画廊 3213 个链接全部指向 E 盘、1044 个不同的链接都在，缩略图 75 张；之后 `--list`：除 h、i 外主模型 110、服装 61、裸模 14
+     在 E 盘上都有高清 `.blend` + PMX + XPS；
+   - 按用户批准删了非高清的旧东西，共 20 项 412 MB（删前备份了归档台账 `ledger.json` / `models.json`，删后注销了 34 条文件、6 个产物）：
+     - E 盘：b01 裸模早期 PMX / XPS（`_nudebase`）、b01 / a01 裸模 FBX、b01 裸模 GLB、j01 职业装 GLB、
+       `_meta\pmx_old\b14`、`_meta\pmx_old\g05`、`_meta\nude_textures`；
+     - D 盘：`nude_materials\pmx`、`xps`、`fbx`、`glb`、`textures`，`j01\blend\glb`，`_hq_materials\_old`，`pmx_manual`、`xps_export`，
+       `b14\blend\pmx_old`、`g05\blend\pmx_old`；
+     - h、i 的一样没删；别的窗口的高清时期备份（`_meta\pmx_old\longnames_20261001` 等）和 `_hq_trial` 没动；
+   - **误操作**：随后为刷新清单跑了 `archive_exports.py roe --report`，带了游戏名就成了完整归档，把 h、i 的 7 个文件
+     （h01 魔化 / 泳装 / 裸模，i01 魔化 / 水手 / 泳装 / 裸模）在 D 盘上 10-01 没检查过的游戏材质版拷到了 E 盘，盖掉了用户说先留着的旧版；
+     旧版没有别的副本。同一次还把主模型 PMX 在 D 盘上 10-01 改过的版本（骨名缩短、a00 液体表情、a08 大剑）再同步了一遍，内容一致或更新。
+     `scripts/archive/README.md` 已加提醒：`--report` 不要带游戏名；
+   - **已恢复**（用户选「恢复成非高清版」）：用原来的流程重新生成只有颜色贴图的版本，D 盘不动——5 套服装直接调拼装器
+     `assemble_suit_blender.py`（用 09-19 的部件数据）输出到临时目录，2 个裸模 `export_nude_models.ps1 -Only h01,i01 -OutputDir <临时>`；
+     和 E 盘保留的旧缩略图逐个对比一致，自检贴图都已打包（裸模里 2 张没打包的是没人用的孤立法线图）。拷回 E 盘时修改时间设回旧版的
+     （台账备份里查到：服装 09-19、裸模 09-05），`export_hq.py --list` 仍判为非高清；台账里 D 盘源文件的大小 / 时间不改，
+     md5 换成 E 盘现在这份并加了说明，完整归档空跑要拷的是 0 个文件，不会再被盖掉。和旧文件不是逐字节相同（代码有更新），内容一致。
+
 ## 2026-10-02 — Rise of Eros 套装：自带物理骨的配件放对了（耳环、头纱、圣诞帽、流苏）；k01 眼罩贴图串了
 
 1. **起因**：10-01 留下的两个套装问题：j01 新年装的两只耳环藏在头的正中间，a01 婚纱的头纱向后平伸。

@@ -166,4 +166,5 @@ def main():
     print("ROE_SUIT_PMX=" + json.dumps(summary, ensure_ascii=True, default=str))
 
 
-main()
+if __name__ == "__main__":      # export_suit_xps_blender.py imports the helpers above
+    main()

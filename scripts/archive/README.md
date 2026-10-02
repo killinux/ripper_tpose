@@ -26,6 +26,10 @@ python tests\test_archive.py                      # 离线测试，最后一行 
 其它选项：`--dest`（默认 `E:\game_export`）、`--blender`（默认 3.6.15）、`--no-check`、`--workers`（拷贝线程，默认 4）、
 `--lanes`（并行 Blender 进程，默认 6）。
 
+`--report` **不要带游戏名**：`python archive_exports.py roe --report` 不是「只算清单」，而是把 roe 完整归档一遍再算清单，
+D 盘上比 E 盘新的文件全部拷过去。2026-10-02 就这样把 h、i 套装在 D 盘上没检查过的游戏材质版盖掉了 E 盘上用户要留着的旧版，
+旧版没有别的副本。只想重算清单就只写 `--report`；想看会拷什么，先 `--dry-run`。
+
 `--only` 只拷造型本身，**不拷 `_meta` 下的东西**：画廊缩略图、manifest 都不动。画廊页的缩略图读的是
 `E:\game_export\<游戏>\_meta\gallery\thumbs\`，所以重生成画廊后接着跑 `--only` 的话，页面上还是旧缩略图。
 这时要么不带 `--only` 再跑一次，要么把改过的缩略图手动拷过去。2026-10-01 ROE 只归档 a/g/j 时就碰到过：

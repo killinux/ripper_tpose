@@ -851,10 +851,20 @@ python export_suits.py --sheet                     # 只重拼预览总图
     --python hq_materials_blender.py -- <同一个路径> --preview
 ```
 
-`fix_suit_slots_blender.py` 补拼装留下的三处问题，没问题的文件什么都不改：
+`fix_suit_slots_blender.py` 补拼装留下的几处问题，没问题的文件什么都不改：
 - i / j 族睫毛透明：插件 v1.1.16 之前拼的；
-- 魔化耳朵：灰色，而且挂在锁骨上。耳朵是按 f01 的身材建的，材质指向 f01 的 fm 脸部材质；
-- 偶像装双丸子的第 2 个槽：其实是角色头发。
+- 魔化耳朵是灰色的：材质指向 f01 的 fm 脸部材质，换成该角色自己的脸部材质；
+- 魔化部件（耳朵、两对角、光环、臂毛、臂环、腿环、腿毛）都是按 f01 的身材建的，拼装不论哪个角色都把它们放在
+  f01 身上的位置：c01 的头比 f01 高 20 cm，羊角挂到了脖子上、光环套在脸上、臂环离手臂 6 cm。现在每件按挂它的骨头
+  （头、上臂、前臂、大腿、小腿）相对 f01 的差平移，并改挂到那根骨头上（角原来挂在脸颊 / 嘴唇骨上，做表情会跟着动）。
+  2026-10-02 起；10-01 的版本只挪了耳朵；
+- 偶像装双丸子的第 2 个槽：其实是角色头发；
+- 魔化身体（e01、f01、g01 的魔化套和魔化裸模用的底模）在游戏里有自己的脸和头发贴图 `pc_<id>_fm_nk_face/_hair`：
+  肤色更红，身体自带的那对角在脸部贴图里画成深蓝，头发更浅。插件按家族给的却是普通的 `pc_f_nk_face/_hair`，
+  f01 魔化的角成了灰米色，换上游戏材质后发黑。还挂着家族贴图的脸、头发、魔化耳朵换成魔化贴图，
+  游戏材质那一步再按贴图名选中魔化材质（g01 没有魔化脸，只换头发）；
+- 裸模身体的六槽标记 `roe_nude_slots`（槽 0 身体、1 脸、2 眼、3 睫毛、4 眉毛）：c01 d01 f01 f01_fm g01_fm k01 l01 m01
+  八个裸模存档时没带，插件导 XPS 会把身体当成脸、漏掉眉毛；眼睛在第 2 槽的身体补上标记。
 
 前两处的材质引用都指向拼装没读的包。同名贴图 / 同名部件（g01 裸体身体的 MGAC、瑜伽服和睡衣的内衣）
 以前会串用，现在按引用对象区分，数据修过的文件用 `--rebuild` 重建。细节、各套装状态和其余角色的待办见
@@ -887,6 +897,56 @@ python ..\mmd_physics\tune_bust_pmx.py <上面的 .pmx> <同目录>\pc_j01_proun
 - 6 套都已重做并归档：a01 婚纱、j01 新年装（含 PMX）、f01 2024 圣诞、f01 新年、h01 护士、k01 战斗。
 - 原理和验证见 [roe-suit-assembly.md](../../docs/roe-suit-assembly.md)「2026-10-02：自带物理骨的配件」。
   同一天还修了贴图名只差大小写会在缓存里串（k01 眼罩变黑），见同一文档。
+
+**XPS（2026-10-02）**：套装 / 裸模的 `.blend` 也能出带游戏材质的 XPS，走主模型同一个导出（插件的「3. 导出 XPS」：
+眼球烘成贴图、头按槽拆开、render group、贴图复制到 `.mesh` 旁边）：
+
+```powershell
+& $blender -b --factory-startup D:\roe_exports\b01\blend\pc_b01_jeans.blend `
+    --python export_suit_xps_blender.py -- D:\roe_exports\b01\blend\xps\pc_b01_jeans\pc_b01_jeans.mesh
+```
+
+- 游戏材质的槽是 render group 24（带透明 25）：颜色 × 发色、AO、凹凸、高光四张图，和主模型一样；
+- 挂在骨头上的部件先改成 100% 蒙皮（同 PMX）；
+- 透明的部件保留透明：插件对 ROE 模型除头发外一律写成不透明（身体图集的 alpha 是垃圾值），这里只给
+  「材质不是不透明、而且贴图在它自己的 UV 上真有 ≥2% 面积 alpha < 0.9」的部件改成 7 → 25，比如头纱、
+  透明丝袜、渔网、蕾丝；身体、脸、头发照插件的规则；
+- 导完用 XNALaraMesh 读回来自检（网格名、贴图都在、没有零权重顶点），写 `<stem>.report.json`。
+
+**一条命令出高清版：`export_hq.py`（2026-10-02）**。上面几步（重拼 → 修槽 + 游戏材质 + 预览 → PMX + 胸部 B 版 →
+XPS → 归档 + 画廊）串成一个入口，以后想单独转哪个就写哪个：
+
+```powershell
+python export_hq.py --list                         # 每个模型在 E 盘的状态：高清 .blend / PMX / XPS，缺什么
+python export_hq.py pc_b01_jeans                   # 一套服装：重拼、游戏材质、PMX + 胸部 B 版、XPS
+python export_hq.py b01:jeans pc_b01_nk_bs --archive   # 再加一个裸模，做完复制到 E 盘、刷新画廊
+python export_hq.py pc_a01_marry --formats xps     # 只出 XPS（用现有的 .blend）
+python export_hq.py a08 --formats pmx              # 主模型（写编号或 stem）：只重出 PMX
+python export_hq.py --todo --skip h,i --lanes 4    # --list 里没做全的全部做（h、i 除外），4 路并行
+python export_hq.py --archive-only pc_b01_jeans    # 不导出，只归档 + 画廊 + 缩略图
+python export_hq.py c01:student --dry-run          # 只打印要跑的命令
+```
+
+| 写法 | 指什么 |
+|---|---|
+| `pc_<id>_<suit>` 或 `<id>:<suit>` | 一套服装（`pc_b01_jeans` / `b01:jeans`） |
+| `pc_<id>_nk_bs` / `pc_<id>_fm_nk_bs` | 裸模（魔化形态带 `_fm`） |
+| `a08` / `a08_outfit1` / `pc_a08_hd` | 主模型 |
+
+- `--formats blend,pmx,xps`（默认三样都出）。服装的 `blend` = `export_suits.py --force` 重拼 + 修槽 + 游戏材质 +
+  预览（`--keep-blend` 不重拼）；裸模的 `blend` = 修槽 + 游戏材质重建（`--rebuild`）；主模型交给
+  `export_character_models.ps1 -Only <key> -Format <formats> -Force`。
+- 产物：`.blend` 原地；PMX `D:\roe_exports\<id>\blend\pmx\<stem>\`（含 `_bustB.pmx`）；XPS `...\blend\xps\<stem>\`。
+  裸模的 PMX / XPS 也放在对应角色的 `<id>\blend\` 下。
+- `--todo` 按 E 盘的状态挑：`.blend` 不是高清的（日期早于 2026-10-01）三样全做，否则只补缺的 PMX / XPS。
+  `--family b,c` / `--skip h,i` 按角色字母筛。
+- `--lanes N` 同时跑 N 个，同一角色的模型排在同一路（它们共用 `_hq_materials\<id>.json`）；`--budget 18`
+  过了 18 分钟不再开新模型，配 `--skip-done` 重跑就接着做（后台任务约 30 分钟会被杀）。
+- `--archive`：`html\make_gallery.py` → `archive_exports.py roe --only <这些 stem>` → 缩略图复制到
+  `E:\game_export\RiseOfEros\_meta\gallery\thumbs`（`--only` 不复制 `_meta`）→ 检查画廊每个链接都在。
+- 日志和结果在 `D:\roe_exports\_hq_runs\<stem>\`（每步一个 `.log` + `result.json`）。
+- 重出 PMX 会丢掉别的脚本后加的东西，脚本会提醒：g04 的扇子缩小表情、a08 的大剑、a01 / g01 裸模的 H 场景表情、
+  a00 的液体表情（见 [roe-motion-to-vmd.md](../../docs/roe-motion-to-vmd.md)）。
 
 ---
 

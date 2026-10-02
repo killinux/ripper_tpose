@@ -118,6 +118,49 @@ def build_one(args, cid, suit):
     return entry
 
 
+def save_manifest(path, entries):
+    """Merge this run's entries into the manifest on disk and replace it atomically: several export_suits.py
+    may run at once (export_hq.py lanes), each must keep the others' entries."""
+    lock = path + ".lock"
+    fd = None
+    for _ in range(600):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(lock) > 300:      # left behind by a killed run
+                    os.remove(lock)
+            except OSError:
+                pass
+            time.sleep(0.1)
+    try:
+        current = {}
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                current = {"%s:%s" % (e["id"], e["suit"]): e for e in json.load(fh).get("suits", [])}
+        current.update(entries)
+        tmp = "%s.%d.tmp" % (path, os.getpid())
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"generated": time.strftime("%Y-%m-%d %H:%M:%S"),
+                       "suits": [current[k] for k in sorted(current)]}, fh, indent=1, ensure_ascii=False)
+        for attempt in range(50):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:          # a reader has it open (Windows)
+                if attempt == 49:
+                    raise
+                time.sleep(0.1)
+    finally:
+        if fd is not None:
+            os.close(fd)
+            try:
+                os.remove(lock)
+            except OSError:
+                pass
+
+
 def contact_sheet(exports, suits, out_path, thumb_h=360):
     from PIL import Image, ImageDraw
     tiles = []
@@ -157,6 +200,7 @@ def main():
     ap.add_argument("--glb", action="store_true")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--sheet", action="store_true", help="only tile the existing previews into a contact sheet")
+    ap.add_argument("--no-sheet", action="store_true", help="skip the contact sheet after building (export_hq.py)")
     args = ap.parse_args()
 
     suits = list_suits(args.game)
@@ -175,22 +219,17 @@ def main():
     todo = [(c, s) for c, s in suits if args.force or not os.path.isfile(blend_path(args.exports, c, s))]
     print("%d suits selected, %d to build, %d lanes" % (len(suits), len(todo), args.lanes), flush=True)
     os.makedirs(os.path.join(args.exports, "_suits"), exist_ok=True)
-    previous = {}
-    if os.path.isfile(manifest_path):
-        with open(manifest_path, encoding="utf-8") as fh:
-            previous = {"%s:%s" % (e["id"], e["suit"]): e for e in json.load(fh).get("suits", [])}
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.lanes)) as pool:
         for entry in pool.map(lambda cs: build_one(args, *cs), todo):
             results.append(entry)
-            previous["%s:%s" % (entry["id"], entry["suit"])] = entry
-            with open(manifest_path, "w", encoding="utf-8") as fh:
-                json.dump({"generated": time.strftime("%Y-%m-%d %H:%M:%S"),
-                           "suits": [previous[k] for k in sorted(previous)]}, fh, indent=1, ensure_ascii=False)
+            save_manifest(manifest_path, {"%s:%s" % (entry["id"], entry["suit"]): entry})
     counts = {}
     for entry in results:
         counts[entry["status"]] = counts.get(entry["status"], 0) + 1
     print("done:", counts, "manifest:", manifest_path)
+    if args.no_sheet:
+        return
     sheet = contact_sheet(args.exports, suits, os.path.join(args.exports, "_suits", "_contact.png"))
     if sheet:
         print("contact sheet:", sheet)

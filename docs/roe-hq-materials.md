@@ -168,7 +168,17 @@ python hq_material_data.py g05 --out D:\roe_exports\_hq_materials --all
 & $blender -b --factory-startup D:\roe_exports\j01\blend\pc_j01_idol.blend `
     --python export_suit_pmx_blender.py -- D:\roe_exports\j01\blend\pmx\pc_j01_idol\pc_j01_idol.pmx
 python ..\mmd_physics\tune_bust_pmx.py <.pmx> <同目录>\pc_j01_idol_bustB.pmx
+
+# 套装 / 裸模的 XPS（2026-10-02，和主模型同一个导出：RG 24 / 25 + AO / 凹凸 / 高光）
+& $blender -b --factory-startup D:\roe_exports\j01\blend\pc_j01_idol.blend `
+    --python export_suit_xps_blender.py -- D:\roe_exports\j01\blend\xps\pc_j01_idol\pc_j01_idol.mesh
+
+# 上面几步一条命令（推荐）：重拼 → 修槽 + 游戏材质 → PMX + 胸部 B 版 → XPS，--archive 再归档到 E 盘 + 画廊
+python export_hq.py pc_j01_idol --archive
+python export_hq.py --list                 # 每个模型在 E 盘缺什么；--todo --skip h,i 把缺的都做了
 ```
+
+`export_hq.py` 的全部用法见 `scripts/riseoferos/README.md` §8.5。
 
 `export_suit_pmx_blender.py` 调主模型的 `export_pmx()`：Convert_to_MMD5 骨架、胸 / 布料 / 头发物理、58 个表情、撕裂门禁、
 付与顺序回读。转换前补三步，`.blend` 不保存：
@@ -182,9 +192,14 @@ python ..\mmd_physics\tune_bust_pmx.py <.pmx> <同目录>\pc_j01_idol_bustB.pmx
 `fix_suit_slots_blender.py` 补 10-01 之前拼好的套装 / 裸模的问题，放在升级前面跑，没问题的文件什么都不改：
 - i / j 族的睫毛、眉毛卡片是透明的（插件 v1.1.16 之前），按 `EYEBROW_TEXTURE_FAMILY` 换上 h / d 族的贴图；
 - 魔化耳朵 `FMRear_L/R`：存根里它的材质指向 `chara_mat_bare_pc_f01_fm_nk.ab` 的 `pc_f01_fm_nk_face`，拼装没读这个包，
-  所以是灰色。各家族脸部贴图的布局相同，连尖耳朵那块都有，所以换成本套装自己的脸部材质。
-  耳朵的顶点是按 f01 的身材建的（f01 头骨比别人低约 15 cm），别的角色身上它挂在锁骨处；
-  按头骨位置差平移，再绑到 `Bip001 Head`，和 f01 一样；
+  所以是灰色。各家族脸部贴图的布局相同，连尖耳朵那块都有，所以换成本套装自己的脸部材质；
+- 魔化部件（耳朵、两对角、光环、臂毛、臂环、腿环、腿毛）的顶点都是按 f01 的身材建的，拼装不论哪个角色都放在 f01 身上的位置。
+  每件按挂它的骨头（头、上臂、前臂、大腿、小腿）相对 f01 的差平移，再改挂到那根骨头上（2026-10-02；10-01 只挪了耳朵），
+  见 [roe-suit-assembly.md](roe-suit-assembly.md)「2026-10-02：魔化部件是按 f01 的身材建的」；
+- 魔化身体（e01、f01、g01 魔化套和魔化裸模的底模）的脸、头发和魔化耳朵还挂着家族共用贴图（`pc_f_nk_face/_hair`）的，
+  换成该角色的魔化贴图（`pc_f01_fm_nk_face/_hair`），游戏材质那一步就会选中魔化材质：f01 魔化身体自带的角在普通脸部贴图里
+  是灰米色的一块，叠上游戏 AO 发黑；魔化脸的肤色更红、头发更浅（2026-10-02）；
+- 裸模身体缺六槽标记 `roe_nude_slots` 的（8 个）补上：插件导 XPS 靠这个标记认出槽 0 是身体，没有它会把身体当成脸、漏掉眉毛；
 - 偶像装双丸子的第 2 个材质槽，游戏里是角色头发 `pc_j_nk_hair`（在 `chara_mat_bare_pc_j_common_head.ab`，拼装也没读），
   原来是灰色，换成头发网格的材质；
 - 一点权重都没有的蒙皮部件（a01 婚纱头纱、j01 新年装耳环、j01 降神装面纱）：游戏里它们只绑在自带的物理骨骼上，
@@ -276,8 +291,16 @@ python ..\mmd_physics\tune_bust_pmx.py <.pmx> <同目录>\pc_j01_idol_bustB.pmx
   XPS 的效果只在 Blender 里用 XPS Tools 读回看过，没在 XNALara / XPS 本体里打开过。
 - PMX 格式本身没有法线和金属度，只能把发色和 AO 烘进颜色贴图；手动用 ROE PMX Tools 转的 PMX 不带这一步。
 - 124 个主模型 10-01 全部用新脚本重导（blend + XPS + PMX），已归档到 `E:\game_export\RiseOfEros`。
+- **2026-10-02 起：除 h、i 外，全部套装和裸模都是高清 `.blend` + PMX（含胸部 B 版）+ XPS，已归档**（`export_hq.py`，
+  75 个模型：36 套服装 + 10 个裸模整套；f01 2024 圣诞、f01 新年、k01 战斗补 PMX + XPS；a / g / j 的 22 套 + 4 个裸模补 XPS）。
+  同时修了魔化部件的位置、魔化身体的脸和头发、8 个裸模的六槽标记（见 §5）。`python export_hq.py --list` 随时看 E 盘缺什么。
+- h、i 没转（用户的决定）。h01 护士 10-02 已是游戏材质版（无 PMX / XPS）；其余 h01 魔化 / 泳装 / 裸模、i01 魔化 / 水手 / 泳装 / 裸模
+  在 E 盘上是只有颜色贴图的旧版（10-02 被误同步过一次，已按原流程重新生成放回，见 CHANGELOG 同日条目）；D 盘上是 10-01 没检查过的
+  游戏材质版，归档台账里这 7 个文件有说明，完整归档不会拿 D 盘的覆盖 E 盘。
+  以后要转：`python export_hq.py --todo --family h,i --lanes 4 --archive`。
+- 以下是 10-01 / 10-02 上午的记录：
 - 套装和裸模：`.blend` 就地升级（`hq_materials_blender.py`）。a / g / j 另外出了 PMX + 胸部 B 版（`export_suit_pmx_blender.py`），
-  XPS 都还没有。
+  XPS 都还没有（10-02 已补）。
   - 用户 10-01 说只要 a / g / j：这三个角色的 22 套服装 + 5 个裸模逐槽查过、修过、归档了，
     22 套 + 4 个裸模有 PMX（a00 的裸模就是主模型 a00，本来就有）；
   - 拼装留下的两处 10-02 修好了，原因是同一个：自带物理骨的配件放错了位置。
@@ -297,8 +320,9 @@ python ..\mmd_physics\tune_bust_pmx.py <.pmx> <同目录>\pc_j01_idol_bustB.pmx
     - i01 的套装和裸模没有睫毛（拼装早于插件 v1.1.16），同上；
     - b01 police / wulin、c01 bohemia / student、d01 archer、k01 swim / weddingdress 有同名部件，
       要 `--rebuild` 才会用上各自的贴图；d01 succubus、k01 combat 10-02 已经用新数据重拼。
-- 以后重新拼套装（`export_suits.py --force`）会丢掉 `fix_suit_slots_blender.py` 的修改：
-  - 魔化耳朵、双丸子要再跑一次修复脚本，PMX 也要重出；
+- 以后重新拼套装（`export_suits.py --force`）会丢掉 `fix_suit_slots_blender.py` 的修改（`export_hq.py` 每次重拼后都会接着跑修复和
+  游戏材质，用它就不用管）：
+  - 魔化部件、魔化身体的脸 / 头发、双丸子要再跑一次修复脚本，PMX 也要重出；
   - i/j 睫毛新拼出来就是对的（插件 v1.1.16）；
   - 头纱 / 耳环的权重拼装器自己会绑（10-02 起）。
   根治要在 `suit_bundle.py` 里解析指向别的包的材质引用（存根引用了 `pc_f01_fm_nk_face`、`pc_j_nk_hair`），还没做。
