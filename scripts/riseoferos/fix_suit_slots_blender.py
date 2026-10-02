@@ -173,7 +173,9 @@ def fix_unweighted_pieces(meshes):
     """A skinned piece whose own bones the suit build could not hang on the skeleton (a01 marry Veil, j01
     2025_newyear NYearring_L / _R, j01 defeatgod veil: their bones' ancestors are the piece's own objects) has an
     armature modifier but no vertex group, so it stays put when the head turns.  Weighted 100 % to its area
-    bone (suit.json area_bone, Bip001 Head for all four): it follows rigidly, without its own sway."""
+    bone (suit.json area_bone, Bip001 Head for all four): it follows rigidly, without its own sway.
+    Since 2026-10-02 the assembler binds such pieces itself (import_suit_part, "bound_to"); this is for files
+    built before."""
     parts, done = suit_parts(), []
     for obj in meshes:
         arm = next((m.object for m in obj.modifiers if m.type == "ARMATURE" and m.object), None)

@@ -386,18 +386,22 @@ def read_suit(game, cid, suit):
                 if part["world_matrix"] is None:
                     part["world_matrix"] = _world_matrix(tr).tolist()
                     part["placement_from"] = "stub"
-                # an accessory rigged only to its own physics bones (hat, tail,
-                # tassels, dangling earrings) is attached to a body bone at runtime by
-                # its Area: offer that placement too (Unity world of the body bone in the
-                # bare skeleton x mesh-in-root-bone-space) and let the importer pick
+                # an accessory rigged only to its own physics bones (hat, tail, tassels,
+                # dangling earrings, veils, wings) is parented under a body bone at runtime,
+                # the one its Area names.  The stub is built for exactly that: the node above
+                # its bones is the inverse of that bone's Unity world at bind time (exact for
+                # 10 of the game's 18 such parts; the copy for the other side - NYearring_L,
+                # REarrings, the right tassel - carries its mirror turn and offset in that
+                # node), so the stub's composed bind placement (world_matrix) is the mesh in
+                # that bone's frame and the model-frame placement is body bind pose x
+                # world_matrix.  Offer it and let the importer pick.  (Until 2026-10-02 the
+                # mesh was put in its own root bone's frame and that frame laid on the body
+                # bone: earrings in the middle of the head, veils / wings / tassels turned 90 deg.)
                 if not any(a in skeleton for name in bones if name for a in [name] + ancestors.get(name, [])):
                     attach = attach_bone_for(go.m_Name, part["area"])
-                    root_pptr = renderer.m_RootBone if getattr(renderer.m_RootBone, "path_id", 0) else (renderer.m_Bones[0] if renderer.m_Bones else None)
-                    root_t = _read(root_pptr) if root_pptr is not None else None
-                    if attach in skeleton and root_t is not None and part["placement_from"] == "bindpose":
-                        rel = np.linalg.inv(_world_matrix(root_t)) @ np.array(part["world_matrix"])
+                    if attach in skeleton and part["placement_from"] == "bindpose":
                         part["attach_bone"] = attach
-                        part["attach_matrix"] = (skeleton[attach] @ rel).tolist()
+                        part["attach_matrix"] = (skeleton[attach] @ np.array(part["world_matrix"])).tolist()
                 indices = np.asarray(handler.m_BoneIndices, dtype=np.int32).reshape(len(verts), -1)
                 if handler.m_BoneWeights:
                     weights = np.asarray(handler.m_BoneWeights, dtype=np.float32).reshape(len(verts), -1)
@@ -512,8 +516,11 @@ def export_suit(game, cid, suit, out_dir, base_fbx_root=None):
         npz = os.path.join(out_dir, "parts", re.sub(r"[^A-Za-z0-9_.()-]", "_", part["root"]) + ".npz")
         np.savez_compressed(npz, **part["_arrays"])
         entry["npz"] = npz
-        # a one-sided pool prop instanced as <x>_L and <x>_R: the _R root is the mirror image
-        entry["mirrored"] = bool(re.search(r"_R_obj\d+$", part["root"], re.IGNORECASE)) and any(
+        # a one-sided pool prop instanced as <x>_L and <x>_R: the _R root is the mirror image.
+        # Static props only: a skinned accessory on its own bones (NYearring_R, k01 Earrings_R)
+        # has its side in the stub node already (see read_suit), mirroring it again stacked it on
+        # the other earring
+        entry["mirrored"] = part["kind"] == "static" and bool(re.search(r"_R_obj\d+$", part["root"], re.IGNORECASE)) and any(
             other is not part and other.get("renderer") == part["renderer"] for other in parts)
         entry["transparent"] = bool(TRANSPARENT_RE.search(part["piece"])
                                     or any(m.get("name") and "transparen" in m["name"].lower() for m in part["materials"]))

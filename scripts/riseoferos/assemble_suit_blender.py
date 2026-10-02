@@ -193,7 +193,7 @@ def import_suit_part(part, base_arm, cache):
         if in_body_yup:
             candidates.append(("unity-world", flip @ raw[:3, :3], flip @ raw[:3, 3]))
         if part.get("attach_matrix") and local:
-            # already in the model frame (body bind pose x mesh-in-root-bone space)
+            # already in the model frame (body bind pose x the stub's bind placement)
             att = np.array(part["attach_matrix"], dtype=np.float64)
             candidates.append(("attach:" + part.get("attach_bone", "?"), flip @ att[:3, :3], flip @ att[:3, 3]))
 
@@ -276,6 +276,12 @@ def import_suit_part(part, base_arm, cache):
             group = obj.vertex_groups.new(name=target)
             for vi, w in items.items():
                 group.add([vi], w, "REPLACE")
+        anchor = part.get("attach_bone") or part.get("area_bone")
+        if not groups and anchor in base_bones:
+            # rigged only to its own physics bones, which the base rig does not have
+            # (earrings, veils, hats): ride the body bone it hangs on, rigidly
+            obj.vertex_groups.new(name=anchor).add(list(range(len(verts))), 1.0, "REPLACE")
+            info["bound_to"] = anchor
         obj.parent = base_arm
         obj.matrix_parent_inverse = mathutils.Matrix.Identity(4)
         obj.matrix_world = mathutils.Matrix.Identity(4)
