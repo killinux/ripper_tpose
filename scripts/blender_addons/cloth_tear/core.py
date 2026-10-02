@@ -13,6 +13,7 @@
 Blender 3.6 / 4.x 通用：边折痕属性 3.x 叫 crease、4.0 起叫 crease_edge；节点组接口 4.0 起是 interface。
 """
 import heapq
+import json
 import math
 import random
 
@@ -440,6 +441,93 @@ def random_cracks(obj, count=4, seed=1, jitter=0.6, through=None, partial=False)
     return made
 
 
+def _boundary_loops(members):
+    """一块网格的边界圈：边界边按共用顶点连成的几串，返回 [(顶点集合, 周长)]。"""
+    edges = {e for v in members for e in v.link_edges if e.is_boundary}
+    seen, loops = set(), []
+    for e0 in edges:
+        if e0 in seen:
+            continue
+        seen.add(e0)
+        stack, verts, length = [e0], set(), 0.0
+        while stack:
+            e = stack.pop()
+            length += e.calc_length()
+            for v in e.verts:
+                verts.add(v)
+                for f in v.link_edges:
+                    if f in edges and f not in seen:
+                        seen.add(f)
+                        stack.append(f)
+        loops.append((verts, length))
+    return loops
+
+
+def cut_loops(obj, seed=1, jitter=0.6, min_ratio=0.25):
+    """把套成圈的布切开：一块布有两圈以上的大边界（腰带、袖子、裙身这种筒状或环状的布，身体从圈里穿过去）时，
+    不管怎么撕都掉不下来——撕开的碎片还是一个圈，卡在腰上、脖子上。这里在每块布上加最少的裂缝，把各圈大边界
+    连起来（k 圈要 k-1 条），连通后就是一整片，没有圈了。已有的裂缝先当已经撕开算，已经连通的不再加。
+    小圈（周长不到这块布最大一圈的 min_ratio，如镂空花纹）不算。返回加的裂缝条数。"""
+    rng = random.Random(seed + 1000)
+    bm, edit = _bm_of(obj)
+    bm.verts.ensure_lookup_table()
+    layer = _crease_layer(bm)
+    work = bm.copy()                                        # 拆开裂缝的副本，原顶点号存在 orig 层里
+    orig = work.verts.layers.int.new("ct_orig")
+    for v in work.verts:
+        v[orig] = v.index
+    wlayer = _crease_layer(work)
+    bmesh.ops.split_edges(work, edges=[e for e in work.edges if e[wlayer] > 0.5])
+    work.verts.index_update()
+    weights = {e: e.calc_length() * (1.0 + jitter * rng.random() * 2.0) for e in work.edges}
+    made = 0
+    for island in _islands(work):
+        loops = _boundary_loops(island)
+        if len(loops) < 2:
+            continue
+        longest = max(length for _, length in loops)
+        big = [verts for verts, length in loops if length >= min_ratio * longest and len(verts) >= 4]
+        if len(big) < 2:
+            continue
+        joined, rest = set(big[0]), big[1:]
+        while rest:
+            owner = {v: i for i, verts in enumerate(rest) for v in verts}
+            dist, prev = {v: 0.0 for v in joined}, {}
+            todo = [(0.0, v.index, v) for v in joined]
+            heapq.heapify(todo)
+            hit = None
+            while todo:
+                d, _, v = heapq.heappop(todo)
+                if d > dist.get(v, math.inf):
+                    continue
+                if v in owner:
+                    hit = v
+                    break
+                for e in v.link_edges:
+                    w = e.other_vert(v)
+                    nd = d + weights[e]
+                    if nd < dist.get(w, math.inf):
+                        dist[w], prev[w] = nd, v
+                        heapq.heappush(todo, (nd, w.index, w))
+            if hit is None:
+                break
+            path, v = [hit], hit
+            while v in prev:
+                v = prev[v]
+                path.append(v)
+            marked = 0
+            for a, b in zip(path, path[1:]):
+                e = bm.edges.get((bm.verts[a[orig]], bm.verts[b[orig]]))
+                if e is not None and not e.is_boundary:
+                    e[layer] = 1.0
+                    marked += 1
+            made += marked > 0
+            joined |= set(path) | rest.pop(owner[hit])
+    work.free()
+    _bm_done(obj, bm, edit)
+    return made
+
+
 # --- 网格准备 / 钩挂 / 固定组 ----------------------------------------------------------------------------
 def subdivide_poke(obj, cuts=20, poke=True):
     """视频的做法：细分 20 刀，再 Ctrl+F 戳孔面（每格 4 个三角，撕开时边缘更碎）。"""
@@ -478,6 +566,8 @@ def pin_vertices(obj, indices, group="Group"):
 
 
 FOLLOW_GROUP = "CT_Follow"
+COLLISION = "CT 碰撞"                # 本插件给身体加的碰撞修改器（1.1 时叫 Collision）
+CLOTH_ADDED, CLOTH_BACKUP = "ct_cloth_added", "ct_cloth_backup"   # 物体自定义属性：布料 1 是加的 / 原来的设置
 
 
 FLOOR = "CT_地面碰撞"
@@ -501,25 +591,35 @@ def add_floor(z, size=20.0):
     return floor
 
 
-def follow_body(garments, add_collision=True, floor=True):
+def follow_body(garments, add_collision=True, floor=True, skip_accessories=True):
     """撕衣服的准备（garments：一件或几件衣服，各是带骨架修改器的单独网格）。布料 1 全部固定（顶点组
     CT_Follow 全为 1），所以撕开前衣服完全跟着身体动画走、不模拟也不穿模；关掉自碰撞。和衣服重叠的身体
-    网格加碰撞（body_meshes，不含这几件衣服本身），撕下来的布落在身上滑下去；floor 时脚底再放一块地面碰撞。"""
+    网格加碰撞（body_meshes，不含这几件衣服本身），撕下来的布落在身上滑下去；floor 时脚底再放一块地面碰撞。
+    skip_accessories：项链、耳环、臂甲这类饰品不加碰撞（衣带从项链底下穿过，碎片会被卡住吊在脖子上；
+    推到手臂上的碎片会挂在臂甲尖上）。"""
     garments = [g for g in (garments if isinstance(garments, (list, tuple)) else [garments])
                 if g is not None and g.type == "MESH"]
     if not garments:
         raise RuntimeError("先选中衣服网格")
-    notes, colliders = [], []
+    notes, colliders, skipped = [], [], []
     for obj in garments:
         notes += _follow_one(obj)
         arm_mod = next((m for m in obj.modifiers if m.type == "ARMATURE" and m.object), None)
         if arm_mod is not None and add_collision:
-            colliders += [b for b in body_meshes(obj, arm_mod.object) if b not in garments and b not in colliders]
+            colliders += [b for b in body_meshes(obj, arm_mod.object, skip_accessories=skip_accessories)
+                          if b not in garments and b not in colliders]
+            skipped += [b for b in body_meshes(obj, arm_mod.object, skip_accessories=False)
+                        if b not in garments and b not in colliders and b not in skipped]
     for body in colliders:
         if not any(m.type == "COLLISION" for m in body.modifiers):
-            body.modifiers.new("Collision", "COLLISION")
+            body.modifiers.new(COLLISION, "COLLISION")
     if colliders:
         notes.append("加了碰撞：%s" % "、".join(b.name for b in colliders))
+    if skipped:
+        notes.append("饰品不加碰撞：%s" % "、".join(b.name for b in skipped))
+    stale = [b.name for b in skipped if any(m.type == "COLLISION" for m in b.modifiers)]
+    if stale:
+        notes.append("注意：%s 已经有碰撞（可能是旧版加的），碎片会被它挂住，可以用「全部清理」或手动删掉" % "、".join(stale))
     arm_mod = next((m for g in garments for m in g.modifiers if m.type == "ARMATURE" and m.object), None)
     if floor and arm_mod is not None:
         meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in garments
@@ -538,7 +638,13 @@ def _follow_one(obj):
     cloth = source_cloth(obj)
     if cloth is None:
         cloth = obj.modifiers.new("Cloth", "CLOTH")
+        obj[CLOTH_ADDED] = cloth.name
         notes.append("加了布料修改器")
+    elif cloth.settings.vertex_group_mass != FOLLOW_GROUP and CLOTH_BACKUP not in obj:
+        pc = cloth.point_cache                              # 用户自己的布料：记下要改的几项，「全部清理」时还原
+        obj[CLOTH_BACKUP] = json.dumps({"name": cloth.name, "pin": cloth.settings.vertex_group_mass,
+                                        "self_collision": cloth.collision_settings.use_self_collision,
+                                        "frame_start": pc.frame_start, "frame_end": pc.frame_end})
     cloth.settings.vertex_group_mass = FOLLOW_GROUP
     cloth.collision_settings.use_self_collision = False
     scene = bpy.context.scene
@@ -554,11 +660,15 @@ def _follow_one(obj):
 FIELD, FIELD_COLL, NO_FIELD_COLL = "CT_撕裂推力", "CT_撕裂力场", "CT_无力场"
 
 
-def add_tear_force(garments, strength=30.0, start=30.0, end=110.0, radius_factor=1.2):
-    """身体不动时，松开的碎片只会贴在身上，裂缝张不开（视频里是钩子拉着布才扯开）：在衣服中心放一个
-    向外推的力场（球形、范围内恒定），只作用于撕裂用的布料 2（布料的力场集合 = CT_撕裂力场）；
-    强度在开始帧–结束帧之间打开，之后关掉让碎片自然落下。刚体世界（MMD 头发物理）原来没限定力场集合时，
-    改成一个空集合 CT_无力场，头发不受这个推力影响。返回说明文字。"""
+def add_tear_force(garments, strength=30.0, start=30.0, end=110.0, radius_factor=1.2, shape="LINE"):
+    """身体不动时，松开的碎片只会贴在身上，裂缝张不开（视频里是钩子拉着布才扯开）：放一个向外推的力场
+    （范围内恒定），只作用于撕裂用的布料 2（布料的力场集合 = CT_撕裂力场）；强度在开始帧–结束帧之间打开，
+    之后关掉让碎片自然落下。刚体世界（MMD 头发物理）原来没限定力场集合时，改成一个空集合 CT_无力场，
+    头发不受这个推力影响。返回说明文字。
+
+    shape="LINE"（1.2 起）：从穿过衣服中心的竖直轴往外水平推，范围是衣服那一段高度的圆柱（管状衰减），
+    肩上、脖子上的碎片被推离身体，掉到衣服下面就出了范围、自然落地。
+    shape="POINT"（1.1）：从衣服中心往四面推，球形范围；中心以上的碎片是往上推的，搭在肩上的掉不下来。"""
     garments = [g for g in garments if g is not None]
     pts = [g.matrix_world @ Vector(c) for g in garments for c in g.bound_box]
     lo = Vector([min(p[i] for p in pts) for i in range(3)])
@@ -571,15 +681,25 @@ def add_tear_force(garments, strength=30.0, start=30.0, end=110.0, radius_factor
     if empty is None:
         empty = bpy.data.objects.new(FIELD, None)
         coll.objects.link(empty)
-        empty.empty_display_type, empty.empty_display_size = "SPHERE", 0.5
     empty.location = (lo + hi) / 2.0
+    empty.rotation_euler = (0.0, 0.0, 0.0)                  # 力场的 Z 轴 = 世界竖直方向
     if empty.field is None or empty.field.type != "FORCE":
         with bpy.context.temp_override(object=empty, active_object=empty):
             bpy.ops.object.forcefield_toggle()
     field = empty.field
-    field.type, field.shape = "FORCE", "POINT"
-    field.falloff_type, field.falloff_power = "SPHERE", 0.0
-    field.use_max_distance, field.distance_max = True, radius_factor * max(hi - lo)
+    size = max(hi - lo)
+    if shape == "LINE":
+        field.type, field.shape = "FORCE", "LINE"
+        field.falloff_type, field.falloff_power, field.radial_falloff = "TUBE", 0.0, 0.0
+        field.use_max_distance, field.distance_max = True, 0.5 * (hi.z - lo.z) * 1.05   # 上下：衣服的高度
+        field.use_radial_max, field.radial_max = True, radius_factor * size
+        empty.empty_display_type, empty.empty_display_size = "SINGLE_ARROW", 0.5 * (hi.z - lo.z)
+    else:
+        field.type, field.shape = "FORCE", "POINT"
+        field.falloff_type, field.falloff_power = "SPHERE", 0.0
+        field.use_max_distance, field.distance_max = True, radius_factor * size
+        field.use_radial_max = False
+        empty.empty_display_type, empty.empty_display_size = "SPHERE", 0.5
     if empty.animation_data and empty.animation_data.action:
         empty.animation_data_clear()
     for frame, value in ((start - 1, 0.0), (start + 5, strength), (end, strength), (end + 5, 0.0)):
@@ -589,7 +709,12 @@ def add_tear_force(garments, strength=30.0, start=30.0, end=110.0, radius_factor
         for m in g.modifiers:
             if m.type == "CLOTH":
                 m.settings.effector_weights.collection = coll
-    notes = ["推力场「%s」：强度 %g，第 %g–%g 帧，半径 %.1f" % (FIELD, strength, start, end, field.distance_max)]
+    if shape == "LINE":
+        notes = ["推力场「%s」：从中轴水平往外推，强度 %g，第 %g–%g 帧，高 %.1f–%.1f、半径 %.1f" % (
+            FIELD, strength, start, end, empty.location.z - field.distance_max, empty.location.z + field.distance_max,
+            field.radial_max)]
+    else:
+        notes = ["推力场「%s」：强度 %g，第 %g–%g 帧，半径 %.1f" % (FIELD, strength, start, end, field.distance_max)]
     rbw = scene.rigidbody_world
     if rbw is not None and rbw.effector_weights.collection is None:
         rbw.effector_weights.collection = bpy.data.collections.get(NO_FIELD_COLL) or bpy.data.collections.new(NO_FIELD_COLL)
@@ -622,12 +747,91 @@ def remove_tear_force():
     return removed
 
 
-def model_height(garments):
-    """衣服所在角色的身高：同一骨架下所有网格的包围盒高度（没有骨架就用衣服自己的）。"""
+def tear_garments(scene=None):
+    """场景里用过本插件的网格：有撕裂修改器，或有 CT_Follow / CT_Pin 顶点组。"""
+    scene = scene or bpy.context.scene
+    return [o for o in scene.objects if o.type == "MESH" and o.name != FLOOR
+            and (any(tear_modifiers(o)) or FOLLOW_GROUP in o.vertex_groups or OUT_GROUP in o.vertex_groups)]
+
+
+def cleanup_all(clear_cracks=True):
+    """全部清理：删掉本插件在这个场景里加的所有东西，回到用插件之前。
+    每件衣服：三个撕裂修改器、「衣服跟随身体」加的布料 1（用户原来就有的布料还原固定组等设置）、CT_Follow /
+    CT_Pin 顶点组、clear_cracks 时连裂缝一起清；场景：给身体加的碰撞、地面、推力场和它的集合、没人用的节点组。
+    1.1 加的碰撞修改器叫 Collision，没有标记：和这些衣服重叠的同骨架网格上叫 Collision 的碰撞也删（不按名字
+    跳过，项链上的也算）。钩挂、空物体、平面示例本身不动。返回做了什么（文字列表）。"""
+    scene = bpy.context.scene
+    garments = tear_garments(scene)
+    done, old_bodies = [], set()
+    for g in garments:
+        arm = next((m.object for m in g.modifiers if m.type == "ARMATURE" and m.object), None)
+        if arm is not None:
+            old_bodies.update(body_meshes(g, arm, skip_names=False))
+    for g in garments:
+        parts = remove_tear(g)
+        cloth = source_cloth(g)
+        backup = g.get(CLOTH_BACKUP)
+        if cloth is not None and backup:
+            b = json.loads(backup)
+            cloth.settings.vertex_group_mass = b["pin"]
+            cloth.collision_settings.use_self_collision = b["self_collision"]
+            cloth.point_cache.frame_start, cloth.point_cache.frame_end = b["frame_start"], b["frame_end"]
+            parts.append("%s 还原成原来的设置" % cloth.name)
+        elif cloth is not None and (g.get(CLOTH_ADDED) == cloth.name or cloth.settings.vertex_group_mass == FOLLOW_GROUP):
+            parts.append(cloth.name)
+            g.modifiers.remove(cloth)
+        for key in (CLOTH_ADDED, CLOTH_BACKUP):
+            if key in g:
+                del g[key]
+        for name in (FOLLOW_GROUP, OUT_GROUP):
+            vg = g.vertex_groups.get(name)
+            if vg is not None:
+                g.vertex_groups.remove(vg)
+                parts.append("顶点组 " + name)
+        if clear_cracks:
+            n = seam_count(g)
+            if n:
+                mark_seams(g, 0.0, only_selected=False)
+                parts.append("裂缝 %d 条边" % n)
+        if parts:
+            done.append("%s：%s" % (g.name, "、".join(parts)))
+    bodies = []
+    for o in scene.objects:
+        if o.type != "MESH":
+            continue
+        for m in list(o.modifiers):
+            if m.type == "COLLISION" and (m.name == COLLISION or (m.name == "Collision" and o in old_bodies)):
+                o.modifiers.remove(m)
+                bodies.append(o.name)
+    if bodies:
+        done.append("碰撞：%s" % "、".join(bodies))
+    floor = bpy.data.objects.get(FLOOR)
+    if floor is not None:
+        mesh = floor.data
+        bpy.data.objects.remove(floor, do_unlink=True)
+        if mesh is not None and mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+        done.append("地面 " + FLOOR)
+    force = remove_tear_force()
+    if force:
+        done.append("推力场：%s" % "、".join(force))
+    for ng in list(bpy.data.node_groups):
+        if (ng.name == "CT_TearMerge" or ng.name.startswith("CT_TearSplit_")) and ng.users == 0:
+            bpy.data.node_groups.remove(ng)
+    return done
+
+
+def _character_meshes(garments):
+    """和衣服同一骨架的所有网格（不含地面）；衣服没有骨架时就是衣服自己。"""
     arms = {m.object for g in garments for m in g.modifiers if m.type == "ARMATURE" and m.object}
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name != FLOOR
               and any(m.type == "ARMATURE" and m.object in arms for m in o.modifiers)] if arms else []
-    zs = [(o.matrix_world @ Vector(c)).z for o in (meshes or garments) for c in o.bound_box]
+    return meshes or list(garments)
+
+
+def model_height(garments):
+    """衣服所在角色的身高：同一骨架下所有网格的包围盒高度（没有骨架就用衣服自己的）。"""
+    zs = [(o.matrix_world @ Vector(c)).z for o in _character_meshes(garments) for c in o.bound_box]
     return max(zs) - min(zs)
 
 
@@ -654,6 +858,12 @@ def set_tear_speed(garments, speed, quality):
 
 SKIP_COLLIDE = ("hair", "eye", "lash", "brow", "mouth", "teeth", "tongue", "face", "head",
                 "头发", "眼", "睫毛", "眉", "脸", "头")
+# 饰品：衣带常从项链底下穿过，项链有碰撞时撕开的碎片被它兜住，吊在脖子上掉不下来（Fiona 实测）
+# 护甲、臂甲同理：T 字姿势时碎片被推到手臂上，挂在 Fiona 的臂甲尖上（不当碰撞体后全部落地）
+ACCESSORIES = ("necklace", "earring", "pendant", "choker", "bracelet", "bangle", "jewel", "piercing",
+               "pad", "armor", "armour", "gauntlet", "pauldron",
+               "项链", "耳环", "耳饰", "吊坠", "手镯", "手链", "首饰", "饰品", "护甲", "盔甲", "肩甲", "护肩", "臂甲",
+               "ネックレス", "イヤリング", "ピアス", "アーマー", "鎧")
 
 
 def _bbox(o):
@@ -661,11 +871,13 @@ def _bbox(o):
     return [min(p[i] for p in pts) for i in range(3)], [max(p[i] for p in pts) for i in range(3)]
 
 
-def body_meshes(garment, arm, margin=0.05):
+def body_meshes(garment, arm, margin=0.05, skip_accessories=True, skip_names=True):
     """撕下来的布要碰的身体：同一骨架下、包围盒和衣服重叠的网格（模型按材质拆开时身体是好几块：
-    Body / Legs / Arms），跳过头发、眼睛、睫毛这类和本插件加的地面。"""
+    Body / Legs / Arms），跳过头发、眼睛、睫毛这类、项链耳环这类饰品（skip_accessories）和本插件加的地面。
+    skip_names=False 时不按名字跳过（「全部清理」找 1.1 加过碰撞的网格用）。"""
     lo, hi = _bbox(garment)
     out = []
+    skip = (SKIP_COLLIDE + (ACCESSORIES if skip_accessories else ())) if skip_names else ()
     for o in bpy.context.scene.objects:
         if o.type != "MESH" or o is garment or o.name == FLOOR or getattr(o, "mmd_type", "NONE") != "NONE":
             continue
@@ -674,7 +886,7 @@ def body_meshes(garment, arm, margin=0.05):
         if any(m.type == "CLOTH" for m in o.modifiers):          # 另一件要撕的衣服
             continue
         name = (o.name + " " + " ".join(s.material.name for s in o.material_slots if s.material)).lower()
-        if any(k in name for k in SKIP_COLLIDE):
+        if any(k in name for k in skip):
             continue
         a, b = _bbox(o)
         if all(a[i] <= hi[i] + margin and b[i] >= lo[i] - margin for i in range(3)):

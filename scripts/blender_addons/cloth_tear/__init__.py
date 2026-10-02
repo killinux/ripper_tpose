@@ -7,7 +7,7 @@
 bl_info = {
     "name": "布料撕裂 Cloth Tear",
     "author": "ripper_tpose",
-    "version": (1, 1, 0),
+    "version": (1, 2, 0),
     "blender": (3, 6, 0),
     "location": "3D 视图 > 侧栏 > 布料撕裂",
     "description": "一键布料撕裂：裂缝（边折痕）+ 几何节点按帧松开固定组 + 第二个布料修改器，附示例场景",
@@ -48,6 +48,9 @@ class CT_Settings(bpy.types.PropertyGroup):
     jitter: FloatProperty(name="锯齿程度", default=0.6, min=0.0, max=3.0)
     partial: BoolProperty(name="不贯穿", default=False,
                           description="从布边撕进去一段就停（撕出裂口和毛边）；关掉时从布边到布边，会撕成几块")
+    loops: BoolProperty(name="切开套圈", default=True,
+                        description="生成裂缝后再看每块布：套成圈的（腰带、袖子、筒裙，身体从圈里穿过去）补最少的裂缝把它切开，"
+                                    "不然撕完还卡在身上。只想撕出口子、不想让衣服掉下来时关掉")
     keep_mode: EnumProperty(name="撕开后仍固定", default="SAME", items=(
         ("SAME", "同布料固定组", "和视频一样：布料 1 的固定组撕开后也一直挂着（例如两个钩挂角）"),
         ("NONE", "无（全部掉落）", "撕开的部分全部松开，衣服用「跟随身体」时选这个就是整件撕掉"),
@@ -150,8 +153,9 @@ class CT_OT_hook(bpy.types.Operator):
 class CT_OT_follow(bpy.types.Operator):
     bl_idname = "cloth_tear.follow"
     bl_label = "衣服跟随身体（撕衣服用）"
-    bl_description = ("选中的衣服（可多选）：布料 1 全部固定，撕开前完全跟着身体动画走；和衣服重叠的身体网格加碰撞，"
-                      "脚底加地面碰撞，撕下来的布落在身上和地上。撕裂设置的「撕开后仍固定」会改成「无」")
+    bl_description = ("选中的衣服（可多选）：布料 1 全部固定，撕开前完全跟着身体动画走；和衣服重叠的身体网格加碰撞"
+                      "（项链、耳环、臂甲这类饰品不加，免得把碎片挂住），脚底加地面碰撞，撕下来的布落在身上和地上。"
+                      "撕裂设置的「撕开后仍固定」会改成「无」")
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -202,7 +206,7 @@ class CT_OT_cracks(bpy.types.Operator):
     bl_idname = "cloth_tear.cracks"
     bl_label = "随机生成裂缝"
     bl_description = ("在布边上随机取点，连出锯齿状的裂缝（加在已有裂缝上）。选中几件衣服就每件各生成这么多条，"
-                      "每件的随机种子依次加 1")
+                      "每件的随机种子依次加 1。打开「切开套圈」时，套成圈的布再补裂缝切开")
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -214,11 +218,33 @@ class CT_OT_cracks(bpy.types.Operator):
         for i, obj in enumerate(_targets(context)):
             try:
                 n = core.random_cracks(obj, count=s.cracks, seed=s.seed + i, jitter=s.jitter, partial=s.partial)
+                rings = core.cut_loops(obj, seed=s.seed + i, jitter=s.jitter) if s.loops else 0
             except Exception as exc:
                 self.report({"ERROR"}, "%s：%s" % (obj.name, exc))
                 return {"CANCELLED"}
-            done.append("%s %d 条（共 %d 条边）" % (obj.name, n, core.seam_count(obj)))
+            done.append("%s %d 条%s（共 %d 条边）" % (obj.name, n, "、切开套圈 %d 处" % rings if rings else "",
+                                                 core.seam_count(obj)))
         self.report({"INFO"}, "生成了裂缝：" + "；".join(done))
+        return {"FINISHED"}
+
+
+class CT_OT_loops(bpy.types.Operator):
+    bl_idname = "cloth_tear.loops"
+    bl_label = "只切开套圈"
+    bl_description = ("不加随机裂缝，只检查每块布：套成圈的（腰带、袖子、筒裙）补最少的裂缝把圈切开，"
+                      "已有的裂缝算已经撕开。手动画的裂缝也能用。选中几件衣服就每件都查")
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        return _obj(context) is not None
+
+    def execute(self, context):
+        s, done = context.scene.cloth_tear, []
+        for i, obj in enumerate(_targets(context)):
+            rings = core.cut_loops(obj, seed=s.seed + i, jitter=s.jitter)
+            done.append("%s %d 处" % (obj.name, rings))
+        self.report({"INFO"}, "切开套圈：" + "；".join(done) + "（0 处 = 没有套成圈的布，或已经切开了）")
         return {"FINISHED"}
 
 
@@ -268,8 +294,9 @@ class CT_OT_setup(bpy.types.Operator):
 class CT_OT_force(bpy.types.Operator):
     bl_idname = "cloth_tear.force"
     bl_label = "加推力场"
-    bl_description = ("身体不动时撕开的碎片只会贴在身上：在选中衣服的中心放一个向外推的力场，只推撕裂用的布料 2，"
-                      "从撕裂开始帧推到结束帧后 10 帧。勾「按尺寸调快」时同时按身高调快布料 2。再点一次就是更新")
+    bl_description = ("身体不动时撕开的碎片只会贴在身上：放一个从身体中轴水平往外推的力场（范围是衣服那一段高度），"
+                      "只推撕裂用的布料 2，从撕裂开始帧推到结束帧后 10 帧。勾「按尺寸调快」时同时按身高调快布料 2。"
+                      "再点一次就是更新")
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -319,6 +346,39 @@ class CT_OT_remove(bpy.types.Operator):
     def execute(self, context):
         removed = core.remove_tear(_obj(context))
         self.report({"INFO"}, "已移除：%s" % "、".join(removed))
+        return {"FINISHED"}
+
+
+class CT_OT_cleanup(bpy.types.Operator):
+    bl_idname = "cloth_tear.cleanup"
+    bl_label = "全部清理"
+    bl_description = ("删掉本插件在这个场景里加的所有东西，回到用插件之前：每件衣服的撕裂修改器、跟随身体的布料 1、"
+                      "CT_ 顶点组和裂缝，身体上的碰撞、地面、推力场。钩挂和空物体不动。可以 Ctrl+Z 撤销")
+    bl_options = {"REGISTER", "UNDO"}
+    cracks: BoolProperty(name="也清除裂缝", default=True,
+                         description="关掉时裂缝（边折痕）留着，之后可以直接重新「生成 / 更新撕裂」")
+
+    @classmethod
+    def poll(cls, context):
+        return bool(core.tear_garments(context.scene)) or any(
+            bpy.data.objects.get(n) is not None for n in (core.FLOOR, core.FIELD))
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        col = self.layout.column()
+        col.label(text="删掉本插件在这个场景里加的所有东西：")
+        col.label(text="  " + ("、".join(o.name for o in core.tear_garments(context.scene)) or "（没有衣服）"))
+        col.prop(self, "cracks")
+
+    def execute(self, context):
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        done = core.cleanup_all(clear_cracks=self.cracks)
+        for line in done:
+            print("[布料撕裂] 清理", line)
+        self.report({"INFO"}, "已清理：" + ("；".join(done) if done else "没有要清理的"))
         return {"FINISHED"}
 
 
@@ -373,8 +433,10 @@ class CT_PT_panel(bpy.types.Panel):
         row = box.row(align=True)
         row.prop(s, "cracks"); row.prop(s, "jitter")
         row = box.row(align=True)
-        row.prop(s, "seed"); row.prop(s, "partial", toggle=True)
-        box.operator("cloth_tear.cracks", icon="FORCE_TURBULENCE")
+        row.prop(s, "seed"); row.prop(s, "partial", toggle=True); row.prop(s, "loops", toggle=True)
+        row = box.row(align=True)
+        row.operator("cloth_tear.cracks", icon="FORCE_TURBULENCE")
+        row.operator("cloth_tear.loops", icon="MOD_EDGESPLIT")
 
         box = layout.box()
         box.label(text="3. 撕裂", icon="MOD_PHYSICS")
@@ -427,9 +489,13 @@ class CT_PT_panel(bpy.types.Panel):
         row.operator("ptcache.bake_all", text="烘焙", icon="REC").bake = True
         row.operator("ptcache.free_bake_all", text="清除烘焙", icon="TRASH")
 
+        box = layout.box()
+        box.label(text="6. 清理", icon="BRUSH_DATA")
+        box.operator("cloth_tear.cleanup", icon="TRASH")
 
-CLASSES = (CT_Settings, CT_OT_demo, CT_OT_prepare, CT_OT_hook, CT_OT_follow, CT_OT_mark, CT_OT_cracks,
-           CT_OT_setup, CT_OT_force, CT_OT_force_remove, CT_OT_remove, CT_OT_bake, CT_PT_panel)
+
+CLASSES = (CT_Settings, CT_OT_demo, CT_OT_prepare, CT_OT_hook, CT_OT_follow, CT_OT_mark, CT_OT_cracks, CT_OT_loops,
+           CT_OT_setup, CT_OT_force, CT_OT_force_remove, CT_OT_remove, CT_OT_cleanup, CT_OT_bake, CT_PT_panel)
 
 
 def register():
