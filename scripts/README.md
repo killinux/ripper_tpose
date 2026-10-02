@@ -40,7 +40,14 @@ Blender 插件也彼此独立：
 - 布料撕裂（通用）：`scripts\blender_addons\cloth_tear`，侧边栏 **布料撕裂** —— B 站教程的两个布料修改器做法做成按钮：
   布料沿裂缝按帧从一边撕到另一边，附一键示例；也能撕角色的衣服（衣服跟随身体、身体碰撞和地面、推力场、按模型尺寸调快）。
   1.2 起套成圈的布（腰带、筒裙）自动补裂缝切开，项链、臂甲这类饰品不挡碎片，撕完整件掉到地上；「全部清理」一键撤掉插件加的所有东西。
-  用法见插件 README，原理见 [`docs/cloth-tear-guide.md`](../docs/cloth-tear-guide.md)。
+  1.3 起撕衣服的烘焙缓存减半，「快速预览」步数减半先看效果，地面按身高放大。
+  默认推力 25 几乎推不动（要几百以上）；改参数就能「爆衣」，见插件 README。
+  用法见插件 README，原理见 [`docs/cloth-tear-guide.md`](../docs/cloth-tear-guide.md)；
+  别人的爆衣 / 撕衣服做法和对比见 [`docs/clothes-burst-survey.md`](../docs/clothes-burst-survey.md)。
+- 爆衣（MMD 模型通用）：`scripts\blender_addons\clothes_burst`，侧栏 **爆衣**（要和 `cloth_tear` 放在同一个插件目录）——
+  选中衣服整件爆开，或在编辑模式选中一部分面只爆这部分；一键设好裂缝、松开、推力（按重力的倍数，每件衣服自动换算），
+  默认第 30 帧炸开、碎片飞出约一个身高，设置都可调。
+  用法见插件 README，原理和测试见 [`docs/clothes-burst-guide.md`](../docs/clothes-burst-guide.md)。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
 按清单批量「提取 + Blender 材质化」36 个 Player 包，画廊在 `final\html\`；

@@ -260,9 +260,11 @@ def setup_tear(obj, axis="UV_V", invert=False, start=120.0, end=170.0, width=0.0
 
     if cloth2 is None:
         cloth2 = _copy_cloth(obj, cloth)
+    cloth2.show_viewport = cloth2.show_render = True        # 复制来的会带上布料 1 的开关
     cloth2.settings.vertex_group_mass = out_group
     cloth2.point_cache.frame_start = cloth.point_cache.frame_start
     cloth2.point_cache.frame_end = cloth.point_cache.frame_end
+    notes += _template_only(obj, cloth)
 
     merge_tree = build_merge_tree()
     if merge_mod is None:
@@ -284,6 +286,45 @@ def setup_tear(obj, axis="UV_V", invert=False, start=120.0, end=170.0, width=0.0
     return notes
 
 
+def _fully_pinned(obj, cloth):
+    """布料 1 的固定组是 CT_Follow，而且每个顶点权重都是 1（「衣服跟随身体」的设置，没被改过）。"""
+    vg = obj.vertex_groups.get(FOLLOW_GROUP)
+    if cloth.settings.vertex_group_mass != FOLLOW_GROUP or vg is None:
+        return False
+    gi = vg.index
+    return all(any(g.group == gi and g.weight >= 0.999 for g in v.groups) for v in obj.data.vertices)
+
+
+def _template_only(obj, cloth):
+    """衣服模式下布料 1 每个点都固定：固定的点每一步都放回输入的位置，布料 1 的输出就是输入（骨架动画），
+    只给布料 2 当模板（复制它的设置）。关掉它的视图 / 渲染开关就不参与计算，烘焙时间和缓存都省一半，
+    结果不变。物体属性 ct_cloth1_off 记下是本插件关的：固定组被改了（不再全部固定）就重新打开，
+    「移除撕裂设置」「全部清理」也会打开。"""
+    if _fully_pinned(obj, cloth):
+        if cloth.show_viewport or cloth.show_render:
+            cloth.show_viewport = cloth.show_render = False
+            obj[CLOTH1_OFF] = cloth.name
+        return ["布料 1 每个点都固定，只当布料 2 的模板，关掉不算（烘焙快一倍）"]
+    if obj.get(CLOTH1_OFF) == cloth.name:
+        cloth.show_viewport = cloth.show_render = True
+        del obj[CLOTH1_OFF]
+        return ["布料 1 的固定组改过、不再全部固定，重新打开计算"]
+    return []
+
+
+def _restore_cloth1(obj):
+    """本插件关掉的布料 1 重新打开。返回说明文字列表。"""
+    cloth = source_cloth(obj)
+    name = obj.get(CLOTH1_OFF)
+    if name is None:
+        return []
+    del obj[CLOTH1_OFF]
+    if cloth is None or cloth.name != name:
+        return []
+    cloth.show_viewport = cloth.show_render = True
+    return ["%s 重新打开" % cloth.name]
+
+
 def remove_tear(obj):
     removed = []
     for mod in tear_modifiers(obj):
@@ -293,7 +334,7 @@ def remove_tear(obj):
     tree = bpy.data.node_groups.get(split_tree_name(obj))
     if tree is not None and tree.users == 0:
         bpy.data.node_groups.remove(tree)
-    return removed
+    return removed + _restore_cloth1(obj)
 
 
 # --- 裂缝（边折痕） ----------------------------------------------------------------------------------------
@@ -568,18 +609,21 @@ def pin_vertices(obj, indices, group="Group"):
 FOLLOW_GROUP = "CT_Follow"
 COLLISION = "CT 碰撞"                # 本插件给身体加的碰撞修改器（1.1 时叫 Collision）
 CLOTH_ADDED, CLOTH_BACKUP = "ct_cloth_added", "ct_cloth_backup"   # 物体自定义属性：布料 1 是加的 / 原来的设置
+CLOTH1_OFF = "ct_cloth1_off"         # 物体自定义属性：布料 1 全部固定、只当模板，是本插件关掉的（1.3）
 
 
 FLOOR = "CT_地面碰撞"
 
 
-def add_floor(z, size=20.0):
-    """脚底一块不渲染的碰撞平面，撕下来的碎片落在地上，而不是一直往下掉。已有就只挪高度。"""
+def add_floor(z, size=20.0, center=(0.0, 0.0), thickness=0.02):
+    """脚底一块不渲染的碰撞平面，撕下来的碎片落在地上，而不是一直往下掉。已有就按新的大小、位置更新。
+    size = 边长：太小的话推到外面的碎片会从边上掉下去（Tifa 的碎片推到离中心 14，1.2 的地面只有 ±10）；
+    单面碰撞（法线朝上），穿到下面的点会被推回地面上；thickness = 碰撞外层厚度，按模型尺寸放大。"""
     floor = bpy.data.objects.get(FLOOR)
     if floor is None:
         mesh = bpy.data.meshes.new(FLOOR)
         bm = bmesh.new()
-        bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=size / 2.0)
+        bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.5)      # 边长 1，用缩放定大小
         bm.to_mesh(mesh)
         bm.free()
         floor = bpy.data.objects.new(FLOOR, mesh)
@@ -587,7 +631,13 @@ def add_floor(z, size=20.0):
         floor.modifiers.new("Collision", "COLLISION")
         floor.display_type = "WIRE"
         floor.hide_render = True
-    floor.location = (0.0, 0.0, z)
+    half = max(abs(v.co.x) for v in floor.data.vertices) or 0.5               # 1.1 / 1.2 建的网格是 ±10
+    k = size / (2.0 * half)
+    floor.scale = (k, k, 1.0)
+    floor.location = (center[0], center[1], z)
+    floor.collision.use_culling = True
+    floor.collision.use_normal = True
+    floor.collision.thickness_outer = thickness
     return floor
 
 
@@ -625,9 +675,13 @@ def follow_body(garments, add_collision=True, floor=True, skip_accessories=True)
         meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in garments
                   and any(m.type == "ARMATURE" and m.object is arm_mod.object for m in o.modifiers)]
         if meshes:
-            low = min((o.matrix_world @ Vector(c)).z for o in meshes for c in o.bound_box)
-            add_floor(low)
-            notes.append("脚底加了地面碰撞「%s」（不渲染）" % FLOOR)
+            pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
+            low, high = min(p.z for p in pts), max(p.z for p in pts)
+            cx = (min(p.x for p in pts) + max(p.x for p in pts)) / 2.0
+            cy = (min(p.y for p in pts) + max(p.y for p in pts)) / 2.0
+            side = max(20.0, 4.0 * (high - low))
+            add_floor(low, size=side, center=(cx, cy), thickness=0.02 * max(1.0, (high - low) / 1.7))
+            notes.append("脚底加了地面碰撞「%s」（不渲染，边长 %.0f）" % (FLOOR, side))
     return notes
 
 
@@ -778,9 +832,9 @@ def cleanup_all(clear_cracks=True):
             cloth.point_cache.frame_start, cloth.point_cache.frame_end = b["frame_start"], b["frame_end"]
             parts.append("%s 还原成原来的设置" % cloth.name)
         elif cloth is not None and (g.get(CLOTH_ADDED) == cloth.name or cloth.settings.vertex_group_mass == FOLLOW_GROUP):
-            parts.append(cloth.name)
+            parts = [p for p in parts if not p.endswith("重新打开")] + [cloth.name]
             g.modifiers.remove(cloth)
-        for key in (CLOTH_ADDED, CLOTH_BACKUP):
+        for key in (CLOTH_ADDED, CLOTH_BACKUP, CLOTH1_OFF):
             if key in g:
                 del g[key]
         for name in (FOLLOW_GROUP, OUT_GROUP):
@@ -835,25 +889,44 @@ def model_height(garments):
     return max(zs) - min(zs)
 
 
-def tear_speed(garments, human=1.7):
+def steps_for(time_scale, fast=False):
+    """布料 2 的质量步数：速度 × 5（一快就炸、碎片挂在手指上的都靠它）；快速预览时速度 × 2.5。
+    实测（2026-10-02，150 帧）：Fiona 98 → 52 秒、Tifa 265 → 169 秒，碎片照样撕开落地，
+    但 Tifa 有一条手套挂在手上没滑下来（步数 6 时两只手都挂着）。"""
+    return max(3, math.ceil(2.5 * time_scale)) if fast else max(5, math.ceil(5 * time_scale))
+
+
+def tear_speed(garments, human=1.7, fast=False):
     """模型比真人大时（PMX 原尺寸约 18 高）同样的重力看起来慢得多：撕开的碎片像慢动作。布料 2 的速度
     （时间缩放）取 sqrt(身高 / 1.7)，不小于 1 —— 这样下落和推开的快慢跟真人尺寸一样，推力强度也就不用
-    跟着尺寸改；质量步数跟着提高到速度 × 5，否则一快就炸。返回 (速度, 质量步数, 身高)。"""
+    跟着尺寸改；质量步数见 steps_for。返回 (速度, 质量步数, 身高)。"""
     height = model_height(garments)
     speed = max(1.0, math.sqrt(height / human))
-    return round(speed, 2), max(5, math.ceil(5 * speed)), height
+    return round(speed, 2), steps_for(speed, fast), height
 
 
-def set_tear_speed(garments, speed, quality):
-    """只改撕裂用的布料 2（布料 1 跟着身体，不受影响）；质量步数只往上调。"""
+def set_tear_speed(garments, speed, quality, exact=False):
+    """只改撕裂用的布料 2（布料 1 跟着身体，不受影响）；质量步数只往上调，exact 时照给的值（快速预览）。"""
     done = []
     for g in garments:
         c2 = g.modifiers.get(MOD_CLOTH)
         if c2 is not None:
             c2.settings.time_scale = speed
-            c2.settings.quality = max(c2.settings.quality, quality)
+            c2.settings.quality = quality if exact else max(c2.settings.quality, quality)
             done.append(g.name)
     return done
+
+
+def set_fast(fast, scene=None):
+    """快速预览开 / 关：场景里每件衣服的布料 2 按它现在的速度重设质量步数（速度 × 2.5 / × 5）。
+    返回 [(衣服, 步数)]。"""
+    out = []
+    for g in tear_garments(scene):
+        c2 = g.modifiers.get(MOD_CLOTH)
+        if c2 is not None:
+            c2.settings.quality = steps_for(c2.settings.time_scale, fast)
+            out.append((g.name, c2.settings.quality))
+    return out
 
 
 SKIP_COLLIDE = ("hair", "eye", "lash", "brow", "mouth", "teeth", "tongue", "face", "head",

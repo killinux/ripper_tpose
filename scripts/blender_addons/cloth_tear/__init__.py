@@ -7,7 +7,7 @@
 bl_info = {
     "name": "布料撕裂 Cloth Tear",
     "author": "ripper_tpose",
-    "version": (1, 2, 0),
+    "version": (1, 3, 0),
     "blender": (3, 6, 0),
     "location": "3D 视图 > 侧栏 > 布料撕裂",
     "description": "一键布料撕裂：裂缝（边折痕）+ 几何节点按帧松开固定组 + 第二个布料修改器，附示例场景",
@@ -30,6 +30,11 @@ AXIS_ITEMS = (
     ("Y", "物体 Y", "物体坐标 Y 大的一边先松开"),
     ("X", "物体 X", "物体坐标 X 大的一边先松开"),
 )
+
+
+def _fast_update(self, context):
+    for name, steps in core.set_fast(self.fast, context.scene):
+        print("[布料撕裂] 快速预览%s：%s 布料 2 质量步数 %d" % ("开" if self.fast else "关", name, steps))
 
 
 class CT_Settings(bpy.types.PropertyGroup):
@@ -63,6 +68,9 @@ class CT_Settings(bpy.types.PropertyGroup):
     auto_speed: BoolProperty(name="按尺寸调快", default=True,
                              description="模型比真人大（PMX 原尺寸约 18 高）时重力看着像慢动作：布料 2 的速度取 "
                                          "√(身高 / 1.7)，质量步数跟着调高")
+    fast: BoolProperty(name="快速预览", default=False, update=_fast_update,
+                       description="布料 2 的质量步数减半（速度 × 2.5，平时 × 5），烘焙快将近一倍，先看撕的时机和样子；"
+                                   "碎片可能挂在手指上滑不下来，定稿前关掉再清除烘焙、烘焙一次")
 
 
 def _obj(context):
@@ -308,9 +316,10 @@ class CT_OT_force(bpy.types.Operator):
         garments = [o for o in _targets(context) if core.tear_modifiers(o)[1] is not None]
         notes = core.add_tear_force(garments, strength=s.force, start=s.start, end=s.end + 10)
         if s.auto_speed:
-            speed, quality, height = core.tear_speed(garments)
-            core.set_tear_speed(garments, speed, quality)
-            notes.append("身高 %.1f → 布料 2 速度 %g、质量步数 ≥ %d" % (height, speed, quality))
+            speed, quality, height = core.tear_speed(garments, fast=s.fast)
+            core.set_tear_speed(garments, speed, quality, exact=s.fast)
+            notes.append("身高 %.1f → 布料 2 速度 %g、质量步数 %s %d%s" % (height, speed, "=" if s.fast else "≥", quality,
+                                                                      "（快速预览）" if s.fast else ""))
         for line in notes:
             print("[布料撕裂]", line)
         self.report({"INFO"}, "；".join(notes) + "（改完要清除烘焙再烘焙）")
@@ -467,6 +476,8 @@ class CT_PT_panel(bpy.types.Panel):
                                  text="合并距离")
                     except StopIteration:
                         pass
+                if obj.get(core.CLOTH1_OFF):
+                    col.label(text="布料 1 每个点都固定，只当模板，不参与计算", icon="INFO")
             box.operator("cloth_tear.remove", icon="TRASH")
 
         box = layout.box()
@@ -484,6 +495,9 @@ class CT_PT_panel(bpy.types.Panel):
 
         box = layout.box()
         box.label(text="5. 烘焙", icon="FILE_CACHE")
+        box.prop(s, "fast", toggle=True, icon="FF")
+        if s.fast:
+            box.label(text="步数减半：碎片可能挂在手指上，定稿前关掉再烘", icon="INFO")
         row = box.row(align=True)
         # Blender 自带的「烘焙所有动力学解算结果」：从按钮调用是后台任务，状态栏有进度条，Esc 取消
         row.operator("ptcache.bake_all", text="烘焙", icon="REC").bake = True
