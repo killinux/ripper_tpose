@@ -14,6 +14,30 @@
 
 ---
 
+## 2026-10-03 — DOA6：格斗动作能解了（不知火舞 269 个动作），DOA5LR 的动作查过、先不做
+
+1. **起因**：ROE 格斗游戏想要不知火舞的招式，用户问本机的 DOA5LR、DOA6 能不能提取格斗动作。
+2. **结果**：
+   - DOA6：所有角色的动作都在 `RRPreview.rdb`（14053 个 `.g1a`，带名字）；不知火舞 `MAI` 269 个、全角色通用 `CMN` 876 个，已取到
+     `E:\game_export\DOA6\MaiShiranui\g1a`、`E:\game_export\DOA6\_common\g1a`。269 个全部解码成功，挑 14 个（站架、跑、拳、高踢、突进、
+     空中招、连段、投技、出场、挑衅、胜利）套在她自己的 DOA6 模型上渲成视频 `E:\game_export\DOA6\MaiShiranui\video\mai_doa6_moves_test.mp4`；
+   - DOA5LR：招式按流派打包（`M_<流派>.MOT`），但社区名表里的名字在现在的 Steam 版封包里对不上，内容疑似在 12 个没名字的 `char_dat` 包里，
+     格式没有公开的解码器。同一个角色 DOA6 已经能用，DOA5LR 先不做。
+3. **用法**（`scripts/doa6`）：
+   - `python extract_rdb.py "<游戏>\RRPreview.rdb" -o <目录> --flat --types g1a --filter "MAI*"` 取动作；
+   - `python g2a.py info <动作>` 看帧率、帧数、动了哪些骨，`python g2a.py dump <动作> --out x.json` 逐帧导出；
+   - `blender -b <角色>.blend --python g2a_blender.py -- --g1m <同一件衣服的 g1m> --clips ... --render-dir <目录>` 套到导出的角色上并渲染。
+4. **原理**：
+   - 文件扩展名是 `.g1a`，内容是 G2A v0300（`_A2G`，60 fps）。`g2a.py` 照 Project G1M（Noesis 插件）源码移植：每个关键帧 4 个 u64 =
+     三次多项式的 4 个系数（4 位指数 + 3 个 20 位有符号数），旋转是轴角；骨架读 G1M 的 `G1MS` 段，动作里的骨骼编号是全局编号，
+     和 Noesis 导出的 `bone_<编号>` 对得上。也支持老的 G1A。
+   - `g2a_blender.py`：每帧按 G1MS 正向算世界变换，`pose = W_anim · W_rest⁻¹ · rest` 换成 pose bone 关键帧（和 FBX 导入的骨头轴向无关），
+     身体 / 脸 / 头发三个骨架一起套。动作里没有布料、头发饰物（游戏里实时物理），预览时让它们往下垂（`--droop`）；
+     背后的流苏是 13 根并列挂在腰上的骨，按位置串起来一起垂。
+   - 不影响已有的模型导出。
+5. **验证**：G1MS 静止姿势和 Blender 骨头头部最大差 0.0001（厘米）；269 个动作全部解码；预览视频逐段看过（动作完整、脚落在地上）。
+   详细见 `docs/doa6-fighting-motions.md`。
+
 ## 2026-10-02 — Taimanin Squad：胸部物理按角色缩放（大小 + 游戏的行程上限），148 个女性单位的 PMX 全部重导
 
 1. **起因**：上一条「胸部物理改成平移弹簧」只重导了 `1_asagi`，其余 PMX 还是旧的转动模板；游戏里每个角色的胸部设置又各不相同。

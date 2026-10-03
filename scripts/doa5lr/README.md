@@ -184,3 +184,11 @@ python html\make_gallery.py            # 加 --force 重建缩略图
   不要与 DOA6 的 `Noesis64.exe` + `plugins\x64\ProjectG1M.dll` 混淆。
 - `--filter "HONOKA*"` 会同时匹配 `--H/--HL`（物理/头发辅助文件）；批量脚本只取
   `*.TMC*`，需要 `--H` 时手动跑 `extract_lnk.py`。
+
+## 6. 格斗动作：没做（2026-10-03 查过）
+
+- 招式按流派打包，`file5lr.dat` 里登记了 `M_ZACK.MOT`、`M_NINJA.MOT` 等约 40 个，但现在 Steam 版 36 个封包里这些混淆名一个都没有。
+- 按内容扫全部 12661 个条目：`DATA` / `DATA2` 是 `_L1G` 音频包；`.MPM` 是 `char_dat` 容器（有名字的是过场和场景物件的动作）；
+  另有 12 个没名字的 `char_dat`（2–5 MB，像量化曲线），疑似流派动作包，例如 `patch_25_catalog #116`，和不知火舞的模型
+  （`WGT_uchiwa` 扇子、`WGT_acs_tare` 垂布）在同一个补丁包里。格式没有公开的解码器，要从头逆向。
+- 同一个角色 DOA6 已经能直接解（`scripts/doa6/g2a.py`），所以 DOA5LR 的动作先不做。详见 `docs/doa6-fighting-motions.md`。

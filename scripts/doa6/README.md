@@ -136,3 +136,16 @@ build_blend.py 已按「存在才 pack、失效即删」处理。
 - `.ps1` 必须带 UTF-8 BOM（PowerShell 5.1 中文脚本问题，同 DOA5LR）。
 - `--filter` 是 fnmatch：`HON_*` 匹配不到贴图（它们叫 `MPR_Muscle_Character_HONCOS...`），
   贴图用 `*HONCOS001_*` 这类去下划线模式。
+
+## 6. 格斗动作（g2a.py + g2a_blender.py，2026-10-03）
+
+角色的全部动作在 `RRPreview.rdb`（14053 个 `.g1a`，名字形如 `MAI01004_MAI.g1a`；`CMN` = 全角色通用，`_CMN` 后缀 = 配对动作里对手那一半）。
+扩展名是 `.g1a`，内容其实是 **G2A**（魔数 `_A2G`）。`g2a.py` 是照 Project G1M 源码移植的解码器（G2A + 老 G1A + G1M 骨架 G1MS），
+`g2a_blender.py` 把动作套到已导出的角色 .blend 上并渲染预览。不知火舞 269 个动作已全部解出、预览验证。
+详细（格式、编号段、坑、DOA5LR 的情况、给格斗游戏用的下一步）：`docs/doa6-fighting-motions.md`。
+
+```powershell
+python extract_rdb.py "<游戏>\RRPreview.rdb" -o E:\game_export\DOA6\MaiShiranui\g1a --flat --types g1a --filter "MAI*"
+python g2a.py info E:\game_export\DOA6\MaiShiranui\g1a\MAI01004_MAI.g1a
+blender -b <角色>.blend --python g2a_blender.py -- --g1m <同一件衣服>.g1m --clips <a.g1a> ... --render-dir <输出目录>
+```
