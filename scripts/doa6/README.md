@@ -148,7 +148,11 @@ build_blend.py 已按「存在才 pack、失效即删」处理。
 python extract_rdb.py "<游戏>\RRPreview.rdb" -o E:\game_export\DOA6\MaiShiranui\g1a --flat --types g1a --filter "MAI*"
 python g2a.py info E:\game_export\DOA6\MaiShiranui\g1a\MAI01004_MAI.g1a
 blender -b <角色>.blend --python g2a_blender.py -- --g1m <同一件衣服>.g1m --clips <a.g1a> ... --render-dir <输出目录>
+# 写成 BVH（人形 21 节骨、Mixamo 关节名、零姿势 = 骨架静止姿势），给别的程序重定向；--check 算回去核对
+python g2a_bvh.py --check --g1m E:\game_export\DOA6\MaiShiranui\g1m_src\MAI_COS_004.g1m --out <输出目录> <a.g1a> ...
 ```
+
+`g2a_bvh.py` 的用处：ROE 格斗游戏把不知火舞的 4 个打击技做成了 Luffee 的普通攻击（`docs/doa6-fighting-motions.md` 末尾）。
 
 ## 7. 布料、软体、碰撞体（g1m_cloth.py，2026-10-03）
 
