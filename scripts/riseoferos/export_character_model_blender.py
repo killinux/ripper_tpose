@@ -1315,10 +1315,294 @@ def add_face_morphs(root, arm):
     return created
 
 
+# Bust physics.  Convert_to_MMD5 renames the chest slot to 左胸/右胸 and builds
+# nothing on it, so every ROE PMX up to 2026-09-25 had rigid breasts.  The layout
+# and the numbers are the user's own MMD template (标准骨骼与刚体.pmx: 乳奶1 ->
+# 乳奶2, the same as their hand-made "nai" models and the Purifier Inase
+# reference): the chest-side bone follows the torso, the outer bone swings.
+# Mass 1, damping 0.5/0.5, a joint with no translation, +-10 degrees on every
+# axis and no spring, so gravity rests it on its lower limit the way hand-made
+# MMD busts sit; group 16 colliding with nothing, so arms and hair never fight it.
+# ROE breasts are two Biped bones per side: 左胸 (was ``Bip001 chest_L`` /
+# ``Breast_L``, head inside the rib cage) -> ``Bip001 chest_L02`` /
+# ``Breast_L02`` (mid-breast), with the skin split about evenly between them.
+# Three rigs have only the first bone; that bone then swings on its own.
+BUST = {
+    "mass": 1.0, "lin_damp": 0.5, "ang_damp": 0.5, "friction": 0.5,
+    "limit_deg": 10.0, "group": 15, "min_weight": 0.3,
+    "radius": (0.03, 0.06), "base_radius": 0.024,
+}
+BUST_SECOND = re.compile(r"(?:chest|breast)_[LR]02$", re.IGNORECASE)
+
+
+def add_bust_physics(root, arm, meshes):
+    """Rigid bodies + joints on 左胸/右胸, laid out like the user's MMD template.
+
+    The swinging body is a sphere at the weighted centre of the skin it moves
+    (the outer bone and the Biped bones under it), jointed at that bone's head
+    to a static body on 左胸 - or, on a one-bone breast, to the torso body.
+    Runs before the garments so a chain hung on the breast (g05's pendants
+    under ``chest_L02``) is anchored to the breast and swings with it.
+    Returns one line per side for the manifest.
+    """
+    from mmd_tools.core.model import Model
+
+    model = Model(root)
+    rigids = {obj.mmd_rigid.bone: obj for obj in bpy.context.scene.objects
+              if getattr(obj, "mmd_type", "") == "RIGID_BODY" and obj.mmd_rigid.bone}
+    to_world = arm.matrix_world
+    biped = re.compile(r"^Bip\d+ ")
+    limit = math.radians(BUST["limit_deg"])
+    no_collision = [True] * 16
+    report = []
+    for base_name in ("左胸", "右胸"):
+        base = arm.data.bones.get(base_name)
+        if base is None:
+            continue
+        second = next((child for child in base.children if BUST_SECOND.search(child.name)), None)
+        swing = second or base
+        if swing.name in rigids:
+            report.append("%s: already has a rigid body" % swing.name)
+            continue
+        moved = {swing.name} | {bone.name for bone in swing.children_recursive
+                                if biped.match(bone.name)}
+        points, weights = [], []
+        for mesh in meshes:
+            index = {group.index for group in mesh.vertex_groups if group.name in moved}
+            if not index:
+                continue
+            for vertex in mesh.data.vertices:
+                weight = sum(item.weight for item in vertex.groups if item.group in index)
+                if weight >= BUST["min_weight"]:
+                    points.append(mesh.matrix_world @ vertex.co)
+                    weights.append(weight)
+        if not points:
+            report.append("%s: no skin" % swing.name)
+            continue
+        centre = sum((p * w for p, w in zip(points, weights)), Vector()) / sum(weights)
+        distances = sorted((p - centre).length for p in points)
+        low, high = BUST["radius"]
+        radius = min(high, max(low, 0.8 * distances[int(0.75 * (len(distances) - 1))]))
+
+        if second is not None:
+            anchor = rigids.get(base.name)
+            if anchor is None:
+                head, tail = to_world @ base.head_local, to_world @ second.head_local
+                anchor = model.createRigidBody(
+                    shape_type=0, location=(head + tail) * 0.5, rotation=(0.0, 0.0, 0.0),
+                    size=(BUST["base_radius"], 0.0, 0.0), dynamics_type=0,
+                    collision_group_number=BUST["group"], collision_group_mask=no_collision,
+                    name=base.name, bone=base.name, mass=BUST["mass"],
+                    friction=BUST["friction"], linear_damping=BUST["lin_damp"],
+                    angular_damping=BUST["ang_damp"], bounce=0.0)
+                rigids[base.name] = anchor
+        else:
+            holder = base.parent
+            while holder is not None and holder.name not in rigids:
+                holder = holder.parent
+            if holder is None:
+                report.append("%s: no torso body to hang on" % swing.name)
+                continue
+            anchor = rigids[holder.name]
+        pivot = to_world @ swing.head_local
+        body = model.createRigidBody(
+            shape_type=0, location=centre, rotation=(0.0, 0.0, 0.0), size=(radius, 0.0, 0.0),
+            dynamics_type=1, collision_group_number=BUST["group"],
+            collision_group_mask=no_collision, name=swing.name, bone=swing.name,
+            mass=BUST["mass"], friction=BUST["friction"], linear_damping=BUST["lin_damp"],
+            angular_damping=BUST["ang_damp"], bounce=0.0)
+        rigids[swing.name] = body
+        model.createJoint(
+            name=swing.name, location=pivot, rotation=(0.0, 0.0, 0.0),
+            rigid_a=anchor, rigid_b=body,
+            maximum_location=(0.0, 0.0, 0.0), minimum_location=(0.0, 0.0, 0.0),
+            maximum_rotation=(limit,) * 3, minimum_rotation=(-limit,) * 3,
+            spring_linear=(0.0, 0.0, 0.0), spring_angular=(0.0, 0.0, 0.0))
+        report.append("%s swings (sphere r %.1f cm, %.1f cm from the pivot, %d verts) on %s"
+                      % (swing.name, radius * 100, (centre - pivot).length * 100, len(points),
+                         anchor.mmd_rigid.bone))
+    return report
+
+
+def follow_breast_skin(arm, meshes, max_gap=0.02):
+    """Make the costume that lies on a breast follow the breast bones like the skin under it.
+
+    ROE weights its costumes for animation where the breast bones barely move: on
+    g05 the skin around the left breast is 0.37 左胸 + 0.38 ``chest_L02``, the white
+    panel lying on it 0.13 + 0.15 with the rest on 上半身3, and 206 of its 349
+    vertices there follow neither.  Once the breasts swing, the skin passes straight
+    through the panel.  So every costume vertex within ``max_gap`` of the skin
+    surface, where the skin (or the vertex itself) carries breast weight, gets the
+    skin's split between the torso and breast bones at the nearest point
+    (barycentric over the skin triangle).  Only the torso/breast share of the vertex
+    is redistributed - weight it has on a garment chain (the pendant straps on
+    ``Riband_L_*``) stays - and the result keeps its 4 largest influences.  This is
+    the "transfer the body weights to the clothes" step MMD modellers do by hand.
+    Skin = faces whose material name contains "skin" (ROE's ``*_skin_mat``).
+    Returns one line per mesh that changed, or why nothing did.
+    """
+    from mathutils.bvhtree import BVHTree
+    from mathutils.interpolate import poly_3d_calc
+
+    names = set(arm.data.bones.keys())
+    breast = set()
+    for base_name in ("左胸", "右胸"):
+        base = arm.data.bones.get(base_name)
+        if base is not None:
+            breast.add(base.name)
+            breast |= {bone.name for bone in base.children_recursive
+                       if re.match(r"^Bip\d+ ", bone.name)}
+    if not breast:
+        return ["no breast bones"]
+    family = breast | {n for n in ("上半身", "上半身2", "上半身3") if n in names}
+
+    def bone_weights(mesh, vertex, groups):
+        return {groups[item.group]: item.weight for item in vertex.groups
+                if item.group in groups and item.weight > 0.0}
+
+    points, tris, skin_w, skin_vertices = [], [], [], {}
+    for mesh in meshes:
+        slots = mesh.material_slots
+        skin_slots = {i for i, slot in enumerate(slots)
+                      if slot.material is not None and "skin" in slot.material.name.lower()}
+        if not skin_slots:
+            continue
+        groups = {g.index: g.name for g in mesh.vertex_groups if g.name in names}
+        data = mesh.data
+        data.calc_loop_triangles()
+        index = {}
+        for tri in data.loop_triangles:
+            if tri.material_index not in skin_slots:
+                continue
+            ids = []
+            for vi in tri.vertices:
+                if vi not in index:
+                    index[vi] = len(points)
+                    points.append(mesh.matrix_world @ data.vertices[vi].co)
+                    skin_w.append({b: w for b, w in bone_weights(mesh, data.vertices[vi], groups).items()
+                                   if b in family})
+                ids.append(index[vi])
+            tris.append(ids)
+        skin_vertices[mesh.name] = set(index)
+    if not tris:
+        return ["no skin material (*skin*) - costume left as weighted"]
+    tree = BVHTree.FromPolygons(points, tris)
+
+    report = []
+    for mesh in meshes:
+        groups = {g.index: g.name for g in mesh.vertex_groups if g.name in names}
+        by_name = {g.name: g for g in mesh.vertex_groups}
+        skip = skin_vertices.get(mesh.name, set())
+        changed, before, after = 0, 0.0, 0.0
+        for vertex in mesh.data.vertices:
+            if vertex.index in skip:
+                continue
+            co = mesh.matrix_world @ vertex.co
+            location, _normal, face, _dist = tree.find_nearest(co, max_gap)
+            if location is None:
+                continue
+            ids = tris[face]
+            bary = poly_3d_calc([points[i] for i in ids], location)
+            skin = {}
+            for i, share in zip(ids, bary):
+                for b, w in skin_w[i].items():
+                    skin[b] = skin.get(b, 0.0) + w * share
+            own = bone_weights(mesh, vertex, groups)
+            own_family = sum(w for b, w in own.items() if b in family)
+            own_breast = sum(w for b, w in own.items() if b in breast)
+            skin_family = sum(skin.values())
+            skin_breast = sum(w for b, w in skin.items() if b in breast)
+            if own_family < 1e-4 or skin_family < 1e-4 or max(own_breast, skin_breast) < 0.02:
+                continue
+            new = {b: w for b, w in own.items() if b not in family}
+            for b, w in skin.items():
+                new[b] = new.get(b, 0.0) + own_family * w / skin_family
+            kept = dict(sorted(new.items(), key=lambda kv: -kv[1])[:4])
+            scale = sum(own.values()) / (sum(kept.values()) or 1.0)
+            for b in own:
+                if b not in kept:
+                    by_name[b].remove([vertex.index])
+            for b, w in kept.items():
+                group = by_name.get(b) or mesh.vertex_groups.new(name=b)
+                by_name[b] = group
+                group.add([vertex.index], w * scale, "REPLACE")
+            changed += 1
+            before += own_breast
+            after += sum(w * scale for b, w in kept.items() if b in breast)
+        if changed:
+            report.append("%s: %d costume vertices on the breasts, breast weight %.2f -> %.2f"
+                          % (mesh.name, changed, before / changed, after / changed))
+    return report or ["no costume on the breasts"]
+
+
+def _body_core(obj):
+    """(segment start, segment end, radius) of a rigid body in world space.  mmd_tools
+    builds capsules along local Z with size = (radius, cylinder height); a box counts as
+    its inscribed sphere (conservative: only a real overlap is reported)."""
+    rb = obj.mmd_rigid
+    size = rb.size
+    mw = obj.matrix_world
+    if rb.shape == "CAPSULE":
+        h = size[1] / 2.0
+        return mw @ Vector((0.0, 0.0, -h)), mw @ Vector((0.0, 0.0, h)), size[0]
+    if rb.shape == "SPHERE":
+        return mw.translation.copy(), mw.translation.copy(), size[0]
+    return mw.translation.copy(), mw.translation.copy(), min(size)
+
+
+def _segment_distance(a0, a1, b0, b1, samples=17):
+    """Minimum distance between segments a0-a1 and b0-b1 (sampled along a, exact on b)."""
+    best = float("inf")
+    d = b1 - b0
+    dd = d.length_squared
+    for i in range(samples):
+        p = a0.lerp(a1, i / (samples - 1))
+        t = 0.0 if dd < 1e-12 else max(0.0, min(1.0, (p - b0).dot(d) / dd))
+        best = min(best, (p - (b0 + d * t)).length)
+    return best
+
+
+def release_rest_overlaps(tolerance=0.002):
+    """A physics body that already sits INSIDE a bone-following collider it may collide
+    with gets shoved out the moment physics starts.  Such pairs stop colliding (the
+    collider's group joins the body's no-collide mask), as MMD modellers do by hand.
+
+    Same rule as scripts/stellarblade (Eve's HairTail_Root, 9.3 cm inside the head
+    sphere).  On ROE it matters since mmd_cloth_physics lets hair collide with the
+    body: g05's back hair is a wide sheet, measured into capsules up to 7 cm thick
+    whose roots start 2-4 cm inside the head sphere and the shoulders.  Standing
+    still, the roots were pushed 6-19 cm.  Returns 'body / collider (depth)' lines."""
+    bodies = [o for o in bpy.context.scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
+    statics = [o for o in bodies if o.mmd_rigid.type == "0"]
+    released = []
+    for d in bodies:
+        rd = d.mmd_rigid
+        if rd.type == "0":
+            continue
+        a0, a1, ra = _body_core(d)
+        for s in statics:
+            rs = s.mmd_rigid
+            gd, gs = rd.collision_group_number, rs.collision_group_number
+            if rd.collision_group_mask[gs] or rs.collision_group_mask[gd]:
+                continue                               # already never collide
+            b0, b1, rb_ = _body_core(s)
+            depth = ra + rb_ - _segment_distance(a0, a1, b0, b1)
+            if depth > tolerance:
+                rd.collision_group_mask[gs] = True
+                released.append("%s / %s (%.1f cm deep, group %d)"
+                                % (rd.name_j, rs.name_j, depth * 100, gs))
+    return released
+
+
 def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
-                       skin_before=None):
+                       skin_before=None, bust=False, collider_fixes=False):
     """Run Convert_to_MMD5's one-click pipeline with the resolved slots; add physics.
 
+    The two switches are ROE's (export_pmx and the roe_pmx_tools buttons turn them
+    on); Stellar Blade and FF7 reuse this function with their own bust and overlap
+    passes, so they stay off by default.  ``bust`` builds breast physics
+    (add_bust_physics).  ``collider_fixes`` keeps garment skin out of the body
+    colliders' measurement and releases bodies that start inside a collider.
     Returns (mmd_root_object, stats dict for the manifest).
     """
     from Convert_to_MMD5.presets import get_bones_list
@@ -1416,11 +1700,45 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
     bpy.ops.object.select_all(action="DESELECT")
     arm.select_set(True)
     bpy.context.view_layer.objects.active = arm
+    # A body collider's radius is measured over the skin of its bone and of every
+    # bone under it, down to a name on Convert_to_MMD5's cloth/hair word list.  A
+    # garment hung on a limb under another name is measured as limb: g05's sleeve
+    # ribbons (Riband_*, under 右腕捩 and 左手捩) made 右腕 and 左ひじ capsules 30 cm
+    # thick, and every hair chain started inside them.  The garment chains found by
+    # shape (cloth_chain_bones) stop the measurement too, for this one call.
+    from Convert_to_MMD5.convert import skirt
+
+    word_list = skirt.CLOTH_RE
+    if collider_fixes:
+        garments = cloth_chain_bones(arm, meshes,
+                                     slots.get("lower_body_bone", "").split(" ")[0])
+        new = [name for name in garments
+               if not word_list.search(name) and not skirt.HAIR_RE.search(name)]
+        physics["collider_stops"] = len(new)
+        if new:
+            skirt.CLOTH_RE = re.compile(
+                "(?:%s)|(?:%s)" % (word_list.pattern, "|".join(re.escape(n) for n in new)),
+                re.IGNORECASE)
     try:
         physics["body"] = ("ok" if bpy.ops.object.add_body_rigids() == {"FINISHED"}
                            else "cancelled")
     except Exception as exc:
         physics["body"] = "failed: %s" % exc
+    finally:
+        skirt.CLOTH_RE = word_list
+    # Breasts before garments, so a chain hung on a breast bone anchors to it.
+    if bust:
+        try:
+            physics["bust"] = add_bust_physics(root, arm, meshes)
+        except Exception as exc:
+            physics["bust"] = ["failed: %s" % exc]
+        for line in physics["bust"]:
+            print("[roe pmx] bust: %s" % line)
+        if any(" swings " in line for line in physics["bust"]):
+            try:
+                physics["bust_costume"] = follow_breast_skin(arm, meshes)
+            except Exception as exc:
+                physics["bust_costume"] = ["failed: %s" % exc]
     # Garments: mmd_cloth_physics (scripts/blender_addons) finds them by shape,
     # sizes the boxes from the skin, ties neighbouring chains of a skirt with
     # lattice joints and tapers mass/limits down each chain.  The add-on's own
@@ -1460,6 +1778,8 @@ def convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans=(),
             skirt.CLOTH_RE = restore
     except Exception as exc:
         physics["cloth"] = "failed: %s" % exc
+    if collider_fixes:
+        physics["released_overlaps"] = release_rest_overlaps()
     physics["rigid_bodies"] = sum(1 for obj in bpy.context.scene.objects
                                   if getattr(obj, "mmd_type", "") == "RIGID_BODY")
     physics["joints"] = sum(1 for obj in bpy.context.scene.objects
