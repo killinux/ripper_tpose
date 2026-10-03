@@ -57,6 +57,68 @@
 5. **验证**：G1MS 静止姿势和 Blender 骨头头部最大差 0.0001（厘米）；269 个动作全部解码；预览视频逐段看过（动作完整、脚落在地上）。
    详细见 `docs/doa6-fighting-motions.md`。
 
+## 2026-10-03 — Action Taimanin：模型清单 + 卡通材质 .blend / XPS / PMX 导出（新游戏），和 Taimanin Squad 的对比
+
+1. **起因**：用户让把 `E:\SteamLibrary\steamapps\common\Action Taimanin` 也做成查看模型和导出的脚本，导出一个试试，
+   并比较它和 taimaninsquad 有什么不同。
+2. **结果**：
+   - 新目录 `scripts/actiontaimanin/`：`list_models.py` 列出游戏的 1384 个模型（按服装拼好的展示模型 918、角色 90、
+     怪物 317、NPC 11、武器 48），`export_model.py <id> [--xps] [--pmx] [--turntable]` 导出；画廊页 `html/index.html`
+     （页首写着脚本用法和不用脚本的手工操作）；
+   - 试导 `asagi_costume_1_f`（Asagi 默认战斗服）到 `E:\game_export\ActionTaimanin\Asagi\`：`.blend`（约 9200 顶点 /
+     13714 三角面 / 96 根骨 / 7 个材质，贴图打包）+ 预览图 + 转台视频，XPS + 读回检查图，PMX（190 根骨、24 个刚体、
+     撕裂 0、付与顺序违规 0、胸部和头发有物理）+ 检查图；
+   - 另外在临时目录里建了 `asagi_costume_2_f`（浴巾，老着色器）和 `rinko_costume_1_f` 的 `.blend` 核对材质，看过预览图。
+3. **游戏数据**（和 Squad 很不一样，细节在 `scripts/actiontaimanin/README.md`）：
+   - Unity 2022.3.62f2 / IL2CPP / 内置渲染管线 / **Gamma 色彩空间**；39 个老式大包（`model_char` 1 GB，解开 2 GB），
+     三个数据表包加密（模型用不到）；
+   - 模型 = `unit` 包里的 prefab；身体、头发、脸的网格分开放在 `model_char/<角色>/` 下，prefab 把它们拼起来；
+   - 着色器是 Toony Colors Pro 2（84 % 的材质）和 Unity-Chan Toon Shader 2（11 %），都带工作室加的换色遮罩；
+   - 脸是骨骼驱动（约 28 根），没有 blend shape；物理是 Dynamic Bone。
+4. **做法**：
+   - `ataimanin_common.Bundle` 按 128 KB 的 LZ4 块读大包：只读块表，要哪段解哪段；序列化文件整个交给 UnityPy，
+     `.resS`（网格、贴图）由 UnityPy 通过同一个读取器按需取；
+   - `ataimanin_scene.py` 继承 Squad 的 `Scene`，加上：部件角色、材质提示（阴影色比例 / 球面贴图 / 描边）、
+     Dynamic Bone 链和碰撞体、胸部骨识别（常常没有名字：挂在脊柱前方、左右对称的一对单骨链）；
+   - `atm_materials.py`：两套着色器的 Blender 节点组，按 Gamma 空间计算。TCP2 的公式是从编译后的程序反汇编读出来的
+     （亮部是常数 1、边缘光混进底色、换色 = 底色的平均亮度 × 白平衡 × 换色色）；UTS2 用公开源码并和反汇编对过
+     （换色在这里作用于最终颜色）；
+   - Blender 端、XPS、PMX、预览全部用 Squad 的脚本，在那边加了几处通用入口（见下一条）。
+5. **改了 Taimanin Squad 的文件**（都是加法，Squad 自己的导出不变）：`build_blend.py` 的 `--materials` 插件入口和
+   骨架属性 `tsq_game` / `tsq_body_bones`；`export_pmx_blender.py` 的材质 `hints`、脸部骨算身体、
+   Dynamic Bone 的头发链、眼球骨 → `左目` / `右目`；`export_model.py` 的 `convert(game=, bust_reader=)`、
+   `run_workers(jobs, script)`；Squad 的 README 加了一节「给别的游戏复用」。
+6. **和 Taimanin Squad 的不同**（完整的表在新 README 里）：
+   - 渲染：Squad 是 URP + 线性空间 + 自研着色器（阴影色贴图、脸部 SDF 阴影）；Action 是内置管线 + Gamma 空间 +
+     两种通用着色器（阴影是颜色乘数）；
+   - 打包：Squad 是 Addressables 的 999 个小包；Action 是 39 个大包，要按块读；
+   - 模型：Squad 252 个单位，一个 prefab 一个角色；Action 1384 个 prefab，服装多得多（每个角色十几到三十套，还能换色）；
+   - 精度：同一个 Asagi，Squad 23,397 顶点 / 33,415 面 / 135 根骨 / 24 个 blend shape，Action 约 9,200 顶点 /
+     13,714 面 / 96 根骨 / 没有 blend shape；
+   - 脸：Squad 用 blend shape，Action 用骨骼；物理：Squad 是 Magica Cloth 2，Action 是 Dynamic Bone。
+7. **用户如何操作**：
+   - `cd scripts\actiontaimanin`；`python list_models.py --find asagi` 看某个角色有哪些模型；
+   - `python export_model.py asagi_costume_1_f --xps --pmx` 导出一个；`python export_model.py asagi --xps --pmx --jobs 4` 导一个角色的全部；
+   - `python list_models.py --html` 重新生成画廊页；结果在 `E:\game_export\ActionTaimanin\<角色>\<blend|xps|pmx>\<id>\`。
+8. **验证**：
+   - 离线测试 27 项通过（按块读取用合成的 UnityFS 文件测；其中 7 项是下午加的片段解码和姿势换算）；Squad 的 41 项测试也通过；
+   - 试导的三种格式都看过检查图：`.blend` 正面 / 侧面 / 背面 / 脸，XPS 读回摆姿势，PMX 读回 + 舞蹈 4 帧（身体姿势正常、
+     长发和胸部在动）；PMX 静止下落测试最大漂移 1.2 cm；
+   - 改过 Squad 的共用脚本后重导 Squad 的 `1_asagi` 到临时目录：PMX 和 XPS 与归档逐字节相同，报告 162 项里 161 项相同
+     （差的一项是这次没要转台视频）；
+   - 画廊页的 10 个文件链接全部有效。
+9. **踩过的坑**：
+   - Asagi 两侧的细发在 prefab 里比绑定姿势转了 26°：先当成过期姿势「修」回绑定姿势，渲侧面图对比后发现 prefab 的
+     才是对的（Squad 里的她也是这个造型），那一步删掉了；
+   - 布料插件不给头下面的无名骨链加物理（怕碰到脸部骨），第一次导出的 PMX 长发是硬的；现在按游戏的 Dynamic Bone 组件认头发链。
+10. **没做的 / 限制**：
+    - **归档的 PMX 没有表情**（脸是骨骼驱动的，表情是动画片段）；脸部骨都在 PMX 里，可以手工摆。当天下午补了片段解码器
+      （`ataimanin_anim.py`）和「姿势 → 形状键」，眨眼和口型已经能出，眉毛类表情还是空的，没有正式重导 —— 见 README「表情」一节；
+    - 只导了这一个模型，918 个展示模型的批量没跑，怪物 / NPC / 武器类别没试；
+    - 武器没有挂上，服装换色没有做成选项，UTS2 的头发天使环没做；
+    - 没有在 MMD 本体和 XPS 本体里打开过；检查图里眼睛上下看时虹膜会转出眼眶；
+    - `--pmx` 和 Squad 一样依赖 ROE worker 里还没进仓库的胸部刚体代码。
+
 ## 2026-10-02 — Taimanin Squad：胸部物理按角色缩放（大小 + 游戏的行程上限），148 个女性单位的 PMX 全部重导
 
 1. **起因**：上一条「胸部物理改成平移弹簧」只重导了 `1_asagi`，其余 PMX 还是旧的转动模板；游戏里每个角色的胸部设置又各不相同。

@@ -245,8 +245,10 @@ def bust_settings(model: dict, a) -> tuple[dict, dict | None]:
     return tc.bust_for_unit(base, spring, a.bust), spring
 
 
-def convert(model: dict, blend: str, a, report: dict) -> dict:
-    """--turntable / --xps / --pmx from the finished .blend into <Character>/blend|xps|pmx/<id>/."""
+def convert(model: dict, blend: str, a, report: dict, game: str = "Taimanin Squad", bust_reader=None) -> dict:
+    """--turntable / --xps / --pmx from the finished .blend into <Character>/blend|xps|pmx/<id>/.
+    `game` and `bust_reader` (model, a) -> (settings, the game's own values): for another game whose .blend
+    comes out of build_blend.py (scripts/actiontaimanin)."""
     model_id = model["id"]
     logs = os.path.join(tc.work_dir(a.export_root), "logs")
     title = "%s (%s)" % (model["name"], model_id)
@@ -299,9 +301,9 @@ def convert(model: dict, blend: str, a, report: dict) -> dict:
                 pmx_previews(model_id, pmx, a, logs, report)
         else:
             log("%s: PMX ..." % model_id)
-            comment = ("%s - Taimanin Squad (%s)\\nConverted by ripper_tpose "
-                       "(scripts/taimaninsquad/export_pmx_blender.py). Personal use only." % (title, model["key"]))
-            bust, spring = bust_settings(model, a)
+            comment = ("%s - %s (%s)\\nConverted by ripper_tpose "
+                       "(scripts/taimaninsquad/export_pmx_blender.py). Personal use only." % (title, game, model["key"]))
+            bust, spring = (bust_reader or bust_settings)(model, a)
             rep, _code = run_blender(["-b", blend, "--python", PMX_SCRIPT, "--", "--out", pmx_root,
                                       "--model-name", title[:60], "--comment", comment,
                                       "--bust", tc.bust_text(bust)]
@@ -326,8 +328,9 @@ def convert(model: dict, blend: str, a, report: dict) -> dict:
     return report
 
 
-def run_workers(jobs: int) -> int:
-    """--jobs: this same command line in `jobs` processes, worker k taking every jobs-th model of the list."""
+def run_workers(jobs: int, script: str | None = None) -> int:
+    """--jobs: this same command line in `jobs` processes, worker k taking every jobs-th model of the list.
+    `script`: the command's own file when it is not this one."""
     args, skip = [], False
     for arg in sys.argv[1:]:
         if skip:
@@ -337,7 +340,7 @@ def run_workers(jobs: int) -> int:
         elif not arg.startswith("--jobs="):
             args.append(arg)
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
-    procs = [subprocess.Popen([sys.executable, os.path.abspath(__file__)] + args + ["--shard", "%d/%d" % (k, jobs)],
+    procs = [subprocess.Popen([sys.executable, script or os.path.abspath(__file__)] + args + ["--shard", "%d/%d" % (k, jobs)],
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                               errors="replace", env=env) for k in range(1, jobs + 1)]
 

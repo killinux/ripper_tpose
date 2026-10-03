@@ -87,6 +87,9 @@ SOURCES = {
     "talk_a": ("mouth_talk_a",), "talk_e": ("mouth_talk_e",), "talk_o": ("mouth_talk_o",),
     "up": ("up_eyes",), "down": ("down_eyes",), "left": ("left_eyes",), "right": ("right_eyes",),
 }
+# shape names tried before those, per role: the .blend's ``tsq_morph_sources`` (main() fills it; shapes made
+# from Action Taimanin's expression clips)
+MORE_SOURCES = {}
 # (MMD name, English name, panel, [(source, strength, region)])
 # region: "all", "L" / "R" (the character's left / right half), "eyes" (eye band and up), "mouth", "brows"
 # strength ("fit", f): whatever makes the shape's largest travel f x the eye height (Face.fit)
@@ -178,8 +181,16 @@ def resolve_slots(roe, arm, meshes):
     for side, name in sides.items():
         if name:
             slots["%s_chest_bone" % side] = name
+    # eyeball bones of a face rigged with bones (Action Taimanin: Bone_Eyeball_L / _R; Squad has none)
+    for side, key in (("L", "left_eye_bone"), ("R", "right_eye_bone")):
+        if key in slots and not slots[key]:
+            slots[key] = next((b.name for b in arm.data.bones
+                               if EYE_BONE.search(b.name) and b.name.endswith("_" + side) and b.name in weighted), "")
     missing = sorted(k for k, v in slots.items() if not v and k != "center_bone")
     return slots, missing
+
+
+EYE_BONE = re.compile(r"eye_?ball", re.IGNORECASE)
 
 
 LIMB_ALIAS = re.compile(r"^Bone_?([LR])_?(Thigh|Calf|UpperArm|Forearm)$", re.IGNORECASE)
@@ -369,7 +380,7 @@ class Face:
         return self._kept[key]
 
     def source(self, role):
-        return next((n for n in SOURCES[role] if n in self.names), None)
+        return next((n for n in MORE_SOURCES.get(role, ()) + SOURCES[role] if n in self.names), None)
 
     def measure(self):
         """Heights that split the face: bottom / top of the eyes (closed_eyes), the mouth (the widest
@@ -674,8 +685,13 @@ def setup_materials(meshes, tex_dir):
 
             # Colours here are DISPLAY values: Image.pixels of an 8-bit picture and the game's colour
             # properties are sRGB-encoded, and MMD multiplies / adds what it is given as it is.
+            # "hints": the same facts worked out by the extraction for another game's shaders
+            # (scripts/actiontaimanin/ataimanin_scene.hints) - the shadow tint, the sphere map and its mask.
+            hints = spec.get("hints") or {}
             ratio = None
-            if "_SHADOWCOLOR" in kw:                   # two tinted steps of the albedo: use the first
+            if hints.get("shade"):
+                ratio = np.clip(np.array(hints["shade"], dtype=float), 0.0, 1.0)
+            elif "_SHADOWCOLOR" in kw:                 # two tinted steps of the albedo: use the first
                 c = colors.get("_Shadow1Color")
                 if c:
                     ratio = np.clip(np.array([float(c[0]), float(c[1]), float(c[2])]), 0.0, 1.0)
@@ -689,8 +705,24 @@ def setup_materials(meshes, tex_dir):
                 mm.is_shared_toon_texture = False
                 mm.toon_texture = path
                 report["toon"].append("%s (%.2f %.2f %.2f)" % (mat.name, *ratio))
-            matcap = img("_MatCapMap")
-            if "_MATCAP" in kw and matcap is not None:
+            sphere = hints.get("sphere")
+            matcap = images.get(sphere["file"].lower()) if sphere else img("_MatCapMap")
+            if sphere and matcap is not None:
+                # a gamma-space shader: matcap x colour x mask.G (+ level) on display values as they are
+                mask = sphere.get("mask") or {}
+                cover = mask_coverage(meshes, mat, images.get(mask["file"].lower()) if mask else None,
+                                      mask.get("channel", 1))
+                cover = min(max(cover + float(sphere.get("level", 0.0)), 0.0), 1.0)
+                px = tb.image_pixels(matcap).copy()
+                px[..., :3] = np.clip(px[..., :3] * np.array(sphere["color"][:3], dtype=float) * cover, 0.0, 1.0)
+                if sphere.get("mode") == "multiply":    # multiplied where the mask lets it: white elsewhere
+                    px[..., :3] = 1.0 - cover + px[..., :3]
+                px[..., 3] = 1.0
+                path = tb.save_png(os.path.join(tex_dir, "sph_%s.png" % safe(mat.name)), px)
+                FnMaterial(mat).create_sphere_texture(path)
+                mm.sphere_texture_type = "1" if sphere.get("mode") == "multiply" else "2"
+                report["sphere"].append("%s (x%.2f)" % (mat.name, cover))
+            elif "_MATCAP" in kw and matcap is not None:
                 px = tb.image_pixels(matcap).copy()
                 tint = colors.get("_MatCapColor", [1, 1, 1, 1])
                 lin = np.array([tb_srgb(tint[0]), tb_srgb(tint[1]), tb_srgb(tint[2])])
@@ -731,27 +763,57 @@ def teach_cloth_names():
     return "skrit = skirt"
 
 
-def every_biped_is_body():
+def teach_dynamic_hair(arm):
+    """The add-on leaves the bones under the head alone unless their name says hair (they could be the face).
+    Action Taimanin's hair chains have no such name (``Bone136`` ... ``Bone141`` is Asagi's long hair) - but
+    the game says which chains swing: the roots of its Dynamic Bone components, kept on the armature
+    (``tsq_cloth``).  For this run those bones count as hair.  Returns their names."""
+    try:
+        from mmd_cloth_physics import analyze
+        groups = json.loads(arm.get("tsq_cloth", "") or "[]")
+    except (ImportError, ValueError):
+        return []
+    names = []
+    for group in groups:
+        if group.get("kind") != "dynamic_bone" or group.get("name") == "Breast":
+            continue
+        for root in group.get("root_bones") or []:
+            bone = arm.data.bones.get(root)
+            if bone is None or not any(re.search(r"\b(Head|Neck)\b", p.name) for p in bone.parent_recursive):
+                continue
+            names += [b.name for b in [bone] + list(bone.children_recursive)
+                      if b.name not in names and not analyze.HAIR_NAME.search(b.name)]
+    if names and not getattr(analyze, "_tsq_hair", False):
+        pattern = analyze.NAME_HINTS[0][0] + "|" + "|".join(r"\b%s\b" % re.escape(n) for n in names)
+        analyze.NAME_HINTS = ((pattern, analyze.NAME_HINTS[0][1]),) + tuple(analyze.NAME_HINTS[1:])
+        analyze.HAIR_NAME = re.compile(pattern, re.IGNORECASE)
+        analyze._tsq_hair = True
+    return names
+
+
+def every_biped_is_body(more=""):
     """58_YuphieSophie is two characters in one unit: a second 3ds Max Biped (``Bip002 ...``) stands next to
     the one the MMD skeleton is made of.  The worker tells mmd_cloth_physics that the body is ``^Bip001\\b``
     and that add-on takes every other chain of skinned bones for a garment - the whole second character
     became cloth and collapsed (5 m of drift in the rest test, 93 m in a dance).  For this run the body is
-    every Biped; the add-on's files are not touched.  Returns a note for the report."""
+    every Biped, and what `more` matches (the .blend's ``tsq_body_bones``: Action Taimanin's face bones);
+    the add-on's files are not touched.  Returns a note for the report."""
     try:
         from mmd_cloth_physics import api
     except ImportError:
         return "mmd_cloth_physics is not installed"
     if not getattr(api, "_tsq_bipeds", False):
         original = api.setup
+        body = r"^Bip\d+\b" + ("|" + more if more else "")
 
         def setup(obj, *args, body_regex=None, **kwargs):
             if body_regex and re.match(r"\^Bip\d+", body_regex):
-                body_regex = r"^Bip\d+\b"
+                body_regex = body
             return original(obj, *args, body_regex=body_regex, **kwargs)
 
         api.setup = setup
         api._tsq_bipeds = True
-    return "every Biped is body"
+    return "every Biped is body" + (", and %s" % more if more else "")
 
 
 def plain_mmd_model(arm):
@@ -797,6 +859,13 @@ def main():
     report = {"name": name, "pmx": path, "source": bpy.data.filepath}
 
     arm, meshes, removed = tb.scene_parts(keep_weapon=args.keep_weapon)
+    game = arm.get("tsq_game", "") or "Taimanin Squad"
+    try:
+        MORE_SOURCES.update({role: tuple(n.lower() for n in names)
+                             for role, names in json.loads(arm.get("tsq_morph_sources", "") or "{}").items()
+                             if role in SOURCES})
+    except ValueError:
+        pass
     report["weapons_left_out"] = removed
     report["outline_modifiers_removed"] = tb.strip_outline(meshes)
     report["shape_key_drivers_removed"] = tb.clear_shape_key_drivers(meshes)
@@ -844,7 +913,8 @@ def main():
         report["arm_down_deg"] = roe.apose_arms(arm, meshes, slots)
         skin_before = roe.snapshot_skin(arm, meshes)
         report["cloth_names"] = teach_cloth_names()
-        report["cloth_body"] = every_biped_is_body()
+        report["dynamic_hair"] = teach_dynamic_hair(arm)
+        report["cloth_body"] = every_biped_is_body(arm.get("tsq_body_bones", "") or "")
         root, stats = roe.convert_rig_to_mmd(arm, meshes, slots, missing_optional, helper_plans, skin_before,
                                              bust=True, collider_fixes=True)
         report.update(stats)
@@ -867,7 +937,7 @@ def main():
 
     root.mmd_root.name = root.mmd_root.name_e = args.model_name or name
     root.name = args.model_name or name
-    comment = args.comment or "Converted from Taimanin Squad by ripper_tpose (scripts/taimaninsquad). Personal use only."
+    comment = args.comment or "Converted from %s by ripper_tpose (scripts/taimaninsquad). Personal use only." % game
     text = bpy.data.texts.new(name + "_comment")
     text.from_string(comment.replace(chr(92) + "n", "\n"))
     root.mmd_root.comment_text = root.mmd_root.comment_e_text = text.name

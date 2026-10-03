@@ -765,6 +765,17 @@ def build_lit(mat, spec):
 
 
 MATS = {}
+# --materials <file.py>: another game's shaders (scripts/actiontaimanin/atm_materials.py).  The module's
+# builders(globals of this script) returns [(match(shader, spec), build(mat, spec))]; a build returns
+# {"kind", "base_map", "outline_mm", "outline_color"} - what is kept on the material below.
+EXTRA_BUILDERS = []
+if arg("--materials"):
+    import importlib.util
+
+    _plugin_spec = importlib.util.spec_from_file_location("tsq_material_plugin", arg("--materials"))
+    _plugin = importlib.util.module_from_spec(_plugin_spec)
+    _plugin_spec.loader.exec_module(_plugin)
+    EXTRA_BUILDERS = _plugin.builders(globals())
 
 
 def material(key, sdf_side=1.0):
@@ -778,7 +789,11 @@ def material(key, sdf_side=1.0):
     for node in list(mat.node_tree.nodes):
         mat.node_tree.nodes.remove(node)
     shader = spec.get("shader", "")
-    if shader.startswith("Squad/"):
+    extra = next((build for match, build in EXTRA_BUILDERS if match(shader, spec)), None)
+    made = extra(mat, spec) if extra is not None else {}
+    if made:
+        kind = made["kind"]
+    elif shader.startswith("Squad/"):
         kind = build_toon(mat, spec, sdf_side)
     elif "Unlit" in shader or shader.startswith(("etoylab", "EP1Shader", "eTOYLab")):
         kind = build_unlit(mat, spec)
@@ -787,7 +802,9 @@ def material(key, sdf_side=1.0):
     mat["tsq_shader"] = shader
     mat["tsq_kind"] = kind
     mat["tsq_keywords"] = " ".join(spec.get("keywords", []))
-    if spec["textures"].get("_BaseMap"):
+    if made.get("base_map"):
+        mat["tsq_base_map"] = made["base_map"]
+    elif spec["textures"].get("_BaseMap"):
         mat["tsq_base_map"] = spec["textures"]["_BaseMap"]["file"]
     for prop in ("_MatCapMap", "_InShadowMap", "_MaskMap", "_SDFShadowMap"):
         if spec["textures"].get(prop):
@@ -797,6 +814,9 @@ def material(key, sdf_side=1.0):
                 and "SRPDEFAULTUNLIT" not in spec.get("disabled_passes", []))
     mat["tsq_outline_width"] = f.get("_Outline_Width", 0.0) if outlined else 0.0
     mat["tsq_outline_color"] = spec["colors"].get("_Outline_Color", [0, 0, 0, 1])[:3]
+    if "outline_mm" in made:
+        mat["tsq_outline_width"] = made["outline_mm"]
+        mat["tsq_outline_color"] = list(made.get("outline_color") or (0.0, 0.0, 0.0))[:3]
     # the game's own material record, so the XPS / PMX converters (and anyone curious) need no scene.json
     mat["tsq_spec"] = json.dumps(spec, ensure_ascii=False, separators=(",", ":"))
     report["materials_built"][key] = kind
@@ -1134,7 +1154,13 @@ report["weapons"] = [o.name for o in meshes if o.get("tsq_role") == "weapon"]
 arm["tsq_id"] = SCENE.get("id", "")
 arm["tsq_name"] = SCENE.get("name", "")
 arm["tsq_prefab"] = SCENE.get("prefab", "")
-arm["tsq_game"] = "Taimanin Squad"
+arm["tsq_game"] = SCENE.get("game", "Taimanin Squad")
+# skinned bones that are the body itself (a regular expression; Action Taimanin's face bones) - for the PMX
+# converter, which takes every other chain of skinned bones for a garment
+arm["tsq_body_bones"] = SCENE.get("body_bones", "")
+# {converter role: [shape key names]} put in front of export_pmx_blender.SOURCES (shapes made from another
+# game's expression clips have their own names)
+arm["tsq_morph_sources"] = json.dumps(SCENE.get("morph_sources") or {}, ensure_ascii=False)
 arm["tsq_cloth"] = json.dumps(SCENE.get("cloth", []), ensure_ascii=False)
 arm["tsq_breast_bones"] = json.dumps(SCENE.get("breast_bones", []), ensure_ascii=False)
 # bones whose skin was handed to the Biped bone they lie on (tsquad_scene.Scene.limb_aliases)

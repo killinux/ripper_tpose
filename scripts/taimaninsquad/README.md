@@ -612,6 +612,20 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
    5 个早期单位的腿权重没修（见上）；XPS / PMX。
 7. 从 Blender 再手工导 XPS / PMX 的步骤和别的游戏相同，见 `docs/vindictus-fiona-manual-export.md` 第 5、6 节。
 
+## 给别的游戏复用（Action Taimanin）
+
+`..\actiontaimanin` 用的是这里的 `build_blend.py`、XPS / PMX 转换和预览脚本，只自己写读取和材质。为此加了几处
+通用入口，Squad 自己的导出不受影响（改完后重导 `1_asagi`，PMX 和 XPS 与归档逐字节相同）：
+
+| 入口 | 在哪 | 作用 |
+|---|---|---|
+| `--materials <文件.py>` | `build_blend.py` | 别的着色器的材质构建器：模块的 `builders(globals)` 返回 `[(匹配函数, 构建函数)]` |
+| 场景里的 `game`、`body_bones` | `build_blend.py` → 骨架属性 `tsq_game`、`tsq_body_bones` | 游戏名；「这些蒙皮骨是身体」的正则（脸部骨不能当衣物） |
+| 材质记录里的 `hints` | `export_pmx_blender.setup_materials` | 阴影色比例、球面贴图及遮罩：有就用它，没有才按 Squad 的属性名算 |
+| `tsq_cloth` 里 `kind = dynamic_bone` 的链 | `export_pmx_blender.teach_dynamic_hair` | 头下面的无名骨链算头发 |
+| 眼球骨 `…Eyeball…_L/_R` | `export_pmx_blender.resolve_slots` | MMD 的 `左目` / `右目`（Squad 的脸没有眼球骨，不受影响） |
+| `convert(..., game=, bust_reader=)`、`run_workers(jobs, script)` | `export_model.py` | 给另一个游戏的入口脚本调用 |
+
 ## 已知限制
 
 - **`--pmx` 依赖 ROE worker 里还没进仓库的胸部刚体代码**：胸部刚体和碰撞体修正是

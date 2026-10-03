@@ -18,6 +18,7 @@
 | HoneySelect 2 (Libido DX) | Unity AssetBundle（`abdata\`，不加密）+ 角色卡 PNG | [`honeyselect2/`](honeyselect2/) | `honeyselect2\list_models.py` / `export_model.py` |
 | CRISIS CORE –FINAL FANTASY VII– REUNION | Unreal 4.27 IoStore（索引 AES 加密，要 usmap） | [`ccff7r/`](ccff7r/) | `ccff7r\list_models.py` / `export_model.py` |
 | Taimanin Squad（対魔忍スクワッド） | Unity 2022.3 Addressables（UnityFS，不加密） | [`taimaninsquad/`](taimaninsquad/) | `taimaninsquad\list_models.py` / `export_model.py` |
+| Action Taimanin（アクション対魔忍） | Unity 2022.3 老式 AssetBundle（39 个大包，3 个数据表包加密） | [`actiontaimanin/`](actiontaimanin/) | `actiontaimanin\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -146,6 +147,15 @@ blend shape 按区域切成 MMD 标准表情，胸部物理是照游戏 Bone Spr
 （`--backdrop` 换背景）；`export_backgrounds.py` 把游戏里的背景图（剧情背景、过场画、天空全景）挑好的 128 张导到一个文件夹。
 详见 [`taimaninsquad/README.md`](taimaninsquad/README.md)。
 
+Action Taimanin（アクション対魔忍）和 Taimanin Squad 是同一家公司的游戏，但打包和着色器完全不同：39 个大包
+（`model_char` 1 GB），`actiontaimanin/` 的 `Bundle` 按 128 KB 的 LZ4 块读取，不用把整包解到内存。
+`list_models.py` 列出 `unit` 包里的 1384 个 prefab（按服装拼好的展示模型 918 个、角色 90、怪物 317 ……）；
+`export_model.py <id> --xps --pmx` 读 prefab（身体、头发、脸分在三处，prefab 把它们拼起来），用 Taimanin Squad 的
+`build_blend.py` 加本目录的材质构建器（`atm_materials.py`：Toony Colors Pro 2 和 Unity-Chan Toon Shader 2，
+按游戏的 Gamma 空间计算，带工作室的换色遮罩）出 `.blend`，XPS / PMX 也是 Squad 的转换脚本。脸是骨骼驱动
+（约 28 根脸部骨，没有 blend shape），物理是 Dynamic Bone；表情从游戏的剧情表情片段解出来做成形状键（进行中）。两款游戏的差别列在
+[`actiontaimanin/README.md`](actiontaimanin/README.md) 的对比表里。
+
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
 Archive Tool 源码），TMC/TMCL 经 Noesis（32 位 + doa5pc 插件）转 FBX+DDS；DOA6 用
@@ -179,5 +189,5 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`、`ccff7r/`、`taimaninsquad/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`、`ccff7r/`、`taimaninsquad/`、`actiontaimanin/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。
