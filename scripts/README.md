@@ -17,6 +17,7 @@
 | NARAKA: BLADEPOINT（永劫无间） | Unity 2019.4 AssetBundle（改头的 UnityFS，不加密） | [`naraka/`](naraka/) | `naraka\list_models.py` / `export_model.py` |
 | HoneySelect 2 (Libido DX) | Unity AssetBundle（`abdata\`，不加密）+ 角色卡 PNG | [`honeyselect2/`](honeyselect2/) | `honeyselect2\list_models.py` / `export_model.py` |
 | CRISIS CORE –FINAL FANTASY VII– REUNION | Unreal 4.27 IoStore（索引 AES 加密，要 usmap） | [`ccff7r/`](ccff7r/) | `ccff7r\list_models.py` / `export_model.py` |
+| Taimanin Squad（対魔忍スクワッド） | Unity 2022.3 Addressables（UnityFS，不加密） | [`taimaninsquad/`](taimaninsquad/) | `taimaninsquad\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -131,6 +132,20 @@ CRISIS CORE –FINAL FANTASY VII– REUNION 是 UE 4.27 IoStore，pak 索引 AES
 贴图打包后存到 `E:\game_export\CCFF7R\<组>\blend\<id>\`；`--xps --pmx` 再出 XPS（blender2xps）和 MMD PMX（FF7 那条转换链，
 NPC 没有脖子骨时补一根）。详见 [`ccff7r/README.md`](ccff7r/README.md)。
 
+Taimanin Squad（対魔忍スクワッド）是 Unity 2022.3 + Addressables：`catalog.json` + 999 个不加密的 UnityFS bundle，
+`taimaninsquad/` 只用 UnityPy。`list_models.py` 解析 Addressables 目录列出 252 个 3D 单位（角色 117、其他造型 19、
+怪物 88、Boss 22 ……，`--details` 读出面数 / 骨骼 / 表情数并按胸部骨标出女性体型，`--html` 出画廊页，页首写着
+自己列模型、导出的手动操作说明）；`export_model.py --female --xps --pmx --turntable --jobs 6` 批量导出女性体型（148 个）；
+`export_model.py <id>` 读单位 prefab（Biped 骨架 + 表情 blend shape），并把游戏放在「武器栏」里的手臂 / 腿装回去
+（另一个包里的武器 prefab，运行时才挂到骨架上；`--weapons` 连真正的武器一起带，`rig_lint.py` 检查有没有缺肢体），
+在 Blender 里**按游戏着色器的字节码逐项重建
+卡通材质**（阴影色图、遮罩图、MatCap、脸部 SDF 阴影、描边外壳；`dump_shader.py` 就是反汇编着色器的工具），存成
+贴图打包的 `.blend`；`--xps` 走 Blender2XPS，`--pmx` 复用 Rise of Eros 的 PMX worker（同是 Biped），表情从整脸
+blend shape 按区域切成 MMD 标准表情，胸部物理是照游戏 Bone Spring 做的平移弹簧（按每个角色的胸部大小和游戏给的
+行程上限缩放，`--bust` 可调）；`dance_video.py <id> --vmd <动作>` 给导出的 PMX 套 MMD 动作渲成带配乐的视频
+（`--backdrop` 换背景）；`export_backgrounds.py` 把游戏里的背景图（剧情背景、过场画、天空全景）挑好的 128 张导到一个文件夹。
+详见 [`taimaninsquad/README.md`](taimaninsquad/README.md)。
+
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
 Archive Tool 源码），TMC/TMCL 经 Noesis（32 位 + doa5pc 插件）转 FBX+DDS；DOA6 用
@@ -164,5 +179,5 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`、`ccff7r/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`、`ccff7r/`、`taimaninsquad/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。

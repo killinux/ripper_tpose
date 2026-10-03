@@ -14,6 +14,88 @@
 
 ---
 
+## 2026-10-02 — Taimanin Squad：胸部物理按角色缩放（大小 + 游戏的行程上限），148 个女性单位的 PMX 全部重导
+
+1. **起因**：上一条「胸部物理改成平移弹簧」只重导了 `1_asagi`，其余 PMX 还是旧的转动模板；游戏里每个角色的胸部设置又各不相同。
+   用户确认了 Asagi 的效果（「可以」）并让继续。
+2. **结果**：
+   - 148 个女性单位的 PMX 全部重导（20:19–20:41，6 个并行，22 分钟，0 失败）：135 个有胸部刚体的都是平移弹簧；其余 13 个
+     没有胸部物理（8 个没有胸部骨，4 个不是人形，`23_oboro` 的胸部骨上没有蒙皮）；撕裂 0、付与顺序违规 0；
+   - 每个角色的参数不同，系数 0.25–1.2（Asagi = 1.0）：1.0 的 23 个，0.8–0.99 的 46 个，0.5–0.79 的 28 个，不到 0.5 的 36 个，
+     1.2 的 2 个。87 个的系数是被游戏的行程上限定的（44 个角色的上限不到 4 cm，如 `11_rinko` 1.5 cm、`16_asuka` 1 cm），
+     48 个是按胸部大小定的（平胸的 `7_yukikaze` 0.66、`2_sakuya` 0.4）；
+   - PMX 的检查图（`preview.png` / `preview_dance.png`）现在都是按 MMD 的方式跑物理渲的；画廊卡片的 pmx 一行写着每个角色的数值。
+3. **做法**（`tsquad_common.bust_fitted`）：
+   - 胸部大小 = 胸部蒙皮的加权中心到胸部骨的距离（Asagi 10.9 cm，平胸 4–7 cm，最大约 15 cm），系数 = 大小 ÷ 10.9，限制在 0.4–1.2；
+   - 游戏上限 = Bone Spring 的 `limitDistance × blendWeight`（Asagi 5 cm）；系数不超过 上限 ÷ 5 cm；最终限制在 0.25–1.6；
+   - 行程 × 系数，左右 / 前后的弹簧频率 × 1/√系数（摆幅随系数走，不会一直撞限位），上下只调硬不调软（否则静止时垂得更低），阻尼比不变。
+4. **没有照搬的游戏参数**（试过，量出来不行）：
+   - 按游戏的 `springPower` 调软硬、按 `damping` 调阻尼：软弹簧 + 小行程的角色（22 个单位是 0.03 / 4 cm / 0.65）在舞蹈里一直撞限位
+     （量到行程 7.9 / 6.4 cm = 限位 ±4 / ±3.2 的两倍）；
+   - MMD 的阻尼只有刚体的移動減衰，减的是相对世界的速度，阻尼大了胸部会被「拖」在身体后面；
+   - 硬弹簧 + 重阻尼（`13_shiranui`）算出来的移動減衰在 32 位浮点里变成 1.0，刚体每步被刹死、整段挂在限位上 —— 现在衰减率有上限；
+   - Magica Cloth 2 内部怎么用这两个数没有公开的公式，换算是推的，没有对照游戏画面。
+5. **顺带修复：双人单位 `58_yuphiesophie`**（核对批量结果时查出来的，不是这次引入的）：
+   - 这个单位里有两副 Biped 骨架（`Bip001` Yuphie、`Bip002` Sophie）。转换时只把 `Bip001` 当身体，Sophie 的整副骨架被布料插件
+     当成了衣物：静止测试漂移 5 米，舞蹈里飞出去 93 米，检查图里没有她；Yuphie 的左胸还被认成了「右胸」、另一边没有物理；
+   - 修法（`export_pmx_blender.py`）：所有 `Bip\d+` 都算身体；胸部的左右按主骨架的脊柱量，优先取挂在主骨架上的胸部骨；
+   - 修后：刚体 92 → 27，静止漂移 505 cm → 2.1 cm，左右胸都有物理；Sophie 以静止姿势站在旁边（MMD 标准骨架只能套一副）。
+     另外两个有第二副 Biped 的单位（`42_shisui`、`b_13_thursday`）重导后检查图和修前一样。
+6. **新增 / 修改**（`scripts/taimaninsquad/`）：
+   - `tsquad_common.py`：`BUST`（全部设置的默认值，从 `tsquad_blender.py` 搬过来，可以离线测试）新增 `amount`（整体幅度）、
+     `size_cm`（参考大小）、`game`（是否遵守游戏上限）、`cap_cm`（上限）；`bust_for_unit`、`bust_fitted`、`bust_text`；
+   - `tsquad_scene.py`：`breast_spring(model)` 读单位的 Bone Spring 设置（`read_cloth` 多记 `springPower` / `limitDistance`）；
+   - `tsquad_blender.spring_bust`：量胸部大小，按 `bust_fitted` 的结果设关节；
+   - `export_model.py` / `dance_video.py`：从游戏读上限传给 Blender；日志和 `exports.json` 里记下每个角色的大小、上限、系数、行程、频率；
+   - `html/make_gallery.py`：卡片的 pmx 一行多了「胸部最多晃 ±x cm（系数…）」，手动操作说明多了 `--bust`、`--view chest`、换背景、导背景图几条。
+7. **用户如何操作**：
+   - 某个角色想多晃 / 少晃：`python export_model.py <id> --pmx --reconvert --bust amount=1.3`（或 `0.5`）；
+   - 不要游戏的上限：`--bust game=0`（全部重做：`python export_model.py --female --pmx --reconvert --jobs 6 --bust game=0`，约 22 分钟）；
+     所有人用 Asagi 那一套：`--bust size_cm=0,game=0`；
+   - 先在视频里试：`python dance_video.py <id> --vmd <动作> --view chest --bust amount=1.3`。
+8. **验证**：
+   - 8 个有代表性的单位各量了一遍舞蹈里胸部的行程（README 里有表）：都在各自限位以内；Asagi 的数值和上一条完全一样；
+   - `14_azusa` 的 PMX 读回：关节在刚体中心，移動制限 ±0.5 / ±0.4 / ±0.4，ばね 239 / 638 / 334；`1_asagi` 重导后读回，
+     移動制限 ±0.625 / ±0.5 / ±0.5、ばね 191 / 512 / 267，和用户看过的那份一样；
+   - 批量后逐个核对：148 个 PMX 和三张检查图都是批量之后生成的，撕裂 0、付与顺序违规 0；把「静止下落漂移」和「刚体离胯部最远距离」
+     排序看了最大的几个（就是这样查出 `58_yuphiesophie` 的），修后最大的是两个巨型 Boss 的触手（19.5 / 13.2 cm）；
+   - 147 张舞蹈检查图按 7 张总览逐张看过，没有散架的；`257_shizuru` 的细链坠子甩得比较开（已写进已知限制）；
+   - 离线测试 41 项通过；画廊页 2009 个链接 0 个失效；没有在 MMD 本体里验证过。
+
+## 2026-10-02 — Taimanin Squad：游戏里的背景图 128 张导到一个文件夹，舞蹈视频可以换背景
+
+1. **起因**：用户看完 `1_asagi` 的舞蹈视频后：「游戏里有没有什么背景，找一些好看的背景放到一个文件夹下」。
+2. **结果**：`E:\game_export\TaimaninSquad\_backgrounds\`，128 张 PNG + 8 张带名字的缩略图总览（`_总览_<类别>_<n>.jpg`），141 MB。
+   - 剧情背景 55 张（`Story/BG/`，全部）、过场画 50 张（`Prologue_Epilogue/` 的 335 个图层里整幅、不透明、没有人物的）、
+     界面底图 2 张、抽卡底图 5 张、手绘天空 6 张、天空盒全景 10 张（9 个立方体贴图各拼成 4096×2048 的全景图）；
+   - 文件名是 `<类别>_<游戏里的名字>_<画的是什么>.png`，例如 `剧情_S018_B_夜店舞台.png`；
+   - 游戏的 3D 战斗关卡（25 个 Unity 场景）不是图片，**没有导**；README 里写了它们是什么。
+3. **新增**（`scripts/taimaninsquad/`）：
+   - `export_backgrounds.py`：`python export_backgrounds.py`；`--list` 只列出每张图来自 catalog 的哪个地址，
+     `--all` 另把背景相关文件夹里的全部 523 张导到 `_backgrounds\全部\<类别>\`，`--force` 重写；
+   - `dance_video.py --backdrop <图片路径 或 背景图名字里的一段>`：给舞蹈视频换背景（`--backdrop-fov / -turn / -tilt`
+     是全景图的取景，`--shadow` 是地面影子的深浅）；
+   - 示例：`E:\game_export\TaimaninSquad\Asagi\video\1_asagi\1_asagi_爆了2026.1.18_bg-剧情_S018_B_夜店舞台.mp4`。
+4. **用户如何操作**：
+   - 看图：打开 `_backgrounds` 文件夹，先看 `_总览_*.jpg`；
+   - 换背景：`python dance_video.py 1_asagi --vmd <动作文件夹> --backdrop 夜店舞台`（名字匹配到不止一张会列出来）；
+   - 在 Blender 里自己用：平面的图当相机背景或贴在角色身后的平面上；`全景_*.png` 接到「世界」的「环境纹理」节点。
+5. **实现原理与兼容性**：
+   - 图片按 Addressables 目录的地址找（地址 → GUID → bundle 容器），只用 UnityPy；
+   - 界面底图在游戏里是 2048×2048 的正方形拉成 16:9 显示的，导出时缩回 2048×1152；
+   - 立方体贴图 → 全景：六个面依次排在图像数据里（+X −X +Y −Y +Z −Z），每个面从上往下存（和普通贴图相反，不能翻转），
+     按立方体贴图的标准规则逐像素取样，经度照 Unity 的全景天空盒；
+   - 换背景：图片贴在一块挂在相机上、正好铺满画面的平面上（保持比例，多出来的裁掉）；全景图先取一个 70° 的视角再贴
+     （相机是 70 mm 长焦，直接当世界背景只看得到 330 px 高的一条，放大后是马赛克）；地面改成透明、只在影子处压暗背景；
+     模型的打光不变；
+   - 只加了选项和新脚本，已有的输出不变；图片是游戏素材，只放在导出目录，不进仓库。
+6. **验证**：
+   - 128 张都在缩略图总览上逐张看过，名字和内容对得上（先是 1013 张候选的缩略图，再是入选的 8 张总览）；
+   - 全景：两种面朝向各拼了一遍对比，错的那种在面的交界处有一圈扇贝形接缝，对的连续；
+   - `--all` 在一个空的导出根目录里跑通（128 + 523 张）；
+   - 换背景：海滩、DSO 总部大厅（平面图）和霓虹都市、云海（全景）各渲了检查帧，夜店舞台渲了整段视频；
+   - 离线测试 41 项通过（全景拼接：六个面各一个颜色时方向正确；每个面涂成方向的函数时拼出来没有接缝）。
+
 ## 2026-10-02 — 新插件「爆衣 Clothes Burst」：选中衣服或衣服的一部分，一键在指定的帧炸开；推力按重力的倍数，先标定了 Blender 的力场
 
 1. **起因**：用户看完爆衣调研：「做成一个blender3.6能使用的插件吧，选中指定的部分衣服，可以爆开的，有默认设置，设置也可调」，又补了一句「blender插件」。
@@ -138,6 +220,63 @@
 
 ---
 
+## 2026-10-02 — Taimanin Squad：胸部物理改成平移弹簧（乳摇），预览按 MMD 的方式跑物理
+
+1. **起因**：用户看了 `1_asagi` 的舞蹈视频：「没有乳摇啊，是骨骼哪里不对么」。
+2. **结论**：骨骼没有问题（`左胸` / `右胸` 有骨头、刚体、关节，每侧 377 个顶点蒙在上面，145 个权重 ≥ 0.9）。
+   问题在物理的做法，量出来是三件事：
+   - PMX 里的胸部关节用的是 Rise of Eros worker 的模板：绕骨头根部转动 ±10°、没有弹簧。重力把它压在下限位上
+     （合成约 16°），整段舞蹈里胸部刚体相对上半身的中位速度只有 0.06 cm/帧。而游戏里胸部是 Magica Cloth 2 的
+     **Bone Spring**（`clothType 10`）：骨头在原位附近**平移**、弹簧拉回、最远 5 cm、不受重力。
+   - Blender 预览：mmd_tools 把每个关节建成带 0.5 阻尼的 SPRING2 约束，软弹簧被按得几乎不动（MMD 没有这一项）。
+   - Blender 预览：所有刚体都在碰撞层 0，mmd_tools 只给静止时靠得近的刚体对建「互不碰撞」约束，PMX 里写着
+     「和谁都不碰」的胸部刚体仍被经过胸前的手臂碰撞体撞到（右胸被撞出 5 cm）。
+3. **结果**：
+   - `1_asagi` 的 PMX 用新的胸部物理重导：`E:\game_export\TaimaninSquad\Asagi\pmx\1_asagi\1_asagi.pmx`；
+   - 舞蹈视频重渲：`...\Asagi\video\1_asagi\1_asagi_爆了2026.1.18.mp4`，另有胸部特写 `..._chest.mp4` 和
+     改前 / 改后并排的 `..._胸部物理对比.mp4`；用户看过对比后说「可以」；
+   - 同一段舞蹈里胸部的行程：左右 7.4 cm、前后 4.4 cm、上下 1.9 cm，中位速度 0.37 cm/帧（改前 0.06）。
+   - **其余已导出的 PMX 还没重导**（另外 139 个有胸部骨的单位仍是旧模板），见第 7 条。
+4. **新增 / 修改**（`scripts/taimaninsquad/`）：
+   - `tsquad_blender.py`：`BUST`（全部设置的默认值）、`parse_bust`、`spring_bust`（把胸部关节改成平移弹簧）、
+     `mmd_like_joints`、`isolate_loners`；
+   - `export_pmx_blender.py`：导出时自动把 worker 建的胸部关节改成平移弹簧；`--bust 名=值,...`，`--bust style=swing`
+     保留原来的转动模板；`export_model.py --bust ...` 透传；
+   - `render_dance_blender.py` / `dance_video.py`：`--physics mmd|blender`（默认 mmd）、`--view chest[:角度]`
+     （跟着上半身走的胸部特写）、`--bust ...`（只在这段视频里试别的参数，PMX 不变）、`--out-dir`；报告里多了
+     `bust_motion`（胸部行程和每帧速度）；
+   - `scripts/stellarblade/preview_pmx_blender.py`（共用文件，只加不改）：`--physics mmd`，默认仍是 `blender`；
+     Taimanin 的 PMX 检查图改用它。
+5. **用户如何操作**：
+   - 试参数（约 2 分钟，不动 PMX）：`python dance_video.py 1_asagi --vmd <动作文件夹> --view chest --bust bounce_hz=3,ratio=0.15`；
+   - 写进 PMX：`python export_model.py 1_asagi --pmx --reconvert --bust bounce_hz=3,ratio=0.15`；
+   - 设置一览（`sway_hz` / `depth_hz` / `bounce_hz` 频率越小越软，`*_cm` 行程，`ratio` 阻尼比）在
+     `scripts/taimaninsquad/README.md` 的「胸部物理（乳摇）是怎么做的」。
+6. **实现原理与兼容性**：
+   - 关节移到刚体中心（没有力臂，重力只拉不拧），转动锁死，三个平移轴各带弹簧 `k = m(2πf)²`：左右 2.2 Hz、
+     前后 2.6 Hz、上下 3.6 Hz。MMD 关不掉重力，弹簧对弹跳让多少、对重力就让多少，静止下垂 = g / (2πf)²
+     （3.6 Hz 垂 1.5 cm，2.2 Hz 会垂 4.1 cm），所以上下方向只能硬；
+   - 阻尼用刚体的移動減衰：Bullet 是每秒 `v ×= (1 − d)`，要阻尼比 0.25 就得 d = 1 − e^(−2ζω) = 0.999
+     （常见的 0.5 只相当于 ζ = 0.025）；
+   - 「按 MMD 的方式跑」= SPRING1 + 阻尼 0（Blender 把 SPRING1 的阻尼取反后交给 Bullet）、回転ばね乘缩放平方、
+     重力 98 × 0.08（`scripts/mmd_physics` 的标定结果），再加上 mask 全屏蔽的刚体各占一个碰撞层；
+   - Rise of Eros 的 worker 和 `scripts/mmd_physics` 的文件都没有改；别的游戏的 PMX 导出和预览不受影响。
+7. **待办**（用户说先记录、compact 之后再做）：
+   - 其余单位的 PMX 重导：`python export_model.py --female --pmx --reconvert --jobs 6`（约半小时）。先要定一件事：
+     游戏里每个角色的胸部设置不同（138 个单位普查：`springPower` 0.01–0.2，`limitDistance` 0.2–15 cm、多数
+     5 / 4 / 10 / 1 cm，`damping` 0.06–0.9，`blendWeight` 11 个是 0.3），现在的默认值是照 Asagi 调的 ——
+     是全部用同一套，还是按各自的游戏参数缩放；
+   - 用户要的「游戏里的好看背景，放到一个文件夹」还没开始。
+8. **验证**：
+   - 改前 / 改后各渲了一段胸部特写（同一个相机、同样按 MMD 的方式跑物理），做了时间切片图：改前胸部边缘是直线，
+     改后是约 2 Hz 的波浪；
+   - 导出的 PMX 用 mmd_tools 的读取器读回核对：关节在刚体中心，移動制限 ±0.625 / ±0.5 / ±0.5，ばね（移動）
+     191 / 512 / 267，回転制限 0，刚体 移動減衰 0.999；重新导入后量到的运动和调参时一致；
+   - 全身视频抽 10 帧看过：头发等其它物理在新的模拟方式下正常，动态刚体离胯部最远 0.56 米；
+   - PMX 静止下落测试：最大漂移 1.5 cm（就是胸部的重力下垂），没有超过 3 cm 的链；撕裂 0、付与顺序违规 0；
+   - 离线单元测试 28 项通过；画廊页 2008 个链接 0 个失效；
+   - 没有在 MMD 本体里验证过。
+
 ## 2026-10-02 — 布料撕裂 1.3：布料 1 只当模板（缓存减半），「快速预览」步数减半，地面按身高放大
 
 1. **起因**：用户：「把省一半烘焙时间那个也做了吧」。指的是我在 Tifa 之后提的：撕衣服时布料 1 每个点都固定，
@@ -173,6 +312,100 @@
      - 新地面在两个模型、三种步数下都没有。
    - 按钮测试 49 项全部通过（布料 1 开关的各种情况、快速预览开 / 关、全部清理还原）；
      窗帘和一键示例不受影响；1.1 场景全部清理后仍和没用过插件的场景一致。
+
+## 2026-10-02 — Taimanin Squad：给导出的 PMX 套 MMD 动作渲视频（`dance_video.py`）
+
+1. **起因**：用户：「1_asagi 导入 blender，用这个动作做个视频我看看」，动作是
+   `E:\Downloads\mmd\爆了2026.1.18by小王动画`（一个 `.vmd`，400 帧，加一个同名 WAV）。
+2. **结果**：
+   - `E:\game_export\TaimaninSquad\Asagi\video\1_asagi\1_asagi_爆了2026.1.18.mp4`：竖屏 1080×1920、30 fps、
+     400 帧（13.3 秒）、H.264 + AAC，配乐从动作第 0 帧开始；
+   - 同一文件夹的 `1_asagi_爆了2026.1.18.blend`：模型、动作、烘好的物理、贴图和配乐都打包在里面，用 Blender 3.6
+     打开按空格就能播，换角度、重渲都在这里改；
+   - 画廊卡片多了「视频」一行。
+3. **新增**（`scripts/taimaninsquad/`）：
+   - `dance_video.py`：`python dance_video.py <id> --vmd <.vmd 或装着它的文件夹>`。给文件夹时自动取里面的动作和配乐
+     （相机 / 表情用的 `.vmd` 会跳过）；`--bgm` / `--no-bgm` / `--name` / `--size` / `--frames` / `--stills N`（只渲检查帧）/
+     `--jobs N`（几个单位同时渲）/ `--force`；
+   - `render_dance_blender.py`：Blender 一侧的 worker；
+   - `html/make_gallery.py`：卡片列出 `<角色>\video\<id>\*.mp4`，操作说明里加了这条命令；
+   - 离线测试 25 → 28 项（动作 / 配乐的挑选、文件名、输出位置）。
+4. **用户如何操作**：
+   - `python dance_video.py 1_asagi --vmd "E:\Downloads\mmd\<动作文件夹>"`，这个单位要先有 PMX
+     （`python export_model.py <id> --pmx`）；
+   - 先看几帧再决定：加 `--stills 6 --no-video`（不到 1 分钟）；
+   - 视频在 `E:\game_export\TaimaninSquad\<角色>\video\<id>\`；想自己在 Blender 里看，打开同名 `.blend`。
+5. **实现原理与兼容性**：
+   - PMX 用 mmd_tools 带物理读回 → `Model.build()`（否则骨头不读刚体）→ 绑定表情滑块 → mmd_tools 的「边缘预览」
+     做描边 → 导入 VMD 时留 30 帧引子（不渲进视频，只让物理从静止姿势平稳进入第一帧）→ **先烘焙刚体模拟再渲**；
+   - 灯光沿用 PMX 检查图的「MMD 观感」（白色环境光 + 一盏弱主光 + Standard），所以颜色和 `preview.png` 一致；
+     地面是一块只显示影子的平面（漫反射 → Shader to RGB，受光处输出背景色）；
+   - 相机固定，取景范围是烘完物理后在整段动作上量出来的包围盒，手举到最高也不出画；
+   - 动作文件夹只读，不往 `E:\Downloads` 写任何东西；Rise of Eros 的 `render_pmx_dance.py` 没有改
+     （它的灯光是给写实材质配的，会把卡通贴图冲淡，所以这里另写）；
+   - 限制：不读相机 VMD；动作是给别的模型做的，体型差得多时手会穿模；Blender 里的物理比 MMD 本体硬一些；
+     4 个非人形单位的 PMX 没有标准 MMD 骨架，套不了。
+6. **验证**：
+   - 先渲 6 张检查帧看过（描边、表情、手指、头发物理、地面影子），再渲全片：400 帧用时 102 秒；
+   - `ffprobe`：视频流 h264 1080×1920 yuv420p 30 fps 400 帧，音频流 aac 48 kHz 双声道 13.35 秒，平均音量 −9.6 dB；
+   - 从成片每 40 帧抽一帧共 10 帧、另放大 6 帧逐张看过：没有物理爆炸，没有肢体撕裂；动态刚体离胯部最远 0.52 米；
+   - 存下的 `.blend` 用无界面 Blender 重新打开核对：帧范围 31–430，物理缓存已烘焙（1–430），15 张贴图和配乐全部
+     打包，渲染输出指向同一个 mp4；
+   - 画廊页 2006 个 `file://` 链接 0 个失效；离线单元测试 28 项通过；
+   - 没有在 MMD 本体里跑过这段动作。
+
+## 2026-10-02 — Taimanin Squad：补上放在「武器栏」里的手臂和腿（Natsume 少一只胳膊），12 个单位重导
+
+1. **起因**：用户：「20_natsume 少了一只胳膊」。核对后三种格式都少左臂（肩头一个断口）。上一条记录里写的
+   「逐张看过全部检查图」没有发现它。
+2. **原因**：单位 prefab 不一定是完整的角色。游戏把「武器」做成另一个包（动作包）里的独立 prefab
+   `<n>_<Name>/Weapon/Prefab/prf_weapon_<n>_<档>_<槽>.prefab`，运行时由根节点的 `AttachObject` 组件挂到骨架上
+   （`kBoneName` = 挂到哪个节点，`kInitTrans` = 挂上后清零自己的变换）。而武器栏里放的不只是刀枪 —— Natsume 的整条
+   左臂就是一件「武器」。此前脚本只读单位 prefab。
+3. **结果**：
+   - 普查了全部 142 个带武器 prefab 的单位（不算低模 572 个 prefab）。其中 **13 个单位的 21 个 prefab 是身体的
+     一部分**（蒙皮网格，每根蒙皮骨都叫 `Ref_<角色骨名>`，是角色骨头的替身）：`20_natsume` 整条左臂、`82_tsuru`
+     右前臂（一支枪）、`71_snakelady` 双臂、`47_saika` / `282_saika` 双腿、`6_amane` / `110_denji` 一只手、
+     `17_yuzuriha` / `87_torajiro` / `129_crackle` 双手、`102_yeager` 双前臂和爪、`51_mari` 臂甲、`44_koro` 背带和刀鞘。
+   - 这些现在**默认就带上**，皮直接蒙到角色自己的骨头上，在 `.blend` / XPS / PMX 里和身体别的部分一样跟着骨架动。
+   - 13 个里已导出的 12 个（都在女性名单里）三种格式全部重导；`110_denji` 没导出过，刷新了预览图。画廊已重新生成。
+   - **更正**：README 之前把 `71_snakelady`「没有手臂」、`282_saika`「只有大腿以上的半身」写成「游戏数据本身如此」，
+     是错的 —— 它们的肢体同样在武器 prefab 里。
+4. **新增**（`scripts/taimaninsquad/`）：
+   - `tsquad_common.py`：`weapon_prefabs()` / `pick_weapons()`，每个模型多一项 `weapons`（它的武器 prefab，按槽和档）；
+   - `tsquad_scene.py`：`Scene.add_weapons()` / `attach_prefab()` 按 `AttachObject` 把武器 prefab 挂到骨架上；
+     `Ref_<骨名>` 节点不另建骨头，直接当作角色的那根骨头；`load_unit()` 供导出和检查共用；
+   - `export_model.py`：`--weapons`（连真正的武器一起带）、`--weapon-grade 0|1|2`（武器的升级外观）、
+     `--no-weapon-prefabs`（只要单位 prefab）；
+   - `rig_lint.py`：新增「肢体上没有皮」的检查（`NO SKIN on: L Forearm, L Hand`）和 `--weapons none|limbs|all`；
+   - 画廊：卡片多了「武器」一行（带上了哪个 prefab、还有几个默认不带），操作说明里加了武器的命令和解释；
+   - 离线测试 20 → 25 项。
+5. **用户如何操作**：
+   - 平时不用做什么：`python export_model.py <id> --xps --pmx` 导出来就是完整的身体；
+   - 想连武器一起：加 `--weapons`（例 `python export_model.py 212_dullahan --xps --pmx --weapons --force`，肩甲和膝甲就有了）；
+     武器的升级外观加 `--weapon-grade 1` 或 `2`；
+   - 想自己确认没有缺胳膊少腿的：`python rig_lint.py`（约 5 分钟）。
+6. **实现原理与兼容性**：
+   - `Ref_` 是替身的依据在动画里：Animator 的绑定存的是节点路径的 CRC32，把候选路径算出来去对，Natsume 的片段里
+     `…/Bip001 L Clavicle/Bip001 L UpperArm` 和 `…/Bip001 L Clavicle/prf_weapon_20_0_L/Ref_Bip001 L UpperArm`
+     两条路径都有曲线；prefab 里这两套骨头也重合（13 个单位里 10 个完全重合，另 3 个差 3 mm – 20 cm，因为皮是蒙到
+     角色骨头上的，不影响结果）。
+   - **真正的武器默认仍然不带**（没带的单位产物不变）：`--weapons` 用的是 prefab 里的位置，握在手里的刀、腰间的
+     刀鞘、头饰、肩甲大多是对的，但靠动画摆位的不对（`59_sayaneo` 的爪链横着伸向一侧、`84_anje` 的触手左右伸出
+     4 米），挂点停在原点的（第 0 档 68 个 prefab）照旧进 `.blend` 的隐藏集合、不进 XPS / PMX。要全部摆对得解码
+     待机动画的曲线，没做。
+   - 没带武器 prefab 的单位，重新导出的结果和之前相同；`exports.json` 多了 `weapon_prefabs` 一项。
+7. **验证**：
+   - 13 个单位逐个做了「修复前 / 修复后 / 游戏头像」对照图；重导的 12 个单位逐个看了 `.blend` 预览、XPS 读回
+     （摆姿势）、PMX 静止、PMX 舞蹈四张图，并放大看了 4 个单位舞蹈里新肢体和身体的接缝，没有裂开；
+   - PMX 报告：12 个单位撕裂 0、付与顺序违规 0；
+   - `rig_lint.py --weapons none`（只看单位 prefab）在 252 个单位里报出 18 个有肢体没有皮：上面 13 个里的 11 个
+     （Mari、Koro 缺的不是肢体）加 7 个怪物；默认再跑，那 11 个全部消失，剩 8 个 —— 7 个本来就没有那一段的怪物
+     （没有腿的法师、双头犬、岩石巨人 ……）和 Tsuru（右前臂是枪，没有手指），都看过预览图；
+   - `--weapons`：35 个单位渲了预览逐个看过，`212_dullahan`、`1_asagi` 和 `20_natsume --weapon-grade 1` 在临时目录里
+     三种格式全套跑通；
+   - 画廊页 2005 个 `file://` 链接 0 个失效；离线单元测试 25 项通过；
+   - 仍未在 MMD / XPS 程序本体里打开过。
 
 ## 2026-10-02 — 布料撕裂 1.2：撕完整件掉下来（套圈切开、饰品不挡、水平推力），加「全部清理」
 
@@ -218,6 +451,73 @@
      - 用户 1.1 的练习文件清理后和 `1002.blend` 一致（只差练习文件里材质在用的 mmd_tools 节点组）。
    - 第二个模型：用户打开的 Tifa Gantz 18（GANTZ 战斗服，好几层）。在用户 Blender 里整套 12 件一起撕、烘焙 150 帧（约 4 分钟），
      第 150 帧整套落地、只剩靴子；只撕连体衣时，伸进手套、绑腿的那截会被兜住，所以多层衣服要一起选（guide 第 7 节）。
+
+## 2026-10-02 — Taimanin Squad：女性体型 148 个全部导出（blend / XPS / PMX），画廊补全并写上手动操作说明
+
+1. **起因**：用户：「把女性角色都导出来，并补全画廊，画廊里也写清楚如果手动看有哪些模型和导出的话如何操作」。
+2. **结果**：
+   - 148 个女性体型全部导出到 `E:\game_export\TaimaninSquad\<角色>\<blend|xps|pmx>\<id>\`，每个都有卡通着色的
+     `.blend`、XPS、MMD PMX、转台视频和各格式的检查图；连同之前测试的 3 个非女性单位共 151 个，合计 4.8 GB
+     （`.blend` 1.8、XPS 1.1、PMX 1.9）。
+   - **女性名单是 148，不是之前写的 146**：游戏的配置表解不开，没有性别字段。按胸部骨（Magica Cloth 的 Breast 组）
+     认出 140 个；又把其余 112 个单位的预览图逐个看过，补了 8 个没有胸部骨的（三个女孩 `87_torajiro`、`95_shizuku`、
+     `113_nao`，女性外形的机甲 `81_library` / `b_33_library`，戴面具的女剑士 `158_paladin` / `159_paladin2`，以及设定上是
+     男孩、模型是女孩外形的 `80_shikanosuke`），列在 `tsquad_common.FEMALE_BY_LOOK`。
+   - 画廊页 `scripts/taimaninsquad/html/index.html`：252 个单位都有图（导出过的用预览图，没导出的用预览渲染）；
+     页首新增**手动操作说明**：A 用脚本（准备、看有哪些模型、导出、产物在哪和怎么打开），B 不用脚本的手工路线
+     （AssetStudio 取 FBX → Blender，实测过）。命令带复制按钮。
+3. **新增**（`scripts/taimaninsquad/`）：
+   - `export_model.py`：`--female`（女性体型）、`--jobs N`（N 个进程并行）、`--shard K/N`、`--reconvert`（只从现有
+     `.blend` 重做 XPS / PMX）、`--repreview`（只重渲检查图）；`exports.json` 改成每导完一个就写，批量中断后把同一条
+     命令再跑一遍即可续上；
+   - `list_models.py --female` 用新名单，清单里 `F` = 有胸部骨、`f` = 看图补的；
+   - **不是人形的单位也能出 PMX**：蛇身的 Kaliya（2 个）、人鱼 Wednesday、翅膀代替手臂的 Harbinger 对不上标准
+     MMD 骨架，改走 mmd_tools 自带的转换 —— 骨头保持游戏原名，没有 IK 和物理，表情和材质照常；
+   - `scripts/stellarblade/preview_pmx_blender.py` 加了可选的 `--look mmd`（默认行为不变，别的游戏不受影响）。
+4. **修复**（都是批量跑起来后逐张看检查图、对照游戏头像发现的，受影响的单位已全部重做）：
+   - **游戏里不画的东西被导出来了**（11 个单位）：Unity 的子网格比渲染器的材质槽多时，多出来的不画，美术用它关掉
+     部件。之前这些面没有材质、在 Blender 里是白的 —— `257_shizuru` 的眼镜片成了不透明的白色（游戏里是透明的）。
+     现在提取时去掉。
+   - **prefab 的默认表情没读**：`125_sokushitsuki` 的角在游戏里默认是「缩小」形态（戴着斗笠），之前导出的是大角，
+     穿出斗笠。现在 `.blend` 里该形态键默认值为 1，XPS / PMX 烘进静止形状。
+   - **XPS 脸上一块黑**（Jinglei、Aki 等 8 个单位）：`_BaseColor` 带染色的材质之前接了「正片叠底」节点，Blender2XPS
+     按网格烘贴图、却按材质名只存一份，脸和 `face_out` 共用材质时后一个网格拿到的是前一个的烘焙结果。改成直接生成
+     乘好颜色的贴图副本（`tex_d_face_18_ffeded.png`）。PMX 之前没乘这个颜色（Emily 的绿色光纹、Reiko 的蓝纱），一并补上；
+     纯黑剪影 `16_asuka_black` 之前出成浅灰 / 白色，现在是黑的。
+   - **PMX 整体发白**：做 sphere（MatCap）图时把 8 位贴图的显示值当成线性值又编码了一次，中间调亮了 2–3 倍，黑色
+     紧身衣被加成银灰色；toon 阴影色同理偏浅。按显示值重算，并把 sphere 按遮罩（`tex_m` 的 B 通道）的覆盖率调暗。
+     PMX 的检查图改用接近 MMD 的打光（之前「三盏强光 + Filmic」本身就把颜色提亮近一倍）。
+   - **切出来的表情露出藏着的贴片**：游戏在张嘴的表情里会把藏在嘴唇后面的嘴形贴片再往头里收（Hebiko 喊叫时收
+     30 mm），按区域切「あ」时没带上这个动作，张开的嘴里露出一个小卷。现在被表情移动、移动后仍藏在皮肤后面的贴片
+     跟着所在区域走。
+   - **裙子被当成丝带**：三个单位的裙子骨名拼成了 `Skrit`，物理插件按名字选预设时认不出，当成了软的「丝带」。
+     转换时把这个拼写也算作裙子，裙片硬了一些；但 `248_mari` 的贴身短裙扭胯时仍会穿进大腿（已知限制，见 README）。
+   - 两个巨型 Boss（`b_10_monday`、`b_13_thursday`）被复用的 worker 的「骨架是否竖直」检查误判（穿着 6 米的触手裙，
+     进深比身高大），之前出不了 PMX。
+   - `exports.json` 里某一步后来成功了，之前记的「失败」警告不再留着。
+5. **用户如何操作**：
+   - 看：打开 `scripts\taimaninsquad\html\index.html`（`python list_models.py --html` 重新生成）；
+   - 列：`python list_models.py --female`；
+   - 导：`python export_model.py <id> --xps --pmx --turntable`，批量 `python export_model.py --female --xps --pmx --turntable --jobs 6`；
+   - 完整说明在画廊页首和 `scripts/taimaninsquad/README.md`。
+6. **实现原理与兼容性**：
+   - 并行是「同一条命令起 N 个进程，各拿名单里每隔 N 个的那一份」，已存在的产物跳过，所以可停可续；
+   - 修复都在 `scripts/taimaninsquad/` 自己的脚本里；Blender2XPS 那个「多网格共用需烘焙的材质」的问题本身没有改
+     （在本游戏里绕开了），Rise of Eros 的 PMX worker 和 `mmd_cloth_physics` 插件的文件也没有改；
+   - 默认表情在 PMX 里留了一个反向表情（`face_125_hornsmall_off`，拉满 = 角恢复原来的大小）；
+   - 预览脚本的 `--look mmd`：环境光用强度 0.8 的白光、一盏弱主光、Standard 色彩管理，材质渲出来就是贴图本色
+     （MMD 里受光的材质正是这样）。
+7. **验证**：
+   - 批量：6 路并行 1 小时 3 分跑完 142 个新单位，`.blend`、转台视频、XPS 0 失败；PMX 首轮 6 个失败（上面的非人形和
+     两个巨型 Boss），修后全部成功；按文件时间核对，151 个单位的 XPS / PMX 都是最后一处修复之后转换的；
+   - PMX 报告汇总：151 个，撕裂 0，付与顺序违规 0；标准 MMD 表情 19 个的 96 个单位，16–18 个的 40 个，没有的 13 个
+     （8 个单位没有任何表情形态，5 个没有闭眼形态）；
+   - 逐张看过：全部 151 个的 XPS 读回图（摆抬腿屈膝的姿势）、PMX 舞蹈图、表情总览图；拿不准的造型对照了游戏自带头像；
+   - 画廊页 2005 个 `file://` 链接逐个检查，0 个失效；
+   - 手工路线：AssetStudioMod v0.19.0 命令行版导出 Kirara 的 FBX，Blender 3.6 导入后 1.88 m、104 根骨、表情形态键
+     齐全（材质需手接贴图）；
+   - 离线单元测试 20 项通过；
+   - 仍未在 MMD / XPS 程序本体里打开过。
 
 ## 2026-10-02 — Rise of Eros：服装和裸模全部出高清版 blend / PMX / XPS（h、i 除外），一条命令 `export_hq.py`；魔化部件按各自身材放
 
@@ -287,6 +587,46 @@
      （台账备份里查到：服装 09-19、裸模 09-05），`export_hq.py --list` 仍判为非高清；台账里 D 盘源文件的大小 / 时间不改，
      md5 换成 E 盘现在这份并加了说明，完整归档空跑要拷的是 0 个文件，不会再被盖掉。和旧文件不是逐字节相同（代码有更新），内容一致。
 
+## 2026-10-02 — Taimanin Squad：复查修正（武器位置、腿部骨架、PMX 表情、Cycles 眼睛）
+
+1. **起因**：用户：「继续」。按前一天留下的清单重新导出、逐项看结果，查出一批「静止看着对、一用就错」的问题。
+2. **修复与新增**（`scripts/taimaninsquad/`）：
+   - **武器、表情贴片的位置**：刚体网格（MeshRenderer）没乘自己节点的世界矩阵，全躺在原点 —— 死亡骑士的剑其实
+     在手里。修正后武器分两种：在身上的（手里的剑、腰间的刀鞘）正常导出并跟着挂点骨；停在原点 / 地面以下、
+     等动画才放到手里的（13 个单位，如兽人的棍子）放进默认隐藏的「Weapons (parked)」集合，XPS / PMX 默认不带，
+     `--keep-weapon` 才带。头上的 `em_*` 表情贴片放进「Emotes (hidden)」。
+   - **早期角色的腿**：阿莎姬、不知火、飞鸟、胧等 5 个单位的大腿 / 小腿不蒙在 Biped 上，而在另一条链
+     `Bone_L_Thigh > … > Bone_L_Calf` 上（游戏里靠动画关键帧让它跟着 Biped）。导出后一屈膝小腿就留在原地、
+     脚和腿分家。现在提取时把这条链的权重交给重合的 Biped 骨；不知火大腿用的 Biped 扭转骨（是大腿的兄弟骨）
+     改挂到大腿下面。`.blend`、XPS、PMX 三种一起修好。
+   - **特效叠加网格**：7 个单位有名字带 `EffectRender` 的渲染器（把身体用发光着色器再画一遍），之前会盖住本体，
+     现在放进默认隐藏的「Effects (hidden)」集合。
+   - **PMX 表情**：切区域时「从头里飞出来的贴片」改按深度判断（起点藏在皮肤后面、终点落在皮肤上），不再把
+     下排牙、舌头、嘴缝线误当贴片（之前「あ」张嘴后牙留在原地）；眼睛的位置不再被闭眼形态里飞进来的贴片带偏
+     （英格丽德）；`目上 / 目下 / 目左 / 目右` 按每个角色的眼睛高度缩放，不再翻白眼；没有 sad / dissatisfied
+     形态的单位，`困る` / `怒り` / `口角下げ` 改用 debuff / shouted 的眉和 dissatisfied 的嘴；兽人的
+     `closed_face`（连嘴一起闭）不再当眨眼；分片形态（`closed_eyes_L` + `_R`）会加起来用。
+   - **Cycles 里眼睛花掉**：描边外壳在没有描边的材质上厚度为 0，和原来的面完全重合，Cycles 会把重合的那层跳过。
+     给这些材质留 0.1 mm 的不可见外壳。
+   - 新增 `preview_pmx_morphs.py`：PMX 文件夹里的 `preview_morphs.png` 现在是**每个 MMD 表情一格、带名字**的总览图；
+     新增 `rig_lint.py`：不开 Blender，逐个单位量「肢体中部的皮有多少跟着该段 Biped 骨」，腿的问题就是它量出来的。
+3. **用户如何操作**：命令不变（`python export_model.py <id> --xps --pmx`）。之前导出过的模型加 `--force` 重导。
+   想把停在原点的武器带进 XPS / PMX 加 `--keep-weapon`；检查骨架用 `python rig_lint.py`。
+4. **实现原理与兼容性**：
+   - 武器「在不在身上」按几何判断：武器包围盒到手骨、或到它挂的那根 Biped 骨的距离不超过身高的 0.15；
+   - 腿的权重移交发生在提取阶段（`tsquad_scene.Scene.limb_aliases`），顶点仍按原骨烘焙到 prefab 姿势，只是
+     顶点组改记到 Biped 骨上，静止形状不变；移交了哪些骨记在骨架的自定义属性 `tsq_limb_aliases`；
+   - 只改 `scripts/taimaninsquad/` 自己的文件；PMX 仍复用 Rise of Eros 的 worker，没有改它。
+5. **验证**：
+   - 全部 252 个单位用最终代码重建预览，0 失败，总览图逐页看过；`rig_lint.py` 全量跑过，剩下比例偏低的 17 个
+     单位都是裙子、披风、肩甲、机甲盖住肢体（逐条看过归属的骨名）；
+   - 9 个单位重新导出全格式（Kirara、阿莎姬、英格丽德、沙耶、不知火、飞鸟、Kuro、死亡骑士、兽人）：
+     `.blend` 的 EEVEE / Cycles 对比（Kirara：逐像素平均差 0.8 / 255）；XPS 读回摆抬腿屈膝的测试姿势；
+     PMX 读回套舞蹈跑物理（撕裂 0、付与顺序无违规）并逐格看表情总览；死亡骑士的剑在 XPS 姿势和 MMD 舞蹈里都
+     跟着手；
+   - 离线单元测试 16 项通过；
+   - 仍未在 MMD / XPS 程序本体里打开过。
+
 ## 2026-10-02 — Rise of Eros 套装：自带物理骨的配件放对了（耳环、头纱、圣诞帽、流苏）；k01 眼罩贴图串了
 
 1. **起因**：10-01 留下的两个套装问题：j01 新年装的两只耳环藏在头的正中间，a01 婚纱的头纱向后平伸。
@@ -326,6 +666,37 @@
      - k01 眼罩恢复成青金色。
    - 对比图：`E:\game_export\RiseOfEros\_hq_trial\suits_agj\ownbone_fix_*.png`；
      说明：`docs/roe-suit-assembly.md`「2026-10-02：自带物理骨的配件」「贴图名只差大小写」。
+
+## 2026-10-01 — Taimanin Squad：模型清单 + 卡通着色 .blend / XPS / PMX 导出（新游戏）
+
+1. **起因**：用户：「把 `E:\SteamLibrary\steamapps\common\Taimanin Squad` 这个也建个查看模型的脚本，和导出高清版
+   blender，pmx，xps 的脚本」「并且导出一个模型测试一下」。
+2. **新增**（`scripts/taimaninsquad/`，只用 UnityPy，不需要 key / AssetStudio）：
+   - `list_models.py`：解析 Addressables 目录，列出 252 个 3D 单位（角色 117、其他造型 19、怪物 88、特殊 3、Boss 22、
+     序章杂兵 3）；`--details` 读面数 / 骨骼 / 表情数 / 身高并按胸部骨标出女性体型（140 个）；`--html` 出画廊页
+     `html/index.html`（游戏头像 + 预览图 + 导出命令）；
+   - `export_model.py <id>`：读单位 prefab → Blender 里重建游戏的卡通着色器（阴影色图、遮罩图、MatCap、脸部 SDF
+     阴影、边缘光、描边外壳）→ 贴图打包的 `.blend` + 全身 / 脸部预览 + 表情总览图；`--xps`、`--pmx`、`--turntable`；
+   - `dump_shader.py`：把游戏编译后的着色器反汇编成文本（材质就是照着它还原的）；
+   - `preview_xps_blender.py`、`render_turntable.py`：XPS 读回摆姿势检查、转台视频。
+3. **用户如何操作**：`cd scripts\taimaninsquad`，`python list_models.py --html` 看画廊，
+   `python export_model.py 24_kirara --xps --pmx` 导出；产物在 `E:\game_export\TaimaninSquad\<角色>\<blend|xps|pmx>\<id>\`。
+   完整说明见 [`scripts/taimaninsquad/README.md`](../scripts/taimaninsquad/README.md)。
+4. **实现原理与兼容性**：
+   - 游戏是 Unity 2022.3 + Addressables，999 个不加密的 UnityFS bundle；容器表以 GUID 为键，可读地址在 `catalog.json`；
+   - 材质公式来自着色器字节码（`d3dcompiler_47.dll` 的 `D3DDisassemble`），在 Blender 里是纯节点数学 + Emission 输出，
+     EEVEE / Cycles 一致，光的方向跟着场景里的 `TSQ_Sun` 物体，脸部阴影跟着头骨（变换驱动器，无 Python 表达式）；
+   - 骨架是 3ds Max Biped，PMX 复用 Rise of Eros 的 PMX worker；表情是顶点 morph，MMD 标准表情从游戏的整脸
+     blend shape 按区域（眉 / 眼 / 嘴、左 / 右）切出来；
+   - 不改动任何已有游戏的脚本；`scripts/README.md` 增加一行入口。
+5. **验证**：
+   - 全部 252 个单位做过一遍预览构建（`--preview-only`），全部成功（10 个最初因 float4 顶点失败，修复后通过），
+     总览图逐页看过；
+   - `24_kirara`（blend + XPS + PMX + 转台视频）、`1_asagi`（blend + PMX）：`.blend` 多角度 / 脸部光照扫描（静止与转头）/
+     表情总览；XPS（Kirara）用 XNALaraMesh 读回并摆测试姿势；PMX 读回套舞蹈跑物理（撕裂 0、付与顺序无违规、
+     胸部物理两侧、表情 30 / 35 个）；
+   - 离线单元测试 13 项通过（`python -m unittest discover -s scripts/taimaninsquad/tests`）；
+   - 尚未在 MMD / XPS 程序本体里打开过。
 
 ## 2026-10-01 — 布料撕裂 1.1：能撕角色的衣服了
 

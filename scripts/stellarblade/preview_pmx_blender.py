@@ -39,6 +39,14 @@ ap.add_argument("--frames", type=int, nargs="*", default=[150, 400, 650, 900],
 ap.add_argument("--margin", type=int, default=30,
                 help="frames of rest-to-first-pose blend before the motion (mmd_tools import_vmd margin)")
 ap.add_argument("--scale", type=float, default=0.08)
+ap.add_argument("--look", choices=("studio", "mmd"), default="studio",
+                help="studio (default): three suns under Filmic - a lit, soft picture.  mmd: the colours MMD shows: "
+                     "white ambient light so that a material comes out as its texture, a weak key sun for shape, "
+                     "the Standard view transform (for toon models, whose textures are the final colours)")
+ap.add_argument("--physics", choices=("blender", "mmd"), default="blender",
+                help="blender (default): the joints as mmd_tools leaves them.  mmd: the way MMD's Bullet runs them "
+                     "(see scripts/mmd_physics): no 0.5 damping on every joint axis, rotation springs in PMX units, "
+                     "gravity 98 - and bodies masked against every group really collide with nothing")
 args = ap.parse_args(argv)
 
 OUT = os.path.dirname(os.path.abspath(args.pmx))
@@ -77,7 +85,26 @@ world.use_nodes = True
 # by type: with the user's (Chinese) UI the default node is called 背景, not Background
 next(n for n in world.node_tree.nodes if n.type == "BACKGROUND").inputs[0].default_value = (0.55, 0.55, 0.58, 1.0)
 scene.world = world
-for name, rot, energy in (("Key", (50, 0, -30), 3.0), ("Fill", (60, 0, 40), 1.2), ("Rim", (70, 0, 170), 1.5)):
+LIGHTS = (("Key", (50, 0, -30), 3.0), ("Fill", (60, 0, 40), 1.2), ("Rim", (70, 0, 170), 1.5))
+if args.look == "mmd":
+    # MMD shows a lit material as its texture colour (ambient + diffuse x light saturates at 1); the three suns
+    # under Filmic roughly double it and lift the darks, so a black suit comes out light grey.  Here the world
+    # lights with white (the camera still sees the grey backdrop) and one weak sun keeps some shape.
+    scene.view_settings.view_transform = "Standard"
+    wt = world.node_tree
+    white = next(n for n in wt.nodes if n.type == "BACKGROUND")
+    white.inputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
+    white.inputs[1].default_value = 0.8
+    backdrop = wt.nodes.new("ShaderNodeBackground")
+    backdrop.inputs[0].default_value = (0.55, 0.55, 0.58, 1.0)
+    path = wt.nodes.new("ShaderNodeLightPath")
+    mix = wt.nodes.new("ShaderNodeMixShader")
+    wt.links.new(path.outputs["Is Camera Ray"], mix.inputs[0])
+    wt.links.new(white.outputs[0], mix.inputs[1])
+    wt.links.new(backdrop.outputs[0], mix.inputs[2])
+    wt.links.new(mix.outputs[0], next(n for n in wt.nodes if n.type == "OUTPUT_WORLD").inputs[0])
+    LIGHTS = (("Key", (50, 0, -30), 0.6),)
+for name, rot, energy in LIGHTS:
     light = bpy.data.lights.new(name, "SUN")
     light.energy = energy
     lo = bpy.data.objects.new(name, light)
@@ -201,6 +228,29 @@ else:
 # drags its chain and skin along: Eve's scalp root sank 12 cm in 60 frames (bald head).
 if not root.mmd_root.is_built:
     rig.build()
+if args.physics == "mmd":
+    # The same three changes as scripts/mmd_physics/mmd_like.py: SPRING1 without joint damping (Blender hands
+    # SPRING1 damping to Bullet inverted - 0 here is Bullet's 1, what MMD runs with), rotation springs scaled
+    # into the import scale, gravity 98 PMX units.  And one more: every rigid body sits in Blender's collision
+    # layer 0 and mmd_tools only builds non-collision constraints for pairs that are close at rest, so a body
+    # the PMX masks against everything (a breast) still gets hit by a hand - it gets a layer of its own.
+    converted, layer = 0, 19
+    for o in scene.objects:
+        c = o.rigid_body_constraint
+        if c is not None and c.type == "GENERIC_SPRING":
+            c.spring_type = "SPRING1"
+            for axis in "xyz":
+                setattr(c, "spring_damping_" + axis, 0.0)
+                setattr(c, "spring_damping_ang_" + axis, 0.0)
+                setattr(c, "spring_stiffness_ang_" + axis,
+                        getattr(c, "spring_stiffness_ang_" + axis) * args.scale * args.scale)
+            converted += 1
+        if getattr(o, "mmd_type", "") == "RIGID_BODY" and o.rigid_body and all(o.mmd_rigid.collision_group_mask) \
+                and layer > 0:
+            o.rigid_body.collision_collections = [i == layer for i in range(20)]
+            layer -= 1
+    scene.gravity = (0.0, 0.0, -98.0 * args.scale)
+    report["physics"] = "mmd-like: %d joints, %d bodies that collide with nothing" % (converted, 19 - layer)
 rbw = scene.rigidbody_world
 bodies = [o for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
 by_bone = {o.mmd_rigid.bone: o for o in bodies if o.mmd_rigid.bone}
