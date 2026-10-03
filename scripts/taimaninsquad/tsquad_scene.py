@@ -192,6 +192,17 @@ def decode_mesh(reader) -> dict:
     return out
 
 
+def packed_weights(weights: np.ndarray) -> np.ndarray:
+    """Bone weights of a compressed mesh with the fourth one put right.  They are stored in 31sts, three per
+    vertex at most; the fourth is what is missing from one.  UnityPy 1.25 computes it as "1 - the sum of the
+    stored integers" (25 + 2 + 2 -> -28 instead of 2/31): a vertex with four bones came out with a weight
+    Blender drops (the fourth bone lost its share) and any skinning done here went wrong."""
+    w = np.asarray(weights, dtype=np.float64).copy()
+    if w.ndim == 2 and w.shape[1] == 4:
+        w[:, 3] = np.clip(1.0 - w[:, :3].sum(axis=1), 0.0, 1.0)
+    return w.astype(np.float32)
+
+
 def decode_compressed_mesh(reader, tt: dict) -> dict:
     """Meshes saved with Mesh Compression (most monsters): the vertex streams are empty and the
     data sits bit-packed in m_CompressedMesh.  UnityPy's MeshHandler unpacks it."""
@@ -208,6 +219,8 @@ def decode_compressed_mesh(reader, tt: dict) -> dict:
         if value is not None and len(value) == count:
             arr = np.asarray(value, dtype=np.float32).reshape(count, -1)[:, :dim]
             out[key] = arr.astype(np.int64) if key == "bone_indices" else arr
+    if "weights" in out:
+        out["weights"] = packed_weights(out["weights"])
     for i in range(8):
         value = getattr(handler, "m_UV%d" % i, None)
         if value is not None and len(value) == count:

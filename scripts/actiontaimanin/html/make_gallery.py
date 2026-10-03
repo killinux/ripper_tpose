@@ -59,7 +59,9 @@ python export_model.py asagi_costume_1_f --pmx --reconvert --bust amount=1.3   #
 Asagi 头两侧绕出去的两缕细发是角色本来的造型（Taimanin Squad 里的她也一样），不是导出错误。<br>
 5. 材质要手工连：主贴图 <code>_MainTex</code>，阴影色是材质参数（TCP2 的 <code>_SColor</code> / UTS2 的 <code>_1st_ShadeColor</code>），
 服装颜色来自 <code>_PartsColorMask</code> 三个通道 × <code>_PartsColorR/G/B</code>。脚本导出的 .blend 里这些已经连好。<br>
-6. 表情：脸是骨骼驱动的（约 28 根脸部骨），没有 blend shape；手工摆表情就是在姿态模式里移动 <code>Bone_Face_*</code>。</p>
+6. 表情：脸是骨骼驱动的（约 28 根脸部骨），没有 blend shape；游戏的表情是 <code>animation_char</code> 包里的动画片段
+（<code>ani_face_&lt;角色&gt;_story_*</code> 整脸表情、<code>ani_mouth_&lt;角色&gt;_story_*</code> 说话口型）。脚本把它们做成了形状键和 PMX 表情；
+手工做的话，在 AssetStudio 里把这些 AnimationClip 和模型一起导出，或者在 Blender 的姿态模式里移动 <code>Bone_Face_*</code>。</p>
 </details>
 """
 
@@ -81,6 +83,9 @@ def card(model: dict, entry: dict, root: str) -> str:
                                               entry.get("faces", "?"), entry.get("bones", "?"))
     out.append('<div class="small">%s</div>' % stats)
     rows = [link(blend_dir, "blend 文件夹")]
+    sheet = os.path.join(blend_dir, model["id"] + "_expressions.png")
+    if os.path.isfile(sheet):
+        rows.append(link(sheet, "形状键表"))
     if "xps" in model["exported"]:
         xps_dir = tc.model_dir(model, root, "xps")
         rows.append(link(xps_dir, "xps 文件夹"))
@@ -100,6 +105,8 @@ def card(model: dict, entry: dict, root: str) -> str:
         note = "pmx：骨骼 %s，刚体 %s" % (report.get("bones"), report.get("rigid_bodies"))
         if fit.get("travel_cm"):
             note += "，胸部最多晃 ±%s cm（系数 %s）" % (fit["travel_cm"][0], fit.get("factor"))
+        if report.get("vertex_morphs"):
+            note += "，表情 %d 个" % len(report["vertex_morphs"])
         out.append('<div class="small">%s</div>' % html.escape(note))
     out.append("</div>")
     return "\n".join(out)

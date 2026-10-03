@@ -38,9 +38,38 @@ EMOTION = re.compile(r"^emotion_", re.IGNORECASE)      # blush / sweat cards the
 FACE_ROOT = re.compile(r"^fbx_(?P<who>.+?)_face$")     # the face prefab: its Animator plays the expression clips
 STORY_CLIP = re.compile(r"/ani_story/ani_(?P<kind>face|mouth)_(?P<who>.+?)_story_(?P<name>[a-z]+?)_?(?P<n>\d*)\.anim$")
 LID = re.compile(r"_Eye_[LR]_Shape|_Eye_Top", re.IGNORECASE)        # the bones a blink moves
+BROW = re.compile(r"Eyebrow", re.IGNORECASE)
+LIP = re.compile(r"_Lip_(UL|UR|DL|DR|U|D|L|R)$", re.IGNORECASE)
+EYEBALL = re.compile(r"Eyeball_([LR])$", re.IGNORECASE)
+EYE_SIDE = re.compile(r"_Eye_([LR])_", re.IGNORECASE)
+UPPER_LID = re.compile(r"_Shape_U_", re.IGNORECASE)
 # the shape names Taimanin Squad's PMX converter knows the roles of (export_pmx_blender.SOURCES)
 SHAPE_NAMES = {"surprise": "surprised_face"}
 BLINK, TALK = "closed_eyes", "mouth_talk_a"
+# one region of a story face, cut by bone group: (clip, region, bones) -> shape "<clip>_<region>".  The MMD
+# morphs that are one region of a face (the brows of the angry face, the lids of the smile) come from these -
+# on this face the brows sit at the height of the upper lashes, a cut by height cannot part them.
+CUTS = (("smile", "eyes", LID), ("surprise", "eyes", LID), ("smile", "brows", BROW), ("angry", "brows", BROW),
+        ("serious", "brows", BROW), ("panic", "brows", BROW))
+# Mouth shapes the game has no clip for (its only mouths are the frown of the serious faces and the open
+# talking mouths), posed here on the eight lip bones: (outward, up, forward) in millimetres per bone group, for
+# a mouth 28 mm wide (scaled to the mouth).  NOT game data - a recipe, tuned by eye on Asagi.
+LIP_GROUP = {"L": "corner", "R": "corner", "UL": "upper_side", "UR": "upper_side", "DL": "lower_side",
+             "DR": "lower_side", "U": "upper", "D": "lower"}
+MOUTH_WIDTH = 0.028
+MOUTH_POSES = {
+    "mouth_smile": {"corner": (1.2, 2.4, -0.4), "upper_side": (0.3, 0.5, 0.0), "lower_side": (0.4, 1.0, 0.0),
+                    "lower": (0.0, 0.3, 0.0)},
+    "mouth_frown": {"corner": (0.4, -2.2, 0.0), "upper_side": (0.0, -0.8, 0.0), "lower_side": (0.0, -0.5, 0.0)},
+    "mouth_wide": {"corner": (2.4, 0.0, -0.8), "upper_side": (0.9, 0.0, 0.0), "lower_side": (0.9, 0.0, 0.0)},
+    "mouth_narrow": {"corner": (-3.2, 0.0, 1.0), "upper_side": (-1.3, 0.2, 1.2), "lower_side": (-1.3, -0.2, 1.2),
+                     "upper": (0.0, 0.3, 0.9), "lower": (0.0, -0.3, 0.9)},
+}
+# Looks, by turning the eyeball bones about their heads: shape -> (direction, degrees).  The game's own
+# sideways look (the panic face) is 9 degrees; left / right are as seen from the front (screen left / right),
+# which is how Taimanin Squad's own left_eyes / right_eyes shapes go.
+GAZE = {"up_eyes": ("up", 5.0), "down_eyes": ("down", 5.0), "left_eyes": ("left", 9.0), "right_eyes": ("right", 9.0)}
+SMILE_CLOSES = 0.7                                     # of the eye's opening: the smile's eyes are shut ("^ ^")
 FACE = re.compile(r"face", re.IGNORECASE)
 HAIR = re.compile(r"hair", re.IGNORECASE)
 SPINE = re.compile(r"^Bip\d+ Spine\d*$")
@@ -182,6 +211,103 @@ def skin_deltas(vertices, bone_indices, bone_weights, changes: np.ndarray) -> np
     return np.einsum("nk,nkij,nj->ni", w, changes[bone_indices], homogeneous)[:, :3]
 
 
+def rotation_about(point, axis, degrees: float) -> np.ndarray:
+    """4x4 turn of `degrees` about the line through `point` along `axis`."""
+    k = np.asarray(axis, dtype=np.float64)
+    k = k / max(float(np.linalg.norm(k)), 1e-12)
+    a = np.radians(degrees)
+    cross = np.array([[0.0, -k[2], k[1]], [k[2], 0.0, -k[0]], [-k[1], k[0], 0.0]])
+    out = np.eye(4)
+    out[:3, :3] = np.eye(3) * np.cos(a) + np.sin(a) * cross + (1.0 - np.cos(a)) * np.outer(k, k)
+    p = np.asarray(point, dtype=np.float64)
+    out[:3, 3] = p - out[:3, :3] @ p
+    return out
+
+
+def look_turn(head, forward: float, direction, degrees: float) -> np.ndarray:
+    """The turn about an eyeball bone's head that carries the front of the eye (the character faces
+    `forward` x Z) towards `direction` (a unit vector across the view axis)."""
+    return rotation_about(head, np.cross((0.0, 0.0, forward), direction), degrees)
+
+
+def mouth_moves(lips: dict, pose: dict, forward: float) -> dict:
+    """{lip bone suffix: world move (m)} of one MOUTH_POSES entry.  `lips`: {suffix (L, UR, D ...): rest
+    position}; outward is away from the mouth's centre plane, amounts scale with the mouth's width."""
+    centre = [lips[s][0] for s in ("U", "D") if s in lips] or [p[0] for p in lips.values()]
+    cx = float(np.mean(centre))
+    corners = [abs(lips[s][0] - cx) for s in ("L", "R") if s in lips]
+    scale = (2.0 * float(np.mean(corners)) / MOUTH_WIDTH) if corners else 1.0
+    out = {}
+    for suffix, position in lips.items():
+        amount = pose.get(LIP_GROUP.get(suffix.upper(), ""))
+        if amount is None:
+            continue
+        side = 0.0 if abs(position[0] - cx) < 1e-4 else (1.0 if position[0] > cx else -1.0)
+        out[suffix] = np.array([side * amount[0], amount[1], forward * amount[2]]) * 0.001 * scale
+    return out
+
+
+def lid_gap(x, y, upper, lower, bins: int = 6) -> float:
+    """Mean opening of an eye (m): over `bins` columns across the eye, the lower edge of the upper lid minus
+    the upper edge of the lower lid (0 where they meet or overlap).  x, y: vertex coordinates (y up);
+    upper / lower: the vertices the upper / lower lid bones hold."""
+    if not upper.any() or not lower.any():
+        return 0.0
+    edges = np.linspace(float(x[lower].min()), float(x[lower].max()), bins + 1)
+    gaps = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        u, low = upper & (x >= a) & (x <= b), lower & (x >= a) & (x <= b)
+        if u.any() and low.any():
+            gaps.append(max(0.0, float(y[u].min() - y[low].max())))
+    return float(np.mean(gaps)) if gaps else 0.0
+
+
+def eye_closure(vertices, bone_indices, bone_weights, bones, delta) -> dict:
+    """{side: the part of the eye's opening the vertex move `delta` closes, 0..1}, measured on the lids
+    themselves (lid_gap) - the lid bones turn as well as move, and a "^ ^" smile closes the eye from below,
+    so neither the bones' travel nor a comparison with the blink tells."""
+    out = {}
+    w = bone_weights.astype(np.float64)
+    for side in ("L", "R"):
+        def held(upper):
+            idx = [k for k, b in enumerate(bones) if LID.search(b) and bool(UPPER_LID.search(b)) == upper
+                   and (EYE_SIDE.search(b) or [None, ""])[1].upper() == side]
+            return (w * np.isin(bone_indices, idx)).sum(axis=1) > 0.3
+
+        upper, lower = held(True), held(False)
+        rest = lid_gap(vertices[:, 0], vertices[:, 1], upper, lower)
+        if rest > 1e-4:
+            posed = vertices + delta
+            out[side] = 1.0 - lid_gap(posed[:, 0], posed[:, 1], upper, lower) / rest
+    return out
+
+
+def morph_recipes(have, smile_closes: bool) -> tuple[list, list]:
+    """(recipes, shapes to leave out of the PMX's own-name list) for export_pmx_blender: MMD morph name,
+    English name, panel, [(shape, strength, region)] - which of the shapes made here each standard morph is.
+    A recipe is only given when all its shapes exist; the converter's defaults stand for the rest."""
+    wanted = [
+        ("笑い", "smile", "EYE", [("smile_eyes", 1.0, "all")], smile_closes),
+        ("ウィンク", "wink", "EYE", [("smile_eyes", 1.0, "L")], smile_closes and BLINK in have),
+        ("ウィンク右", "wink_R", "EYE", [("smile_eyes", 1.0, "R")], smile_closes and BLINK in have),
+        ("びっくり", "surprised", "EYE", [("surprise_eyes", 1.0, "all")], True),
+        ("い", "i", "MOUTH", [(TALK, 0.3, "all"), ("mouth_wide", 1.0, "all")], True),
+        ("う", "u", "MOUTH", [(TALK, 0.25, "all"), ("mouth_narrow", 1.0, "all")], True),
+        ("え", "e", "MOUTH", [(TALK, 0.55, "all"), ("mouth_wide", 0.6, "all")], True),
+        ("お", "o", "MOUTH", [(TALK, 0.8, "all"), ("mouth_narrow", 0.75, "all")], True),
+        ("にっこり", "smile_mouth", "MOUTH", [("mouth_smile", 1.0, "all")], True),
+        ("口角下げ", "mouth_corner_down", "MOUTH", [("mouth_frown", 1.0, "all")], True),
+        ("困る", "trouble", "EYEBROW", [("panic_brows", 1.0, "all")], True),
+        ("怒り", "anger", "EYEBROW", [("angry_brows", 1.0, "all")], True),
+        ("真面目", "serious", "EYEBROW", [("serious_brows", 1.0, "all")], True),
+        ("にこり", "cheerful", "EYEBROW", [("smile_brows", 1.0, "all")], True),
+    ]
+    recipes = [[jp, en, panel, [list(p) for p in parts]] for jp, en, panel, parts, ok in wanted
+               if ok and all(p[0] in have for p in parts)]
+    helpers = ["%s_%s" % (label, region) for label, region, _bones in CUTS] + list(MOUTH_POSES) + list(GAZE)
+    return recipes, [name for name in helpers if name in have]
+
+
 class Scene(ts.Scene):
     """tsquad_scene.Scene with this game's parts, materials and Dynamic Bone."""
 
@@ -292,8 +418,12 @@ class Scene(ts.Scene):
             <name>_face          the face of every other story clip at its start (smile_face, angry_face ...)
             mouth_talk_a         the talking mouth of the idle face, as a move from that face
             <name>_talk          the talking mouth of another expression, as a move from that expression
+            <name>_eyes / _brows one region of a story face, cut by bone group (CUTS)
+            mouth_smile / _frown / _wide / _narrow     lip bones posed by recipe (MOUTH_POSES) - not game data
+            up_eyes / down_eyes / left_eyes / right_eyes   the eyeball bones turned (GAZE) - not game data
 
-        Returns (what was made, {converter role: [shape names]})."""
+        Returns (what was made, what the PMX converter is told: {role: [shape names]} + "recipes" (which shape
+        each MMD morph is, morph_recipes) + "drop" (helper shapes it leaves out of the PMX's own-name list))."""
         root = next((self.nodes[i] for i in self._ordered(root_id)
                      if self.nodes[i]["active"] and "Animator" in self.nodes[i]["types"]
                      and FACE_ROOT.match(self.nodes[i]["name"])), None)
@@ -353,9 +483,45 @@ class Scene(ts.Scene):
             base = faces.get(label, {})
             shapes.append((TALK if label == "idle" else label + "_talk", clip.name,
                            worlds(base, pose(clip.sample(clip.start))), worlds(base)))
+        for label, region, bones in CUTS:              # one region of a story face, cut by bone group
+            if label != "idle" and label in clips["face"]:
+                cut = worlds({n: v for n, v in faces[label].items() if bones.search(self.nodes[n]["name"])})
+                if travel(cut) > 3e-4:
+                    shapes.append(("%s_%s" % (label, region),
+                                   "%s, the %s bones only" % (clips["face"][label].name, region), cut, rest))
+
+        def shifted(moves):
+            """World matrices with `moves` ({bone: 4x4 world transform}) applied to those bones and all
+            below them."""
+            out, applied = {root["id"]: root["world"]}, {}
+            for nid in order:
+                applied[nid] = moves[nid] if nid in moves else applied.get(self.nodes[nid]["parent"])
+                out[nid] = rest[nid] if applied[nid] is None else applied[nid] @ rest[nid]
+            return out
+
+        forward = self.forward()
+        lips = {LIP.search(self.nodes[n]["name"]).group(1).upper(): n for n in order if LIP.search(self.nodes[n]["name"])}
+        if {"L", "R"} <= set(lips):                    # the mouths the game has no clip for (MOUTH_POSES)
+            at = {suffix: rest[n][:3, 3] for suffix, n in lips.items()}
+            for name, table in MOUTH_POSES.items():
+                moves = {}
+                for suffix, move in mouth_moves(at, table, forward).items():
+                    moves[lips[suffix]] = np.eye(4)
+                    moves[lips[suffix]][:3, 3] = move
+                shapes.append((name, "lip bones posed by recipe (not game data)", shifted(moves), rest))
+        eyes = {EYEBALL.search(self.nodes[n]["name"]).group(1).upper(): n for n in order
+                if EYEBALL.search(self.nodes[n]["name"])}
+        if {"L", "R"} <= set(eyes):                    # looks: the eyeballs turned about their bones (GAZE)
+            left = 1.0 if rest[eyes["L"]][0, 3] > rest[eyes["R"]][0, 3] else -1.0
+            # left / right as seen from the front, like Squad's own left_eyes (it moves towards the character's right)
+            towards = {"up": (0.0, 1.0, 0.0), "down": (0.0, -1.0, 0.0), "left": (-left, 0.0, 0.0), "right": (left, 0.0, 0.0)}
+            for name, (direction, degrees) in GAZE.items():
+                shapes.append((name, "eyeball bones turned %g degrees %s (not game data)" % (degrees, direction),
+                               shifted({n: look_turn(rest[n][:3, 3], forward, towards[direction], degrees)
+                                        for n in eyes.values()}), rest))
 
         bone_node = {n["bone"]: nid for nid, n in self.nodes.items() if "bone" in n}
-        made = []
+        made, closed = [], {}                          # closed: {shape: {side: part of the eye's opening it closes}}
         for part in self.parts:
             ids = [bone_node.get(b) for b in part["bones"]]
             if not any(i in rest and i != root["id"] for i in ids):
@@ -364,12 +530,21 @@ class Scene(ts.Scene):
             arrays = dict(np.load(path))
             first = len(part["shape_keys"])
             inverse = [np.linalg.inv(self.nodes[i]["world"]) if i in rest else None for i in ids]
+            moves = []
             for name, source, new, old in shapes:
                 change = np.zeros((len(ids), 4, 4))
                 for k, i in enumerate(ids):
                     if i in rest:
                         change[k] = (new[i] - old[i]) @ inverse[k]
-                delta = skin_deltas(arrays["vertices"], arrays["bone_indices"], arrays["bone_weights"], change)
+                moves.append(skin_deltas(arrays["vertices"], arrays["bone_indices"], arrays["bone_weights"], change))
+            if not any(float(np.abs(delta).max(initial=0.0)) > 1e-6 for delta in moves):
+                continue                               # held by the face rig, moved by nothing (the blush card)
+            for (name, source, new, old), delta in zip(shapes, moves):
+                if name in (BLINK, "smile_eyes"):
+                    closure = eye_closure(arrays["vertices"], arrays["bone_indices"], arrays["bone_weights"],
+                                          part["bones"], delta)
+                    if closure:
+                        closed[name] = closure
                 keep = np.linalg.norm(delta, axis=1) > 1e-6
                 index = len(part["shape_keys"])
                 arrays["shape%d_idx" % index] = np.nonzero(keep)[0].astype(np.int32)
@@ -388,7 +563,12 @@ class Scene(ts.Scene):
         sources = {role: [n for n in wanted if n in have] for role, wanted in (
             ("blink", [BLINK]), ("talk_a", [TALK]), ("shout", [TALK]), ("smile", ["smile_face"]),
             ("angry", ["angry_face"]), ("yell", ["angry_face"]), ("debuff", ["panic_face"]))}
-        return made, {role: found for role, found in sources.items() if found}
+        sources = {role: found for role, found in sources.items() if found}
+        smile = closed.get("smile_eyes", {})
+        smile_closes = len(smile) == 2 and min(smile.values()) >= SMILE_CLOSES
+        sources["recipes"], sources["drop"] = morph_recipes(have, smile_closes)
+        sources["eyes_closed_by"] = {name: {side: round(v, 3) for side, v in sides.items()} for name, sides in closed.items()}
+        return made, sources
 
     def forward(self) -> float:
         """+1 when the character faces +Z in the prefab (toes ahead of the feet), else -1."""

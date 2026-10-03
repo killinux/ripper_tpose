@@ -702,5 +702,16 @@ class BackgroundTests(unittest.TestCase):
         self.assertTrue(all(os.path.isfile(r["file"]) for r in rows))          # the pictures themselves stay
 
 
+class CompressedMeshTests(unittest.TestCase):
+    def test_the_fourth_packed_weight_is_what_is_missing_from_one(self):
+        # as UnityPy 1.25 hands them over: 25 + 2 + 2 thirty-firsts read, the fourth left as 1 - 29
+        got = ts.packed_weights(np.array([[25 / 31, 2 / 31, 2 / 31, -28.0], [1.0, 0.0, 0.0, 0.0],
+                                          [20 / 31, 11 / 31, 0.0, 0.0], [1 / 31, 0.0, 0.0, 0.0]]))
+        np.testing.assert_allclose(got[0], [25 / 31, 2 / 31, 2 / 31, 2 / 31], atol=1e-6)
+        np.testing.assert_allclose(got[1:3], [[1.0, 0.0, 0.0, 0.0], [20 / 31, 11 / 31, 0.0, 0.0]], atol=1e-6)
+        np.testing.assert_allclose(got.sum(axis=1), 1.0, atol=1e-6)
+        self.assertEqual(ts.packed_weights(np.ones((3, 1))).shape, (3, 1))     # fewer than four per vertex: as is
+
+
 if __name__ == "__main__":
     unittest.main()

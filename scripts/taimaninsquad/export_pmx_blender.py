@@ -88,8 +88,12 @@ SOURCES = {
     "up": ("up_eyes",), "down": ("down_eyes",), "left": ("left_eyes",), "right": ("right_eyes",),
 }
 # shape names tried before those, per role: the .blend's ``tsq_morph_sources`` (main() fills it; shapes made
-# from Action Taimanin's expression clips)
+# from Action Taimanin's expression clips).  The same property may carry "recipes" - rows like RECIPES' that
+# replace the one of the same MMD name or are added after them (a part's role may be a shape name) - and
+# "drop": helper shapes that are not listed in the PMX under their own names.
 MORE_SOURCES = {}
+MORE_RECIPES = []
+MORE_DROP = set()
 # (MMD name, English name, panel, [(source, strength, region)])
 # region: "all", "L" / "R" (the character's left / right half), "eyes" (eye band and up), "mouth", "brows"
 # strength ("fit", f): whatever makes the shape's largest travel f x the eye height (Face.fit)
@@ -280,8 +284,11 @@ class Face:
                 self.delta[(m.name, kb.name.lower())] = _coords(kb.data) - base
             # the blush / gloom / tear cards (the unlit overlay material) hide inside the head and are
             # pushed out by whole-face shapes: they belong to those, not to a brow or mouth morph
+            # (tsq_overlay = 0: an unlit material that is the face itself - Action Taimanin's eye material
+            # also draws the brows, lashes and teeth)
             unlit = {i for i, slot in enumerate(m.material_slots)
-                     if slot.material is not None and slot.material.get("tsq_kind") == "unlit"}
+                     if slot.material is not None and slot.material.get("tsq_kind") == "unlit"
+                     and slot.material.get("tsq_overlay", 1)}
             hidden = np.zeros(len(base), dtype=bool)
             if unlit:
                 shown = np.zeros(len(base), dtype=bool)
@@ -380,7 +387,7 @@ class Face:
         return self._kept[key]
 
     def source(self, role):
-        return next((n for n in MORE_SOURCES.get(role, ()) + SOURCES[role] if n in self.names), None)
+        return next((n for n in MORE_SOURCES.get(role, ()) + SOURCES.get(role, (role,)) if n in self.names), None)
 
     def measure(self):
         """Heights that split the face: bottom / top of the eyes (closed_eyes), the mouth (the widest
@@ -509,11 +516,15 @@ def build_morphs(root, meshes):
     made = []
     happy = face.smile_closes_eyes(measure)
     report["smile_closes_eyes"] = happy
-    for jp, en, panel, parts in RECIPES:
-        if happy and jp in SMILE_EYES:
+    given = {row[0]: row for row in MORE_RECIPES}
+    for jp, en, panel, parts in [given.get(row[0], row) for row in RECIPES] + \
+            [row for row in MORE_RECIPES if row[0] not in {r[0] for r in RECIPES}]:
+        if happy and jp in SMILE_EYES and jp not in given:
             parts = SMILE_EYES[jp]
         deltas = face.mix(parts, measure) if (measure or all(p[2] == "all" for p in parts)) else None
         how = "game" if all(p[2] == "all" and p[1] == 1.0 for p in parts) else "cut from the game's"
+        if jp in given:
+            how = "the model's recipe"
         used_parts = parts
         if deltas is None and measure:
             for alternative in FALLBACKS.get(jp, []):
@@ -542,6 +553,13 @@ def build_morphs(root, meshes):
     report["cards"] = {"%s/%s" % key: int(mask.sum()) for key, mask in face._cards.items() if mask.any()}
     # the hidden pieces that went along with a cut region (the shape moves them, they stay inside the head)
     report["kept_hidden"] = {"%s/%s" % key: int(mask.sum()) for key, mask in face._kept.items() if mask.any()}
+    if MORE_DROP:                                      # helper shapes: the standard morphs made of them stay
+        dropped = set()
+        for m in face.meshes:
+            for kb in [kb for kb in m.data.shape_keys.key_blocks[1:] if kb.name.lower() in MORE_DROP]:
+                dropped.add(kb.name)
+                m.shape_key_remove(kb)
+        report["helper_shapes_dropped"] = sorted(dropped)
     mmd = root.mmd_root
     have = {item.name for item in mmd.vertex_morphs}
     for jp, en, panel in made:
@@ -861,11 +879,15 @@ def main():
     arm, meshes, removed = tb.scene_parts(keep_weapon=args.keep_weapon)
     game = arm.get("tsq_game", "") or "Taimanin Squad"
     try:
-        MORE_SOURCES.update({role: tuple(n.lower() for n in names)
-                             for role, names in json.loads(arm.get("tsq_morph_sources", "") or "{}").items()
-                             if role in SOURCES})
+        more = json.loads(arm.get("tsq_morph_sources", "") or "{}")
     except ValueError:
-        pass
+        more = {}
+    MORE_SOURCES.update({role: tuple(n.lower() for n in names) for role, names in more.items()
+                         if role in SOURCES and isinstance(names, list)})
+    MORE_RECIPES.extend((jp, en, panel, [(role, tuple(s) if isinstance(s, list) else s, where)
+                                         for role, s, where in parts])
+                        for jp, en, panel, parts in more.get("recipes") or [])
+    MORE_DROP.update(n.lower() for n in more.get("drop") or [])
     report["weapons_left_out"] = removed
     report["outline_modifiers_removed"] = tb.strip_outline(meshes)
     report["shape_key_drivers_removed"] = tb.clear_shape_key_drivers(meshes)

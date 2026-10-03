@@ -288,5 +288,65 @@ class PoseTests(unittest.TestCase):
         self.assertFalse(asc.FACE_ROOT.match("fbx_asagi_face_none"))
 
 
+class MadeShapeTests(unittest.TestCase):
+    """The shapes the game has no clip for (lip-bone mouths, looks) and what the PMX converter is told."""
+
+    def test_look_turn_carries_the_front_of_the_eye_the_asked_way(self):
+        head = np.array([0.02, 1.56, -0.04])
+        for forward in (1.0, -1.0):
+            front = np.append(head + np.array([0.0, 0.0, forward * 0.038]), 1.0)
+            up = (asc.look_turn(head, forward, (0.0, 1.0, 0.0), 5.0) @ front)[:3] - front[:3]
+            self.assertAlmostEqual(up[1], 0.038 * np.sin(np.radians(5.0)), places=6)
+            self.assertAlmostEqual(up[0], 0.0, places=9)
+            side = (asc.look_turn(head, forward, (-1.0, 0.0, 0.0), 9.0) @ front)[:3] - front[:3]
+            self.assertLess(side[0], -0.005)
+            self.assertAlmostEqual(side[1], 0.0, places=9)
+        np.testing.assert_allclose(asc.look_turn(head, 1.0, (0.0, 1.0, 0.0), 5.0) @ np.append(head, 1.0),
+                                   np.append(head, 1.0), atol=1e-12)        # the bone's head stays
+
+    def test_mouth_moves_mirror_and_scale_with_the_mouth(self):
+        lips = {"L": (0.014, 1.5, 0.08), "R": (-0.014, 1.5, 0.08), "U": (0.0, 1.502, 0.085), "D": (0.0, 1.498, 0.085),
+                "UL": (0.008, 1.501, 0.083), "UR": (-0.008, 1.501, 0.083)}
+        moves = asc.mouth_moves(lips, asc.MOUTH_POSES["mouth_smile"], 1.0)
+        np.testing.assert_allclose(moves["L"], [0.0012, 0.0024, -0.0004])
+        np.testing.assert_allclose(moves["R"], [-0.0012, 0.0024, -0.0004])     # outward is away from the centre
+        np.testing.assert_allclose(moves["D"], [0.0, 0.0003, 0.0])
+        self.assertNotIn("U", moves)                                           # the smile leaves the upper lip
+        wide = {k: (v[0] * 2.0, v[1], v[2]) for k, v in lips.items()}
+        np.testing.assert_allclose(asc.mouth_moves(wide, asc.MOUTH_POSES["mouth_smile"], -1.0)["L"],
+                                   [0.0024, 0.0048, 0.0008])                   # twice the mouth, facing -Z
+
+    def test_eye_closure_is_measured_on_the_lids(self):
+        bones = ["Bone_face", "Bone_Face_Eye_L_Shape_U_Mid", "Bone_Face_Eye_L_Shape_In"]
+        xs = np.linspace(0.02, 0.04, 7)
+        upper = np.array([[x, 1.010, 0.08] for x in xs])
+        lower = np.array([[x, 1.000, 0.08] for x in xs])
+        vertices = np.concatenate([upper, lower, [[0.0, 1.05, 0.08]]])
+        indices = np.zeros((15, 4), dtype=np.int32)
+        indices[:7, 0], indices[7:14, 0] = 1, 2
+        weights = np.zeros((15, 4))
+        weights[:, 0] = 1.0
+
+        def closure(up, low):
+            delta = np.zeros((15, 3))
+            delta[:7, 1], delta[7:14, 1] = up, low
+            return asc.eye_closure(vertices, indices, weights, bones, delta)
+
+        self.assertEqual(list(closure(-0.010, 0.0)), ["L"])            # no lid bones on the right: no verdict
+        self.assertAlmostEqual(closure(-0.010, 0.0)["L"], 1.0)         # a blink: the upper lid comes down
+        self.assertAlmostEqual(closure(-0.001, 0.008)["L"], 0.9)       # "^ ^": closed from below
+        self.assertAlmostEqual(closure(-0.012, 0.0)["L"], 1.0)         # lids that overlap are shut, not more
+        self.assertAlmostEqual(closure(0.002, 0.0)["L"], -0.2)         # wide open
+
+    def test_recipes_need_their_shapes(self):
+        have = {"closed_eyes", "mouth_talk_a", "smile_eyes", "mouth_wide", "angry_brows", "up_eyes", "smile_face"}
+        recipes, drop = asc.morph_recipes(have, True)
+        names = [r[0] for r in recipes]
+        self.assertEqual(names, ["笑い", "ウィンク", "ウィンク右", "い", "え", "怒り"])
+        self.assertEqual(recipes[1][3], [["smile_eyes", 1.0, "L"]])
+        self.assertEqual(sorted(drop), ["angry_brows", "mouth_wide", "smile_eyes", "up_eyes"])    # never a game face
+        self.assertEqual([r[0] for r in asc.morph_recipes(have, False)[0]], ["い", "え", "怒り"])
+
+
 if __name__ == "__main__":
     unittest.main()

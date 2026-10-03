@@ -136,30 +136,56 @@ ramp   = smoothstep(_RampThreshold ∓ _RampSmooth/2, N·L × 0.5 + 0.5)
 - **导出的是 prefab 的姿势**（Unity 在播任何动画之前画出来的样子）。Asagi 两侧那两缕绕出去的细发
   （`Bone_hair00` / `Bone_hair06`）在 prefab 里比绑定姿势转了 26°，prefab 的姿势才是对的（见「踩过的坑」）。
 
-## 表情（2026-10-03 下午，进行中）
+## 表情（2026-10-03）
 
-脸没有 blend shape，但游戏的表情数据在 `animation_char` 包里，可以解出来做成形状键：
+脸没有 blend shape，游戏的表情是 `animation_char` 包里的动画片段。脚本把它们解出来做成形状键，PMX 里再组成 MMD 的标准表情。
+Asagi：`.blend` 里 28 个形状键，PMX 里 36 个顶点表情（22 个 MMD 标准名 + 14 个游戏原名）。
 
 - **数据在哪**：`animation_char/<角色>/ani_story/ani_face_<角色>_story_<名>_01.anim` 是剧情对话用的整脸表情
   （idle、smile、angry、panic、serious、shy、surprise，约 45 个角色都有）；idle 片段第 1.00 秒有一次眨眼。
-  `ani_mouth_<角色>_story_<名>_01.anim` 只有一个姿势：用这个表情说话时张开的嘴。没有元音口型，没有单独的眨眼 / 视线片段。
+  `ani_mouth_<角色>_story_<名>_01.anim` 只有一个姿势：用这个表情说话时张开的嘴。没有元音口型，没有单独的眨眼 / 视线片段，
+  也没有「闭着嘴笑」的嘴（smile 的嘴和平时一样，只有眼睛和眉毛在笑）。
 - **片段解码**（`ataimanin_anim.py`）：曲线分三种存（streamed：带三次多项式系数的关键帧；dense：每帧一个采样；
   constant：一个值），绑定里的路径是「Animator 下面的骨骼路径」的 CRC32，属性 1 / 2 / 3 = 位置 / 旋转四元数 / 缩放。
-- **做成形状键**（`ataimanin_scene.Scene.add_expressions`）：把片段的姿势套到脸部骨上，按蒙皮权重算出每个顶点的位移，
+- **做成形状键**（`ataimanin_scene.Scene.add_expressions`）：把姿势套到脸部骨上，按蒙皮权重算出每个顶点的位移，
   存成和游戏自带 blend shape 一样的数据，后面的流程（`.blend` 的形状键、PMX 的顶点表情）不用改：
 
-  | 形状键 | 来源 |
-  |---|---|
-  | `closed_eyes` | idle 片段里眼睑离静止位置最远的那一帧（眨眼），只取眼睑骨 |
-  | `<名>_face`（`smile_face`、`angry_face`、`surprised_face` …） | 该表情片段开头的姿势 |
-  | `mouth_talk_a` | idle 的说话口型（相对静止脸的位移） |
-  | `<名>_talk` | 该表情的说话口型，存成**相对那个表情**的位移，所以「表情 + 说话」叠加 = 游戏里边说话边做表情的样子 |
+  | 形状键 | 来源 | 是游戏数据吗 |
+  |---|---|---|
+  | `closed_eyes` | idle 片段里眼睑离静止位置最远的那一帧（眨眼），只取眼睑骨 | 是 |
+  | `<名>_face`（`smile_face`、`angry_face`、`surprised_face` …） | 该表情片段开头的姿势 | 是 |
+  | `mouth_talk_a` | idle 的说话口型（相对静止脸的位移） | 是 |
+  | `<名>_talk` | 该表情的说话口型，存成**相对那个表情**的位移，所以「表情 + 说话」叠加 = 游戏里边说话边做表情的样子 | 是 |
+  | `smile_eyes`、`surprise_eyes`、`smile_brows`、`angry_brows`、`serious_brows`、`panic_brows` | 整脸表情里只取一组骨头（眼睑 / 眉毛）的那部分（`CUTS`） | 是，按骨骼切出来的 |
+  | `mouth_smile`、`mouth_frown`、`mouth_wide`、`mouth_narrow` | 8 根嘴唇骨按配方平移（`MOUTH_POSES`：嘴角 / 上下唇两侧 / 上下唇中间各移多少毫米，按嘴宽缩放） | **不是**，自己配的 |
+  | `up_eyes`、`down_eyes`、`left_eyes`、`right_eyes` | 眼球骨绕自己的骨头转 5°（上下）/ 9°（左右）（`GAZE`；游戏自己的 panic 表情里眼睛斜看也是 9° 左右） | **不是**，自己转的 |
 
-- **已核对**（Asagi，临时目录）：`.blend` 里 14 个形状键，表情总览图和嘴部特写看过 —— 闭眼、眯眼笑、张嘴说话、怒吼露齿都正常。
-  PMX 里出了 27 个顶点表情：`まばたき`、`笑い`、`ウィンク` 四个、`あ`（游戏的说话口型）、`い う え お`（用 `あ` 和笑的嘴近似）、
-  `にっこり`、`口角下げ`，加上 14 个游戏形状原名。
-- **还没做完**：`困る` / `怒り`（眉毛区域没切出来）、`笑い` 应该用笑的眼睛、`口角下げ` 的来源不合适、视线表情、
-  正式重导到 `E:\game_export`、PMX 表情图还没看。用 `--no-expressions` 可以不带这些形状键。
+- **PMX 的表情**（`morph_recipes` → 场景的 `morph_sources` → Squad 的 `export_pmx_blender.build_morphs`）：
+
+  | MMD 表情 | 用哪个形状 |
+  |---|---|
+  | `まばたき` | `closed_eyes` |
+  | `笑い` | `smile_eyes`（笑的时候眼睛是闭上的才用它，否则和 `まばたき` 一样） |
+  | `ウィンク` / `ウィンク右` | `smile_eyes` 的左半 / 右半 |
+  | `ウィンク２` / `ｳｨﾝｸ２右` | `closed_eyes` 的左半 / 右半 |
+  | `びっくり` | `surprise_eyes` |
+  | `あ` | `mouth_talk_a` |
+  | `い` / `え` | 0.3 × `あ` + `mouth_wide` / 0.55 × `あ` + 0.6 × `mouth_wide` |
+  | `う` / `お` | 0.25 × `あ` + `mouth_narrow` / 0.8 × `あ` + 0.75 × `mouth_narrow` |
+  | `にっこり` / `口角下げ` | `mouth_smile` / `mouth_frown` |
+  | `困る` / `怒り` / `真面目` / `にこり` | `panic_brows` / `angry_brows` / `serious_brows` / `smile_brows` |
+  | `目上` / `目下` / `目左` / `目右` | `up_eyes` … `right_eyes`（左右按从正面看的方向，和 Squad 游戏自带的 `left_eyes` 一致） |
+
+  另外 7 个整脸表情和 7 个说话口型以游戏原名列在「其他」里。切出来的和自己配的辅助形状只留在 `.blend` 里，不以原名进 PMX。
+- **「笑的时候眼睛闭不闭」怎么判断**（`eye_closure`）：直接量眼睑 —— 把眼睛沿宽度分 6 列，每列取「上眼睑下缘 − 下眼睑上缘」，
+  平均开口比静止时少 70 % 以上算闭上。Asagi 和 Rinko 的 smile 都是 98 % – 100 %（「^ ^」）。
+- **为什么不按高度切区域**：Squad 的转换脚本是按高度把整脸表情切成眼 / 眉 / 嘴的。这张脸的眉毛和上睫毛在同一高度，
+  切不开；这里有骨骼，所以按骨骼组切（`CUTS`），再用「配方」告诉转换脚本每个 MMD 表情用哪个形状。
+- **核对过的**（Asagi）：`.blend` 的嘴部正面 / 侧面特写（平时、にっこり、口角下げ、あいうえお、怒脸、怒吼、害羞、边笑边说）
+  和去掉头发的眼部特写（眨眼、笑眼、惊讶、四个视线、四种眉毛、panic）；PMX 读回的 36 格表情表。
+- **限制**：嘴唇配方和视线角度只在 Asagi 上调过，别的角色嘴形不同时可能要改 `MOUTH_POSES` / `GAZE`；
+  没有「眉毛上 / 下」（游戏没有这样的表情）；脸红贴片 `emotion_shy` 没有做成表情；没有在 MMD 本体里打开过。
+  用 `--no-expressions` 可以不带这些形状键。
 
 ## XPS / PMX
 
@@ -172,6 +198,8 @@ ramp   = smoothstep(_RampThreshold ∓ _RampSmooth/2, N·L × 0.5 + 0.5)
 | 骨架属性 `tsq_cloth` 里的 Dynamic Bone 链 | 头上的无名骨链（`Bone136`…）算头发：布料插件默认不碰头下面的骨头，除非名字里有 hair |
 | 材质记录里的 `hints` | 阴影色比例、球面贴图（MatCap）及其遮罩、描边 —— PMX 的 toon / sphere / edge 从这里取 |
 | 眼球骨 | `Bone_Eyeball_L/R` → MMD 的 `左目` / `右目`（有 `両目`） |
+| 场景里的 `morph_sources`（骨架属性 `tsq_morph_sources`） | 表情来源：`{角色: [形状名]}`、`recipes`（每个 MMD 表情用哪个形状，和 Squad 的 `RECIPES` 同格式）、`drop`（不以原名进 PMX 的辅助形状） |
+| 材质属性 `tsq_overlay = 0` | 这个 unlit 材质是脸本身（眼睛材质里有眉毛、睫毛、牙齿），不是藏在头里的贴片 |
 
 胸部物理和 Squad 相同：平移弹簧，按胸部大小缩放（`--bust`，设置在 `..\taimaninsquad\tsquad_common.BUST`）。
 Dynamic Bone 没有「最大行程」这个参数，所以这里没有 Squad 那样的游戏上限。
@@ -214,24 +242,24 @@ Squad 的模型精度高一倍多，表情现成；Action Taimanin 的服装多�
 
 | 格式 | 结果 |
 |---|---|
-| `.blend` | 4 个部件（身体、头发、脸、隐藏的脸红贴片），约 9,200 顶点 / 13,714 三角面，96 根骨（80 根有蒙皮），7 个材质；读取 + 建模约 11 秒 |
+| `.blend` | 4 个部件（身体、头发、脸、隐藏的脸红贴片），约 9,200 顶点 / 13,714 三角面，96 根骨（80 根有蒙皮），7 个材质，脸上 28 个形状键（总览图 `<id>_expressions.png`）；读取 + 建模约 12 秒 |
 | XPS | 96 根骨、6 个网格、13,714 面，每顶点最多 3 个权重，没有未加权的顶点；读回摆姿势的检查图正常 |
-| PMX | 190 根骨、24 个刚体、9 个关节；撕裂 0、付与顺序违规 0；胸部 2 个刚体（大小 8.2 cm → 系数 0.76，最多晃 ±3.8 cm）；长发 5 节 + 刘海 2 节有物理；静止下落最大漂移 1.2 cm；表情 0（这一份导出时还没有表情形状键） |
+| PMX | 190 根骨、24 个刚体、9 个关节；撕裂 0、付与顺序违规 0；胸部 2 个刚体（大小 8.2 cm → 系数 0.76，最多晃 ±3.8 cm）；长发 5 节 + 刘海 2 节有物理；静止下落最大漂移 1.2 cm；顶点表情 36 个（见「表情」，表情表 `preview_morphs.png`） |
 
-看过的图：`.blend` 的正面 / 侧面 / 背面 / 四分之三 / 脸；XPS 读回图；PMX 的 `preview.png`、`preview_dance.png`（4 帧，身体姿势正常）、
+看过的图：`.blend` 的正面 / 侧面 / 背面 / 四分之三 / 脸、形状键总览；XPS 读回图；PMX 的表情表、`preview.png`、`preview_dance.png`（4 帧，身体姿势正常）、
 `preview_gaze.png`（眼球骨能转；上下看时虹膜会转出眼眶，这张脸的眼睛转动量要比检查图里用的小）。
 另外在临时目录建过 `asagi_costume_2_f`（浴巾，全是 TCP2 材质）和 `rinko_costume_1_f`（UTS2 + 换色遮罩，带名字的胸部 / 头发骨）
 的 `.blend` 看材质，没有归档。
 
 ## 已知限制
 
-- **表情还没做完**（见「表情」一节）：形状键和 PMX 的眨眼 / 口型已经能出，眉毛类（`困る`、`怒り`）是空的，
-  没有视线表情；归档在 `E:\game_export` 的那一份是没有表情的版本。脸部骨都在 PMX 里，也可以手工摆。
+- **表情**的限制见「表情」一节（嘴唇配方和视线是自己配的，只在 Asagi 上调过）。
 - **没有在 MMD 本体和 XPS 本体里打开过**：检查图是 Blender 读回渲的。
 - **只试导了少数几个模型**（见「试导结果」），1384 个里绝大多数没有跑过；怪物 / NPC / 武器类别没有试。
 - **武器没有挂上**：展示用 prefab 不带武器，武器是 `unit/weapon/` 下单独的 prefab。
 - **服装换色没有做成选项**：导出的是材质里存的默认颜色（`CostumeBody` 的换色材质表没有用）。
-- **`--pmx` 依赖 ROE worker 里还没进仓库的胸部刚体代码**：和 Taimanin Squad 相同，见 `..\taimaninsquad\README.md` 的已知限制。
+- **`--pmx` 用的是 ROE worker 的胸部刚体代码**（`scripts\riseoferos\export_character_model_blender.py`，2026-10-03 下午进了仓库）：
+  和 Taimanin Squad 相同，见 `..\taimaninsquad\README.md` 的已知限制。
 - 着色器没做的部分见「着色器」一节末尾。
 
 ## 踩过的坑
@@ -246,11 +274,20 @@ Squad 的模型精度高一倍多，表情现成；Action Taimanin 的服装多�
   Dynamic Bone 组件的根就是会摆的链。
 - **脸部骨会被当成衣物**：同一个插件把身体正则（`^Bip001`）以外的所有蒙皮骨链当衣物。脸部骨的名字
   （`Bone_Face_*`、`Bone_Eyeball_*`、`Bone_Teeth_*`…）通过骨架属性 `tsq_body_bones` 加进身体正则。
+- **压缩网格的第 4 个骨骼权重是错的（UnityPy 1.25.3）**：压缩网格的权重按 1/31 存，每个顶点最多存 3 个，第 4 个是
+  「差多少到 1」。UnityPy 把它算成「1 − 前三个整数之和」，例如 25 + 2 + 2 → **−28** 而不是 2/31。脸是压缩网格，
+  嘴角一圈顶点正好有 4 根骨：这里算表情位移时权重和成了负数，这些顶点没有位移 —— 嘴角被撕开、露出牙齿；
+  Blender 里负权重被丢掉，第 4 根骨的份额没了。现在在 `tsquad_scene.packed_weights` 里按「1 − 前三个之和」重算。
+  发现方法：同一个配方用「摆骨头」和「形状键」各渲一次，嘴不一样，逐顶点对比出 64 个顶点没有位移。
+- **眼睛材质里画着眉毛、睫毛、牙齿**：Squad 把 unlit 材质当成藏在头里的贴片（脸红、汗），切表情时不带它们；
+  这里的眼睛材质就是脸的一部分。材质属性 `tsq_overlay = 0` 告诉转换脚本「这不是贴片」，否则眉毛表情是空的。
+- **眼睑骨既平移又转**：用骨头原点的位移判断「眼睛闭没闭」会算错（笑眼的上眼睑中段骨只下来 2 mm，眨眼是 7 mm），
+  而且「^ ^」是下眼睑往上顶，和眨眼方向不一样。所以直接量眼睑顶点之间的开口。
 - **1 GB 的包不能整个解**：见「按块读」。三个加密包的文件头不是 `UnityFS`，`Bundle` 直接拒绝。
 - **`_PartsColorMask` 不是可有可无的**：UTS2 材质的默认颜色就是靠换色算出来的，不接遮罩衣服会是贴图的原色。
 
 ## 测试
 
 ```powershell
-python -m unittest discover -s tests        # 27 项：按块读取（合成的 UnityFS 文件）、模型 id 解析、材质提示、胸部骨识别、片段解码、姿势 → 顶点位移
+python -m unittest discover -s tests        # 31 项：按块读取（合成的 UnityFS 文件）、模型 id 解析、材质提示、胸部骨识别、片段解码、姿势 → 顶点位移、嘴唇配方 / 视线 / 眼睑开口 / PMX 配方
 ```

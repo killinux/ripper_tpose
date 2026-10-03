@@ -79,7 +79,7 @@ def export_one(model: dict, a, game: ac.Game) -> dict:
     log("%s: reading %s" % (model_id, model["key"]))
     scene = asc.extract_unit(model, scene_dir, game, include_inactive=a.inactive, expressions=not a.no_expressions)
     if scene.get("expressions"):
-        log("%s: %d expression shapes from the game's clips (%s)" % (
+        log("%s: %d expression shapes (the game's clips + lip / gaze recipes): %s" % (
             model_id, len(scene["expressions"]), " ".join(e["name"] for e in scene["expressions"])))
     os.makedirs(os.path.dirname(blend), exist_ok=True)
     log("%s: building %s (%d parts, %d bones, %d materials)" % (

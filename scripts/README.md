@@ -153,7 +153,8 @@ Action Taimanin（アクション対魔忍）和 Taimanin Squad 是同一家公�
 `export_model.py <id> --xps --pmx` 读 prefab（身体、头发、脸分在三处，prefab 把它们拼起来），用 Taimanin Squad 的
 `build_blend.py` 加本目录的材质构建器（`atm_materials.py`：Toony Colors Pro 2 和 Unity-Chan Toon Shader 2，
 按游戏的 Gamma 空间计算，带工作室的换色遮罩）出 `.blend`，XPS / PMX 也是 Squad 的转换脚本。脸是骨骼驱动
-（约 28 根脸部骨，没有 blend shape），物理是 Dynamic Bone；表情从游戏的剧情表情片段解出来做成形状键（进行中）。两款游戏的差别列在
+（约 28 根脸部骨，没有 blend shape），物理是 Dynamic Bone；表情从游戏的剧情表情片段解出来（`ataimanin_anim.py` 解 AnimationClip）做成形状键，
+PMX 里组成 MMD 的标准表情（嘴形和视线游戏里没有，是按嘴唇骨 / 眼球骨配的）。两款游戏的差别列在
 [`actiontaimanin/README.md`](actiontaimanin/README.md) 的对比表里。
 
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆

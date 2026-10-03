@@ -483,6 +483,8 @@ def builders(api):
         else:
             tree.links.new(emit.outputs[0], out.inputs["Surface"])
         mat.use_backface_culling = int(spec["floats"].get("_Cull", 2)) == 2
+        if not blend:                                  # the eye material also draws the brows, lashes and teeth: it
+            mat["tsq_overlay"] = 0                     # is the face, not a card hidden in the head (PMX morph cutter)
         return made(spec, "unlit")
 
     def family(name):

@@ -14,6 +14,55 @@
 
 ---
 
+## 2026-10-03 — Action Taimanin：表情（剧情表情片段 → 形状键 → MMD 表情）；修了压缩网格第 4 个骨骼权重的错
+
+1. **起因**：用户说「先做个表情试试」。这个游戏的脸是骨骼驱动的（约 28 根脸部骨），没有 blend shape，上一条里 PMX 没有表情。
+2. **数据在哪**：`animation_char` 包里每个角色有 7 个剧情表情片段 `ani_face_<角色>_story_<名>_01.anim`
+   （idle、smile、angry、panic、serious、shy、surprise；idle 第 1.00 秒眨一次眼）和配套的说话口型
+   `ani_mouth_<角色>_story_<名>_01.anim`（一个姿势）。没有元音口型、视线片段，也没有「闭着嘴笑」的嘴。
+3. **新增 / 修改**（`scripts/actiontaimanin`）：
+   - `ataimanin_anim.py`：AnimationClip 解码（streamed / dense / constant 三种曲线，绑定路径是骨骼路径的 CRC32）；
+   - `ataimanin_scene.Scene.add_expressions`：把姿势按蒙皮权重换成顶点位移，存成普通形状键 ——
+     `closed_eyes`、`<名>_face`、`mouth_talk_a`、`<名>_talk`（游戏数据）；`smile_eyes`、`angry_brows` 等 6 个是整脸表情里
+     只取眼睑骨或眉毛骨的部分；`mouth_smile / frown / wide / narrow` 是 8 根嘴唇骨按配方平移、`up / down / left / right_eyes`
+     是眼球骨转 5° / 9°（**这两组不是游戏数据**，参数在 `MOUTH_POSES`、`GAZE`）；
+   - `morph_recipes`：告诉 PMX 转换脚本每个 MMD 表情用哪个形状（`まばたき`、`笑い`、4 个 `ウィンク`、`びっくり`、`あいうえお`、
+     `にっこり`、`口角下げ`、`困る`、`怒り`、`真面目`、`にこり`、`目上 / 下 / 左 / 右`）；「笑的时候眼睛闭不闭」直接量眼睑的开口
+     （`eye_closure`，闭合 ≥ 70 % 才用笑眼做 `笑い`）；
+   - `export_model.py --no-expressions`；`.blend` 旁边多一张形状键总览 `<id>_expressions.png`；画廊卡片加了「形状键表」链接和表情数。
+4. **改了 Taimanin Squad 的文件**（加法，Squad 的 `1_asagi` 重导后 PMX / XPS 仍与归档逐字节相同）：
+   - `export_pmx_blender.py`：骨架属性 `tsq_morph_sources` 可以带 `recipes`（和 `RECIPES` 同格式，同名替换、新名追加）和
+     `drop`（不以原名进 PMX 的辅助形状）；材质属性 `tsq_overlay = 0` 表示这个 unlit 材质是脸本身、不是藏在头里的贴片；
+   - `build_blend.py`：把场景的 `morph_sources` 存到骨架上；
+   - `tsquad_scene.py`：**修 bug** —— 见第 6 点。
+5. **结果**（`asagi_costume_1_f`，已重导到 `E:\game_export\ActionTaimanin\Asagi\`）：`.blend` 28 个形状键；
+   PMX 36 个顶点表情（22 个 MMD 标准名 + 7 个整脸表情 + 7 个说话口型），其余不变（190 根骨、24 个刚体、撕裂 0）。
+6. **踩过的坑**：
+   - **UnityPy 1.25.3 把压缩网格的第 4 个骨骼权重算错**：权重按 1/31 存，每个顶点最多存 3 个，第 4 个是「差多少到 1」，
+     UnityPy 算成「1 − 前三个整数之和」（25 + 2 + 2 → −28）。脸是压缩网格，嘴角一圈顶点有 4 根骨：算表情位移时这些顶点
+     没有位移，嘴角被撕开露出牙齿。发现方法：同一个嘴唇配方用「摆骨头」和「形状键」各渲一张，逐顶点对比出 64 个顶点不动。
+     现在在 `tsquad_scene.packed_weights` 里重算（Squad 的压缩网格也走这里）；
+   - **这个 bug 对已导出的 Squad 模型的影响**：Blender 丢掉负权重，等于少了第 4 根骨的份额。扫了已导出的 151 个单位，
+     只有 4 个用压缩的蒙皮网格：`189_gsoldier1`（468 个顶点 = 2.4 %）、`158_paladin`（274）、`159_paladin2`（92）、
+     `130_orc1`（4），丢的份额最多 0.26、平均 0.07 – 0.1。这 4 个已用修正后的权重重导（blend + XPS + PMX + 转台视频；
+     XPS 每顶点最多权重数 3 → 4，PMX 撕裂 0，`158_paladin` 的拉伸最大值 2.6 mm → 1.8 mm）；
+   - 眉毛表情一开始是空的：Squad 的转换脚本把 unlit 材质当隐藏贴片，而这里的眼睛材质里画着眉毛、睫毛、牙齿；
+   - 眉毛和上睫毛在同一高度，按高度切不开 → 改成按骨骼组切；
+   - 眼睑骨既平移又转，「^ ^」是下眼睑往上顶：用骨头位移或和眨眼比方向都判断不出「眼睛闭没闭」→ 直接量眼睑顶点。
+7. **验证**：
+   - 离线测试 31 项（新增：视线旋转、嘴唇配方的镜像和缩放、眼睑开口、PMX 配方）；Squad 42 项（新增：第 4 个权重）；
+   - 看过的图：`.blend` 的嘴部正面 / 侧面特写 12 组、去掉头发的眼部特写 18 格、28 格形状键总览、PMX 读回的 36 格表情表（归档的那一份）；
+   - Squad 回归：`1_asagi` 用现在的代码重导到临时目录，PMX 和 XPS 与归档逐字节相同；
+   - 把提交解到空目录（不带工作区的任何文件）：两套测试通过，`asagi_costume_1_f` 和 Squad 的 `1_asagi` 各导一遍 blend + XPS + PMX，
+     PMX 和 XPS 都与归档逐字节相同。
+8. **ROE worker 的胸部物理进仓库了**（用户确认「要进」）：`scripts/riseoferos/export_character_model_blender.py` 的
+   `convert_rig_to_mmd(bust=, collider_fixes=)` 两个开关和它们用的函数（`add_bust_physics`、`follow_breast_skin`、
+   `release_rest_overlaps`）。开关默认关，Rise of Eros 自己的 `export_pmx` 在仓库里仍然不开（把它打开的那一处改动留在
+   工作区，属于 ROE 胸部物理那条线，等那边定参数）。此前 Squad / Action 的 `--pmx` 从干净检出会停在
+   「worker 没有胸部物理」，现在可以直接跑。
+9. **没做的 / 限制**：嘴唇配方和视线角度只在 Asagi 上调过；没有「眉毛上 / 下」；脸红贴片 `emotion_shy` 没做成表情；
+   没有在 MMD 本体里打开过；只导了这一个模型。
+
 ## 2026-10-03 — DOA5LR / DOA6 的衣服和布料是怎么做的（调研 + `g1m_cloth.py`）
 
 1. **起因**：用户："也调研一下这两个游戏的衣服和布料是怎么处理的"。ROE 格斗游戏的裙子还有一点穿模，后面还要做爆衣，所以拿同类格斗游戏的数据对照。

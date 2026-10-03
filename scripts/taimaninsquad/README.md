@@ -624,15 +624,17 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
 | 材质记录里的 `hints` | `export_pmx_blender.setup_materials` | 阴影色比例、球面贴图及遮罩：有就用它，没有才按 Squad 的属性名算 |
 | `tsq_cloth` 里 `kind = dynamic_bone` 的链 | `export_pmx_blender.teach_dynamic_hair` | 头下面的无名骨链算头发 |
 | 眼球骨 `…Eyeball…_L/_R` | `export_pmx_blender.resolve_slots` | MMD 的 `左目` / `右目`（Squad 的脸没有眼球骨，不受影响） |
+| 场景里的 `morph_sources` | `build_blend.py` → 骨架属性 `tsq_morph_sources` → `export_pmx_blender.MORE_SOURCES / MORE_RECIPES / MORE_DROP` | 表情的来源：`{角色名: [形状名]}` 排在 `SOURCES` 前面；`"recipes"` 是和 `RECIPES` 同格式的行（同名的替换，新名字加在后面，来源可以直接写形状名）；`"drop"` 是不以原名列进 PMX 的辅助形状 |
+| 材质属性 `tsq_overlay = 0` | `export_pmx_blender.Face` | 这个 unlit 材质是脸本身，不是藏在头里的贴片（Action 的眼睛材质里还画着眉毛、睫毛、牙齿） |
 | `convert(..., game=, bust_reader=)`、`run_workers(jobs, script)` | `export_model.py` | 给另一个游戏的入口脚本调用 |
 
 ## 已知限制
 
-- **`--pmx` 依赖 ROE worker 里还没进仓库的胸部刚体代码**：胸部刚体和碰撞体修正是
+- **`--pmx` 用的是 ROE worker 的胸部刚体代码**：胸部刚体和碰撞体修正是
   `scripts\riseoferos\export_character_model_blender.py` 的 `convert_rig_to_mmd(bust=True, collider_fixes=True)` 做的
-  （本目录只把它建出的关节改成平移弹簧）。这段代码是 Rise of Eros 那条线的工作，2026-10-03 推送本目录时还在工作区里、
-  没有提交。从仓库干净检出：`.blend` 和 XPS 正常，`--pmx` 会停下并提示 worker 缺胸部物理；那段代码进仓库后即可。
-  （验证方法：把提交解到空目录跑 `1_asagi`，再把工作区的 worker 文件放进去重跑。）
+  （本目录只把它建出的关节改成平移弹簧）。这两个开关 2026-10-03 下午进了仓库（默认关，Rise of Eros 自己的导出不变），
+  从干净检出可以直接跑 `--pmx`；之前的提交（`fdd9b1c`、`7fb8ac9`）里 `--pmx` 会停下并提示 worker 缺胸部物理。
+  （验证方法：把提交解到空目录跑 `1_asagi`，PMX 与归档逐字节相同。）
 - **眉毛 / 睫毛透过刘海**：游戏用模板缓冲（材质 `*_st`）让眉眼画在刘海上面。Blender 的 EEVEE 没有模板测试，
   `.blend` 里刘海会挡住眉毛；PMX 同理（MMD 里常见做法是把刘海材质调成半透明，可以自己在 PMXEditor 里改）。
 - **没有眼球骨**：眼睛是脸网格的一部分，视线靠 blend shape。PMX 没有 `両目`，视线用 `目上/目下/目左/目右` 四个表情。
@@ -680,6 +682,13 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
 
 ## 踩过的坑
 
+- **压缩网格的第 4 个骨骼权重是错的（UnityPy 1.25.3，2026-10-03 修）**：开了 Mesh Compression 的网格，权重按 1/31 存、
+  每个顶点最多存 3 个，第 4 个是「差多少到 1」。UnityPy 把它算成「1 − 前三个整数之和」（25 + 2 + 2 → −28，应为 2/31）。
+  Blender 把负权重丢掉，所以有 4 根骨的顶点少了第 4 根的份额（最多 0.26，平均 0.07 – 0.1）。现在读取时在
+  `tsquad_scene.packed_weights` 里重算。已导出的 151 个单位里只有 4 个用了压缩的蒙皮网格：`189_gsoldier1`
+  （468 个顶点，2.4 %）、`158_paladin`（274，2.5 %）、`159_paladin2`（92，0.4 %）、`130_orc1`（4 个）——
+  这 4 个已用修正后的权重重导（XPS 每顶点最多权重数 3 → 4，PMX 撕裂 0）。这个 bug 是做 Action Taimanin 的表情时发现的：
+  那边的脸是压缩网格。
 - **嘴唇不能按位置焊接**：Unity 在 UV 接缝处把顶点拆开，导入 Blender 前要焊回去；但闭着的上下唇在静止时
   坐标完全相同，按位置焊会把嘴缝死。焊接键 = 位置 + 法线 + 蒙皮 + **所有 blend shape 的位移**，只有真正的
   UV 接缝重复点才合并。
