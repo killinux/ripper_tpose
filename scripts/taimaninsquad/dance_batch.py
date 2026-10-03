@@ -33,7 +33,6 @@ import concurrent.futures
 import os
 import random
 import re
-import struct
 import subprocess
 import sys
 import time
@@ -48,6 +47,8 @@ FOLDER = "_videos"
 TITLE = "{dance}_{name}"                               # the videos' file names (dance_video.file_stem)
 SEED = 20261003                                        # of the draw: who gets which dance, which backdrop
 MIN_SECONDS = 8.0
+MEASURE = "body"                                       # how dances.json's lengths were taken: an older cache is read again
+MIN_FREE_GB = 6.0                                      # --min-free-gb: no video is started with less memory free
 SKIP_CATEGORIES = ("monster", "boss", "mob")
 FITTED = re.compile(r"适配|体型")                        # a version of the motion fitted to another body
 SEVERAL = re.compile(r"\d\s*人|[双二三四多]人")           # a dance for several dancers
@@ -60,30 +61,10 @@ log = tc.log
 
 
 # ---------------------------------------------------------------- the collection
-def vmd_frames(path: str) -> int:
-    """The last keyed frame of a .vmd (bone and morph keys); 0 for a file that is not one."""
-    import numpy as np
-
-    with open(path, "rb") as fh:
-        data = fh.read()
-    if len(data) < 54:
-        return 0
-    last, at = 0, 50
-    for size in (111, 23):                              # bone keys, then morph keys: name (15 bytes), frame, ...
-        if at + 4 > len(data):
-            break
-        count = struct.unpack_from("<I", data, at)[0]
-        at += 4
-        if count and at + count * size <= len(data):
-            block = np.frombuffer(data, dtype=np.uint8, count=count * size, offset=at).reshape(count, size)
-            last = max(last, int(block[:, 15:19].copy().view("<u4").max()))
-        at += count * size
-    return last
-
-
 def read_collection(folder: str, cache: dict | None = None) -> list[dict]:
     """[{"folder", "vmds": [{"file", "frames"}], "audio": [file names]}] of a collection that keeps one dance per
-    folder.  `cache` ({path: [size, mtime, frames]}) saves reading the motions again."""
+    folder; "frames" = the last key of the body bones (dance_video.dance_frames).  `cache` ({path: [size, mtime,
+    frames, MEASURE]}) saves reading the motions again."""
     cache = cache if cache is not None else {}
     out = []
     for name in sorted(os.listdir(folder)):
@@ -98,8 +79,8 @@ def read_collection(folder: str, cache: dict | None = None) -> list[dict]:
             path = os.path.join(sub, f)
             stat = os.stat(path)
             hit = cache.get(path)
-            if not hit or hit[0] != stat.st_size or hit[1] != int(stat.st_mtime):
-                hit = cache[path] = [stat.st_size, int(stat.st_mtime), vmd_frames(path)]
+            if not hit or hit[:2] != [stat.st_size, int(stat.st_mtime)] or hit[3:] != [MEASURE]:
+                hit = cache[path] = [stat.st_size, int(stat.st_mtime), dv.dance_frames(path), MEASURE]
             vmds.append({"file": f, "frames": hit[2]})
         out.append({"folder": name, "vmds": vmds, "audio": [f for f in files if f.lower().endswith(AUDIO)]})
     return out
@@ -327,8 +308,47 @@ def step_aside() -> bool:
     return bool(kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), 0x00004000))      # BELOW_NORMAL_PRIORITY_CLASS
 
 
+def free_memory_gb() -> float | None:
+    """Memory that can still be had right now, in GB: the smaller of free RAM and free commit (RAM + page file) -
+    other jobs on the machine may have reserved more than they use yet.  None where that cannot be asked."""
+    if os.name == "nt":
+        import ctypes
+
+        class Status(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_uint32), ("dwMemoryLoad", ctypes.c_uint32),
+                        ("ullTotalPhys", ctypes.c_uint64), ("ullAvailPhys", ctypes.c_uint64),
+                        ("ullTotalPageFile", ctypes.c_uint64), ("ullAvailPageFile", ctypes.c_uint64),
+                        ("ullTotalVirtual", ctypes.c_uint64), ("ullAvailVirtual", ctypes.c_uint64),
+                        ("ullAvailExtendedVirtual", ctypes.c_uint64)]
+
+        status = Status(dwLength=ctypes.sizeof(Status))
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return None
+        return min(status.ullAvailPhys, status.ullAvailPageFile) / 2.0 ** 30
+    try:
+        return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / 2.0 ** 30
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def wait_for_memory(least_gb: float, who: str = "", poll: float = 30.0, free=free_memory_gb, sleep=time.sleep) -> float:
+    """Hold a video back while less than `least_gb` of memory is free (a render takes 1 - 2.5 GB; the other jobs on
+    the machine come and go); returns the seconds waited.  least_gb 0, or a system that does not tell: no waiting."""
+    waited = 0.0
+    while least_gb > 0:
+        have = free()
+        if have is None or have >= least_gb:
+            break
+        if not waited:
+            log("%s: %.1f GB of memory free - waiting for %g (--min-free-gb)" % (who, have, least_gb))
+        sleep(poll)
+        waited += poll
+    return waited
+
+
 def render(model: dict, dance: dict, backdrop: str, a, where: SimpleNamespace, names: dict) -> dict:
     """One unit's video; returns its record for videos.json."""
+    wait_for_memory(a.min_free_gb, model["id"])
     folder = os.path.join(a.motions, dance["folder"])
     vmd, bgm = os.path.join(folder, dance["vmd"]), os.path.join(folder, dance["music"])
     job = SimpleNamespace(
@@ -336,12 +356,13 @@ def render(model: dict, dance: dict, backdrop: str, a, where: SimpleNamespace, n
         backdrop=os.path.join(a.export_root, "_backgrounds", backdrop) if backdrop else "", backdrop_as="auto",
         backdrop_fov=70.0, backdrop_turn=0.0, backdrop_tilt=0.0, shadow=0.45, people=names, dance=dance["title"],
         camera=a.camera, follow=a.follow, physics="mmd", margin=30, samples=a.samples, size=a.size, frames=0,
-        stills=0, no_video=False, no_edge=False, no_blend=True, force=a.force)
+        music_tail=a.music_tail, stills=0, no_video=False, no_edge=False, no_blend=True, force=a.force)
     rep = dv.render_one(model, vmd, bgm, dv.motion_name(vmd), job)
     video = rep["video"]
+    seconds = round(rep["motion_frames"] / float(rep.get("fps") or dv.FPS), 1) if rep.get("motion_frames") else dance["seconds"]
     record = {"video": video, "dance": dance["folder"], "title": dance["title"], "vmd": dance["vmd"],
               "backdrop": backdrop, "time": rep.get("time") or time.strftime("%Y-%m-%d %H:%M:%S"),
-              "seconds": dance["seconds"], "render_seconds": rep.get("seconds"), "kept": bool(rep.get("skipped"))}
+              "seconds": seconds, "render_seconds": rep.get("seconds"), "kept": bool(rep.get("skipped"))}
     side = os.path.splitext(video)[0] + ".json"          # dance_video's report: out of the folder people browse
     if os.path.isfile(side):
         os.makedirs(where.reports, exist_ok=True)
@@ -359,10 +380,15 @@ def main() -> int:
     ap.add_argument("--jobs", type=int, default=1, metavar="N", help="render N videos at a time")
     ap.add_argument("--full-speed", action="store_true",
                     help="normal process priority (default: below normal, so the machine stays usable meanwhile)")
+    ap.add_argument("--min-free-gb", type=float, default=MIN_FREE_GB, metavar="GB",
+                    help="a video is started only while this much memory is free, else it waits (%(default)s; 0 = never wait)")
     ap.add_argument("--plan", action="store_true", help="only draw the plan and write the lists")
     ap.add_argument("--list", action="store_true", help="only rewrite the lists and the gallery")
     ap.add_argument("--motions", default=MOTIONS, help="the motion collection: one dance per folder (default %(default)s)")
     ap.add_argument("--min-seconds", type=float, default=MIN_SECONDS, help="dances shorter than this are left out (%(default)s)")
+    ap.add_argument("--music-tail", type=float, default=dv.MUSIC_TAIL, metavar="SECONDS",
+                    help="a motion that goes on for more than this after its music is rendered as far as the music "
+                         "plays (%(default)s; dance_video.py --music-tail)")
     ap.add_argument("--seed", type=int, default=SEED, help="of the draw (%(default)s); the plan that is there stays")
     ap.add_argument("--title", default=TITLE, metavar="PATTERN", help="the videos' file names (%(default)s; dance_video.py --title)")
     ap.add_argument("--men", action="store_true", help="the male units too (default: female figures only)")

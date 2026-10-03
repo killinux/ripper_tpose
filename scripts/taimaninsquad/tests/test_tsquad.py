@@ -578,6 +578,43 @@ class DanceVideoTests(unittest.TestCase):
         _folder, mp4 = dance_video.video_paths(model, r"E:\x", "m", view="chest", stem="Dance-Kirara")
         self.assertTrue(mp4.endswith(os.path.join("video", "24_kirara", "Dance-Kirara_chest.mp4")))
 
+    @staticmethod
+    def vmd(path, bones, morphs=()):
+        """A .vmd with these (bone name, frame) and (morph name, frame) keys; the names as Shift-JIS bytes."""
+        data = b"Vocaloid Motion Data 0002".ljust(30, b"\0") + b"model".ljust(20, b"\0") + struct.pack("<I", len(bones))
+        for name, frame in bones:
+            data += name.ljust(15, b"\0") + struct.pack("<I", frame) + bytes(92)
+        data += struct.pack("<I", len(morphs))
+        for name, frame in morphs:
+            data += name.ljust(15, b"\0") + struct.pack("<If", frame, 1.0)
+        with open(path, "wb") as fh:
+            fh.write(data)
+        return path
+
+    def test_a_dance_ends_with_its_last_body_key(self):
+        folder = self.folder("empty.vmd")
+
+        def sjis(text):
+            return text.encode("shift_jis")
+
+        dance = self.vmd(os.path.join(folder, "a.vmd"),
+                         [(sjis("センター"), 0), (sjis("左足ＩＫ"), 325), (sjis("上半身") + b"\0\xfd\xfd", 300), (sjis("両目"), 435)],
+                         [(sjis("まばたき"), 600)])
+        self.assertEqual(dance_video.dance_frames(dance), 325)           # not the eyes' 435, not the blink's 600
+        props = self.vmd(os.path.join(folder, "b.vmd"), [(sjis("スカート前"), 90), (sjis("髪1"), 120)])
+        self.assertEqual(dance_video.dance_frames(props), 120)           # no body bone is keyed: the last bone key
+        self.assertEqual(dance_video.dance_frames(self.vmd(os.path.join(folder, "c.vmd"), [])), 0)
+        self.assertEqual(dance_video.dance_frames(os.path.join(folder, "empty.vmd")), 0)
+
+    def test_how_much_of_a_motion_is_rendered(self):
+        self.assertEqual(dance_video.video_frames(325), 326)                       # frames 0 .. 325
+        self.assertEqual(dance_video.video_frames(325, music=10.8), 326)           # the music ends with the dance
+        self.assertEqual(dance_video.video_frames(273, music=11.1), 274)           # music that plays on: the dance's end
+        self.assertEqual(dance_video.video_frames(500, music=15.5), 501)           # 1.2 s without music: left alone
+        self.assertEqual(dance_video.video_frames(1040, music=17.25), 518)         # the dance twice in the file: with the music
+        self.assertEqual(dance_video.video_frames(1040, music=17.25, tail=30.0), 1041)
+        self.assertEqual(dance_video.video_frames(0, music=17.25), 0)              # not known: whatever the file keys
+
     def test_the_following_camera(self):
         still = [0.3] * 40
         self.assertEqual([round(v, 9) for v in tc.smooth_track(still, 12.0)], still)      # standing still: no drift at the ends
@@ -799,6 +836,31 @@ class DanceBatchTests(unittest.TestCase):
         self.assertIn("辛舞（2025.8.9）", got["辛舞"]["status"])                 # no date in the name: the oldest
         self.assertIn("配乐", got["壬舞"]["status"])                           # the camera motion is passed over, but two songs
         self.assertEqual(dance_batch.release_date("品鉴Colder Than Ice 202511.2by小王动画"), (2025, 11, 2))
+
+    def test_a_video_waits_for_free_memory(self):
+        seen, slept = iter([2.0, 5.9, 8.0, 1.0]), []
+        waited = dance_batch.wait_for_memory(6.0, "u1", poll=30.0, free=lambda: next(seen), sleep=slept.append)
+        self.assertEqual((waited, slept), (60.0, [30.0, 30.0]))                 # two looks too few, the third enough
+        self.assertEqual(dance_batch.wait_for_memory(0.0, free=lambda: 0.1, sleep=slept.append), 0.0)    # switched off
+        self.assertEqual(dance_batch.wait_for_memory(6.0, free=lambda: None, sleep=slept.append), 0.0)   # cannot be asked
+        self.assertEqual(len(slept), 2)
+        have = dance_batch.free_memory_gb()
+        self.assertTrue(have is None or 0.0 < have < 4096.0)
+
+    def test_lengths_of_an_older_cache_are_taken_again(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        os.makedirs(os.path.join(tmp.name, "甲舞"))
+        vmd = DanceVideoTests.vmd(os.path.join(tmp.name, "甲舞", "甲舞.vmd"), [("センター".encode("shift_jis"), 300)],
+                                  [("あ".encode("shift_jis"), 450)])
+        open(os.path.join(tmp.name, "甲舞", "甲舞.WAV"), "w").close()
+        stat = os.stat(vmd)
+        cache = {vmd: [stat.st_size, int(stat.st_mtime), 450]}               # the first version's: up to the last morph key
+        entry = dance_batch.read_collection(tmp.name, cache)[0]
+        self.assertEqual((entry["vmds"], entry["audio"]), ([{"file": "甲舞.vmd", "frames": 300}], ["甲舞.WAV"]))
+        self.assertEqual(cache[vmd], [stat.st_size, int(stat.st_mtime), 300, dance_batch.MEASURE])
+        cache[vmd][2] = 123                                                    # a cache of this version is believed
+        self.assertEqual(dance_batch.read_collection(tmp.name, cache)[0]["vmds"][0]["frames"], 123)
 
     def test_the_draw_is_kept(self):
         units = ["u%d" % i for i in range(6)]

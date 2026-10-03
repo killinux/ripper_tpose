@@ -30,8 +30,11 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import math
 import os
 import re
+import struct
+import subprocess
 import sys
 import time
 
@@ -50,6 +53,11 @@ DATE = re.compile(r"\s*[(（]?\s*20\d\d\.?\d{1,2}\.\d{1,2}\s*[)）]?")
 AUTHOR = re.compile(r"\s*b?y\s*小王(?:动画|崩坏原神)?", re.IGNORECASE)
 COPY = re.compile(r"\s*[(（]\d[)）]\s*$")
 TITLE = "{id}_{motion}"                                # --title: the video's file name
+FPS = 30                                               # of a .vmd
+# the bones a dance is made of: their last key is where it ends (dance_frames)
+BODY = ("全ての親", "センター", "グルーブ", "上半身", "上半身2", "下半身", "首", "頭", "左肩", "右肩", "左腕", "右腕",
+        "左ひじ", "右ひじ", "左手首", "右手首", "左足", "右足", "左ひざ", "右ひざ", "左足ＩＫ", "右足ＩＫ")
+MUSIC_TAIL = 2.0                                       # --music-tail: seconds a dance may go on after its music
 log = tc.log
 
 
@@ -85,6 +93,49 @@ def motion_name(vmd: str, name: str = "") -> str:
     """A file-name-safe label for the motion: --name, else the .vmd's own name."""
     text = name or os.path.splitext(os.path.basename(vmd))[0]
     return re.sub(r'[<>:"/\\|?*\s]+', "_", text).strip("._") or "motion"
+
+
+def dance_frames(path: str) -> int:
+    """The last frame a .vmd keys on a body bone (BODY) - where the dance ends.  Face and eye keys often run on
+    for seconds after it (what is left of a longer take); a model that has those morphs would stand still through
+    them, with the music over.  A motion that keys no body bone: its last bone key.  0: not a .vmd."""
+    import numpy as np
+
+    with open(path, "rb") as fh:
+        data = fh.read()
+    if len(data) < 54:
+        return 0
+    count = struct.unpack_from("<I", data, 50)[0]
+    if not count or 54 + count * 111 > len(data):
+        return 0
+    block = np.frombuffer(data, dtype=np.uint8, count=count * 111, offset=54).reshape(count, 111)
+    frames = block[:, 15:19].copy().view("<u4")[:, 0]
+    names, which = np.unique(block[:, :15].copy().view("V15")[:, 0], return_inverse=True)
+    wanted = {name.encode("shift_jis") for name in BODY}
+    body = np.array([n.tobytes().split(b"\0")[0] in wanted for n in names])[which.ravel()]   # after the zero: anything
+    return int(frames[body].max() if body.any() else frames.max())
+
+
+def audio_seconds(path: str) -> float:
+    """How long a music file plays (ffprobe); 0.0 when that cannot be found out."""
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                             capture_output=True, timeout=60).stdout
+        return float(out.decode("ascii", "replace").strip() or 0.0)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 0.0
+
+
+def video_frames(dance: int, music: float = 0.0, tail: float = MUSIC_TAIL) -> int:
+    """How many frames of a motion to render: up to its last body key (`dance`, of dance_frames).  A motion that
+    goes on for more than `tail` seconds after its music (the dance twice in one file, a stray key far out) is
+    rendered as far as the music plays.  0: not known - whatever the file keys."""
+    if dance <= 0:
+        return 0
+    frames = dance + 1
+    if music > 0 and frames / FPS - music > tail:
+        frames = int(math.ceil(music * FPS))
+    return frames
 
 
 def clean_name(text: str) -> str:
@@ -185,8 +236,10 @@ def render_one(model: dict, vmd: str, bgm: str, name: str, a) -> dict:
         cmd += ["--backdrop", a.backdrop, "--backdrop-as", a.backdrop_as, "--backdrop-fov", str(a.backdrop_fov),
                 "--backdrop-turn", str(a.backdrop_turn), "--backdrop-tilt", str(a.backdrop_tilt),
                 "--shadow", str(a.shadow)]
-    if a.frames:
-        cmd += ["--frames", str(a.frames)]
+    frames = a.frames or video_frames(dance_frames(vmd), audio_seconds(bgm) if bgm else 0.0,
+                                      getattr(a, "music_tail", MUSIC_TAIL))
+    if frames:
+        cmd += ["--frames", str(frames)]
     if a.stills:
         cmd += ["--stills", str(a.stills)]
     for flag in ("no_video", "no_edge", "no_blend"):
@@ -250,7 +303,12 @@ def main() -> int:
     ap.add_argument("--backdrop-tilt", type=float, default=0.0, metavar="DEG", help="panorama: look this many degrees up")
     ap.add_argument("--shadow", type=float, default=0.45, help="with --backdrop: how dark the shadow on the ground is (0 = none)")
     ap.add_argument("--out-dir", default="", help="write the video here instead of <Character>/video/<id>")
-    ap.add_argument("--frames", type=int, default=0, help="only the first N frames of the motion")
+    ap.add_argument("--frames", type=int, default=0,
+                    help="only the first N frames of the motion (default: up to the last key of the body bones - "
+                         "face keys left over after the dance are not waited for)")
+    ap.add_argument("--music-tail", type=float, default=MUSIC_TAIL, metavar="SECONDS",
+                    help="a motion that goes on for more than this after its music has ended is rendered as far as "
+                         "the music plays (%(default)s)")
     ap.add_argument("--margin", type=int, default=30, help="lead-in frames the physics gets before the motion (30)")
     ap.add_argument("--samples", type=int, default=32, help="EEVEE samples per frame (32)")
     ap.add_argument("--stills", type=int, default=0, help="also render N check frames into <video>_stills\\")
