@@ -15,7 +15,10 @@ Two body rigs come in (RIGS): Fiona_BaseBody's 3ds Max Biped body and the UE5 bo
 (PCF_*) and the default set; the slots, the bust bones and the body-bone pattern follow the rig.
 
 The conversion is the hand route of docs/vindictus-fiona-manual-export.md 6.10 (XNALaraMesh
-import -> Convert to MMD 5 with four slots corrected -> one-click with auto-identify off), then:
+import -> Convert to MMD 5 with four slots corrected -> one-click with auto-identify off).  Around it:
+the UE body's helper bones go into their parents first (merge_into_parent), and weight the plugin still
+hands to non-MMD bones (feathers, sockets, cloth chains) goes to the nearest MMD bone after it
+(return_conversion_gains).  Then:
 
 1. 両目 - the ROE worker's add_both_eyes_bone (grant rate 1, eyes on transform layer 1).
 2. Expressions - the face is a MetaHuman: no shape keys, ~630 FACIAL_* joints moved by RigLogic
@@ -33,7 +36,8 @@ import -> Convert to MMD 5 with four slots corrected -> one-click with auto-iden
    from the vertex's other bones, the T-shirt gets the same factor as the skin under it).
    On the UE body the template sits on ``breast_physics_01`` / ``_02``; the skin hangs on 02 and the
    soft-tissue bones under it (1.0 summed at the centre), which all swing with 02.  Skirts hang
-   from 下半身 and their chains are joined into one ring (see merge_garments).
+   from 下半身 and their chains are joined into one ring (see merge_garments); skirts the game splits
+   per leg stay one sheet per thigh; coat, shirt and jacket hems are joined the same way.
 4. PMX at scale 12.5 with textures, the ROE grant-order check, the converted .blend and a
    JSON report next to it.
 """
@@ -84,14 +88,20 @@ RIGS = {
                   "left_eye_bone": "head eyeball left", "right_eye_bone": "head eyeball right"},
         "bust": (("breast_physics_01_l", "breast_physics_02_l"), ("breast_physics_01_r", "breast_physics_02_r")),
         "body_regex": r"^(FACIAL_|breast_|[a-z]+toe_\d)",
-        "into_parent": r"^unused_calf_twist",       # see merge_into_parent
+        "into_parent": r"^unused_(?!(?:upper|lower)arm_twist_\d)",       # see merge_into_parent
     },
 }
 SLOT_FIX = RIGS["biped"]["slots"]
+JAPANESE = re.compile(r"[぀-ヿ一-鿿]")     # MMD bone names (the conversion's own bones)
 # mmd_cloth_physics groups chains by a name stem whose side tokens are upper case (Skirt_L_01); the UE
 # outfits name them Outfit005_skirt_a_01_l, so every skirt chain came out a garment of its own.  Chains
-# whose root matches one of these (group 1 = the garment) and that share an anchor are joined again.
-GARMENT_MERGE = (r"^(.*_skirt)_[a-z]_\d+_[lr]$",)
+# whose root matches one of these (group 1 = the garment) and that share an anchor are joined again:
+# skirts, coat tails (PCF_067), shirt hems (PCF_008's hoodie), the default armour's shoulder cloth and
+# PCF_009's jacket hem (Outfit009_upper_a_01_l).  The anchor keeps sides apart where the game splits a
+# skirt per leg (roots on thigh_l / thigh_r: the default armour, PCF_001_Temp, PCF_067): one sheet per
+# leg, no joints across the gap that opens when the legs part.  Ribbons, feathers, necklaces and other
+# ornaments stay single strands.
+GARMENT_MERGE = (r"^(.*_(?:skirt|coat|shirt|fabric))_[a-z]_\d+_[lr]$", r"^(Outfit\d+_upper)_[a-z]_\d+_[lr]$")
 # MMD skirts hang from 下半身; the UE outfits hang theirs from spine_02 (上半身2), so a bow tipped the
 # whole skirt with the chest.  Roots matching this are re-parented to 下半身 before the physics.
 SKIRT_ROOT = r"_skirt_root$"
@@ -340,12 +350,32 @@ def rig_kind(arm):
     return "biped" if "Bip001_Pelvis" in arm.data.bones else "ue"
 
 
+def unhide_outfit_bones(arm, pattern=r"^unused_((?:Outfit|Armor)\d|Fiona_)"):
+    """Blender2XPS hides the bones it takes for helpers behind an ``unused_`` prefix, by name: a ``_bck`` reads like an
+    arm corrective, so PCF_005's centre back feather Outfit005_spine05_feather_g_bck_01..03 came out unused_ and
+    merge_into_parent folded it into the feather root (which then swung all 14 feathers as one).  Outfit, armour and
+    hair bones get their names back here and stay cloth.  Renaming a bone renames its vertex groups."""
+    rx = re.compile(pattern)
+    names = [b.name for b in arm.data.bones if rx.match(b.name)]
+    for name in names:
+        arm.data.bones[name].name = name[len("unused_"):]
+    if names:
+        log("outfit bones Blender2XPS had marked as helpers, names restored: %s" % ", ".join(names))
+    return names
+
+
 def merge_into_parent(arm, pattern):
     """Weights of the bones matching ``pattern`` move to their first ancestor that does not match.
-    Convert to MMD 5 hands a UE calf twist bone's weights to the nearest MMD bone.  calf_twist_01 sits a
-    third of the way up from the ankle, so the lower half of the shin went to 足首D and folded with the
-    foot: in a dance on high heels PCF_005's shins broke halfway down (XPS calf_twist_01 378 -> 足首D).
-    The twist bones are children of the calf; their skin belongs to ひざ."""
+    Convert to MMD 5 hands every helper bone's weights (Blender2XPS prefixes them ``unused_``: the UE5
+    body's ~260 twist, corrective and muscle bones) to the bone nearest to it, whatever that bone is:
+    - calf_twist_01 sits a third of the way up from the ankle, so the lower half of the shin went to
+      足首D and folded with the foot: in a dance on high heels PCF_005's shins broke halfway down;
+    - the chest correctives went into the breast soft-tissue bones and the head / neck ones into hair
+      bones and coat chains: PCF_067's steel breastplate swung with the bust physics, its helmet with
+      five hair strands (up to 1190 weight on one hair bone), the coat's first row with the coat.
+    In UE the correctives only move when the game's pose drivers move them, at rest they ride on their
+    parent, so their skin goes to the parent here, before the conversion.  The arm twist bones stay: the
+    plugin maps them onto 腕捩 / 手捩, which MMD motions do twist."""
     rx = re.compile(pattern)
     bones = arm.data.bones
     moved = defaultdict(float)
@@ -367,6 +397,84 @@ def merge_into_parent(arm, pattern):
     return {k: round(v, 1) for k, v in sorted(moved.items())}
 
 
+def skinned_meshes(arm):
+    return [o for o in bpy.context.scene.objects if o.type == "MESH" and o.find_armature() == arm]
+
+
+def weight_snapshot(arm):
+    """Per mesh (vertex count, {group: {vertex: weight}}) of every bone.  The helpers count too: on the Biped body the
+    plugin keeps unused_Bip001_*ThighTwist as they are (they follow their thigh), and none of that weight is a gain."""
+    snap = {}
+    for mesh in skinned_meshes(arm):
+        names = {g.index: g.name for g in mesh.vertex_groups}
+        per = defaultdict(dict)
+        for v in mesh.data.vertices:
+            for g in v.groups:
+                name = names.get(g.group)
+                if name is not None and g.weight > 0.0:
+                    per[name][v.index] = g.weight
+        snap[mesh.name] = (len(mesh.data.vertices), dict(per))
+    return snap
+
+
+def return_conversion_gains(arm, snap):
+    """Convert to MMD 5 merges the bones it drops - the arm twist bones that merge_into_parent leaves to it, a few
+    weighted chain roots - into whichever bone is nearest, MMD or not.  PCF_005's forearm skin went to a hand
+    feather (263 weight on Outfit005_hand_feather_e_01, which swings), PCF_067's to the shield socket.  Weight that
+    a non-MMD bone (no Japanese name) gained in the conversion goes, vertex by vertex, to the nearest MMD deform bone;
+    what the bone had before stays.  The face's FACIAL_* bones are left alone."""
+    bones = arm.data.bones
+    skip = re.compile(r"目|全ての親|センター|グルーブ|操作中心|IK")
+    segs = []
+    for b in bones:
+        if b.use_deform and JAPANESE.search(b.name) and not skip.search(b.name):
+            head, tail = b.head_local.copy(), b.tail_local.copy()
+            segs.append((b.name, head, tail - head, max((tail - head).length_squared, 1e-12)))
+    inv = arm.matrix_world.inverted()
+    moved = defaultdict(float)
+    for mesh in skinned_meshes(arm):
+        count, before = snap.get(mesh.name, (None, None))
+        if before is None or count != len(mesh.data.vertices):
+            log("conversion gains: %s not in the snapshot, left as it is" % mesh.name)
+            continue
+        names = {g.index: g.name for g in mesh.vertex_groups}
+        gains = []
+        for v in mesh.data.vertices:
+            for g in v.groups:
+                name = names[g.group]
+                if g.weight <= 0.0 or JAPANESE.search(name) or name.startswith("FACIAL_") or name not in bones:
+                    continue
+                extra = g.weight - before.get(name, {}).get(v.index, 0.0)
+                if extra > 1e-4:
+                    gains.append((v.index, name, extra))
+        to_arm = inv @ mesh.matrix_world
+        nearest = {}
+        for index, name, extra in gains:
+            if index not in nearest:
+                co = to_arm @ mesh.data.vertices[index].co
+                best, best_d = None, None
+                for bone, head, vec, len2 in segs:
+                    t = min(1.0, max(0.0, (co - head).dot(vec) / len2))
+                    d = (co - (head + vec * t)).length_squared
+                    if best_d is None or d < best_d:
+                        best, best_d = bone, d
+                nearest[index] = best
+            target = nearest[index]
+            group = mesh.vertex_groups[name]
+            keep = before.get(name, {}).get(index, 0.0)
+            if keep > 0.0:
+                group.add([index], keep, "REPLACE")
+            else:
+                group.remove([index])
+            dest = mesh.vertex_groups.get(target) or mesh.vertex_groups.new(name=target)
+            dest.add([index], extra, "ADD")
+            moved["%s -> %s" % (name, target)] += extra
+    top = sorted(moved.items(), key=lambda kv: -kv[1])
+    log("conversion gains on non-MMD bones moved to the nearest MMD bone: %.0f weight%s" % (
+        sum(moved.values()), (": " + ", ".join("%s %.0f" % kv for kv in top[:12])) if top else ""))
+    return {k: round(v, 1) for k, v in top}
+
+
 def import_and_convert(xps):
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -375,8 +483,10 @@ def import_and_convert(xps):
     arm = live_armature()
     kind = rig_kind(arm)
     log("body rig: %s" % kind)
+    unhide_outfit_bones(arm)
     if RIGS[kind].get("into_parent"):
         merge_into_parent(arm, RIGS[kind]["into_parent"])
+    snap = weight_snapshot(arm)
     arm.scale = (1.0, 1.0, 1.0)                            # the 214-unit trap (tutorial 6.10 step 2)
     activate(arm)
     bpy.ops.object.auto_identify_skeleton()
@@ -392,7 +502,8 @@ def import_and_convert(xps):
         root = root.parent
     if getattr(root, "mmd_type", "") != "ROOT":
         raise RuntimeError("no mmd root after the conversion")
-    return root, arm, kind
+    gains = return_conversion_gains(arm, snap)
+    return root, arm, kind, gains
 
 
 # -- 2. expressions from the DNA ---------------------------------------------------------------
@@ -600,6 +711,36 @@ def hang_skirts(arm):
     return moved
 
 
+def link_lone_garment_bones(analyze):
+    """A candidate_bones wrapper for mmd_cloth_physics: a cloth bone left alone - no candidate parent, no candidate
+    child - gets its parent back as the chain's first link when that parent is no body bone (nor a limb helper,
+    dummy or helper bone).  A lone bone is a plate to mmd_cloth_physics, no physics, and the outfits often skin a
+    piece to one bone of its chain only, the links above it carrying little or nothing (the 2.0 minimum):
+    - the default armour's tassets: *_02 only (*_01 0.3-1.8 or none, *_03 none) - the armour skirt never moved;
+    - PCF_005's arm feathers: *_01 only, the feather root none (the archived PMX swung them only because the
+      conversion had merged forearm skin into them); PCF_008's wrist ribbons, PCF_003's glove cuff.
+    Returns (patched function, linked names)."""
+    original = analyze.candidate_bones
+    linked = []
+
+    def candidate_bones(arm, meshes, body_regex=None, prop_regex=r"\bProp\d*$", min_weight=2.0, include_hair=True,
+                        with_rigid=()):
+        free, total, body_re = original(arm, meshes, body_regex, prop_regex, min_weight, include_hair, with_rigid)
+        for name in sorted(free):
+            bone = arm.data.bones[name]
+            parent = bone.parent
+            if (parent is None or parent.name in free or parent.name in with_rigid
+                    or analyze.is_body_bone(parent, body_re) or any(c.name in free for c in bone.children)
+                    or analyze.LIMB_HELPER.search(parent.name) or analyze.HAIR_NAME.search(name)
+                    or parent.name.startswith(("_dummy_", "_shadow_", "unused"))):
+                continue           # hair keeps its strands: anchor_scalp_hair works chain by chain
+            free.add(parent.name)
+            linked.append(parent.name)
+        return free, total, body_re
+
+    return candidate_bones, linked
+
+
 def merge_garments(arm, garments, meshes):
     """Join the garments whose chain roots match GARMENT_MERGE and share an anchor (see there): a skirt
     of separate strands has no joints between neighbouring chains and the panels swing apart; joined,
@@ -680,9 +821,19 @@ def add_physics(root, arm, meshes, roe, rig):
     out["bust_weights"] = boost_bust_weights(meshes, [swing_set(bones, s) for _b, s in sides], BUST["boost_to"])
     out["bust"] = add_bust_physics(root, arm, meshes, sides)
     out["skirt_roots"] = hang_skirts(arm)
+    from mmd_cloth_physics import analyze as cloth_analyze
     from mmd_cloth_physics import api as cloth_api
 
-    garments = merge_garments(arm, cloth_api.analyze_model(root, rig["body_regex"], r"\bProp\d*$", True), meshes)
+    original = cloth_analyze.candidate_bones
+    cloth_analyze.candidate_bones, linked = link_lone_garment_bones(cloth_analyze)
+    try:
+        found = cloth_api.analyze_model(root, rig["body_regex"], r"\bProp\d*$", True)
+    finally:
+        cloth_analyze.candidate_bones = original
+    if linked:
+        log("cloth: %d lone garment bones get their parent as the first link: %s" % (len(linked), ", ".join(linked)))
+    out["linked_parents"] = linked
+    garments = merge_garments(arm, found, meshes)
     hair = [g for g in garments if g.preset == "hair"]
     for garment in hair:
         garment.preset = HAIR_PRESET
@@ -755,8 +906,9 @@ def main():
         xps = os.path.join(work, name + ".xps")
         report["hd"] = xps_from_blend(os.path.abspath(args.blend), xps, args.max_texture, args.ao)
     report["xps"] = xps
-    root, arm, kind = import_and_convert(xps)
+    root, arm, kind, gains = import_and_convert(xps)
     report["rig"] = kind
+    report["conversion_gains_moved"] = gains
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.find_armature() == arm]
     report["both_eyes_bone"] = roe.add_both_eyes_bone(arm)
     activate(arm)
