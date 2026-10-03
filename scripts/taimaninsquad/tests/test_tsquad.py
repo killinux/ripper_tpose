@@ -20,6 +20,7 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
+import dance_batch  # noqa: E402
 import dance_video  # noqa: E402
 import export_backgrounds as eb  # noqa: E402
 import tsquad_common as tc  # noqa: E402
@@ -547,6 +548,66 @@ class DanceVideoTests(unittest.TestCase):
         self.assertEqual(folder, os.path.join(r"E:\x", "Asagi", "video", "1_asagi"))
         self.assertEqual(mp4, os.path.join(folder, "1_asagi_dance.mp4"))
 
+    def test_the_dance_is_named_after_its_folder_without_date_and_author(self):
+        def title(folder, vmd, loose=False):
+            return dance_video.dance_title(os.path.join(r"E:\motions", folder, vmd), folder_is_the_dance=not loose)
+
+        self.assertEqual(title("PUBG胜利之舞爱的主打歌(2025.6.9)by小王动画", "PUBG胜利之舞爱的主打歌(2025.6.9).vmd"),
+                         "PUBG胜利之舞爱的主打歌")
+        self.assertEqual(title("2026新年摇2026.1.25by小王动画", "2026新年摇2026.1.25.vmd"), "2026新年摇")   # the year in the name stays
+        self.assertEqual(title("work2014 2025.9.21by小王动画", "work2014 2025.9.21.vmd"), "work2014")
+        self.assertEqual(title("30sexy2025.7.11y小王动画", "30sexy2025.7.11.vmd"), "30sexy")              # a misspelt "by"
+        self.assertEqual(title("扭一扭（2024.8.12）", "扭一扭（2024.8.12）.vmd"), "扭一扭")
+        self.assertEqual(title("品鉴下企鹅舞蹈Colder Than Ice 202511.2by小王动画", "x.vmd"), "品鉴下企鹅舞蹈Colder Than Ice x")
+        self.assertEqual(title("[旧版禁止使用]Ai Scream!(愛)(2025.4.20)by小王动画", "Ai Scream!(愛)(2025.4.20).vmd"), "Ai Scream!(愛)")
+        self.assertEqual(title("pbug胜利之舞146(2025.2.28)by小王动画 (2)", "pbug胜利之舞146(2025.2.28)左.vmd"), "pbug胜利之舞146左")
+        self.assertEqual(title("pubg胜利之舞146 2026.2.7by小王动画", "左.vmd"), "pubg胜利之舞146 左")    # a variant in the folder
+        self.assertEqual(title("格局打开美女动作文件", "格局打开美女.vmd"), "格局打开美女动作文件")
+        self.assertEqual(title("mmd", "爆了2026.1.18.vmd", loose=True), "爆了")                         # a loose file: its own name
+
+    def test_the_file_name_pattern(self):
+        self.assertEqual(dance_video.file_stem(dance_video.TITLE, id="1_asagi", name="Asagi", motion="dance", dance="Dance"),
+                         "1_asagi_dance")
+        self.assertEqual(dance_video.file_stem("{dance}-{name}", id="24_kirara", name="Kirara", motion="m", dance="Bar Bar Bar扭一扭"),
+                         "Bar Bar Bar扭一扭-Kirara")                                          # spaces stay
+        self.assertEqual(dance_video.file_stem("{dance}-{name}", id="x", name="A/B", motion="m", dance='what? "now": go.'),
+                         "what_ _now_ go.-A_B")
+        with self.assertRaises(SystemExit):
+            dance_video.file_stem("{dancer}", id="x", name="n", motion="m", dance="d")
+        model = {"id": "24_kirara", "group": "Kirara"}
+        _folder, mp4 = dance_video.video_paths(model, r"E:\x", "m", view="chest", stem="Dance-Kirara")
+        self.assertTrue(mp4.endswith(os.path.join("video", "24_kirara", "Dance-Kirara_chest.mp4")))
+
+    def test_the_following_camera(self):
+        still = [0.3] * 40
+        self.assertEqual([round(v, 9) for v in tc.smooth_track(still, 12.0)], still)      # standing still: no drift at the ends
+        ramp = [0.01 * i for i in range(120)]                                              # a walk: followed, without a lag
+        self.assertAlmostEqual(tc.smooth_track(ramp, 12.0)[60], ramp[60], places=6)
+        sway = [0.1 * math.sin(2.0 * math.pi * i / 15.0) for i in range(120)]              # hips swinging twice a second
+        self.assertLess(max(abs(v) for v in tc.smooth_track(sway, 12.0)[40:80]), 0.002)    # the camera holds still
+        self.assertEqual(tc.smooth_track(sway, 0.0), sway)
+        # 100 frames, the body 0.4 m to each side of where the camera looks, in five of them an arm out to 0.9
+        spans = [(0.0, -0.4, 0.4)] * 95 + [(0.0, -0.4, 0.9)] * 5
+        v_half, h_half = math.atan(18.0 / 70.0), math.atan(18.0 * 1080 / 1920 / 70.0)
+        shot = tc.follow_shot(spans, 1.8, 0.0, v_half, h_half)
+        self.assertAlmostEqual(shot["half_width"], 0.5)                                    # 95 %: the arm may leave the picture
+        self.assertEqual(shot["limit"], "height")
+        self.assertAlmostEqual(shot["distance"], 1.8 * 1.06 / 2.0 / math.tan(v_half))
+        wide = tc.follow_shot(spans, 1.8, 0.0, v_half, h_half, tc.parse_follow("cover=100"))
+        self.assertAlmostEqual(wide["half_width"], 1.0)
+        self.assertEqual(wide["limit"], "width")
+        self.assertAlmostEqual(wide["distance"], 1.0 / math.tan(h_half))
+        with self.assertRaises(SystemExit):
+            tc.parse_follow("zoom=2")
+
+    def test_units_that_share_a_name(self):
+        models = [{"id": "253_asagi", "name": "Asagi", "number": 253}, {"id": "1_asagi", "name": "Asagi", "number": 1},
+                  {"id": "24_kirara", "name": "Kirara", "number": 24}, {"id": "b_20_dullahan", "name": "Dullahan", "number": 20},
+                  {"id": "212_dullahan", "name": "Dullahan", "number": 212}]
+        self.assertEqual(dance_video.person_names(models), {
+            "1_asagi": "Asagi", "253_asagi": "Asagi 253", "24_kirara": "Kirara",
+            "b_20_dullahan": "Dullahan", "212_dullahan": "Dullahan 212"})
+
     def test_backdrop_by_a_piece_of_its_name(self):
         root = self.folder()
         pictures = os.path.join(root, "_backgrounds")
@@ -700,6 +761,135 @@ class BackgroundTests(unittest.TestCase):
         self.assertTrue(all(os.path.isfile(p) for p in sheets))
         self.assertFalse(os.path.exists(stale))
         self.assertTrue(all(os.path.isfile(r["file"]) for r in rows))          # the pictures themselves stay
+
+
+class DanceBatchTests(unittest.TestCase):
+    """One dance per unit: which folders of a collection are dances to hand out, the draw, the lists."""
+
+    @staticmethod
+    def entry(folder, vmds, audio=None):
+        return {"folder": folder, "vmds": [{"file": f, "frames": n} for f, n in vmds],
+                "audio": [os.path.splitext(vmds[0][0])[0] + ".WAV"] if audio is None and vmds else (audio or [])}
+
+    def test_which_folders_are_dances_to_hand_out(self):
+        got = {d["folder"]: d for d in dance_batch.choose_dances([
+            self.entry("甲舞(2025.6.9)by小王动画", [("甲舞(2025.6.9).vmd", 300)]),
+            self.entry("乙舞2026.1.25by小王动画", [("乙舞2026.1.25.vmd", 450), ("适配瓦雷莎.vmd", 450)]),
+            self.entry("丙舞", [("左.vmd", 300), ("右.vmd", 300)], ["BGM.WAV"]),
+            self.entry("丁舞4人版（2024.7.25）", [("丁舞4人版.vmd", 300)]),
+            self.entry("戊舞", [("戊舞.vmd", 300)], []),
+            self.entry("己舞", [("己舞.vmd", 200)]),
+            self.entry("庚舞", [("适配瓦雷莎.vmd", 300)]),
+            self.entry("辛舞(2024.10.6)", [("辛舞(2024.10.6).vmd", 300)]),
+            self.entry("辛舞（2025.8.9）", [("辛舞（2025.8.9）.vmd", 300)]),
+            self.entry("辛舞", [("辛舞.vmd", 300)]),
+            self.entry("壬舞", [("壬舞.vmd", 300), ("壬舞_camera.vmd", 300)], ["a.wav", "b.wav"]),
+        ])}
+        self.assertEqual((got["甲舞(2025.6.9)by小王动画"]["status"], got["甲舞(2025.6.9)by小王动画"]["title"]), ("", "甲舞"))
+        self.assertEqual(got["甲舞(2025.6.9)by小王动画"]["seconds"], 10.0)
+        second = got["乙舞2026.1.25by小王动画"]                               # the fitted version is not the dance
+        self.assertEqual((second["status"], second["vmd"], second["music"]), ("", "乙舞2026.1.25.vmd", "乙舞2026.1.25.WAV"))
+        self.assertIn("几段动作", got["丙舞"]["status"])
+        self.assertEqual(got["丁舞4人版（2024.7.25）"]["status"], "多人舞")
+        self.assertEqual(got["戊舞"]["status"], "没有配乐")
+        self.assertEqual(got["己舞"]["status"], "不到 8 秒")
+        self.assertIn("适配版", got["庚舞"]["status"])
+        self.assertEqual(got["辛舞（2025.8.9）"]["status"], "")                  # of three releases the newest
+        self.assertIn("旧版", got["辛舞(2024.10.6)"]["status"])
+        self.assertIn("辛舞（2025.8.9）", got["辛舞"]["status"])                 # no date in the name: the oldest
+        self.assertIn("配乐", got["壬舞"]["status"])                           # the camera motion is passed over, but two songs
+        self.assertEqual(dance_batch.release_date("品鉴Colder Than Ice 202511.2by小王动画"), (2025, 11, 2))
+
+    def test_the_draw_is_kept(self):
+        units = ["u%d" % i for i in range(6)]
+        dances = ["d%d" % i for i in range(8)]
+        pictures = ["p1.png", "p2.png", "p3.png", "p4.png"]
+        plan = dance_batch.draw(units, dances, pictures, 7)
+        self.assertEqual(list(plan), units)
+        self.assertEqual(len({p["dance"] for p in plan.values()}), 6)                 # nobody shares a dance
+        self.assertEqual({p["backdrop"] for p in list(plan.values())[:4]}, set(pictures))   # all four before any comes back
+        self.assertEqual(dance_batch.draw(units, dances, pictures, 7), plan)          # the same seed: the same draw
+        more = dance_batch.draw(["new"] + units, dances + ["d8"], pictures, 99, plan)  # another seed, a new unit, a new dance:
+        self.assertEqual({u: more[u] for u in units}, plan)                           # what was drawn stays
+        self.assertNotIn(more["new"]["dance"], {p["dance"] for p in plan.values()})
+        gone = dance_batch.draw(units, [d for d in dances if d != plan["u0"]["dance"]], pictures, 7, plan)
+        self.assertNotEqual(gone["u0"]["dance"], plan["u0"]["dance"])                 # its dance left the collection: a new one
+        self.assertEqual({u: gone[u] for u in units[1:]}, {u: plan[u] for u in units[1:]})
+        self.assertEqual(len(dance_batch.draw(units, dances[:4], pictures, 7)), 4)    # fewer dances than units
+
+    def test_who_dances(self):
+        ok = {"pmx": "x.pmx", "pmx_report": {"bones": 200}}
+
+        def unit(category, female=True):
+            return {"id": "9_x", "category": category, "details": {"bust": female}}
+
+        self.assertTrue(dance_batch.can_dance(unit("character"), ok))
+        self.assertTrue(dance_batch.can_dance(unit("costume"), ok))
+        self.assertFalse(dance_batch.can_dance(unit("character", female=False), ok))          # a man: no
+        self.assertTrue(dance_batch.can_dance(unit("character", female=False), ok, men=True))  # unless asked for
+        self.assertFalse(dance_batch.can_dance(unit("monster"), ok))
+        self.assertFalse(dance_batch.can_dance(unit("boss"), ok, men=True))
+        self.assertFalse(dance_batch.can_dance(unit("special"), {"pmx": "x.pmx", "pmx_report": {"plain_rig": "no legs"}}))
+        self.assertFalse(dance_batch.can_dance(unit("character"), {"blend": "x.blend"}))
+        self.assertFalse(dance_batch.can_dance(unit("character"), None))
+
+    def test_prune_deletes_only_listed_videos_in_the_folder(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        where = dance_batch.paths(tmp.name)
+        for folder in (where.folder, where.thumbs, where.reports):
+            os.makedirs(folder)
+        made = {}
+        for stem in ("a_Kuro", "b_Asagi"):
+            made[stem] = [os.path.join(where.folder, stem + ".mp4"), os.path.join(where.thumbs, stem + ".jpg"),
+                          os.path.join(where.reports, stem + ".json")]
+            for path in made[stem]:
+                open(path, "w").close()
+        outside = os.path.join(tmp.name, "elsewhere.mp4")
+        open(outside, "w").close()
+        videos = {"4_kuro": {"video": made["a_Kuro"][0]}, "1_asagi": {"video": made["b_Asagi"][0]}, "9_gone": {"video": outside}}
+        gone = dance_batch.prune(videos, {"1_asagi"}, where)
+        self.assertEqual(gone, ["a_Kuro.mp4 (4_kuro)"])
+        self.assertEqual(list(videos), ["1_asagi"])
+        self.assertFalse(any(os.path.exists(p) for p in made["a_Kuro"]))
+        self.assertTrue(all(os.path.exists(p) for p in made["b_Asagi"]))
+        self.assertTrue(os.path.exists(outside))                                   # not in the videos folder: left alone
+
+    def test_the_lists(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        video = os.path.join(tmp.name, "甲舞_Asagi.mp4")
+        open(video, "w").close()
+        units = [{"id": "1_asagi", "name": "Asagi", "category": "character"},
+                 {"id": "2_sakuya", "name": "Sakuya", "category": "character"}]
+        dances = [{"folder": "甲舞(2025.6.9)", "title": "甲舞", "vmd": "甲舞.vmd", "music": "甲舞.WAV", "seconds": 10.0, "status": ""},
+                  {"folder": "乙舞", "title": "乙舞", "vmd": "乙舞.vmd", "music": "乙舞.WAV", "seconds": 12.5, "status": ""},
+                  {"folder": "丙舞", "title": "丙舞", "vmd": "丙舞.vmd", "music": "丙舞.WAV", "seconds": 9.0, "status": ""},
+                  {"folder": "丁舞", "title": "丁舞", "vmd": "", "music": "", "seconds": 0.0, "status": "多人舞"}]
+        plan = {"1_asagi": {"dance": "甲舞(2025.6.9)", "backdrop": "剧情_a.png"}, "2_sakuya": {"dance": "乙舞", "backdrop": "剧情_b.png"}}
+        videos = {"1_asagi": {"video": video, "dance": "甲舞(2025.6.9)", "backdrop": "剧情_a.png", "time": "2026-10-03 17:00:00"},
+                  "2_sakuya": {"video": os.path.join(tmp.name, "deleted.mp4"), "dance": "乙舞"}}     # the file is gone: not done
+        data = dance_batch.lists(units, {"1_asagi": "Asagi", "2_sakuya": "Sakuya"}, plan, dances, videos, r"E:\motions")
+        self.assertEqual(data["summary"], {"units": 2, "with_video": 1, "without_dance": 0, "folders": 4, "usable": 3,
+                                           "exported": 1, "planned": 1, "free": 1, "left_out": 1})
+        self.assertEqual([(t["title"], t["state"], t["unit"]) for t in data["dances"]], [
+            ("甲舞", "已导出", "1_asagi"), ("乙舞", "已分配，未导出", "2_sakuya"), ("丙舞", "未分配", ""), ("丁舞", "不用", "")])
+        text = dance_batch.markdown(data)
+        self.assertIn("| `1_asagi` | Asagi | 甲舞 | 10 | 剧情_a | 已导出 2026-10-03 17:00 | `甲舞_Asagi.mp4` |", text)
+        self.assertIn("| `2_sakuya` | Sakuya | 乙舞 | 12.5 | 剧情_b | 未导出 |  |", text)
+        self.assertIn("| 丁舞 | 丁舞 |  |  | 不用 | 多人舞 |", text)
+        self.assertIn("**已导出视频 1**，还没导出 1", text)
+
+    def test_backdrops_one_can_stand_in_front_of(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        folder = os.path.join(tmp.name, "_backgrounds")
+        os.mkdir(folder)
+        for name in ("剧情_S018_B_夜店舞台.png", "过场_1-2_pl_01_都市街道_白天.png", "过场_1-1_pl_05_sky_月夜云层.png",
+                     "剧情_S017_人工岛_夜_鸟瞰.png", "全景_drt_霓虹都市_夜.png", "抽卡_Pickup1_白绿.png", "_总览_剧情_1.jpg"):
+            open(os.path.join(folder, name), "w").close()
+        self.assertEqual(dance_batch.backdrop_pool(tmp.name), ["剧情_S018_B_夜店舞台.png", "过场_1-2_pl_01_都市街道_白天.png"])
+        self.assertEqual(dance_batch.backdrop_pool(os.path.join(tmp.name, "nowhere")), [])
 
 
 class CompressedMeshTests(unittest.TestCase):

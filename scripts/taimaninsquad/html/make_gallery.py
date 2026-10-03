@@ -75,6 +75,7 @@ def collect(models, root, force=False):
         records = tc.load_json(os.path.join(tc.meta_dir(root), "exports.json"))
     except (OSError, ValueError):
         records = {}
+    batch = {u["id"]: u["video"] for u in video_lists(root).get("units", []) if u.get("video")}    # dance_batch.py
     rows = []
     for m in models:
         mid = m["id"]
@@ -97,6 +98,8 @@ def collect(models, root, force=False):
         video_dir = tc.model_dir(m, root, "video")       # dance_video.py: <id>_<motion>.mp4
         videos = [os.path.join(video_dir, f) for f in sorted(os.listdir(video_dir))
                   if f.lower().endswith(".mp4")] if os.path.isdir(video_dir) else []
+        if os.path.isfile(batch.get(mid, "")):
+            videos.insert(0, batch[mid])
         shot = files["preview"] if files["blend"] else files["survey"]
         thumb = build_thumb(shot, os.path.join(gallery, "thumbs", mid + ".jpg"), force)
         rows.append({"model": m, "files": files, "thumb": thumb, "shot": shot, "icon": icons.get(mid, ""),
@@ -105,6 +108,64 @@ def collect(models, root, force=False):
                      "pmx_note": pmx_note((records.get(mid) or {}).get("pmx_report")) if files["pmx"] else "",
                      "weapons": weapon_note(m, (records.get(mid) or {}).get("weapon_prefabs") if files["blend"] else None)})
     return rows
+
+
+def video_lists(root):
+    """The lists dance_batch.py keeps (<root>/_videos/_meta/list.json): {} when there are none."""
+    try:
+        return tc.load_json(os.path.join(root, "_videos", "_meta", "list.json"))
+    except (OSError, ValueError):
+        return {}
+
+
+def render_videos(root):
+    """The 舞蹈视频 section: the videos of dance_batch.py as tiles, then who is still without one and what
+    became of every dance of the collection.  '' when no batch has run."""
+    esc = html.escape
+    data = video_lists(root)
+    if not data:
+        return ""
+    s = data["summary"]
+    done = [u for u in data["units"] if u.get("video") and os.path.isfile(u["video"])]
+    todo = [u for u in data["units"] if u not in done]
+    tiles = []
+    for u in done:
+        picture = ('<img loading="lazy" src="%s" alt="%s">' % (esc(file_uri(u["thumb"])), esc(u["id"]))
+                   if u.get("thumb") and os.path.isfile(u["thumb"]) else '<div class="noimg">没有缩略图</div>')
+        tiles.append('      <a class="vid" href="%s" target="_blank" rel="noopener" title="%s">%s'
+                     '<span class="cap"><b>%s</b><br>%s · %s 秒<br><span class="muted">%s</span></span></a>' % (
+                         esc(file_uri(u["video"])), esc(u["video"]), picture, esc(u["name"]), esc(u["dance"]),
+                         esc("%g" % u["seconds"]), esc(os.path.splitext(u.get("backdrop") or "")[0] or "没有背景")))
+    waiting = "".join("<tr><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+        esc(u["id"]), esc(u["name"]), esc(u["dance"] or "（没有分到动作）"), esc(os.path.splitext(u.get("backdrop") or "")[0]))
+        for u in todo)
+    order = {"已导出": 0, "已分配，未导出": 1, "未分配": 2, "不用": 3}
+    dances = "".join('<tr class="st%d"><td>%s</td><td class="muted">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>' % (
+        order.get(t["state"], 3), esc(t["title"]), esc(t["folder"]), esc("%g" % t["seconds"]) if t["seconds"] else "",
+        esc(t["state"]), "<code>%s</code>" % esc(t["unit"]) if t["unit"] else esc(t["why"]))
+        for t in sorted(data["dances"], key=lambda t: (order.get(t["state"], 3), t["title"], t["folder"])))
+    folder = os.path.join(root, "_videos")
+    return """  <section class="howto" id="videos">
+    <h2>舞蹈视频</h2>
+    <p>每个女性角色（每套服装算一个，不含怪物和 Boss）配一支不同的舞和一张随机的游戏背景，由 <code>dance_batch.py</code> 渲到
+      <a href="{folder_uri}"><code>{folder}</code></a>，文件名「动作名_角色名」。列表更新于 {generated}（<a href="{list_uri}">_列表.md</a>）。</p>
+    <p><b>角色</b>：{units} 个，已导出 <b>{with_video}</b>，未导出 {without}。
+      <b>动作</b>：合集里 {folders} 个文件夹，可用 {usable} 支（单人、有配乐、8 秒以上、同一支舞取最新版）——
+      已导出 <b>{exported}</b>，已分配未导出 {planned}，未分配 {free}；不用的 {left_out} 个。</p>
+    <div class="vids">
+{tiles}
+    </div>
+    <details><summary>还没导出视频的角色（{without}）</summary>
+      <table class="list"><tr><th>单位</th><th>名字</th><th>分到的动作</th><th>背景</th></tr>{waiting}</table>
+    </details>
+    <details><summary>动作列表（{folders}）：哪些导出了，哪些没有，哪些不用</summary>
+      <table class="list"><tr><th>动作</th><th>文件夹</th><th>秒</th><th>状态</th><th>角色 / 不用的原因</th></tr>{dances}</table>
+    </details>
+  </section>
+""".format(folder_uri=esc(file_uri(folder)), folder=esc(folder), generated=esc(data.get("generated", "")),
+           list_uri=esc(file_uri(os.path.join(folder, "_列表.md"))), units=s["units"], with_video=len(done),
+           without=len(todo), folders=s["folders"], usable=s["usable"], exported=s["exported"], planned=s["planned"],
+           free=s["free"], left_out=s["left_out"], tiles="\n".join(tiles), waiting=waiting, dances=dances)
 
 
 def weapon_note(model, attached):
@@ -190,10 +251,13 @@ def render_card(row):
                 extra.append('<a href="%s" target="_blank" rel="noopener">%s</a>' % (esc(file_uri(f[key])), label))
         if extra:
             lines.append('<dt>图</dt><dd>%s</dd>' % " · ".join(extra))
-        if row.get("videos"):                          # motions put on the PMX by dance_video.py
+        if row.get("videos"):                          # motions put on the PMX by dance_video.py / dance_batch.py
+            def label(path):
+                stem = os.path.splitext(os.path.basename(path))[0]
+                return (stem[len(m["id"]) + 1:] if stem.startswith(m["id"] + "_") else stem) or "视频"
+
             links = ['<a href="%s" target="_blank" rel="noopener" title="%s">%s</a>' % (
-                esc(file_uri(v)), esc(v), esc(os.path.splitext(os.path.basename(v))[0][len(m["id"]) + 1:] or "视频"))
-                for v in row["videos"]]
+                esc(file_uri(v)), esc(v), esc(label(v))) for v in row["videos"]]
             lines.append('<dt>视频</dt><dd>%s</dd>' % " · ".join(links))
         for fmt in ("xps", "pmx"):
             if f[fmt]:
@@ -398,6 +462,7 @@ def render(rows, root):
         female=len(female), female_done=sum(1 for r in female if r["files"]["blend"]),
         by_look=by_look,
         size=human_size(sum(r["blend_size"] for r in rows)), chips=chips, howto=render_howto(root, counts),
+        videos=render_videos(root),
         cards="".join(render_card(r) for r in exported_first))
 
 
@@ -495,6 +560,16 @@ a {{ color: var(--accent); }}
 .cmd > code {{ font-size: 12.5px; white-space: pre-wrap; word-break: break-all; }}
 .cmd .what {{ color: var(--muted); flex: 1 1 260px; }}
 h2.listhead {{ margin: 0 0 12px; font-size: 17px; scroll-margin-top: 64px; }}
+.vids {{ display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin: 12px 0 14px; }}
+.vid {{ display: block; text-decoration: none; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 9px; overflow: hidden; }}
+.vid img {{ width: 100%; height: auto; display: block; }}
+.vid .cap {{ display: block; padding: 6px 8px 8px; font-size: 12px; line-height: 1.45; word-break: break-all; }}
+table.list {{ border-collapse: collapse; margin: 8px 0 4px; font-size: 12.5px; width: 100%; }}
+table.list th, table.list td {{ text-align: left; padding: 3px 10px 3px 0; border-bottom: 1px solid var(--line);
+  vertical-align: top; }}
+table.list tr.st0 td:nth-child(4) {{ color: var(--kind); font-weight: 600; }}
+table.list tr.st3 td {{ color: var(--muted); }}
 </style>
 </head>
 <body>
@@ -516,12 +591,13 @@ h2.listhead {{ margin: 0 0 12px; font-size: 17px; scroll-margin-top: 64px; }}
   <button class="toggle" id="only-exported">只看已导出</button>
   <button class="toggle" id="only-female">只看女性</button>
   <a class="jump" href="#howto">操作说明</a>
+  <a class="jump" href="#videos">舞蹈视频</a>
   <a class="jump" href="#models">模型列表</a>
   <span class="count" id="count"></span>
 </div>
 <main>
 {howto}
-  <h2 class="listhead" id="models">模型列表</h2>
+{videos}  <h2 class="listhead" id="models">模型列表</h2>
   <div class="grid" id="grid">
 {cards}  </div>
 </main>

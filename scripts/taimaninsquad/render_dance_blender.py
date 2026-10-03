@@ -3,7 +3,8 @@
 
     blender -b --python render_dance_blender.py -- --pmx <model.pmx> --vmd <motion.vmd> --out <video.mp4>
             [--bgm <music.wav>] [--size 1080x1920] [--frames N] [--margin 30] [--samples 32]
-            [--view full|chest|chest:<deg>] [--physics mmd|blender] [--bust key=value,...]
+            [--view full|chest|chest:<deg>] [--camera follow|fixed] [--follow key=value,...]
+            [--physics mmd|blender] [--bust key=value,...]
             [--backdrop <picture>] [--backdrop-turn <deg>] [--shadow 0.45]
             [--stills N] [--no-video] [--no-edge] [--no-blend]
 
@@ -25,9 +26,11 @@ What it does, in this order (the order matters, each line was learnt on another 
     a live cache shows physics the model does not have;
   * lights the way MMD shows a toon model: white ambient light so that a material comes out as its texture,
     one weak sun for shape and a ground shadow, the Standard view transform (see scripts/taimaninsquad/README);
-  * the camera is fixed and frames everything the model touches during the motion (measured on the baked
-    frames), portrait by default; --view chest is a close-up that rides the upper body instead, so the torso
-    holds still on screen and what moves is the breast physics (chest:60 looks from 60 degrees to the side);
+  * the camera follows the dancer (--camera follow, the default): it looks at the hips' smoothed path and
+    stands as far back as the body's width needs (tsquad_common.FOLLOW); --camera fixed stands still and frames
+    everything the model touches during the motion.  Both are measured on the baked frames; portrait by
+    default.  --view chest is a close-up that rides the upper body instead, so the torso holds still on screen
+    and what moves is the breast physics (chest:60 looks from 60 degrees to the side);
   * --backdrop puts a picture behind the model (the game's own: export_backgrounds.py).  A panorama (twice as
     wide as high) is what the camera sees of the world, so it turns with the camera; any other picture sits on a
     plane that fills the frame behind everything.  The model is lit as before; the floor becomes see-through and
@@ -55,6 +58,7 @@ from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tsquad_blender as tb  # noqa: E402
+from tsquad_common import follow_shot, parse_follow, smooth_track  # noqa: E402
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 ap = argparse.ArgumentParser()
@@ -68,6 +72,10 @@ ap.add_argument("--margin", type=int, default=30, help="lead-in frames before th
 ap.add_argument("--samples", type=int, default=32, help="EEVEE samples per frame")
 ap.add_argument("--scale", type=float, default=0.08, help="import scale: 0.08 puts a 12.5-scale PMX back in metres")
 ap.add_argument("--view", default="full", help="full (default) | chest | chest:<degrees round to the model's left>")
+ap.add_argument("--camera", choices=("follow", "fixed"), default="follow",
+                help="--view full: follow (default) = the camera goes with the dancer's steps and frames the body; "
+                     "fixed = it stands still and holds everything the model touches during the motion")
+ap.add_argument("--follow", default="", help="settings of the following camera: key=value,... (tsquad_common.FOLLOW)")
 ap.add_argument("--physics", choices=("mmd", "blender"), default="mmd",
                 help="mmd (default): joints as MMD runs them; blender: as mmd_tools leaves them (stiffer, calmer)")
 ap.add_argument("--gravity", type=float, default=98.0, help="with --physics mmd: PMX units / s^2 (MMD: 98)")
@@ -185,18 +193,41 @@ hips = arm.pose.bones.get("下半身") or arm.pose.bones.get("センター")
 dynamic = [o for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY" and o.rigid_body
            and o.rigid_body.type == "ACTIVE" and not o.rigid_body.kinematic]
 lo, hi, far = Vector((1e9, 1e9, 1e9)), Vector((-1e9, -1e9, -1e9)), 0.0
+# the body itself, for the following camera: the skinned bones that no rigid body moves (a ribbon that swings a
+# metre wide is not what the picture has to hold)
+loose = {b.name for b in arm.pose.bones if "mmd_tools_rigid_track" in b.constraints}
+for b in arm.pose.bones:
+    if any(p.name in loose for p in b.parent_recursive):
+        loose.add(b.name)
+# ... and that carry skin: an IK target, a helper or a socket has a head and a tail too, and the tail of some lies
+# metres away (Yukikaze came out an eighth of the picture high).  Heads only - a tail is no place on the body.
+skinned = set()
+for o in meshes:
+    names = [g.name for g in o.vertex_groups]
+    used = set()
+    for v in o.data.vertices:
+        used.update(g.group for g in v.groups if g.weight > 0.05)
+    skinned.update(names[i] for i in used if i < len(names))
+body = [b for b in arm.pose.bones if b.name in skinned and b.name not in loose]
+walk = []                                              # (frame, hips x, hips y, the body's lowest x, highest x)
 for f in list(range(first, last + 1, 3)) + [last]:
     scene.frame_set(f)
     dg = bpy.context.evaluated_depsgraph_get()
+    box_lo, box_hi = 1e9, -1e9                         # what the meshes reach in this frame, across
     for o in meshes:
         ev = o.evaluated_get(dg)
         for c in ev.bound_box:
             p = ev.matrix_world @ Vector(c)
             lo = Vector((min(lo.x, p.x), min(lo.y, p.y), min(lo.z, p.z)))
             hi = Vector((max(hi.x, p.x), max(hi.y, p.y), max(hi.z, p.z)))
+            box_lo, box_hi = min(box_lo, p.x), max(box_hi, p.x)
     if hips is not None and dynamic:
         c = arm.matrix_world @ hips.head
         far = max(far, max((o.matrix_world.translation - c).length for o in dynamic))
+    if hips is not None and body and (not walk or walk[-1][0] != f):
+        c = arm.matrix_world @ hips.head
+        xs = [(arm.matrix_world @ b.head).x for b in body]
+        walk.append((f, c.x, c.y, max(min(xs), box_lo), min(max(xs), box_hi)))      # never wider than the meshes are
 report.update(bounds=[[round(v, 3) for v in lo], [round(v, 3) for v in hi]],
               max_rigid_body_distance_from_hips_m=round(far, 2))
 
@@ -390,6 +421,46 @@ cam_data.clip_start, cam_data.clip_end = 0.05, 200.0
 sun_data.shadow_cascade_max_distance = distance * 1.6 + 2.0          # the shadow map covers what the camera sees
 report["camera"] = {"view": args.view, "lens_mm": cam_data.lens, "distance_m": round(distance, 2),
                     "target": [round(v, 3) for v in target]}
+if args.camera == "follow" and not CHEST and len(walk) > 1:
+    # The camera goes with the dancer: it looks at the hips' smoothed path (steps and walks pass, the sway of
+    # the dance does not) from a distance that holds the BODY's width, not the fixed frame's "everything the
+    # model ever touched" - a dance that crosses a metre of floor, or a costume with long ribbons, left the
+    # figure a quarter of the picture high.  Height: the whole motion's, as before.  tsquad_common.FOLLOW.
+    follow = parse_follow(args.follow)
+    frames = list(range(first, last + 1))
+    at = [w[0] for w in walk]
+
+    def per_frame(column):
+        out, k = [], 0
+        for f in frames:
+            while k + 1 < len(walk) - 1 and at[k + 1] <= f:
+                k += 1
+            a, b = walk[k], walk[min(k + 1, len(walk) - 1)]
+            t = 0.0 if b[0] == a[0] else min(1.0, max(0.0, (f - a[0]) / (b[0] - a[0])))
+            out.append(a[column] + (b[column] - a[column]) * t)
+        return out
+
+    sigma = follow["smooth_s"] * scene.render.fps
+    path_x, path_y = smooth_track(per_frame(1), sigma), smooth_track(per_frame(2), sigma)
+    shot = follow_shot([(path_x[w[0] - first], w[3], w[4]) for w in walk], hi.z, min(lo.z, 0.0), v_half, h_half, follow)
+    distance = shot["distance"]
+    height = (min(lo.z, 0.0) + hi.z) / 2.0
+    cam.rotation_euler = Vector((0.0, 1.0, 0.0)).to_track_quat("-Z", "Y").to_euler()      # the model faces -Y
+    for f, x, y in zip(frames, path_x, path_y):
+        cam.location = (x, y - distance, height)
+        cam.keyframe_insert("location", frame=f)
+    for curve in cam.animation_data.action.fcurves:
+        for key in curve.keyframe_points:
+            key.interpolation = "LINEAR"
+    sun_data.shadow_cascade_max_distance = distance * 1.6 + 2.0
+    report["camera"] = {"view": args.view, "mode": "follow", "lens_mm": cam_data.lens, "distance_m": round(distance, 2),
+                        "limited_by": shot["limit"], "half_width_m": round(shot["half_width"], 3),
+                        "travel_m": [round(max(path_x) - min(path_x), 2), round(max(path_y) - min(path_y), 2)],
+                        "hips_travel_m": [round(max(w[1] for w in walk) - min(w[1] for w in walk), 2),
+                                          round(max(w[2] for w in walk) - min(w[2] for w in walk), 2)],
+                        "settings": follow}
+elif not CHEST:
+    report["camera"]["mode"] = "fixed"
 if CHEST:
     # A close-up that rides the upper body: the torso holds still on screen, what moves is the physics.
     if chest is None:

@@ -477,6 +477,74 @@ def bust_text(params: dict) -> str:
     return ",".join("%s=%s" % (key, params[key] if isinstance(BUST[key], str) else "%g" % params[key]) for key in BUST)
 
 
+# The camera of a dance video (dance_video.py --camera follow, the default).  A dancer who walks a metre
+# across the floor makes a fixed camera stand far back, and so does a ribbon that swings wide: the figure
+# ends up a quarter of the picture high.  So the camera follows the hips - through a filter that lets the
+# steps through and holds the sway of the dance back - and the picture is as wide as the BODY needs (its
+# bones), not as wide as its loose cloth flies.  Every value is a default: --follow key=value,... changes it.
+FOLLOW = {
+    "smooth_s": 0.4,        # the hips' path is smoothed by a Gaussian this wide, in seconds: 0 = stick to the hips
+    "cover": 95.0,          # per cent of the motion in which the whole body (bones) is inside the picture's width
+    "margin_m": 0.10,       # what there is beyond the bones, on each side: flesh, clothes
+    "head_room": 1.06,      # the picture is this much taller than the highest point the model reaches
+}
+
+
+def parse_follow(text: str | None) -> dict:
+    """FOLLOW with the values of "key=value,key=value" put in ("cover=100,margin_m=0.2")."""
+    params = dict(FOLLOW)
+    for item in (text or "").replace(";", ",").split(","):
+        if not item.strip():
+            continue
+        key, _eq, value = item.partition("=")
+        key = key.strip()
+        if key not in FOLLOW:
+            raise SystemExit("--follow: no such setting %r (there are: %s)" % (key, ", ".join(FOLLOW)))
+        try:
+            params[key] = float(value)
+        except ValueError:
+            raise SystemExit("--follow: %s wants a number, not %r" % (key, value.strip())) from None
+    return params
+
+
+def smooth_track(values: list[float], sigma: float) -> list[float]:
+    """`values` (one per frame) through a Gaussian of `sigma` frames; the ends are mirrored, so a track that
+    stands still stays where it is and one that starts moving at once is not pulled back."""
+    count = len(values)
+    if sigma <= 0.0 or count < 2:
+        return list(values)
+    reach = max(1, int(math.ceil(3.0 * sigma)))
+    weights = [math.exp(-0.5 * (k / sigma) ** 2) for k in range(-reach, reach + 1)]
+    total = sum(weights)
+    out = []
+    for i in range(count):
+        acc = 0.0
+        for k, w in zip(range(-reach, reach + 1), weights):
+            j = i + k
+            while j < 0 or j >= count:                  # mirror at both ends
+                j = -j if j < 0 else 2 * (count - 1) - j
+            acc += w * values[j]
+        out.append(acc / total)
+    return out
+
+
+def follow_shot(spans: list[tuple[float, float, float]], top: float, bottom: float, v_half: float, h_half: float,
+                params: dict | None = None) -> dict:
+    """How far back the following camera stands.  `spans`: per sampled frame (where the camera looks, the
+    body's lowest x, its highest x); `top` / `bottom`: the highest and lowest point of the whole motion;
+    `v_half` / `h_half`: half the camera's opening angle, up-down and across (radians).
+    -> {"distance", "half_width", "limit": "width" | "height"}: the picture holds the motion's height with
+    head room, and the body's width in `cover` per cent of the frames plus the margin."""
+    params = params or FOLLOW
+    reach = sorted(max(centre - low, high - centre) for centre, low, high in spans) or [0.0]
+    at = min(len(reach) - 1, max(0, int(math.ceil(len(reach) * min(100.0, params["cover"]) / 100.0)) - 1))
+    half_width = reach[at] + params["margin_m"]
+    by_height = (top - bottom) * params["head_room"] / 2.0 / math.tan(v_half)
+    by_width = half_width / math.tan(h_half)
+    return {"distance": max(by_height, by_width), "half_width": half_width,
+            "limit": "width" if by_width > by_height else "height"}
+
+
 def bust_sag_cm(params: dict, gravity: float = MMD_GRAVITY) -> float:
     """How far the up-down spring gives to gravity, in cm (gravity in PMX units / s^2: MMD's 98)."""
     return gravity / PMX_UNITS / (2.0 * math.pi * params["bounce_hz"]) ** 2 * 100.0
