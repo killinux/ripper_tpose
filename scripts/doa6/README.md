@@ -149,3 +149,14 @@ python extract_rdb.py "<游戏>\RRPreview.rdb" -o E:\game_export\DOA6\MaiShiranu
 python g2a.py info E:\game_export\DOA6\MaiShiranui\g1a\MAI01004_MAI.g1a
 blender -b <角色>.blend --python g2a_blender.py -- --g1m <同一件衣服>.g1m --clips <a.g1a> ... --render-dir <输出目录>
 ```
+
+## 7. 布料、软体、碰撞体（g1m_cloth.py，2026-10-03）
+
+衣服 `.g1m` 里的物理数据一览：哪些网格是布料、每块布的控制点网格（列 × 行）、挂在哪根骨上、参数块、软体（胸、臀）、碰撞体分组。
+
+```powershell
+python g1m_cloth.py E:\game_export\DOA6\MaiShiranui\g1m_src\MAI_COS_004.g1m [--params] [--json out.json]
+```
+
+要点：布料是粗控制点网格（不知火舞每块 5 列 × 6–11 行；霞 `KAS_COS_011` 的裙子是一整圈 20 × 10），看得见的布料网格每帧从网格插值、沿法线加厚度；
+破衣是预先做好的 `<衣服>a.g1m` 整件替换（428 件里 44 件）。两款游戏的衣服和布料调研：`docs/doa-clothing-and-cloth.md`。

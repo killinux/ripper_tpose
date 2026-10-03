@@ -192,3 +192,10 @@ python html\make_gallery.py            # 加 --force 重建缩略图
   另有 12 个没名字的 `char_dat`（2–5 MB，像量化曲线），疑似流派动作包，例如 `patch_25_catalog #116`，和不知火舞的模型
   （`WGT_uchiwa` 扇子、`WGT_acs_tare` 垂布）在同一个补丁包里。格式没有公开的解码器，要从头逆向。
 - 同一个角色 DOA6 已经能直接解（`scripts/doa6/g2a.py`），所以 DOA5LR 的动作先不做。详见 `docs/doa6-fighting-motions.md`。
+
+## 7. 衣服和布料（2026-10-03 查过）
+
+- 裙子是密集的骨骼网格（穗香 `HONOKA_COS_001` 的 `OPT_acs_skt0`–`skt151` 共 152 根），绳带是 `OPT_acs_himo*` 骨链；物理组在模型的 `ACSCLS` 块；
+  碰撞体每个角色一个 `.PHYD`（球、盒，挂在 `MOT00_Hips` … `MOT16_Waist`）。
+- 湿身：贴图库里同一件衣服有干、湿（透出皮肤和内衣）两张加一张斑块遮罩；`<衣服>_001`…`_004.--H/.--HL` 是 4 款内衣的换贴图包（`texch`）。
+- 详见 `docs/doa-clothing-and-cloth.md`。
