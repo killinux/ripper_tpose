@@ -6,9 +6,12 @@ the game's pictures; the videos go into one folder, with the lists of what is do
     python dance_batch.py 5_sakura 24_kirara    # these units
     python dance_batch.py --plan                # only work out who dances what, and write the lists
     python dance_batch.py --list                # only rewrite the lists and the gallery (after deleting a video, say)
+    python dance_batch.py --drop 58_yuphiesophie --why "两个人的单位"    # this unit gets no video: its video goes
+    python dance_batch.py --undrop 58_yuphiesophie                      # ... and back among the dancers
 
 Who: every female unit (--men: the others too) that has a PMX with a standard MMD skeleton, each costume on its
-own, without monsters and bosses (SKIP_CATEGORIES).  What: the collection's solo dances with music, MIN_SECONDS or longer; of a dance that was
+own, without monsters and bosses (SKIP_CATEGORIES), and without the units somebody looked at and did not want
+(--drop: kept in dropped.json with the reason).  What: the collection's solo dances with music, MIN_SECONDS or longer; of a dance that was
 released several times the newest one; folders with several motions (left / right versions, parts) or only versions
 fitted to another body are left out - the list says why for each.  The pairing is drawn once with a fixed seed and
 kept (plan.json): a second run goes on where the first stopped, a unit never changes its dance by itself.
@@ -19,6 +22,7 @@ kept (plan.json): a second run goes on where the first stopped, a unit never cha
         _列表.md                      who has a video and who has not; which dances are used, free, or left out and why
         _meta/plan.json              unit -> dance, backdrop
         _meta/videos.json            what was rendered, from what
+        _meta/dropped.json           unit -> why it gets no video (--drop / --undrop)
         _meta/dances.json            the collection as it was read (lengths; a cache)
         _meta/list.json              the lists as data - the gallery (html/make_gallery.py) shows them
         _meta/reports/<video>.json   dance_video's report of each video
@@ -159,6 +163,16 @@ def prune(videos: dict, keep: set, where: SimpleNamespace) -> list[str]:
     return gone
 
 
+def set_dropped(dropped: dict, drop: list[str], undrop: list[str], why: str = "") -> dict:
+    """{unit: why it gets no video} after --drop / --undrop: what a look at the videos decided (a unit of two
+    figures, of which a dance moves one), not something a rule could tell.  A unit dropped again keeps its reason
+    unless a new one is given."""
+    out = {unit: reason for unit, reason in dropped.items() if unit not in undrop}
+    for unit in drop:
+        out[unit] = why or out.get(unit, "")
+    return out
+
+
 def backdrop_pool(root: str) -> list[str]:
     """File names of the game's pictures a dancer can stand in front of (<root>/_backgrounds)."""
     folder = os.path.join(root, "_backgrounds")
@@ -206,7 +220,8 @@ def paths(root: str) -> SimpleNamespace:
     folder = os.path.join(root, FOLDER)
     meta = os.path.join(folder, "_meta")
     return SimpleNamespace(folder=folder, meta=meta, plan=os.path.join(meta, "plan.json"),
-                           videos=os.path.join(meta, "videos.json"), dances=os.path.join(meta, "dances.json"),
+                           videos=os.path.join(meta, "videos.json"), dropped=os.path.join(meta, "dropped.json"),
+                           dances=os.path.join(meta, "dances.json"),
                            data=os.path.join(meta, "list.json"), reports=os.path.join(meta, "reports"),
                            thumbs=os.path.join(meta, "thumbs"), text=os.path.join(folder, "_列表.md"))
 
@@ -218,9 +233,12 @@ def load(path: str, default):
         return default
 
 
-def lists(units: list[dict], names: dict, plan: dict, dances: list[dict], videos: dict, collection: str) -> dict:
-    """The lists as data: every unit with its dance and its video, every dance with what became of it."""
+def lists(units: list[dict], names: dict, plan: dict, dances: list[dict], videos: dict, collection: str,
+          dropped: dict | None = None) -> dict:
+    """The lists as data: every unit with its dance and its video, every dance with what became of it, and the
+    units that were dropped (`dropped`: {unit: why}) with the reason."""
     by_folder = {d["folder"]: d for d in dances}
+    out = [{"id": unit, "name": names.get(unit, unit), "why": why} for unit, why in sorted((dropped or {}).items())]
     done = {u: v for u, v in videos.items() if v.get("video") and os.path.isfile(v["video"])}
     rows = []
     for m in units:
@@ -246,8 +264,9 @@ def lists(units: list[dict], names: dict, plan: dict, dances: list[dict], videos
                       "state": state, "unit": unit, "why": d["status"]})
     count = lambda state: sum(1 for t in table if t["state"] == state)  # noqa: E731
     return {"generated": time.strftime("%Y-%m-%d %H:%M"), "collection": collection, "units": rows, "dances": table,
+            "dropped": out,
             "summary": {"units": len(rows), "with_video": sum(1 for r in rows if r["video"]),
-                        "without_dance": sum(1 for r in rows if not r["dance"]),
+                        "without_dance": sum(1 for r in rows if not r["dance"]), "dropped": len(out),
                         "folders": len(table), "usable": len(table) - count("不用"), "exported": count("已导出"),
                         "planned": count("已分配，未导出"), "free": count("未分配"), "left_out": count("不用")}}
 
@@ -263,13 +282,19 @@ def markdown(data: dict) -> str:
                "（其中 %d 个没有分到动作）" % s["without_dance"] if s["without_dance"] else ""),
            "- 动作：合集里 %d 个文件夹，可用的 %d 支（单人、有配乐、够长、同一支舞取最新版）—— **已导出 %d**，"
            "已分配还没导出 %d，没分配 %d；不用的 %d 个，原因见下表" % (
-               s["folders"], s["usable"], s["exported"], s["planned"], s["free"], s["left_out"]),
-           "", "## 角色", "", "| 单位 | 名字 | 动作 | 秒 | 背景 | 状态 | 视频 |", "|---|---|---|---:|---|---|---|"]
+               s["folders"], s["usable"], s["exported"], s["planned"], s["free"], s["left_out"])]
+    dropped = data.get("dropped") or []
+    if dropped:
+        out.append("- 不做视频的角色：%d 个（看过之后决定不要的，`--drop`；`--undrop` 放回来），见下表" % len(dropped))
+    out += ["", "## 角色", "", "| 单位 | 名字 | 动作 | 秒 | 背景 | 状态 | 视频 |", "|---|---|---|---:|---|---|---|"]
     for r in data["units"]:
         out.append("| `%s` | %s | %s | %s | %s | %s | %s |" % (
             r["id"], r["name"], r["dance"] or "（没有分到）", "%g" % r["seconds"] if r["dance"] else "",
             os.path.splitext(r["backdrop"])[0], "已导出 %s" % r["time"][:16] if r["video"] else "未导出",
             "`%s`" % os.path.basename(r["video"]) if r["video"] else ""))
+    if dropped:
+        out += ["", "## 不做视频的角色", "", "| 单位 | 名字 | 原因 |", "|---|---|---|"]
+        out += ["| `%s` | %s | %s |" % (d["id"], d["name"], d["why"] or "（没写）") for d in dropped]
     out += ["", "## 动作", "", "| 动作 | 文件夹 | .vmd | 秒 | 状态 | 角色 / 原因 |", "|---|---|---|---:|---|---|"]
     order = {"已导出": 0, "已分配，未导出": 1, "未分配": 2, "不用": 3}
     for t in sorted(data["dances"], key=lambda t: (order[t["state"]], t["title"], t["folder"])):
@@ -394,6 +419,11 @@ def main() -> int:
     ap.add_argument("--men", action="store_true", help="the male units too (default: female figures only)")
     ap.add_argument("--prune", action="store_true",
                     help="delete the videos of units that are no dancers under the present rules (after a rule changed)")
+    ap.add_argument("--drop", nargs="+", default=[], metavar="UNIT",
+                    help="these units get no video from now on (kept in _meta/dropped.json): the video they have is "
+                         "deleted, their dance is free for somebody else, the lists name them with --why")
+    ap.add_argument("--why", default="", metavar="TEXT", help="with --drop: the reason, for the lists")
+    ap.add_argument("--undrop", nargs="+", default=[], metavar="UNIT", help="take these units back among the dancers")
     ap.add_argument("--no-backdrop", action="store_true", help="the plain grey background")
     ap.add_argument("--camera", choices=("follow", "fixed"), default="follow")
     ap.add_argument("--follow", default="", metavar="KEY=VALUE,...", help="the following camera's settings (tsquad_common.FOLLOW)")
@@ -415,7 +445,14 @@ def main() -> int:
     list_models.add_details(everyone, a.export_root)    # is_female reads them (cached in _meta/model_details.json)
     names = dv.person_names(everyone)
     exports = load(os.path.join(tc.meta_dir(a.export_root), "exports.json"), {})
-    units = [m for m in everyone if can_dance(m, exports.get(m["id"]), a.men)
+    dropped = load(where.dropped, {})
+    going = [m["id"] for m in tc.find_models(everyone, a.drop)] if a.drop else []
+    if a.drop or a.undrop:
+        back = [m["id"] for m in tc.find_models(everyone, a.undrop)] if a.undrop else []
+        dropped = set_dropped(dropped, going, back, a.why)
+        tc.save_json(where.dropped, dropped)
+        log("no video for: %s" % (", ".join("%s (%s)" % (u, w or "no reason given") for u, w in sorted(dropped.items())) or "nobody"))
+    units = [m for m in everyone if m["id"] not in dropped and can_dance(m, exports.get(m["id"]), a.men)
              and os.path.isfile(os.path.join(tc.model_dir(m, a.export_root, "pmx"), m["id"] + ".pmx"))]
     cache = load(where.dances, {})
     dances = choose_dances(read_collection(a.motions, cache), a.min_seconds)
@@ -426,11 +463,13 @@ def main() -> int:
     tc.save_json(where.plan, plan)
     videos = load(where.videos, {})
     strays = [u for u in videos if u not in plan]
-    if strays and a.prune:
-        for line in prune(videos, set(plan), where):
+    unwanted = strays if a.prune else [u for u in strays if u in going]      # --drop takes its units' videos along
+    if unwanted:
+        for line in prune(videos, set(videos) - set(unwanted), where):
             log("removed %s" % line)
         tc.save_json(where.videos, videos)
-    elif strays:
+    strays = [u for u in videos if u not in plan]
+    if strays:
         log("%d video(s) of units that are no dancers under the present rules: %s  (--prune deletes them)" % (
             len(strays), ", ".join(strays)))
     log("%d units, %d dances to hand out (%d folders), %d backdrops; %d videos are there" % (
@@ -438,7 +477,7 @@ def main() -> int:
         sum(1 for v in videos.values() if v.get("video") and os.path.isfile(v["video"]))))
 
     def finish():
-        data = lists(units, names, plan, dances, videos, a.motions)
+        data = lists(units, names, plan, dances, videos, a.motions, dropped)
         tc.save_json(where.data, data)
         with open(where.text, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(markdown(data))

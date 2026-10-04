@@ -26,6 +26,9 @@ import export_backgrounds as eb  # noqa: E402
 import tsquad_common as tc  # noqa: E402
 import tsquad_scene as ts  # noqa: E402
 
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "html"))
+import make_gallery  # noqa: E402
+
 BUNDLE_PROVIDER = "UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider"
 ASSET_PROVIDER = "UnityEngine.ResourceManagement.ResourceProviders.BundledAssetProvider"
 
@@ -932,8 +935,9 @@ class DanceBatchTests(unittest.TestCase):
         videos = {"1_asagi": {"video": video, "dance": "甲舞(2025.6.9)", "backdrop": "剧情_a.png", "time": "2026-10-03 17:00:00"},
                   "2_sakuya": {"video": os.path.join(tmp.name, "deleted.mp4"), "dance": "乙舞"}}     # the file is gone: not done
         data = dance_batch.lists(units, {"1_asagi": "Asagi", "2_sakuya": "Sakuya"}, plan, dances, videos, r"E:\motions")
-        self.assertEqual(data["summary"], {"units": 2, "with_video": 1, "without_dance": 0, "folders": 4, "usable": 3,
-                                           "exported": 1, "planned": 1, "free": 1, "left_out": 1})
+        self.assertEqual(data["summary"], {"units": 2, "with_video": 1, "without_dance": 0, "dropped": 0, "folders": 4,
+                                           "usable": 3, "exported": 1, "planned": 1, "free": 1, "left_out": 1})
+        self.assertNotIn("不做视频", dance_batch.markdown(data))
         self.assertEqual([(t["title"], t["state"], t["unit"]) for t in data["dances"]], [
             ("甲舞", "已导出", "1_asagi"), ("乙舞", "已分配，未导出", "2_sakuya"), ("丙舞", "未分配", ""), ("丁舞", "不用", "")])
         text = dance_batch.markdown(data)
@@ -941,6 +945,28 @@ class DanceBatchTests(unittest.TestCase):
         self.assertIn("| `2_sakuya` | Sakuya | 乙舞 | 12.5 | 剧情_b | 未导出 |  |", text)
         self.assertIn("| 丁舞 | 丁舞 |  |  | 不用 | 多人舞 |", text)
         self.assertIn("**已导出视频 1**，还没导出 1", text)
+
+    def test_a_dropped_unit_gets_no_video(self):
+        dropped = dance_batch.set_dropped({}, ["58_pair"], [], "两个人的单位")
+        self.assertEqual(dropped, {"58_pair": "两个人的单位"})
+        self.assertEqual(dance_batch.set_dropped(dropped, ["58_pair", "9_x"], []), {"58_pair": "两个人的单位", "9_x": ""})
+        self.assertEqual(dance_batch.set_dropped(dropped, ["58_pair"], [], "换个说法"), {"58_pair": "换个说法"})
+        self.assertEqual(dance_batch.set_dropped(dropped, [], ["58_pair", "never_dropped"]), {})
+        self.assertEqual(dropped, {"58_pair": "两个人的单位"})                     # what was handed in stays as it was
+        # in the lists: out of the units, its dance free again, named with the reason
+        units = [{"id": "1_asagi", "name": "Asagi", "category": "character"}]
+        dances = [{"folder": "甲舞", "title": "甲舞", "vmd": "甲舞.vmd", "music": "甲舞.WAV", "seconds": 10.0, "status": ""},
+                  {"folder": "乙舞", "title": "乙舞", "vmd": "乙舞.vmd", "music": "乙舞.WAV", "seconds": 12.5, "status": ""}]
+        plan = dance_batch.draw(["1_asagi"], ["甲舞", "乙舞"], [], 7,
+                                {"1_asagi": {"dance": "甲舞", "backdrop": ""}, "58_pair": {"dance": "乙舞", "backdrop": ""}})
+        self.assertEqual(list(plan), ["1_asagi"])
+        data = dance_batch.lists(units, {"1_asagi": "Asagi", "58_pair": "Pair"}, plan, dances, {}, r"E:\motions", dropped)
+        self.assertEqual(data["dropped"], [{"id": "58_pair", "name": "Pair", "why": "两个人的单位"}])
+        self.assertEqual((data["summary"]["units"], data["summary"]["dropped"], data["summary"]["free"]), (1, 1, 1))
+        text = dance_batch.markdown(data)
+        self.assertIn("- 不做视频的角色：1 个", text)
+        self.assertIn("| `58_pair` | Pair | 两个人的单位 |", text)
+        self.assertLess(text.index("## 不做视频的角色"), text.index("## 动作"))
 
     def test_backdrops_one_can_stand_in_front_of(self):
         tmp = tempfile.TemporaryDirectory()
@@ -952,6 +978,52 @@ class DanceBatchTests(unittest.TestCase):
             open(os.path.join(folder, name), "w").close()
         self.assertEqual(dance_batch.backdrop_pool(tmp.name), ["剧情_S018_B_夜店舞台.png", "过场_1-2_pl_01_都市街道_白天.png"])
         self.assertEqual(dance_batch.backdrop_pool(os.path.join(tmp.name, "nowhere")), [])
+
+
+class GalleryTests(unittest.TestCase):
+    """The page's manual (how to export a model) and its video section (html/make_gallery.py)."""
+
+    def test_the_manual_says_how_to_export_a_model(self):
+        page = make_gallery.render_howto(r"E:\out", {"total": 252, "female": 148, "by_look": 8})
+        for piece in ("最短的路", "第 0 步", "第 1 步", "第 2 步", "第 3 步", "第 4 步", "出问题时", "B　完全不用脚本",
+                      "python export_model.py 24_kirara --xps --pmx --turntable", "python list_models.py --html",
+                      "pip install UnityPy lz4 numpy pillow", "只列女性体型（148 个）", "（140 个），另有 8 个",
+                      r"E:\out\_meta\exports.json", r"building E:\out\Kirara\blend\24_kirara\24_kirara.blend",
+                      "done: 1 built, 0 skipped, 0 failed", "python dance_batch.py --drop"):
+            self.assertIn(piece, page)
+        self.assertLess(page.index("最短的路"), page.index("第 0 步"))            # the short way comes first
+        self.assertNotIn("{", page)                                               # every field of the template is filled
+        for tag in ("details", "table", "ol", "ul", "pre", "div", "section"):
+            self.assertEqual(page.count("<" + tag), page.count("</%s>" % tag), tag)
+        marks = page.count("本机已有</span>") + page.count("本机没找到</span>")
+        self.assertEqual(marks, 8)       # Blender, the game, Blender2XPS, four add-ons, ffmpeg - whatever this machine has
+        self.assertIn(make_gallery.on_this_machine(True), make_gallery.addon_mark("os", os.path.dirname(os.__file__)))
+        self.assertIn(make_gallery.on_this_machine(False), make_gallery.addon_mark("no such add-on anywhere"))
+
+    def test_the_video_section_names_the_dropped_units(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        video = os.path.join(tmp.name, "_videos", "甲舞_Asagi.mp4")
+        os.makedirs(os.path.join(tmp.name, "_videos", "_meta"))
+        open(video, "w").close()
+        data = {"generated": "2026-10-04 15:00", "collection": r"E:\motions",
+                "units": [{"id": "1_asagi", "name": "Asagi", "dance": "甲舞", "seconds": 10.0, "backdrop": "剧情_a.png",
+                           "video": video, "thumb": ""},
+                          {"id": "2_sakuya", "name": "Sakuya", "dance": "乙舞", "seconds": 12.5, "backdrop": "", "video": ""}],
+                "dances": [{"title": "甲舞", "folder": "甲舞(2025.6.9)", "seconds": 10.0, "state": "已导出", "unit": "1_asagi", "why": ""}],
+                "summary": {"units": 2, "folders": 1, "usable": 1, "exported": 1, "planned": 0, "free": 0, "left_out": 0}}
+        path = os.path.join(tmp.name, "_videos", "_meta", "list.json")
+        tc.save_json(path, data)                                                   # a list of before --drop: no such part
+        page = make_gallery.render_videos(tmp.name)
+        self.assertIn("已导出 <b>1</b>，未导出 1。", page)
+        self.assertNotIn("不做视频", page)
+        tc.save_json(path, dict(data, dropped=[{"id": "58_pair", "name": "Pair", "why": "两个人 <并排>"}]))
+        page = make_gallery.render_videos(tmp.name)
+        self.assertIn("未导出 1；另有 1 个看过之后决定不做（见下）。", page)
+        self.assertIn("不做视频的角色（1）", page)
+        self.assertIn("<td><code>58_pair</code></td><td>Pair</td><td>两个人 &lt;并排&gt;</td>", page)
+        self.assertEqual(page.count("<details"), page.count("</details>"))
+        self.assertEqual(make_gallery.render_videos(os.path.join(tmp.name, "nowhere")), "")
 
 
 class CompressedMeshTests(unittest.TestCase):

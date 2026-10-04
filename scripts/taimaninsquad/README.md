@@ -13,7 +13,7 @@ UnityFS bundle（LZ4HC，**没加密**，3.7 GB）。角色是 3D 蒙皮模型�
 | `export_model.py` | 导出 **卡通着色的 .blend**（游戏着色器逐项还原 + 描边），`--xps` 出 XPS，`--pmx` 出 MMD PMX（骨架、物理、表情） |
 | `dance_video.py` | 给导出的 PMX 套一段 MMD 动作（`.vmd`）渲成带配乐的视频，并存一份能直接打开播放的 `.blend` |
 | `export_backgrounds.py` | 把游戏里的背景图（剧情背景、过场画、天空全景 ……）挑好的 128 张导到一个文件夹，带总览图 |
-| `html/make_gallery.py` | 画廊页 `html/index.html`：导出过的显示预览图和文件位置，没导出的显示预览渲染（或游戏头像）和导出命令；页首是「手动操作说明」 |
+| `html/make_gallery.py` | 画廊页 `html/index.html`：导出过的显示预览图和文件位置，没导出的显示预览渲染（或游戏头像）和导出命令；页首是「怎么导出模型」的操作说明 |
 
 辅助脚本：`rig_lint.py`（检查骨架：肢体的皮是否跟着 Biped 骨、有没有哪段肢体根本没有皮）、`dump_shader.py`（着色器反汇编）、
 `preview_xps_blender.py` / `preview_pmx_morphs.py` / `render_turntable.py`（导出后的读回检查图和转台视频，
@@ -41,7 +41,7 @@ python list_models.py --find asagi 24 kira* # 按 id / 单位编号 / 名字找�
 python list_models.py --details             # 另外读出部件数、顶点、三角面、蒙皮骨、表情数、身高、是否女性体型（约 20 秒，有缓存）
 python list_models.py --female              # 只列女性体型（148 个：140 个有胸部骨 F + 8 个看预览认的 f，见下）
 python list_models.py --exported            # 只列已导出的
-python list_models.py --html                # 生成画廊页 html\index.html（预览图 + 导出命令 + 手动操作说明）
+python list_models.py --html                # 生成画廊页 html\index.html（预览图 + 导出命令 + 「怎么导出模型」的操作说明）
 
 python export_model.py 24_kirara            # 导出一个：.blend + 全身 / 脸部预览 + 表情总览图
 python export_model.py asagi                # 一个角色的全部造型（1_asagi、253_asagi、271_asagi）
@@ -574,6 +574,8 @@ python dance_batch.py 5_sakura 24_kirara    # 指定角色
 python dance_batch.py --plan                # 只算分配、写列表，不渲
 python dance_batch.py --list                # 只重写列表和画廊（比如删了某个视频之后）
 python dance_batch.py --prune --list        # 规则改了以后：删掉不再符合规则的单位的视频
+python dance_batch.py --drop 58_yuphiesophie --why "两个人的单位"   # 看过之后不要这个角色的视频（删掉，以后也不渲）
+python dance_batch.py --undrop 58_yuphiesophie                     # 放回来
 ```
 
 给每个角色从动作合集里分一支**不重复**的舞、从游戏背景里分一张图，渲到一个文件夹里，并维护「谁做了、谁没做」的列表：
@@ -584,15 +586,22 @@ E:\game_export\TaimaninSquad\_videos\
   _列表.md                   角色表（分到哪支舞、哪张背景、导出了没有）和动作表（已导出 / 已分配未导出 / 未分配 / 不用及原因）
   _meta\plan.json            分配结果：角色 → 动作、背景
   _meta\videos.json          已渲的视频是用什么渲的
+  _meta\dropped.json         不做视频的角色和原因（--drop / --undrop 维护）
   _meta\list.json            列表的数据（画廊页读它）
   _meta\dances.json          合集里每个 .vmd 的长度（缓存）
   _meta\reports\、thumbs\    每个视频的渲染记录、一帧缩略图
 ```
 
 - **哪些角色**：**女性**（`tsquad_common.is_female`；`--men` 把男的也带上）、有 PMX、骨架是标准 MMD 骨架的单位，
-  每套服装算一个；不要怪物和 Boss（`SKIP_CATEGORIES`）。现在是 126 个（角色 105、其他造型 19、特殊单位 2）；
+  每套服装算一个；不要怪物和 Boss（`SKIP_CATEGORIES`）。符合的是 126 个（角色 105、其他造型 19、特殊单位 2）；
   蛇尾 / 鱼尾 / 翅膀的 4 个套不了 VMD，男角色只有 `4_kuro` 一个。
   规则改了之后，不再符合的单位的视频不会自己消失：运行时会提示，加 `--prune` 才删（连同缩略图和渲染记录）。
+- **看过之后不要的**（`--drop <单位> --why "原因"`）：有的单位符合上面的规则，但视频渲出来不好看，这是看了才知道的事，
+  写不成规则。`--drop` 把它记进 `_meta\dropped.json`（单位 → 原因）：它的视频、缩略图、渲染记录当场删掉，以后的批量也跳过它，
+  分给它的那支舞回到「未分配」里让给别人；列表和画廊页的「不做视频的角色」一栏写着它和原因。`--undrop <单位>` 放回来
+  （会从没人用的舞里重新拿一支）。模型本身不受影响，照常在画廊的模型列表里。
+  现在有一个：`58_yuphiesophie`（双人单位，两个人并排、画面里人很小，MMD 动作只带得动其中一个；它的两个单人版
+  `58_yuphiesophie_yuphie` / `_sophie` 各有视频）。
 - **哪些动作**（`choose_dances`）：合集里一个文件夹算一支舞。要求单人、有配乐、8 秒以上（`--min-seconds`）；同一支舞重发过几次的
   用日期最新的；文件夹里另有 `适配…` 的 `.vmd`（给别的体型的版本）不算，用原版。不用的文件夹和原因都写在列表里：
   不到 8 秒、文件夹里有几段动作（左右版 / 分段 / 长短版，分不清主动作）、旧版、没有配乐或有几个配乐、只有适配版、多人舞。
@@ -621,6 +630,10 @@ E:\game_export\TaimaninSquad\_videos\
 - 每渲完一个就存一次 `videos.json`，中途停掉不丢进度；已有的视频不重渲（`--force` 重渲）。渲完自动重写列表和画廊页
   （`--no-gallery` 不动画廊）。画廊页多了「舞蹈视频」一栏：视频缩略图、还没导出的角色、动作列表。
 - 动作合集的位置默认是 `E:\4090\小王动画2026年2月11日以前MMD动作合集`，用 `--motions` 或环境变量 `TSQUAD_MOTIONS` 改。合集只读。
+- **现状**（2026-10-04）：126 个女性角色都渲过，看完之后去掉了双人单位 `58_yuphiesophie` 的（`--drop`，见上），
+  留下 125 个视频，共 26.8 分钟、1.46 GB，每个 8–25.5 秒；244 支可用的舞用了 125 支。
+  看着特别的几个都是数据本身如此：`13_shiranui`、`237_shiranui`（大件武器）和 `107_tatsumi`（两侧飘带各伸出 1 m）
+  人偏小，因为画面要装下这些东西；`16_asuka_black` 是纯黑剪影。
 
 ## 游戏里的背景图
 
@@ -676,7 +689,7 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
   另有 14 个大厅主题（`LobbyTheme_*`）。它们不是图片，要在 Blender 里重建场景（网格 + 材质 + 光照图）才能当背景用，
   还没做。上面「全景」那几张就是这些关卡的天空。
 
-## 画廊页和「手动操作说明」
+## 画廊页和「怎么导出模型」的操作说明
 
 `python list_models.py --html` 生成 `html\index.html`（只含指向本机文件的 `file://` 链接，游戏素材不进仓库）：
 
@@ -684,8 +697,22 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
   转台视频、XPS 读回、PMX 舞蹈、PMX 表情）；没导出的显示 `--preview-only` 渲过的预览（`_work\previews`，
   左上角标着「未导出」），再没有就用游戏头像；每张卡片带一条可复制的导出命令。
 - 顶部可以搜索、按类别筛、「只看女性」「只看已导出」。
-- 页首的**手动操作说明**把「自己怎么看有哪些模型、怎么导出」写在页面上：A 用脚本（准备、列清单、导出、
-  产物在哪和怎么打开），B 不用脚本的手工路线。命令都带复制按钮，路径是生成时本机的真实路径。
+- 页首的**操作说明**（`render_howto`）把「怎么导出模型」完整写在页面上，不看这份 README 也能照着做。命令都带复制按钮，
+  路径是生成时本机的真实路径。顺序是先给最短的路，再一步一步展开：
+  - **最短的路：三条命令** —— 进脚本目录、`export_model.py <id> --xps --pmx --turntable`、`list_models.py --html` 刷新本页。
+  - **第 0 步 准备**：Python 包、Blender、游戏和导出目录；一张「想要什么 → 命令里加什么 → 另外需要什么」的表
+    （`.blend` 不需要任何插件，XPS 要 Blender2XPS，PMX 要三个插件，舞蹈视频要 PMX 和 ffmpeg）。每样东西后面标着
+    「本机已有 / 本机没找到」—— 生成页面时在这台机器上看的（插件看 `%APPDATA%\Blender Foundation\Blender\3.6\scripts\addons`，
+    别处的用环境变量 `TSQUAD_BLENDER_ADDONS` 指）。
+  - **第 1 步 找模型**：在页面上找、在命令行找（`list_models.py` 的几种用法）、id 的规则。
+  - **第 2 步 导出**：一个模型的三条命令；**这条命令做了什么**（读游戏资源 → 建 `.blend` → 转台视频 → XPS → PMX → 记录，
+    每步用什么、写到哪）；终端里实际打印的内容（`24_kirara` 导到一个空目录的实测输出，2 分 02 秒）和该看哪几个数；
+    一批模型、重做、武器、胸部物理。
+  - **第 3 步 看结果、打开**：输出的目录结构；五张检查图各看什么；`.blend` / XPS / PMX 各用什么打开。
+  - **第 4 步（可选）舞蹈视频和背景图**：`dance_video.py`、`dance_batch.py`（含 `--drop`）、`export_backgrounds.py`。
+  - **出问题时**：终端里十来种提示（找不到游戏 / Blender、id 写错、已经导出过、某一步失败 ……）各是什么意思、看哪个日志。
+  - **B 不用脚本的手工路线**（见下一节）。
+- 「舞蹈视频」一栏：每个视频一格缩略图，下面三个折叠的表 —— 还没导出的角色、**不做视频的角色**和原因、动作列表。
 
 ## 不用脚本的手工路线（AssetStudio + Blender）
 
@@ -771,7 +798,7 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
   是一支枪，没有右手。
 - **双人单位 `58_yuphiesophie` 的 PMX 里只有一个人会动**：MMD 的标准骨架只能套在一副骨架上（第一个 Biped，Yuphie），
   Sophie 的骨架保持游戏原名、不带 IK，舞蹈里她以静止姿势站在旁边（头发的物理还在）。要让两人各跳各的，用单独的
-  `58_yuphiesophie_yuphie` 和 `58_yuphiesophie_sophie`。
+  `58_yuphiesophie_yuphie` 和 `58_yuphiesophie_sophie`。所以批量舞蹈视频里没有这个双人单位（`dance_batch.py --drop`）。
 - **个别细链饰在舞蹈里甩得很开**（`257_shizuru` 腰上的细链坠子能甩出一米）：它在游戏里是一条只在一头固定的骨链，
   PMX 里按「丝带」预设做的物理，现在检查图按 MMD 的方式跑（关节没有额外阻尼），所以比以前的检查图里活泼。
 - 角色的正式名字（日文 / 中文）拿不到（表格的密钥在服务器），用的是文件夹里的英文名。
