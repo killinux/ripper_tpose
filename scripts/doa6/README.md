@@ -164,3 +164,27 @@ python g1m_cloth.py E:\game_export\DOA6\MaiShiranui\g1m_src\MAI_COS_004.g1m [--p
 
 要点：布料是粗控制点网格（不知火舞每块 5 列 × 6–11 行；霞 `KAS_COS_011` 的裙子是一整圈 20 × 10），看得见的布料网格每帧从网格插值、沿法线加厚度；
 破衣是预先做好的 `<衣服>a.g1m` 整件替换（428 件里 44 件）。两款游戏的衣服和布料调研：`docs/doa-clothing-and-cloth.md`。
+
+## 8. 胸、头发、衣服的物理细读（g1m_physics.py，2026-10-04）
+
+给 ROE 格斗游戏重新实现 DOA6 的物理用（霞，见 `roe_fighter_unity` 的 `docs/doa-physics.md`）：一个部件一个 JSON，所有原始数值都保留，猜的字段名带可信度。
+
+```powershell
+python g1m_physics.py E:\game_export\DOA6\Kasumi\g1m_src\KAS_COS_001.g1m E:\game_export\DOA6\Kasumi\g1m_src\KAS_HAIR_001.g1m -o E:\game_export\DOA6\Kasumi\physics
+```
+
+内容：
+
+- 骨架：全局编号、名字或 `hash_0x…`、父骨、模型空间静止姿势；
+- 碰撞体分组（`COLL`）；
+- 粗网格布（`NUNO1`/`NUNO3`/`NUNV1`）：网格、两行蒙皮的顶行、参数、额外约束；
+- 骨链（`NUNO4`）；
+- 格子软体（`SOFT` 0x80001）：节点、蒙皮、标志、闭合壳、参数；
+- 骑在软体上的骨（0x80002）；
+- 摆动骨（`.swg`）；
+- 每个网格由什么驱动：
+  - 类型 1：从 4×4 控制点重建；
+  - 类型 2：挂在物理骨上；
+  - 类型 4：软体格子的三线性插值 + 混合值。
+
+格式和读法见 `docs/doa-clothing-and-cloth.md` 的"10-04"一节。

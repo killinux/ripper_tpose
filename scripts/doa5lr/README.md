@@ -196,6 +196,26 @@ python html\make_gallery.py            # 加 --force 重建缩略图
 ## 7. 衣服和布料（2026-10-03 查过）
 
 - 裙子是密集的骨骼网格（穗香 `HONOKA_COS_001` 的 `OPT_acs_skt0`–`skt151` 共 152 根），绳带是 `OPT_acs_himo*` 骨链；物理组在模型的 `ACSCLS` 块；
-  碰撞体每个角色一个 `.PHYD`（球、盒，挂在 `MOT00_Hips` … `MOT16_Waist`）。
+  碰撞体每个角色一个 `.PHYD`（球、盒，挂在 `MOT00_Hips` … `MOT16_Waist`）。10-04 更正：布料的碰撞体在 `ACSCLS` 里，`.PHYD` 是刚体（见第 8 节）。
 - 湿身：贴图库里同一件衣服有干、湿（透出皮肤和内衣）两张加一张斑块遮罩；`<衣服>_001`…`_004.--H/.--HL` 是 4 款内衣的换贴图包（`texch`）。
 - 详见 `docs/doa-clothing-and-cloth.md`。
+
+## 8. 胸、头发、衣服的物理细读（tmc_physics.py，2026-10-04）
+
+给 ROE 格斗游戏比较物理用（霞，见 `roe_fighter_unity` 的 `docs/doa-physics.md`）：TMC 的 `ACSCLS`（绳、网格布、头发、刘海的姿势混合、碰撞体），
+每个节点的自定义参数（键名是 FNV-1 哈希，`BUST_SWING_PRESET` 等），`.PHYD`（刚体，尽力解析）。
+`--exe` 只读地把 exe 数据段里胸部预设表旁边的那块拷出来（代码段是 SteamStub 加密的，没有动）。
+
+```powershell
+python tmc_physics.py E:\game_export\DOA5LR\Kasumi\tmc_src --exe "<DOA5LR 安装目录>\game.exe"
+```
+
+衣服和头发要一起给（头发引用衣服定义的碰撞体）；默认输出到 `tmc_src` 旁边的 `physics`。
+
+要点：
+
+- 胸不模拟：每边 7 根骨，按每套衣服选的预设表驱动；
+- 衣服头发是"一个质点就是一根骨头"的弹簧网（穗香的裙子 152 根骨、997 根弹簧）；
+- 刘海是 7 个烘好的姿势混合。
+
+见 `docs/doa-clothing-and-cloth.md` 的"10-04"一节。
