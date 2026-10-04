@@ -1,7 +1,7 @@
 """删 D 盘上已经归档完的导出目录（用户要求删的时候用；归档脚本本身只拷不删）。
 
   python delete_archived.py                         只列出：每个登记过的 D 盘来源目录能不能删、多大、最近一次写入
-  python delete_archived.py --delete D:\\a D:\\b     删这几个
+  python delete_archived.py --delete D:\\a D:\\b     删这几个（也可以是来源目录下面的子目录：报告里「其中可以整个删的子目录」）
   python delete_archived.py --delete-all --keep D:\\roe_exports   除了 --keep 的全删
 
 每个目录删之前的一刻再核对一遍：里面每个文件都要么在账本里（已拷到 E 盘、之后没改过、E 盘那份还在），
@@ -93,6 +93,25 @@ def main():
     print("D: 可用 %.1f GB" % (free0 / 1e9))
     if not (args.delete or args.delete_all):
         return
+    # a sub-directory of a source (the report's 「其中可以整个删的子目录」): same checks on that subtree only
+    for d in args.delete:
+        n = ae.norm(d)
+        if any(ae.norm(root) == n for root, _g, _ok, _age in rows):
+            continue
+        owner = next(((root, game) for root, game, _ok, _age in rows if ae.inside(d, root)), None)
+        if owner is None or not os.path.isdir(d):
+            print("跳过 %s：不是登记过的 D 盘来源目录或它下面的目录" % d)
+            continue
+        ok, pending, reparse, newest, _size, _freed = verify(d, owner[1], ledger)
+        if not ok:
+            print("跳过 %s：还有 %d 个没归档的文件 / %d 个链接，例如 %s" % (d, len(pending), len(reparse), (pending + reparse)[0]))
+            continue
+        if newest and (now - newest) / 60 < args.min_age:
+            print("跳过 %s：%.0f 分钟前还有写入" % (d, (now - newest) / 60))
+            continue
+        errors = rmtree(d)
+        print("%s %s%s" % ("已删" if not os.path.exists(d) else "没删干净", d,
+                           "（%d 个错误，例如 %s）" % (len(errors), errors[0]) if errors else ""), flush=True)
     for root, game, ok, age in rows:
         n = ae.norm(root)
         if n in keep or not (args.delete_all or n in wanted):

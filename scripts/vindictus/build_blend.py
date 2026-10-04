@@ -806,16 +806,22 @@ for part, arm, meshes in imported:
     if worst > REPOSE_TOLERANCE and part["name"] not in socket_parts:
         repose_part(arm, meshes, base_arm)
         reposed.append("%s (%.1f cm at %s)" % (part["name"], worst, worst_bone))
-    # bones the base rig lacks: add them keeping their offset to the (possibly moved) parent
+    # bones the base rig lacks: add them where this part's mesh has them - in the pose its mesh was baked in when
+    # the part was re-posed (they followed their moved parents), at the part's own rest otherwise.  Not relative to
+    # the parent in the base rig: a parent that is only turned there (same head) swings the whole chain away from
+    # the mesh.  The outfits made for the older body skeleton have their pelvis turned 7.6 deg against the MetaHuman
+    # face skeleton; their legs come from the Foot part, which shares only root and pelvis and is never re-posed,
+    # and came out swung forward, 13 cm at the toes, with the shoes and socks left behind (PCF_002..PCF_012 until
+    # 10-03).  The body parts re-posed after it now find the legs where they have them too: only the hips follow
+    # the turned pelvis.
     missing = sorted((b for b in arm.data.bones if base_arm.data.bones.get(b.name) is None), key=bone_depth)
     if missing:
+        posed = {b.name: arm.pose.bones[b.name].matrix.copy() for b in missing}
         bpy.context.view_layer.objects.active = base_arm
         bpy.ops.object.mode_set(mode="EDIT")
         edit = base_arm.data.edit_bones
         for bone in missing:
-            ml = bone.matrix_local
-            if bone.parent and bone.parent.name in edit:
-                ml = edit[bone.parent.name].matrix @ (bone.parent.matrix_local.inverted() @ bone.matrix_local)
+            ml = posed[bone.name]
             eb = edit.new(bone.name)
             eb.head = ml.to_translation()
             eb.tail = eb.head + (ml.to_3x3() @ Vector((0.0, 1.0, 0.0))) * max(bone.length, 0.5)
@@ -1035,6 +1041,153 @@ report["rig"] = {"bones": len(base_arm.data.bones), "added_from_parts": added,
                  "reposed_parts": reposed, "aligned_hierarchies": aligned, "attached_to_head": attached, "hidden_parts": []}
 log("rig: %d bones (+%d merged), max rest deviation %.4f cm%s" % (
     len(base_arm.data.bones), added, deviation, ("; re-posed onto the base rig: " + ", ".join(reposed)) if reposed else ""))
+
+
+# ---------------------------------------------------------------- cloth bones the asset lacks
+# Shiningwill_legacy's white cape is two long strips hanging from the shoulder blades to the knees, skinned in the
+# asset to Bip001_Spine2 alone (no cloth bones): in a dance it swung out sideways like a board.  Each strip gets a
+# bone grid here - `columns` chains of `bones` bones, the joints laid on the cape surface - and its skin below `top`
+# goes to the grid: between the two nearest chains across the strip and the two nearest bone centres along it,
+# blending back into the asset's own weights over `band` above `top` (the part over the shoulder blades keeps
+# following the shoulders).  The chains are named <prefix>_<L|R>_coat_<a,b..>_<nn>_<l|r>: export_pmx.py joins each
+# strip's chains into one sheet (GARMENT_MERGE) and mmd_cloth_physics gives it the coat preset ("cape").  The strips
+# are the mesh islands that hang behind the body from above `top` to below `min_z`, nothing in front of `min_y` (the
+# backs of the greaves are behind the legs too, but low); the
+# legacy set has the cape in both its Upper and its Onepiece part (near copies, 0.4 cm apart, both shown), and every
+# copy gets the same weights.
+CAPE_RIGS = {
+    "Shiningwill_legacy": {"anchor": "Bip001_Spine2", "prefix": "LegacyCape", "columns": 2, "bones": 6,
+                           "top": 138.0, "band": 8.0, "min_z": 70.0, "min_y": 8.0},
+}
+
+
+def mesh_islands(mesh):
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    bm.verts.ensure_lookup_table()
+    seen = [False] * len(bm.verts)
+    out = []
+    for v0 in bm.verts:
+        if seen[v0.index]:
+            continue
+        stack, comp = [v0], []
+        seen[v0.index] = True
+        while stack:
+            v = stack.pop()
+            comp.append(v.index)
+            for e in v.link_edges:
+                w = e.other_vert(v)
+                if not seen[w.index]:
+                    seen[w.index] = True
+                    stack.append(w)
+        out.append(comp)
+    bm.free()
+    return out
+
+
+def rig_cape(arm, meshes, cfg):
+    anchor = cfg["anchor"]               # a name: Bone references go stale in edit mode
+    if arm.data.bones.get(anchor) is None:
+        return None
+    to_arm = arm.matrix_world.inverted()
+    strips = {"L": [], "R": []}          # side -> [(mesh, vertex index, armature-space position)]
+    for mesh in meshes:
+        mw = to_arm @ mesh.matrix_world
+        for comp in mesh_islands(mesh):
+            pts = [mw @ mesh.data.vertices[i].co for i in comp]
+            if (min(p.z for p in pts) < cfg["min_z"] and max(p.z for p in pts) > cfg["top"]
+                    and min(p.y for p in pts) > cfg["min_y"]):
+                side = "L" if sum(p.x for p in pts) > 0 else "R"      # the character faces -Y: its left is +X
+                strips[side].extend((mesh, i, p) for i, p in zip(comp, pts))
+    top, band, nb, nc = cfg["top"], cfg["band"], cfg["bones"], cfg["columns"]
+    letters = "abcdefgh"[:nc]
+    fracs = [(k + 0.5) / nc for k in range(nc)]          # chain positions across the strip
+    made = {}
+    for side, verts in strips.items():
+        if not verts:
+            continue
+        bottom = min(p.z for _m, _i, p in verts) + 1.0
+        zs = [top - (top - bottom) * j / nb for j in range(nb + 1)]
+
+        def extent(z, verts=verts):
+            near = [p.x for _m, _i, p in verts if abs(p.z - z) < 3.0] or [p.x for _m, _i, p in verts]
+            return min(near), max(near)
+
+        def depth(x, z, verts=verts):
+            near = [p.y for _m, _i, p in verts if abs(p.z - z) < 3.0 and abs(p.x - x) < 3.0]
+            return sum(near) / len(near) if near else sum(p.y for _m, _i, p in verts) / len(verts)
+
+        joints = {}
+        for c, f in enumerate(fracs):
+            for j, z in enumerate(zs):
+                lo, hi = extent(z)
+                x = lo + (hi - lo) * f
+                joints[c, j] = Vector((x, depth(x, z), z))
+        names = {}
+        bpy.context.view_layer.objects.active = arm
+        bpy.ops.object.mode_set(mode="EDIT")
+        edit = arm.data.edit_bones
+        for c in range(nc):
+            parent = edit[anchor]
+            for j in range(nb):
+                name = "%s_%s_coat_%s_%02d_%s" % (cfg["prefix"], side, letters[c], j + 1, side.lower())
+                eb = edit.new(name)
+                eb.head, eb.tail = joints[c, j], joints[c, j + 1]
+                eb.align_roll(Vector((0.0, 1.0, 0.0)))           # Z away from the back, X across the strip
+                eb.parent = parent
+                eb.use_connect = j > 0
+                parent = eb
+                names[c, j] = name
+        bpy.ops.object.mode_set(mode="OBJECT")
+        centres = [(zs[j] + zs[j + 1]) / 2 for j in range(nb)]
+        for mesh, i, p in verts:
+            lo, hi = extent(p.z)
+            f = (p.x - lo) / (hi - lo) if hi > lo else 0.5
+            col = {}
+            if f <= fracs[0]:
+                col[0] = 1.0
+            elif f >= fracs[-1]:
+                col[nc - 1] = 1.0
+            else:
+                k = max(k for k in range(nc - 1) if fracs[k] <= f)
+                t = (f - fracs[k]) / (fracs[k + 1] - fracs[k])
+                col[k], col[k + 1] = 1.0 - t, t
+            row = {}
+            if p.z >= centres[0]:
+                row[0] = 1.0
+            elif p.z <= centres[-1]:
+                row[nb - 1] = 1.0
+            else:
+                j = max(j for j in range(nb - 1) if centres[j] >= p.z)
+                t = (centres[j] - p.z) / (centres[j] - centres[j + 1])
+                row[j], row[j + 1] = 1.0 - t, t
+            keep = min(1.0, max(0.0, (p.z - top) / band))       # 0 below top: all on the grid
+            if keep >= 1.0:
+                continue
+            v = mesh.data.vertices[i]
+            for g in list(v.groups):
+                group = mesh.vertex_groups[g.group]
+                if keep > 0.0:
+                    group.add([i], g.weight * keep, "REPLACE")
+                else:
+                    group.remove([i])
+            for c, wc in col.items():
+                for j, wr in row.items():
+                    w = wc * wr * (1.0 - keep)
+                    if w > 1e-4:
+                        group = mesh.vertex_groups.get(names[c, j]) or mesh.vertex_groups.new(name=names[c, j])
+                        group.add([i], w, "ADD")
+        made[side] = {"vertices": len(verts), "chains": nc, "bones": nb,
+                      "length_cm": round(top - bottom, 1), "meshes": sorted({m.name for m, _i, _p in verts})}
+    return made
+
+
+if MODEL_ID in CAPE_RIGS:
+    cape = rig_cape(base_arm, [m for _p, _a, ms in imported for m in ms], CAPE_RIGS[MODEL_ID])
+    report["rig"]["cape"] = cape
+    report["rig"]["bones"] = len(base_arm.data.bones)
+    log("cape rigged: %s" % cape)
 
 
 # ---------------------------------------------------------------- materials
