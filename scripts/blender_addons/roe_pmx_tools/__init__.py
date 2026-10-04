@@ -74,6 +74,11 @@ class ROEPMX_Settings(bpy.types.PropertyGroup):
     pmx_out: bpy.props.StringProperty(
         name="PMX 输出", subtype="FILE_PATH",
         description="留空: D:\\roe_exports\\pmx_manual\\<模型名>\\<模型名>.pmx（不要放进会被重新提取清空的角色目录）")
+    pmx_morphs: bpy.props.EnumProperty(
+        name="表情", default="vertex",
+        items=(("vertex", "顶点表情", "表情烘成顶点表情（默认，和批量导出一样）"),
+               ("bone", "骨骼表情", "表情保留为骨骼表情（脸部骨头摆姿势）")),
+        description="PMX 里的表情用顶点表情还是骨骼表情（批量导出用环境变量 ROE_PMX_MORPHS）")
     stage: bpy.props.IntProperty(default=0)
     report: bpy.props.StringProperty()
 
@@ -290,6 +295,9 @@ class ROEPMX_OT_export(bpy.types.Operator):
                     pass
                 stack.extend(obj.children)
             context.view_layer.objects.active = root
+            stats["face_morph_kind"] = settings.pmx_morphs                  # after the unhide: hidden meshes bake empty
+            if settings.pmx_morphs == "vertex":
+                stats["vertex_morph_bake"] = work.bake_bone_morphs(root, work.live_armature(root))
             stats["short_bone_names"] = work.shorten_bone_names(root)      # VMD-addressable names
             bpy.ops.mmd_tools.export_pmx(filepath=path, scale=12.5, copy_textures=True, log_level="ERROR")
             if not os.path.isfile(path) or os.path.getsize(path) == 0:
@@ -355,6 +363,7 @@ class ROEPMX_PT_panel(bpy.types.Panel):
         col.operator("roe_pmx.prepare", icon="ARMATURE_DATA")
         col.operator("roe_pmx.convert", icon="MOD_ARMATURE")
         layout.prop(settings, "pmx_out")
+        layout.prop(settings, "pmx_morphs", expand=True)
         col = layout.column(align=True)
         col.operator("roe_pmx.export", icon="EXPORT")
         row = col.row(align=True)

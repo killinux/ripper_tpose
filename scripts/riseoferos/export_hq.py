@@ -225,6 +225,7 @@ def do_pmx(stem, info, args, logs, result):
         return False
     else:
         result["pmx"] = {"torn": data.get("torn"), "morphs": data.get("face_morphs"),
+                         "morph_kind": data.get("morph_kind"), "vertex_morph_bake": data.get("vertex_morph_bake"),
                          "bust": (data.get("physics") or {}).get("bust"),
                          "grant_order_violations": data.get("grant_order_violations")}
     result["bustB"] = bust_b(pmx, logs, args.dry_run, args.exports)
@@ -423,11 +424,15 @@ def main():
     ap.add_argument("--budget", type=float, default=0, help="minutes: start no new model after this")
     ap.add_argument("--skip-done", action="store_true", help="skip models whose result.json says done for these formats")
     ap.add_argument("--dry-run", action="store_true", help="print the commands only")
+    ap.add_argument("--pmx-morphs", choices=("vertex", "bone"), default=None,
+                    help="PMX expressions as vertex morphs (default) or bone morphs (env ROE_PMX_MORPHS)")
     ap.add_argument("--plan", help=argparse.SUPPRESS)        # a lane's [(stem, formats)] list (run_lanes)
     ap.add_argument("--exports", default=EXPORTS)
     ap.add_argument("--archive-root", default=ARCHIVE)
     ap.add_argument("--blender", default=BLENDER)
     args = ap.parse_args()
+    if args.pmx_morphs:
+        os.environ["ROE_PMX_MORPHS"] = args.pmx_morphs      # the Blender runs, the batch .ps1 and the lanes inherit it
     started = time.time()
     cat = catalogue(args.exports)
     letters = lambda text: {x.strip().lower() for x in text.split(",") if x.strip()}

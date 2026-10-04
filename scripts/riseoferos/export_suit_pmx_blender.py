@@ -25,7 +25,8 @@ Marks other scripts leave in the .blend:
     shape key 裸体形状 (its own shape; the basis is fitted under the outfit) becomes a vertex morph, and 衣服非表示
     a group morph of it and the material morph 衣服非表示_材質, so the body is whole again when the outfit goes
 
-  blender -b --factory-startup <suit.blend> --python export_suit_pmx_blender.py -- <out.pmx>
+  blender -b --factory-startup <suit.blend> --python export_suit_pmx_blender.py -- <out.pmx> [--pmx-morphs bone]
+The expressions come out as vertex morphs (default) or, with --pmx-morphs bone / ROE_PMX_MORPHS=bone, bone morphs.
 The .blend is not saved.  Prints ROE_SUIT_PMX={json} and writes <out>.report.json like the batch.
 """
 import json
@@ -249,8 +250,11 @@ def reserve_indices(extra):
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     if not argv or not argv[0].lower().endswith(".pmx"):
-        raise SystemExit("usage: -- <out.pmx>")
+        raise SystemExit("usage: -- <out.pmx> [--pmx-morphs vertex|bone]")
     path = os.path.abspath(argv[0])
+    if "--pmx-morphs" in argv:      # expressions as vertex (default) or bone morphs: worker.PMX_MORPHS_ENV
+        os.environ[worker.PMX_MORPHS_ENV] = argv[argv.index("--pmx-morphs") + 1]
+    worker.pmx_morph_kind()         # a bad value stops here, before the conversion
     addon = worker.load_addon(ADDON)
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     armatures = addon.related_armatures(meshes)
@@ -287,6 +291,7 @@ def main():
                "torn": (stats.get("distortion") or {}).get("torn"),
                "grant_order_violations": len(stats.get("grant_order_violations") or []),
                "face_morphs": len(stats.get("face_morphs") or []), "bones": stats.get("bones"),
+               "morph_kind": stats.get("face_morph_kind"), "vertex_morph_bake": stats.get("vertex_morph_bake"),
                "physics": {k: (v if isinstance(v, (str, int, float)) else len(v))
                            for k, v in (stats.get("physics") or {}).items()}}
     print("ROE_SUIT_PMX=" + json.dumps(summary, ensure_ascii=True, default=str))

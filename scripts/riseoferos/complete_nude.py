@@ -124,6 +124,7 @@ def one_version(stem, variant, info, base_blend, args, logs, dump, result):
                 res["pmx"] = "FAILED (exit %d)" % code
                 return False
             res["pmx"] = {"torn": data.get("torn"), "morphs": data.get("face_morphs"),
+                          "morph_kind": data.get("morph_kind"), "vertex_morph_bake": data.get("vertex_morph_bake"),
                           "bust": (data.get("physics") or {}).get("bust"),
                           "grant_order_violations": data.get("grant_order_violations"),
                           "outfit_morph": (data.get("prep") or {}).get("outfit_morph")}
@@ -167,6 +168,8 @@ def main():
     ap.add_argument("--formats", default=",".join(hq.FORMATS), help="blend,pmx,xps (default all three)")
     ap.add_argument("--weapon", choices=("auto", "yes", "no"), default="auto",
                     help="auto: add the battle weapon when the model has no wp_* mesh of its own")
+    ap.add_argument("--pmx-morphs", choices=("vertex", "bone"), default=None,
+                    help="PMX expressions as vertex morphs (default) or bone morphs (env ROE_PMX_MORPHS)")
     ap.add_argument("--archive", action="store_true", help="afterwards: gallery + copy these models to E:")
     ap.add_argument("--archive-only", action="store_true", help="no export: gallery + copy what is on D: to E:")
     ap.add_argument("--dry-run", action="store_true", help="print the commands only")
@@ -176,6 +179,8 @@ def main():
     args = ap.parse_args()
     args.variants = [v for v in VARIANTS if v in args.variants.split(",")]
     args.formats = [f for f in hq.FORMATS if f in args.formats.split(",")]
+    if args.pmx_morphs:
+        os.environ["ROE_PMX_MORPHS"] = args.pmx_morphs       # every Blender run below inherits it
     cat = hq.catalogue(args.exports)
     results, stems = [], []
     for name in args.names:

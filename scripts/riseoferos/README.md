@@ -314,6 +314,17 @@ D:\roe_exports\character_models_manifest.json   # 全量清单
 >    腕捩/手捩、肩P/肩C、掌骨、付与、显示枠；补 MMD 的 両目 控制骨（插件不建，缺了 VMD 的视线关键帧就空转）；
 >    用面部骨生成 PMX 骨骼 morph——2026-09-19 起调 **`scripts/blender_addons/mmd_face_morphs`**（独立插件，37 个标准表情：眉 6 / 目 11 / 口 20，见其 README），worker 自带的 9 个（まばたき/笑い/ウィンク/ウィンク右 + あいうえお）只在插件包缺席时兜底；
 >    再加身体碰撞刚体和裙/披风/头发物理；最后按 12.5 导出。
+> 5. **表情默认写成顶点表情**（2026-10-04 起，用户：所有导出的 PMX 表情默认做成顶点表情，骨骼表情只在指定时才出）：
+>    导出前 `bake_bone_morphs` 把每个骨骼表情在转换好的骨架上摆一遍，被它带动的网格读回来存成同名形态键
+>    （mmd_tools 把形态键写成顶点表情，分类、英文名、在「表情」栏里的位置都照原来的），然后删掉骨骼表情。
+>    - 烘之前按 PMX 的规矩把每个顶点的骨骼权重截到 4 个（mmd_tools 写出时也是留最大的 4 个再归一化）：转换后
+>      d08 的头有 194 个顶点超过 4 个，不截的话张嘴差 1.4 mm；截了以后 58 个表情和骨骼表情版逐个比，最大差 0.08 mm
+>      （mmd_tools 写顶点表情时省掉位移 < 0.001 单位的顶点）。
+>    - 要骨骼表情：批量设环境变量 `ROE_PMX_MORPHS=bone`（`export_character_models.ps1` 也认），
+>      `export_hq.py` / `complete_nude.py` 加 `--pmx-morphs bone`，`export_suit_pmx_blender.py` 在 PMX 路径后加
+>      `--pmx-morphs bone`；侧边栏 ROE PMX Tools 第 ④ 步上面有「表情：顶点表情 / 骨骼表情」。
+>    - 报告里是 `face_morph_kind` 和 `vertex_morph_bake`（转了几个、每个网格几个形态键、最大位移）。PMX 大约大 1 MB
+>      （d08 带衣服版 6.1 → 7.1 MB）。已经导出的 PMX 没有重出，还是骨骼表情。
 >
 > **踩过的坑（都已修，改动在 worker 里）**
 >

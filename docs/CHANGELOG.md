@@ -97,6 +97,27 @@
      - 格斗游戏里 124 根链骨和摆动骨、2410 个软体网格顶点和导入的模型全部对上（0.00 毫米）。
    - DOA5LR：595 个 `ACSCLS` 块全部解析无误；FNV-1 由 Noesis 插件里的四个常数核实。
 
+## 2026-10-04 — Rise of Eros：PMX 表情默认改成顶点表情，骨骼表情要指定才出
+
+1. **起因**：用户要求以后所有导出的 PMX 表情默认做成顶点表情，骨骼表情只在指定时才出（vindictus 窗口转来，ROE 由这个窗口改）。
+   其他导出线（Vindictus、Stellar Blade、Taimanin、FF7）已经是顶点表情。
+2. **改了什么**：
+   - `scripts/riseoferos/export_character_model_blender.py`：新函数 `bake_bone_morphs`，导出 PMX 前把 `mmd_face_morphs` 建的
+     骨骼表情逐个在转换好的骨架上摆一遍，被带动的网格存成同名形态键（mmd_tools 写成顶点表情，分类、英文名、
+     「表情」栏里的位置照旧），删掉骨骼表情；组表情里引用的也一起改。烘之前按 PMX 的规矩把骨骼权重截到每个顶点 4 个
+     （mmd_tools 写出时也这样截）。不动任何顶点的表情保留为骨骼表情。
+   - 开关：环境变量 `ROE_PMX_MORPHS=vertex|bone`（默认 vertex），批量 `export_character_models.ps1` 也认；
+     `export_hq.py`、`complete_nude.py` 加 `--pmx-morphs`，`export_suit_pmx_blender.py` 在 PMX 路径后加 `--pmx-morphs`；
+     侧边栏插件 ROE PMX Tools 加了「表情：顶点表情 / 骨骼表情」选项（默认顶点）。报告多了 `face_morph_kind`、`vertex_morph_bake`。
+3. **验证**：
+   - d08 带衣服版用同一份代码各出一份顶点表情版和骨骼表情版，用 mmd_tools 导回 Blender 逐个表情比顶点位移：
+     58 个表情最大差 0.08 mm（张嘴最大位移 42 mm）；不截权重时是 1.4 mm（转换后头上 194 个顶点超过 4 个权重）。
+   - 两份的「表情」栏都是 60 项、顺序和分类一样，「衣服非表示」组合表情完好；胸部 B 版、加武器补丁
+     （l01 补全端到端跑过）都能处理顶点表情。PMX 大约大 1 MB（d08 带衣服版 6.1 → 7.1 MB）。
+4. **没做**：已经导出的 ROE PMX 没有重出，还是骨骼表情。
+5. **用户如何操作**：照常导出就是顶点表情；要骨骼表情加 `--pmx-morphs bone`（或设 `ROE_PMX_MORPHS=bone`），
+   手动导出在侧边栏 PMX 面板选「骨骼表情」。说明见 `scripts/riseoferos/README.md`（PMX 转换第 5 步）。
+
 ## 2026-10-04 — Rise of Eros：补全身体第三轮：121 个穿衣主模型全部补全（裸体版 + 带衣服版，blend / XPS / PMX，已归档），补全规则改成各家族通用
 
 1. **起因**：

@@ -41,12 +41,17 @@ import bpy
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "blender_addons"))
 import numpy as np
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hq_materials_blender as hq_materials  # noqa: E402  (the game's full materials: hq_material_data.py)
 
 RESULT_PREFIX = "ROE_CHAR_EXPORT="
+# How a PMX carries the face expressions: "vertex" (default since 2026-10-04: every exported PMX's expressions are
+# vertex morphs unless asked otherwise) or "bone" (the mmd_face_morphs bone morphs as they are).  An environment
+# variable so every entry point - export_character_models.ps1, export_hq.py, complete_nude.py,
+# export_suit_pmx_blender.py, the ROE PMX Tools add-on - passes it down to its Blender runs unchanged.
+PMX_MORPHS_ENV = "ROE_PMX_MORPHS"
 
 # Views composited into the single preview image, left to right.
 PREVIEW_VIEWS = ("hero", "front", "head")
@@ -1331,6 +1336,146 @@ def add_face_morphs(root, arm):
     return created
 
 
+def pmx_morph_kind():
+    """"vertex" (default) or "bone": how the PMX carries the face expressions (env ROE_PMX_MORPHS)."""
+    kind = (os.environ.get(PMX_MORPHS_ENV) or "vertex").strip().lower()
+    if kind not in ("vertex", "bone"):
+        raise RuntimeError("%s=%r: use vertex or bone" % (PMX_MORPHS_ENV, kind))
+    return kind
+
+
+def live_armature(root):
+    """The armature under an mmd root (the conversion may have replaced the object the export started with)."""
+    stack = list(root.children)
+    while stack:
+        obj = stack.pop()
+        if obj.type == "ARMATURE":
+            return obj
+        stack.extend(obj.children)
+    raise RuntimeError("no armature under %s" % root.name)
+
+
+def bake_bone_morphs(root, arm, threshold=1e-6):
+    """The face expressions as PMX vertex morphs instead of bone morphs (user, 2026-10-04: exported PMX expressions
+    are vertex morphs by default, bone morphs only when asked - ROE_PMX_MORPHS=bone).
+
+    Each bone morph is posed on the converted rig the way mmd_tools previews it (its bones' local location and
+    rotation offsets from the rest pose; bones following them through grants move along via mmd_tools' constraints).
+    Every mesh the armature deforms is read back from the depsgraph and, where the pose moved it, the shape becomes a
+    shape key of the morph's name - mmd_tools writes each shape key as a vertex morph, with the category and English
+    name of the vertex_morphs entry of that name, in that list's order.  The bone morph then goes; group morphs and
+    the 表情 display frame point at the vertex morph instead, in the same place.  A morph that moves no vertex stays
+    a bone morph (a motion may still key it).  ROE skin is linear blend with at most four weights, as in MMD, so at
+    1.0 the vertex morph puts every vertex where the bone morph did.  Returns a report."""
+    mmd_root = root.mmd_root
+    if not len(mmd_root.bone_morphs):
+        return {"baked": 0}
+    meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"
+              and any(m.type == "ARMATURE" and m.object is arm and m.show_viewport for m in obj.modifiers)]
+    # The PMX keeps a vertex's four largest bone weights (mmd_tools: largest first, the rest dropped, normalised) and
+    # skins with every bone, deforming in Blender or not.  Bake with the same weights: after the conversion d08's head
+    # has 194 vertices with five or more, and baking with all of them put the jaw 1.4 mm off the bone morph's.
+    # The export would drop the same weights anyway.
+    bones = arm.data.bones
+    trimmed = 0
+    for obj in meshes:
+        names = {g.index: g.name for g in obj.vertex_groups}
+        drop = {}
+        for v in obj.data.vertices:
+            items = [(g.group, g.weight) for g in v.groups if g.weight > 0 and names.get(g.group) in bones]
+            if len(items) > 4:
+                items.sort(key=lambda item: -item[1])
+                for group, _weight in items[4:]:
+                    drop.setdefault(group, []).append(v.index)
+                trimmed += 1
+        for group, indices in drop.items():
+            obj.vertex_groups[group].remove(indices)
+    weighted = {g.name for obj in meshes for g in obj.vertex_groups}
+    switched = [b for b in bones if not b.use_deform and b.name in weighted]
+    for b in switched:
+        b.use_deform = True
+    pose = arm.pose.bones
+    for pb in pose:
+        pb.matrix_basis = Matrix.Identity(4)
+    values = {}
+    for obj in meshes:
+        if obj.data.shape_keys:
+            for kb in obj.data.shape_keys.key_blocks:
+                values[(obj.name, kb.name)] = kb.value
+                kb.value = 0.0
+
+    def shapes():
+        bpy.context.view_layer.update()
+        graph = bpy.context.evaluated_depsgraph_get()
+        out = {}
+        for obj in meshes:
+            data = obj.evaluated_get(graph).data
+            co = np.empty(len(data.vertices) * 3)
+            data.vertices.foreach_get("co", co)
+            out[obj.name] = co.reshape(-1, 3)
+        return out
+
+    rest = shapes()
+    for obj in meshes:
+        if len(rest[obj.name]) != len(obj.data.vertices):
+            raise RuntimeError("%s: its modifiers change the vertex count - cannot bake the expressions" % obj.name)
+    baked, kept, keys, worst = [], [], {}, 0.0
+    for morph in list(mmd_root.bone_morphs):
+        moved = []
+        for item in morph.data:
+            pb = pose.get(item.bone)
+            if pb is None:
+                continue
+            mtx = Quaternion(item.rotation).to_matrix().to_4x4()
+            mtx.translation = Vector(item.location)
+            pb.matrix_basis = mtx
+            moved.append(pb)
+        posed = shapes() if moved else rest
+        hit = False
+        for obj in meshes:
+            delta = posed[obj.name] - rest[obj.name]
+            if not moved or np.abs(delta).max() <= threshold:
+                continue
+            if obj.data.shape_keys is None:
+                obj.shape_key_add(name="Basis", from_mix=False)
+            base = np.empty(len(obj.data.vertices) * 3)
+            obj.data.shape_keys.key_blocks[0].data.foreach_get("co", base)
+            key = obj.shape_key_add(name=morph.name, from_mix=False)
+            key.data.foreach_set("co", (base.reshape(-1, 3) + delta).ravel())
+            key.value = 0.0
+            keys[obj.name] = keys.get(obj.name, 0) + 1
+            worst = max(worst, float(np.linalg.norm(delta, axis=1).max()))
+            hit = True
+        for pb in moved:
+            pb.matrix_basis = Matrix.Identity(4)
+        (baked if hit else kept).append((morph.name, morph.name_e, morph.category))
+    for (name, key_name), value in values.items():
+        obj = bpy.data.objects.get(name)
+        if obj is not None and obj.data.shape_keys and key_name in obj.data.shape_keys.key_blocks:
+            obj.data.shape_keys.key_blocks[key_name].value = value
+    for b in switched:
+        b.use_deform = False
+    names = {name for name, _e, _c in baked}
+    for name, name_e, category in baked:
+        entry = mmd_root.vertex_morphs.get(name) or mmd_root.vertex_morphs.add()
+        entry.name, entry.name_e, entry.category = name, name_e, category
+    for index in reversed(range(len(mmd_root.bone_morphs))):
+        if mmd_root.bone_morphs[index].name in names:
+            mmd_root.bone_morphs.remove(index)
+    for group in mmd_root.group_morphs:
+        for item in group.data:
+            if item.morph_type == "bone_morphs" and item.name in names:
+                item.morph_type = "vertex_morphs"
+    for frame in mmd_root.display_item_frames:
+        for item in frame.data:
+            if item.type == "MORPH" and item.morph_type == "bone_morphs" and item.name in names:
+                item.morph_type = "vertex_morphs"
+    bpy.context.view_layer.update()
+    return {"baked": len(baked), "kept_as_bone": [name for name, _e, _c in kept], "keys_per_mesh": keys,
+            "max_move_mm": round(worst * 1000.0, 2), "weights_trimmed_to_4": trimmed,
+            "non_deform_bones_with_weights": [b.name for b in switched]}
+
+
 # Bust physics.  Convert_to_MMD5 renames the chest slot to 左胸/右胸 and builds
 # nothing on it, so every ROE PMX up to 2026-09-25 had rigid breasts.  The layout
 # and the numbers are the user's own MMD template (标准骨骼与刚体.pmx: 乳奶1 ->
@@ -2025,6 +2170,10 @@ def export_pmx(path, meshes, armatures):
             pass
         stack.extend(obj.children)
     bpy.context.view_layer.objects.active = root
+    # after the unhide above: a hidden mesh is not evaluated, its shape keys would come out empty
+    stats["face_morph_kind"] = pmx_morph_kind()
+    if stats["face_morph_kind"] == "vertex":
+        stats["vertex_morph_bake"] = bake_bone_morphs(root, live_armature(root))
     stats["short_bone_names"] = shorten_bone_names(root)
     # mmd_tools multiplies by ``scale`` on export (PMX = Blender units * scale),
     # so 12.5 turns a 1.7 m character into the usual ~21 PMX units; 0.08 would
