@@ -20,6 +20,24 @@ from tsquad_common import BUST, PMX_UNITS, bust_fitted, bust_sag_cm, parse_bust 
 BUST_BONES = ("左胸", "右胸")
 
 
+def bust_bodies(scene):
+    """The rigid bodies that move the breasts: the ones on 左胸 / 右胸 - or, where such a body is a static anchor that
+    follows the bone (Rise of Eros: the swinging body hangs from it by a joint, "Bip001 Breast_L02"), the dynamic
+    bodies jointed to it.  Measuring the anchor reads 0 cm however much the breasts swing."""
+    named = [o for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY" and o.mmd_rigid.name_j in BUST_BONES]
+    joints = [o.rigid_body_constraint for o in scene.objects
+              if getattr(o, "mmd_type", "") == "JOINT" and o.rigid_body_constraint is not None]
+    out = []
+    for body in named:
+        if body.mmd_rigid.type != "0":                  # "0": follows its bone (static); "1" / "2": physics
+            out.append(body)
+            continue
+        hung = [c.object2 for c in joints if c.object1 is body and c.object2 is not None
+                and getattr(c.object2, "mmd_type", "") == "RIGID_BODY" and c.object2.mmd_rigid.type != "0"]
+        out += hung or [body]
+    return out
+
+
 def breast_size_cm(scene, body):
     """How far the breast's skin lies from its bone, in cm: the rigid body sits in the weighted centre of
     the skin the bone moves, the bone's head at the chest.  Asagi's is 10.9, a flat chest 4 to 7, the

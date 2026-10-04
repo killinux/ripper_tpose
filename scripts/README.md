@@ -19,6 +19,7 @@
 | CRISIS CORE –FINAL FANTASY VII– REUNION | Unreal 4.27 IoStore（索引 AES 加密，要 usmap） | [`ccff7r/`](ccff7r/) | `ccff7r\list_models.py` / `export_model.py` |
 | Taimanin Squad（対魔忍スクワッド） | Unity 2022.3 Addressables（UnityFS，不加密） | [`taimaninsquad/`](taimaninsquad/) | `taimaninsquad\list_models.py` / `export_model.py` |
 | Action Taimanin（アクション対魔忍） | Unity 2022.3 老式 AssetBundle（39 个大包，3 个数据表包加密） | [`actiontaimanin/`](actiontaimanin/) | `actiontaimanin\list_models.py` / `export_model.py` |
+| Taimanin Collection（対魔忍コレクション） | Unity 2018.4 玩家数据 `data.unity3d`（UnityFS，不加密，**没有类型树**；卡牌图片加密） | [`taimanincollection/`](taimanincollection/) | `taimanincollection\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -157,6 +158,14 @@ Action Taimanin（アクション対魔忍）和 Taimanin Squad 是同一家公�
 PMX 里组成 MMD 的标准表情（嘴形和视线游戏里没有，是按嘴唇骨 / 眼球骨配的）。两款游戏的差别列在
 [`actiontaimanin/README.md`](actiontaimanin/README.md) 的对比表里。
 
+Taimanin Collection（対魔忍コレクション）是 2D 卡牌游戏，3D 只有摩托小游戏那一块，全在玩家数据 `data.unity3d` 里：
+阿莎姬一个角色（和 Action Taimanin 同一套做法）、带骨架的摩托车和运输机、桥面赛道和道具，另有一批 Action Taimanin 的残留
+（材质被剥掉的布景、只有默认材质的原始模型）。`taimanincollection/` 的 `list_models.py` 按 `Resources` 路径表列出 276 个带网格的对象；
+`export_model.py <id> --xps --pmx` 复用 `actiontaimanin/` 的角色读取和 `taimaninsquad/` 的 Blender 端 / 格式转换。
+玩家构建不带类型树：脚本组件靠原始数据头里的 `m_Script` 认类名，Dynamic Bone 的字段表存在 `dynamic_bone_types.json` 里；
+材质有三种补救（借用同一网格在别处的材质、按名字找回被剥掉的贴图、实在没有就纯色）。
+详见 [`taimanincollection/README.md`](taimanincollection/README.md)。
+
 DOA5LR 与 DOA6 都是 Koei Tecmo 系但封包完全不同：DOA5LR 用 `.bin/.lnk`（文件名混淆
 + XOR 加密 + 分块 zlib），`doa5lr\extract_lnk.py` 为自研 Python 解包器（算法移植自
 Archive Tool 源码），TMC/TMCL 经 Noesis（32 位 + doa5pc 插件）转 FBX+DDS；DOA6 用
@@ -176,6 +185,8 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 [`gantz/`](gantz/README.md)：GANTZ（杀戮都市）主题 mod 导出的模型（FF7 Remake / FF7 Rebirth / Stellar Blade，5 个 mod、
 23 个模型）放在一页 `gantz\html\index.html`，数据全从 `E:\game_export` 归档读，`gantz\html\make_gallery.py` 生成。
 
+[`mmd_dances/`](mmd_dances/README.md)：MMD 动作合集（小王动画）的舞蹈视频，跨游戏。Taimanin Squad 的角色跳了 125 支（`taimaninsquad\dance_batch.py`），剩下的 119 支由 Rise of Eros 穿衣服的服装轮流来跳（`mmd_dances\roe_dances.py`，渲染用 Squad 的 `dance_video.py`），视频在 `E:\game_export\RiseOfEros\_videos\`。`pmx_rig_check.py` 查 PMX 里绑在没有父骨骼的骨骼上的部件（跳舞时会停在原地），ROE 有 11 套这样的衣服，默认不参加。以后所有舞蹈放进一个公共页面。
+
 ## 导出归档（`E:\game_export`）
 
 各游戏的导出默认落在 D 盘；做好的模型用 [`archive/archive_exports.py`](archive/README.md) 按
@@ -190,5 +201,5 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 边界见 [`dev/blender_mcp/README.md`](dev/blender_mcp/README.md)。
 
 `scripts` 根目录只保留本说明和兼容入口 `extract_character.ps1`；正式脚本按游戏放入
-`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`、`ccff7r/`、`taimaninsquad/`、`actiontaimanin/`，可复用开发工具放入 `dev/`，一次性
+`riseoferos/`、`final/`、`stellarblade/`、`throneofdesire/`、`venusvacationprism/`、`fallendoll/`、`vindictus/`、`naraka/`、`honeyselect2/`、`ccff7r/`、`taimaninsquad/`、`actiontaimanin/`、`taimanincollection/`，可复用开发工具放入 `dev/`，一次性
 probe/渲染/热重载脚本不提交到仓库。

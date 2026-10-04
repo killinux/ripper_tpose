@@ -188,6 +188,16 @@ class RigTests(unittest.TestCase):
                   {"bone": "Bone_R_Bust", "parent": "X", "pos": (0, 0, 0), "leaf": False}]
         self.assertEqual(asc.breast_pair(chains), ["Bone_L_Bust", "Bone_R_Bust"])
 
+    def test_of_two_nodes_named_alike_the_one_with_skin_is_the_bone(self):
+        rig = [(1, "Bone_Eyeball_L", "Bone_Eyeball_L"), (2, "Bone_Eyeball_R", "Bone_Eyeball_R"),
+               (3, "Point_Eyeball_L", "Point_Eyeball_L"), (4, "Point_Eyeball_R", "Point_Eyeball_R"),
+               (5, "Bone_Face_Lip_UL", "Bone_Face_Lip_UL")]
+        skinned = {"Bone_Eyeball_L", "Bone_Eyeball_R", "Bone_Face_Lip_UL"}
+        self.assertEqual(asc.by_side(rig, asc.EYEBALL, skinned), {"L": 1, "R": 2})
+        self.assertEqual(asc.by_side(list(reversed(rig)), asc.EYEBALL, skinned), {"L": 1, "R": 2})   # in any order
+        self.assertEqual(asc.by_side(rig, asc.EYEBALL, set()), {"L": 1, "R": 2})                     # no skin: the first
+        self.assertEqual(asc.by_side(rig, asc.LIP, skinned), {"UL": 5})
+
     def test_no_pair(self):
         self.assertEqual(asc.breast_pair([{"bone": "Bone136", "parent": "Bip001 Head", "pos": (0, 0, 0), "leaf": False}]), [])
 

@@ -282,6 +282,21 @@ def eye_closure(vertices, bone_indices, bone_weights, bones, delta) -> dict:
     return out
 
 
+def by_side(nodes: list[tuple], pattern, skinned: set) -> dict:
+    """{what the pattern's first group says, upper case: node id} of the nodes [(id, name, bone name)] the
+    pattern fits.  Where several fit one side, the one that carries skin: a face rig can hold a helper named
+    alike next to the bone (Taimanin Collection: ``Point_Eyeball_L`` beside ``Bone_Eyeball_L``)."""
+    out, holds = {}, {}
+    for nid, name, bone in nodes:
+        found = pattern.search(name)
+        if found is None:
+            continue
+        side = found.group(1).upper()
+        if side not in out or (bone in skinned and not holds[side]):
+            out[side], holds[side] = nid, bone in skinned
+    return out
+
+
 def morph_recipes(have, smile_closes: bool) -> tuple[list, list]:
     """(recipes, shapes to leave out of the PMX's own-name list) for export_pmx_blender: MMD morph name,
     English name, panel, [(shape, strength, region)] - which of the shapes made here each standard morph is.
@@ -500,7 +515,9 @@ class Scene(ts.Scene):
             return out
 
         forward = self.forward()
-        lips = {LIP.search(self.nodes[n]["name"]).group(1).upper(): n for n in order if LIP.search(self.nodes[n]["name"])}
+        skinned = {b for part in self.parts for b in part["bones"]}
+        rig = [(n, self.nodes[n]["name"], self.nodes[n].get("bone")) for n in order]
+        lips = by_side(rig, LIP, skinned)
         if {"L", "R"} <= set(lips):                    # the mouths the game has no clip for (MOUTH_POSES)
             at = {suffix: rest[n][:3, 3] for suffix, n in lips.items()}
             for name, table in MOUTH_POSES.items():
@@ -509,8 +526,7 @@ class Scene(ts.Scene):
                     moves[lips[suffix]] = np.eye(4)
                     moves[lips[suffix]][:3, 3] = move
                 shapes.append((name, "lip bones posed by recipe (not game data)", shifted(moves), rest))
-        eyes = {EYEBALL.search(self.nodes[n]["name"]).group(1).upper(): n for n in order
-                if EYEBALL.search(self.nodes[n]["name"])}
+        eyes = by_side(rig, EYEBALL, skinned)
         if {"L", "R"} <= set(eyes):                    # looks: the eyeballs turned about their bones (GAZE)
             left = 1.0 if rest[eyes["L"]][0, 3] > rest[eyes["R"]][0, 3] else -1.0
             # left / right as seen from the front, like Squad's own left_eyes (it moves towards the character's right)

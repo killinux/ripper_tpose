@@ -210,7 +210,7 @@ def video_paths(model: dict, root: str, name: str, view: str = "full", bust: str
 
 
 def render_one(model: dict, vmd: str, bgm: str, name: str, a) -> dict:
-    pmx = os.path.join(tc.model_dir(model, a.export_root, "pmx"), model["id"] + ".pmx")
+    pmx = model.get("pmx") or os.path.join(tc.model_dir(model, a.export_root, "pmx"), model["id"] + ".pmx")   # another game's batch may name the file
     if not os.path.isfile(pmx):
         raise RuntimeError("no PMX yet - run: python export_model.py %s --pmx" % model["id"])
     stem = file_stem(a.title, id=model["id"], name=a.people.get(model["id"], model["name"]), motion=name, dance=a.dance)
@@ -247,7 +247,8 @@ def render_one(model: dict, vmd: str, bgm: str, name: str, a) -> dict:
             cmd.append("--" + flag.replace("_", "-"))
     t0 = time.time()
     log("%s: %s on %s ..." % (model["id"], os.path.basename(vmd), os.path.basename(pmx)))
-    log_path = os.path.join(tc.work_dir(a.export_root), "logs", "%s.dance.log" % model["id"])
+    log_dir = getattr(a, "log_dir", "") or os.path.join(tc.work_dir(a.export_root), "logs")   # another game's batch: its own
+    log_path = os.path.join(log_dir, "%s.dance.log" % model["id"])
     rep, code = run_blender(cmd, "TSQ_DANCE=", log_path, timeout=4 * 3600)
     if rep is None or (not a.no_video and not rep.get("video")):
         raise RuntimeError("Blender failed (exit %d), log: %s" % (code, log_path))

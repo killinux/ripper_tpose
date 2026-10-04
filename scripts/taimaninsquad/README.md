@@ -737,9 +737,9 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
    5 个早期单位的腿权重没修（见上）；XPS / PMX。
 7. 从 Blender 再手工导 XPS / PMX 的步骤和别的游戏相同，见 `docs/vindictus-fiona-manual-export.md` 第 5、6 节。
 
-## 给别的游戏复用（Action Taimanin）
+## 给别的游戏复用（Action Taimanin、Taimanin Collection、ROE 的舞蹈视频）
 
-`..\actiontaimanin` 用的是这里的 `build_blend.py`、XPS / PMX 转换和预览脚本，只自己写读取和材质。为此加了几处
+`..\actiontaimanin` 和 `..\taimanincollection` 用的是这里的 `build_blend.py`、XPS / PMX 转换和预览脚本，只自己写读取和材质。为此加了几处
 通用入口，Squad 自己的导出不受影响（改完后重导 `1_asagi`，PMX 和 XPS 与归档逐字节相同）：
 
 | 入口 | 在哪 | 作用 |
@@ -752,6 +752,10 @@ python export_backgrounds.py --force    # 已有的文件重写一遍
 | 场景里的 `morph_sources` | `build_blend.py` → 骨架属性 `tsq_morph_sources` → `export_pmx_blender.MORE_SOURCES / MORE_RECIPES / MORE_DROP` | 表情的来源：`{角色名: [形状名]}` 排在 `SOURCES` 前面；`"recipes"` 是和 `RECIPES` 同格式的行（同名的替换，新名字加在后面，来源可以直接写形状名）；`"drop"` 是不以原名列进 PMX 的辅助形状 |
 | 材质属性 `tsq_overlay = 0` | `export_pmx_blender.Face` | 这个 unlit 材质是脸本身，不是藏在头里的贴片（Action 的眼睛材质里还画着眉毛、睫毛、牙齿） |
 | `convert(..., game=, bust_reader=)`、`run_workers(jobs, script)` | `export_model.py` | 给另一个游戏的入口脚本调用 |
+| `--preview-view x,y,z` | `build_blend.py` | 道具、载具、场景的预览：从这个方向看（Blender 坐标），画面按物体实际占的范围取景，横竖自动；比其余部件大 6 倍以上的（天空、海面）不参与取景。不给就是原来的「人物正面平视」 |
+| 骨架里没有 Biped | `export_pmx_blender.main` | 完全没有 `Bip### Pelvis` 的骨架（Taimanin Collection 的摩托车、赛道）不再报错，走下面「不是人形的单位」那条保持原骨的路 |
+| 胸部测量量会摆的刚体 | `tsquad_blender.bust_bodies` → `render_dance_blender.py` 报告里的 `bust_motion` | `左胸` / `右胸` 上的刚体是跟着骨头走的固定锚点时（Rise of Eros：会摆的刚体用关节挂在它下面，叫 `Bip001 Breast_L02`），量挂在下面的那个；原来量的是锚点，ROE 的视频报告里永远是 0。Squad 的胸部刚体本身就是动态的，结果不变 |
+| PMX 路径 `model["pmx"]`、日志目录 `log_dir` | `dance_video.render_one`、`dance_batch.render` | 模型记录里给了 `pmx` 就渲染这个文件（ROE 的批量用它选胸部调过的 `_bustB.pmx`）；别的游戏的舞蹈批量（`../mmd_dances/roe_dances.py`）把 Blender 日志放在自己的 `_videos\_meta\logs` 里，不在那个游戏的归档里建 `_work`；不给时和原来一样 |
 
 ## 已知限制
 

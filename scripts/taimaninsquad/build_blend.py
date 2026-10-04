@@ -2,6 +2,8 @@
 
     blender -b --factory-startup -P build_blend.py -- --scene <dir>/scene.json --out <id>.blend
             [--no-preview] [--views <dir>] [--tiles <dir>] [--no-outline] [--no-weld] [--no-save]
+            [--preview-view x,y,z]      a prop or scenery: the preview looks from this side (Blender axes) and
+                                        frames what is there; default: a figure seen from the front
 
 scene.json comes from export_model.py (tsquad_scene.py): the skeleton in Unity space with world
 matrices, parts whose vertices are already skinned to the prefab pose, materials with decoded
@@ -49,6 +51,8 @@ NO_PREVIEW = "--no-preview" in argv
 NO_OUTLINE = "--no-outline" in argv
 NO_WELD = "--no-weld" in argv
 NO_SAVE = "--no-save" in argv
+PREVIEW_VIEW = arg("--preview-view")                      # "x,y,z": where the preview of a prop / a set looks from
+FAR_PART = 6.0                                            # x the median part: bigger ones (sky, sea) are not framed
 SRC_DIR = os.path.dirname(os.path.abspath(SCENE_PATH))
 with open(SCENE_PATH, encoding="utf-8") as fh:
     SCENE = json.load(fh)
@@ -1182,12 +1186,33 @@ def frame(objs):
     return (mn + mx) / 2, mx - mn
 
 
+def framed(objs, direction):
+    """(centre, ortho scale, picture size) of a look from `direction` at objs: what the corners of their boxes
+    take on the picture plane, landscape or portrait as they lie.  Parts far bigger than the others (a sky
+    dome, the sea around a set: over FAR_PART x the median part) are left out of the frame."""
+    spans = sorted((max((o.matrix_world @ Vector(c) - o.matrix_world @ Vector(o.bound_box[0])).length
+                        for c in o.bound_box), o.name) for o in objs)
+    limit = FAR_PART * spans[len(spans) // 2][0]
+    near = {name for span, name in spans if span <= limit} or {o.name for o in objs}
+    turn = (-direction).to_track_quat("-Z", "Y")
+    right, up, back = turn @ Vector((1.0, 0.0, 0.0)), turn @ Vector((0.0, 1.0, 0.0)), direction.normalized()
+    pts = [o.matrix_world @ Vector(c) for o in objs if o.name in near for c in o.bound_box]
+    lo = [min(p.dot(axis) for p in pts) for axis in (right, up, back)]
+    hi = [max(p.dot(axis) for p in pts) for axis in (right, up, back)]
+    centre = sum(((a + b) / 2.0 * axis for a, b, axis in zip(lo, hi, (right, up, back))), Vector())
+    wide, high = max(hi[0] - lo[0], 1e-4), max(hi[1] - lo[1], 1e-4)
+    size = (1400, 1000) if wide >= high else (900, 1400)
+    ortho = max(wide * 1.06, high * 1.06 * size[0] / size[1]) if wide >= high else \
+        max(high * 1.06, wide * 1.06 * size[1] / size[0])
+    return centre, ortho, size, (hi[2] - lo[2]) / 2.0
+
+
 def render(path, center, ortho, size, direction, distance=6.0):
     cam_data = bpy.data.cameras.new("PreviewCam")
     cam_data.type = "ORTHO"
     cam_data.ortho_scale = ortho
     cam_data.clip_start = 0.01
-    cam_data.clip_end = distance * 10
+    cam_data.clip_end = max(distance * 10, 100.0)
     cam = bpy.data.objects.new("PreviewCam", cam_data)
     scene.collection.objects.link(cam)
     cam.location = center + direction.normalized() * distance
@@ -1228,7 +1253,12 @@ if meshes:
     elif HEAD_BONE:
         hb = arm_data.bones[HEAD_BONE]
         head_pos = arm.matrix_world @ hb.head_local + Vector((0.0, 0.0, 0.07))
-    if not NO_PREVIEW:
+    if not NO_PREVIEW and PREVIEW_VIEW:                # a prop, a set: from the side asked for, framed as it lies
+        look = Vector([float(v) for v in PREVIEW_VIEW.split(",")])
+        centre, ortho, size, depth = framed(body, look)
+        render(base_path + "_preview.png", centre, ortho, size, look, distance=max(6.0, depth * 1.5 + ortho))
+        report["preview"] = base_path + "_preview.png"
+    elif not NO_PREVIEW:
         front = Vector((0.0, -1.0, 0.0))
         tall = extent.z >= extent.x
         size = (900, 1400) if tall else (1400, 1000)

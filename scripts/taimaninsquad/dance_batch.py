@@ -381,7 +381,8 @@ def render(model: dict, dance: dict, backdrop: str, a, where: SimpleNamespace, n
         backdrop=os.path.join(a.export_root, "_backgrounds", backdrop) if backdrop else "", backdrop_as="auto",
         backdrop_fov=70.0, backdrop_turn=0.0, backdrop_tilt=0.0, shadow=0.45, people=names, dance=dance["title"],
         camera=a.camera, follow=a.follow, physics="mmd", margin=30, samples=a.samples, size=a.size, frames=0,
-        music_tail=a.music_tail, stills=0, no_video=False, no_edge=False, no_blend=True, force=a.force)
+        music_tail=a.music_tail, stills=0, no_video=False, no_edge=False, no_blend=True, force=a.force,
+        log_dir=getattr(a, "log_dir", ""))
     rep = dv.render_one(model, vmd, bgm, dv.motion_name(vmd), job)
     video = rep["video"]
     seconds = round(rep["motion_frames"] / float(rep.get("fps") or dv.FPS), 1) if rep.get("motion_frames") else dance["seconds"]

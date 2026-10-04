@@ -133,6 +133,10 @@ ramp   = smoothstep(_RampThreshold ∓ _RampSmooth/2, N·L × 0.5 + 0.5)
   （`.blend` 骨架的 `tsq_cloth` 属性）。
 - **哪两根是胸部骨**（`ataimanin_scene.breast_pair`）：名字带 bust / breast / mune 的优先；否则取 Dynamic Bone 的根里
   挂在脊柱骨上、位于脊柱前方、左右对称的那一对单骨链。
+- **按名字找眼球骨 / 嘴唇骨**（`ataimanin_scene.by_side`，2026-10-04）：脸的骨架里可能有名字结尾相同的辅助点
+  （Taimanin Collection 的 `Point_Eyeball_L` 挨着 `Bone_Eyeball_L`）。同一侧有几个候选时取**带蒙皮的那个**；
+  原来是后找到的盖掉先找到的，转到了辅助点上，视线形状一个顶点都不动。这个游戏的模型没有这种辅助点，结果不变。
+- 本目录的角色读取（`ataimanin_scene.Scene`）也被 `..\taimanincollection` 用着：那个游戏的阿莎姬是同一套做法。
 - **导出的是 prefab 的姿势**（Unity 在播任何动画之前画出来的样子）。Asagi 两侧那两缕绕出去的细发
   （`Bone_hair00` / `Bone_hair06`）在 prefab 里比绑定姿势转了 26°，prefab 的姿势才是对的（见「踩过的坑」）。
 
@@ -289,5 +293,5 @@ Squad 的模型精度高一倍多，表情现成；Action Taimanin 的服装多�
 ## 测试
 
 ```powershell
-python -m unittest discover -s tests        # 31 项：按块读取（合成的 UnityFS 文件）、模型 id 解析、材质提示、胸部骨识别、片段解码、姿势 → 顶点位移、嘴唇配方 / 视线 / 眼睑开口 / PMX 配方
+python -m unittest discover -s tests        # 32 项：按块读取（合成的 UnityFS 文件）、模型 id 解析、材质提示、胸部骨识别、同名骨取带蒙皮的、片段解码、姿势 → 顶点位移、嘴唇配方 / 视线 / 眼睑开口 / PMX 配方
 ```

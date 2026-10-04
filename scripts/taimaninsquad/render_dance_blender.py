@@ -235,7 +235,7 @@ report.update(bounds=[[round(v, 3) for v in lo], [round(v, 3) for v in hi]],
 # squinting at a video.  Axes: to the model's left, to its front, up - as the chest stands in the rest pose.
 by_name = {(b.mmd_bone.name_j or b.name): b for b in arm.pose.bones}
 chest = by_name.get("上半身3") or by_name.get("上半身2") or by_name.get("上半身")
-busts = [o for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY" and o.mmd_rigid.name_j in tb.BUST_BONES]
+busts = tb.bust_bodies(scene)                         # on 左胸 / 右胸, or what swings from them
 if chest is not None and busts:
     import numpy as np
 

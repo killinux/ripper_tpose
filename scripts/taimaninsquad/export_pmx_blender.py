@@ -900,7 +900,12 @@ def main():
 
     roe.enable_addon("mmd_tools")
     roe.enable_addon("Convert_to_MMD5")
-    slots, missing_optional = resolve_slots(roe, arm, meshes)
+    try:
+        slots, missing_optional = resolve_slots(roe, arm, meshes)
+    except RuntimeError as exc:                         # no Biped at all - a vehicle, a prop, a set (Taimanin
+        if "Biped pelvis" not in str(exc):              # Collection): the plain route below, like a snake's body
+            raise
+        slots, missing_optional = {key: "" for key in roe.ROE_MMD_REQUIRED_SLOTS}, []
     report["missing_optional_slots"] = missing_optional
     report["chest_bones"] = [slots.get("left_chest_bone", ""), slots.get("right_chest_bone", "")]
     missing_required = [r for r in roe.ROE_MMD_REQUIRED_SLOTS if not slots[r]]

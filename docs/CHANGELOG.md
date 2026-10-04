@@ -14,6 +14,58 @@
 
 ---
 
+## 2026-10-04 — MMD 舞蹈视频：ROE 的服装来跳 Squad 剩下的 119 支舞（`scripts/mmd_dances`），用调过乳摇的 PMX、游戏的剧情背景；查出 11 套 PMX 有不跟身体走的部件
+
+1. **起因**：用户要用 ROE 的模型把动作合集里 Taimanin Squad 没用到的舞做成视频，最后所有舞放进一个公共页面；先做 2 个看效果。
+   看过后又问"ROE 的 PMX 有乳摇吗"，并要视频也随机配背景。
+2. **新目录 `scripts/mmd_dances/`**：
+   - `roe_dances.py`：ROE 归档里穿衣服的服装（主模型 + 时装）轮流分到合集里还没人跳的舞，13 个角色每轮各出一套；
+     每套再随机分一张背景图，所有图用完前不重复；分配存在 `plan.json` 里不再变。渲染直接用 Squad 的
+     `dance_video.py` / `render_dance_blender.py`，视频和列表在 `E:\game_export\RiseOfEros\_videos\`。一次一个，默认低优先级，
+     内存不够就等。
+   - **乳摇**：默认跳 `<id>_bustB.pmx`（`scripts/mmd_physics/tune_bust_pmx.py` 做的，胸部关节有弹簧）。原版 `<id>.pmx` 的胸部
+     挂在一个 ±10°、没有弹簧的关节上，重力把它压在限位上，几乎不晃。`--bust-pmx main` 改回原版。
+   - `roe_backgrounds.py`：从游戏的 `avg_background_image_*.ab`（剧情场景背景，149 个普通 Unity 包）取出背景图到
+     `E:\game_export\RiseOfEros\_backgrounds\`：写出 419 张，剧情插画和重复版本 19 张不写，看过缩略图后再排除 16 张
+     （界面底图、全黑、回忆特效、带黑边的重复版、特写、俯视平台、怪物），可用 403 张。
+   - `pmx_rig_check.py`：找 PMX 里绑在**没有父骨骼**的骨骼上的部件。VMD 只移动 `全ての親` 下面那棵树，这些部件整支舞都停在
+     静止姿势的位置（MMD 里也一样）。ROE 173 套穿衣服的里有 11 套：Miri e08 裙子上的花、e07 的两把枪、Lynn j01 / j03 的武器、
+     j07 的戒指、Rana f09 的酒杯酒瓶、Misa c08 的脚甲、Sera i04 的脚链、Kart b12 的球和蕾丝、Fen h04 的球。
+     这些默认不参加跳舞（`--keep-loose` 可以让它们照跳），PMX 重新导出后自动重查。
+3. **Squad 渲染器的三处改动**（`scripts/taimaninsquad`，Squad 自己的结果不变）：
+   - 胸部测量（`tsquad_blender.bust_bodies`，`render_dance_blender.py` 报告里的 `bust_motion`）：`左胸` / `右胸` 上的刚体是跟着骨头
+     走的固定锚点时，量挂在它下面会摆的刚体。ROE 正是这样（会摆的叫 `Bip001 Breast_L02`），原来报告里永远是 0。
+     Squad 的胸部刚体本身是动态的，挑出来的还是它们。
+   - `dance_video.render_one` 可以从模型记录里拿 PMX 路径（`model["pmx"]`），别的游戏的批量用它选 `_bustB.pmx`。
+   - `dance_video.render_one` / `dance_batch.render` 可以给日志目录 `log_dir`：ROE 的批量把 Blender 日志放进 `_videos\_meta\logs`，
+     不在 ROE 归档里建 `_work`。两处不给时都和原来一样。
+4. **用法**：
+   ```
+   python scripts\mmd_dances\roe_backgrounds.py            # 第一次：取出背景图
+   python scripts\mmd_dances\roe_dances.py --plan          # 只排谁跳哪支、站在哪张背景前，写 _列表.md
+   python scripts\mmd_dances\roe_dances.py --count 5       # 渲染接下来 5 个
+   python scripts\mmd_dances\pmx_rig_check.py <PMX 或目录>   # 只检查部件
+   ```
+   另有 `--drop / --undrop / --why`、`--prune`、`--kinds`、`--keep-loose`、`--bust-pmx`、`--no-backdrop`、`--full-speed`、`--force`。
+5. **结果**：
+   - 分配：162 套能跳的衣服，119 支舞（合集可用 244 支，Squad 用了 125 支，没有重叠），每个角色 9 到 12 支，衣服少的
+     Amano 7、SFox 3、Sera 3；119 张背景各不相同。
+   - 乳摇检查（173 套穿衣服的 PMX）：159 套有胸部刚体，原版都没有弹簧，bustB 都有弹簧（155 套是锚点下挂会摆的刚体，
+     g09、g10、c01、c02 是左胸 / 右胸本身会摆，**g09 只有左胸有刚体**）；14 套根本没有胸部骨骼（a03–a06、b01–b06、c03–c06，
+     没有 bustB），怎么都不会晃。
+     用户的测试动作（适配瓦雷莎.vmd）下 Lynn 泳装胸部上下摆动：原版 0.3 cm、bustB 2.4 cm；对比视频
+     `E:\game_export\RiseOfEros\_videos\_检查\乳摇对比_Lynn泳装_原版PMX_vs_bustB.mp4`。
+   - 试做：Sera i02 跳「瓦纳哟哒哒哒电摇舞」、Lynn 泳装 j01_swim 跳「小虎队爱」，都用 bustB + 随机背景重做过；
+     原来排在第二的 Miri e08 因为裙子上的花悬在半空被排除，它的视频还在目录里，等用户确认后用 `--prune` 删。
+   - 渲染时间（正常优先级）：16 到 18 秒的舞 2.5 到 6.7 分钟，看机器忙不忙。别的窗口开着十几个 Blender 时，低优先级的渲染
+     几乎分不到 CPU（25 分钟只算了 2 分钟）。119 支合计 25 分钟长，估计 5 到 10 小时。
+6. **验证**：
+   - 新测试 15 项（用手工拼的最小 PMX 测部件检查；背景的命名、排除和可用列表；跳哪个 PMX）+ Squad 59 项通过。
+   - 159 对 `_bustB.pmx` 和原版逐个比：物理之前的部分逐字节相同。
+   - 在 Miri e08 烘焙好的场景里逐帧量：有刚体的花和它挂的裙摆一直相距 2 cm，物理本身正常；浮起来的四朵花绑的骨骼没有父骨骼。
+   - 新的胸部测量：Lynn 泳装跳「小虎队爱」，原版上下 2.3 cm，bustB 上下 3.9 到 4.3 cm。
+   - 部件检查扫全部 173 套和临时脚本结果一致（11 套）；9 张背景缩略图逐张看过；两个试做视频逐帧抽查。
+
 ## 2026-10-04 — Rise of Eros：E 盘已归档的 PMX 表情全部改成顶点表情（`pmx_vertex_morphs.py`，不重出，在文件里直接改）
 
 1. **起因**：用户要 PMX 表情默认是顶点表情。导出默认下午已经改了（下面一条），但已经归档的 PMX 还是骨骼表情。
@@ -66,6 +118,56 @@
    - 调色时底模网格还在场景里，被当成也在用身体材质，材质复制成了 `.001`（PMX 材质名跟着变）。改成不算底模，三个模型
      重跑后材质名正常。
 5. **用户如何操作**：不用操作，`complete_nude.py <编号>` 重出时自动判断。原理和数字见 `docs/roe-complete-nude.md` 17.11。
+
+## 2026-10-04 — Taimanin Collection：新游戏的 3D 模型列表与导出（`scripts/taimanincollection`），阿莎姬、摩托车、运输机、赛道共 41 个模型导出
+
+1. **这个游戏有什么**：`E:\SteamLibrary\steamapps\common\Taimanin Collection`（eTOYLab，Unity 2018.4.36f1 + IL2CPP，Gamma 空间）
+   是 2D 卡牌游戏，843 张卡是 `Data\Res` 下加密的图片。3D 内容只有摩托小游戏那一块，全在玩家数据 `data.unity3d`
+   （360 MB，没加密）里：**阿莎姬**一个角色（和 Action Taimanin 的 `asagi_costume_1` 同一套做法）、带骨架的**摩托车**和**运输机**、
+   **桥面赛道**和道具、22 个赛道段；另有 Action Taimanin 的残留 —— 两套材质被剥掉的城市布景、221 个原始模型（218 个只有默认材质）。
+2. **新脚本**（`scripts/taimanincollection/`，Blender 端和格式转换用 `taimaninsquad/` 的，读角色和卡通材质用 `actiontaimanin/` 的）：
+   - `list_models.py`：按 `Resources` 路径表列出 276 个带网格的对象，分 11 类；`--details`、`--html`。
+   - `export_model.py <id> [--xps] [--pmx] [--turntable]`，`--category …`，`--game`（游戏实际显示的五类）。
+   - `tcollection_common.py` / `tcollection_scene.py` / `tco_materials.py`、`dynamic_bone_types.json`、画廊 `html/`、测试 18 项、README。
+3. **做法里新的东西**：
+   - **玩家构建没有类型树**。引擎自己的类 UnityPy 能读，脚本组件不行。认脚本：任何 MonoBehaviour 的数据都以
+     `m_GameObject`、`m_Enabled`、`m_Script` 开头，从第 16 字节读出 `m_Script` 去查 `MonoScript` 的类名。读字段：
+     Dynamic Bone 的字段表取自 Action Taimanin 的包（那边带类型树），存成 `dynamic_bone_types.json`；
+     用它读这个游戏的 8 个 `DynamicBone` 和 4 个 `DynamicBoneCollider`，全部正好读完（UnityPy 会核对字节数）。
+   - **材质的三种补救**：只有默认材质的原始模型，借用游戏在别处给**同一个网格**挂的材质（运输机带贴图的那份在过场演出里）；
+     着色器和参数被剥掉的材质，按名字找贴图（`mat_x` → `tex_x` / `tex_x_lm` / `tex_x_e`）；连同名贴图也没有的，纯色。
+     三种都在终端和画廊卡片上写明。
+   - **场景着色器**（`Curved/Curved_BG`、`eTOYLab/bg_default` 等）当成「底色 × 染色 × 光照图 + 发光」的不受光材质；
+     只用着色器**声明了的**属性（材质里留着别的着色器的旧参数：`_glow_velue` 才是真名，另有一个没人用的 `_glow_value`）。
+   - **场景**（构建里的 `race_bridge`）有多个根：在一个虚拟根下一起走；每个有网格的根也单独成一个模型
+     （装好轮子的整辆摩托 = `scene_race_bridge_bikeobj`，在 `Resources` 下它是三个分开的 rig）。
+4. **改了别的目录的三处**（都是通用的入口，原有游戏的结果不变）：
+   - `taimaninsquad/build_blend.py`：新增 `--preview-view x,y,z` —— 道具和场景的预览从指定方向看、按实际范围取景
+     （原来只有正面平视，桥从桥头看过去是一条线）；预览相机的远裁剪面至少 100 m。
+   - `taimaninsquad/export_pmx_blender.py`：骨架里完全没有 Biped 时不再报错，走「保持原骨」的路（原来只有蛇身单位走）。
+   - `actiontaimanin/ataimanin_scene.py`：按名字找眼球骨 / 嘴唇骨时，同名的取**带蒙皮的那个**（`by_side`）。
+5. **两个不报错的坑**（都是「按名字建字典，后者盖前者」）：
+   - 表情片段同名各有两个（一套旧的、一套完整的），混着用时说话口型 `mouth_talk_a` 只动 0.1 mm；取后一个对象后是 7.3 mm。
+   - 脸的骨架里有 `Point_Eyeball_L/R` 两个辅助点，和眼球骨 `Bone_Eyeball_L/R` 同样以 `Eyeball_L/R` 结尾：
+     转的是辅助点，四个视线形状一个顶点都没动。修后各动 146 个顶点。
+6. **导出结果**（`E:\game_export\TaimaninCollection\`，349 MB，41 个模型，没有失败的，一次只跑一个 Blender）：
+   - 阿莎姬 `prf_asagi_costume_1`：blend + XPS + PMX + 转台视频。9,323 顶点 / 13,773 三角面、102 根骨、29 个形状键；
+     PMX 196 根骨、24 个刚体、37 个表情，撕裂 0、付与顺序违规 0，胸部最多晃 ±3.8 cm。全套 3 分 19 秒。
+   - 载具 4、道具 8、场景 3：blend + XPS + PMX（非人形：游戏原骨，没有 IK 和物理），15 个共 5 分 33 秒。
+   - 赛道段 22、残留布景 3：blend，25 个共 1 分 07 秒。
+7. **验证**：
+   - 测试：`taimanincollection` 18 项、`taimaninsquad` 59 项、`actiontaimanin` 32 项（新增 1 项）全部通过；
+   - 看过的图：阿莎姬的正面预览、形状键总览（30 格）、XPS 读回摆姿势图、PMX 舞蹈 4 帧、PMX 表情表 38 格；
+     其余 40 个模型的预览拼成总览图全部看过；
+   - 导出记录 41 条：blend 41、XPS 16、PMX 16，警告 0；画廊页 137 个不同的本地链接全部有效，用无界面 Edge 渲成图看过。
+   - 回归：改了共用的代码之后，把 Taimanin Squad 的 `24_kirara` 和 Action Taimanin 的 `asagi_costume_1_f` 重导到临时目录，
+     两个模型的 PMX 和 XPS 都和 `E:\game_export` 里归档的**逐字节相同**。
+8. **已知限制**：场景着色器的公式是按槽位和属性名定的，没有对着编译后的程序核过，也没有游戏截图对照；海面只是一块纯蓝色；
+   残留布景的贴图是按名字猜的；夜空穹顶没有贴图（纯白）；动作没有导（数据里有 114 段阿莎姬的动作和 27 段摩托车动作），
+   所以没有「骑在摩托上」的姿势；221 个原始模型没有导；没有在 MMD / XPS 本体里打开过。
+9. **用户如何操作**：画廊页 `scripts\taimanincollection\html\index.html`（页首是「怎么导出模型」）；
+   文件在 `E:\game_export\TaimaninCollection\<Asagi|Vehicles|Props|Scenes|Levels|Sets>\<blend|xps|pmx>\<id>\`。
+   再导别的：`python export_model.py <id> --xps --pmx`。
 
 ## 2026-10-04 — Taimanin Squad：画廊页把「怎么导出模型」写清楚（最短三条命令 + 分步说明 + 实测输出 + 报错对照）；双人单位的视频去掉（`dance_batch.py --drop`）
 
