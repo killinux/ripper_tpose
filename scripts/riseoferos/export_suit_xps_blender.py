@@ -13,6 +13,12 @@ What a suit needs on top of the batch:
     sheer stockings, fishnet, lace) gets render group 7 -> 25.  Body, face and hair keep the add-on's rule.
   * the procedural eye is baked from the iris image; a packed iris whose file is gone is written to a temp
     file first (the bake reads a file)
+  * objects marked roe_xps_optional ("+outfit", "+weapon"; complete_nude_body_blender.py / add_weapon_blender.py)
+    become XPS optional items: XNALara / XPS list meshes named <render group>_+<group>|<name> with a check box
+    (+ shown, - hidden when the model loads), so one file is dressed or nude - the object is renamed
+    <mark>|<name> in memory before the export (the .blend is not saved)
+  * the full version's body, fitted under the outfit with its own shape kept as shape key 裸体形状: the part that
+    key moves goes out twice, fitted with the outfit's group and in its own shape as "-nude" (split_fitted_body)
 
   blender -b --factory-startup <suit.blend> --python export_suit_xps_blender.py -- <out.mesh>
 The .blend is not saved.  Prints ROE_SUIT_XPS={json} (read back with XNALaraMesh: mesh names = render group,
@@ -146,6 +152,66 @@ class AlphaRule:
         return group
 
 
+NUDE_SHAPE = "裸体形状"     # complete_nude_body_blender.py: the full version's body keeps its own shape here
+
+
+def split_fitted_body(meshes):
+    """The full version's body (complete_nude_body_blender.py --variant full) is fitted under the outfit and keeps
+    its own shape as the shape key NUDE_SHAPE.  XPS has no morphs, so the part of the body that shape key moves
+    goes out twice: fitted, in the outfit's optional group (it hides with the outfit), and in its own shape in an
+    optional group "nude" that loads hidden - in XNALara / XPS untick outfit and tick nude for the nude look.
+    In memory only (the .blend is not saved).  Returns the new pieces."""
+    import bmesh
+    made = []
+    for body in [o for o in meshes if o.data.shape_keys and o.data.shape_keys.key_blocks.get(NUDE_SHAPE)]:
+        keys = body.data.shape_keys.key_blocks
+        n = len(body.data.vertices)
+        fitted, nude = np.empty(n * 3), np.empty(n * 3)
+        keys[0].data.foreach_get("co", fitted)
+        keys[NUDE_SHAPE].data.foreach_get("co", nude)
+        moved = np.linalg.norm((nude - fitted).reshape(-1, 3), axis=1) > 1e-6
+        faces = {p.index for p in body.data.polygons if moved[list(p.vertices)].any()}
+        outfit_mark = next((str(o["roe_xps_optional"]) for o in meshes
+                            if o.get("roe_outfit") and str(o.get("roe_xps_optional", ""))[:1] in "+-"), "+outfit")
+        pieces = []
+        for suffix, co, mark in (("_fit", fitted, outfit_mark), ("_nude", nude, "-nude"), ("", fitted, None)):
+            obj = body
+            if suffix:
+                obj = body.copy()
+                obj.data = body.data.copy()
+                for coll in body.users_collection:
+                    coll.objects.link(obj)
+                obj.name = obj.data.name = body.name + suffix
+            for kb in reversed(list(obj.data.shape_keys.key_blocks)):
+                obj.shape_key_remove(kb)
+            obj.data.vertices.foreach_set("co", co.astype(np.float32))
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+            bm.faces.ensure_lookup_table()
+            bmesh.ops.delete(bm, geom=[f for f in bm.faces if (f.index in faces) != bool(suffix)], context="FACES_ONLY")
+            bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+            bm.to_mesh(obj.data)
+            bm.free()
+            obj.data.update()
+            if mark:
+                obj["roe_xps_optional"] = mark
+                pieces.append(obj)
+        made += pieces
+    return made
+
+
+def optional_items(meshes):
+    """roe_xps_optional "+group" / "-group" -> object renamed "<mark>|<name>": the ROE add-on writes the mesh name
+    as <render group>_<object name>_<spec> (no '.', '_' -> '-'), which XNALara reads as an optional item."""
+    done = []
+    for obj in meshes:
+        mark = str(obj.get("roe_xps_optional", "")).strip()
+        if mark[:1] in ("+", "-") and "|" not in obj.name:
+            obj.name = "%s|%s" % (mark, obj.name.replace(".", "-"))
+            done.append(obj.name)
+    return done
+
+
 def read_back(path):
     """Mesh names (render group_name_spec), vertex counts and textures as XNALaraMesh reads them."""
     for module in ("XNALaraMesh-master", "XNALaraMesh"):
@@ -166,6 +232,27 @@ def read_back(path):
                                        if not any(w.weight > 0 for w in v.boneWeights))}
 
 
+def missing_bumps(meshes):
+    """A material recorded (roe_hq_xps) before every lit material got a bump map - hq_material_data writes a flat one
+    when the game has none since 10-04, but the i family's LD eyes were built on 10-02: no bump, and the add-on wrote
+    missing.png.  When the export cache has the bump beside the diffuse now, this export uses it (the .blend is not
+    saved).  Returns the materials patched."""
+    done = []
+    for mat in {s.material for o in meshes for s in o.material_slots if s.material}:
+        try:
+            maps = json.loads(mat.get("roe_hq_xps", "") or "{}")
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(maps, dict) or not maps.get("diffuse") or (maps.get("bump") and os.path.isfile(maps["bump"])):
+            continue
+        bump = maps["diffuse"].replace("__xps_diffuse.png", "__xps_bump.png")
+        if bump != maps["diffuse"] and os.path.isfile(bump):
+            maps["bump"] = bump
+            mat["roe_hq_xps"] = json.dumps(maps)
+            done.append(mat.name)
+    return sorted(done)
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     if not argv or not argv[0].lower().endswith(".mesh"):
@@ -177,7 +264,10 @@ def main():
     if len(armatures) != 1:
         raise SystemExit("expected one armature, found %s" % [a.name for a in armatures])
     arm = armatures[0]
-    report = {"source": bpy.data.filepath, "skinned_pieces": skin_bone_parented(arm, meshes)}
+    split = split_fitted_body(meshes)
+    meshes += split
+    report = {"source": bpy.data.filepath, "skinned_pieces": skin_bone_parented(arm, meshes),
+              "fitted_body_split": [o.name for o in split], "optional_items": optional_items(meshes)}
     unweighted = [o.name for o in meshes if not o.vertex_groups]
     if unweighted:
         report["unweighted_meshes"] = unweighted        # would follow the root only: reported, not guessed
@@ -188,6 +278,7 @@ def main():
     head = addon.find_head(meshes)
     report["head"] = head.name if head else None
     report["nude_marker"] = fix_nude_marker(meshes)      # a file saved before fix_suit_slots_blender.py set it
+    report["bumps_added"] = missing_bumps(meshes)
     temp = readable_iris(head)
     rule = AlphaRule(addon)
     try:
@@ -207,7 +298,8 @@ def main():
                "unweighted_meshes": unweighted, "alpha_pieces": report["alpha_pieces"],
                "meshes": len(back.get("meshes", [])), "bones": back.get("bones"),
                "missing_textures": back.get("missing_textures"), "unweighted_vertices": back.get("unweighted_vertices"),
-               "groups": sorted({m["name"].split("_", 1)[0] for m in back.get("meshes", [])})}
+               "groups": sorted({m["name"].split("_", 1)[0] for m in back.get("meshes", [])}),
+               "optional": [m["name"] for m in back.get("meshes", []) if re.match(r"^\d+_[+-]", m["name"])]}
     print("ROE_SUIT_XPS=" + json.dumps(summary, ensure_ascii=True, default=str))
 
 

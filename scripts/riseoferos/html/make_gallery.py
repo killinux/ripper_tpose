@@ -7,7 +7,8 @@ outfit variants assembled from component meshes) and the nude bases in
 into a JPEG thumbnail and emits a self-contained ``index.html`` next to this
 script.  Suit and nude-base cards sit next to their character's cards and can be
 filtered with the 角色模型 / 套装 / 裸模 chips; their XPS / PMX rows come from
-export_hq.py (export_suit_xps_blender.py / export_suit_pmx_blender.py).
+export_hq.py (export_suit_xps_blender.py / export_suit_pmx_blender.py).  Dressed models whose body
+complete_nude.py filled in (``<id>/blend/<stem>_nude.blend``) get a 裸模 card too.
 
 The page links to the real files with ``file://`` URLs and the thumbnails are
 written under the export root, so **no game-derived image ever enters the repo**
@@ -250,6 +251,40 @@ def collect_nudes(source_root, thumb_dir, force, main_stems):
     return nudes
 
 
+def collect_completed(source_root, thumb_dir, force):
+    """Cards for dressed models given the whole body by complete_nude.py: ``<id>/blend/<stem>_nude.blend`` (the
+    skin the game deleted under the outfit filled in from the family nude base), with the dressed full-body
+    ``<stem>_full`` (.blend, XPS with the outfit as optional items, PMX with the 衣服非表示 morph) as extra rows."""
+    found = []
+    for rid in sorted(os.listdir(source_root)) if os.path.isdir(source_root) else []:
+        folder = os.path.join(source_root, rid, "blend")
+        for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+            stem, ext = os.path.splitext(name)
+            if ext.lower() != ".blend" or not stem.startswith("pc_") or not stem.endswith("_nude"):
+                continue
+            blend = os.path.join(folder, name)
+            preview = os.path.join(folder, stem + "_preview.png")
+            if not os.path.isfile(preview):
+                continue
+            cid, key = stem[3:6], stem[3:]
+            run = os.path.join(source_root, "_hq_runs", stem, "result.json")
+            base = "pc_%s01_nk_bs" % cid[0]
+            if os.path.isfile(run):
+                with open(run, encoding="utf-8") as handle:
+                    base = json.load(handle).get("nude_base") or base
+            full = os.path.join(folder, stem[:-len("_nude")] + "_full.blend")
+            xps, pmx, pmx_note = suit_formats(folder, stem)
+            full_xps, full_pmx, _note = suit_formats(folder, stem[:-len("_nude")] + "_full")
+            found.append({
+                "key": key, "family": cid[:1].upper(), "id": cid, "blend": blend, "xps": xps, "pmx": pmx,
+                "pmx_note": pmx_note, "preview": preview,
+                "thumb": build_thumb(preview, os.path.join(thumb_dir, key + ".jpg"), force) or "",
+                "blend_size": os.path.getsize(blend), "fm": False, "completed": base,
+                "model": stem[:-len("_nude")], "full": full if os.path.isfile(full) else "",
+                "full_xps": full_xps, "full_pmx": full_pmx})
+    return found
+
+
 def format_rows(item):
     """The XPS / PMX rows of a suit or nude-base card (the links point at the folder)."""
     esc = html.escape
@@ -372,13 +407,35 @@ def render_suit_card(suit):
 def render_nude_card(nude):
     esc = html.escape
     thumb_uri = file_uri(nude["thumb"])
-    badges = ('<span class="badge badge-suit" title="官方裸体基础模型：H 场景用的身体（export_nude_models.ps1，'
-              '游戏材质 hq_materials_blender.py）">裸模</span>')
+    completed = nude.get("completed")
+    if completed:
+        badges = ('<span class="badge badge-suit" title="%s">补全裸模</span>'
+                  % esc("%s 去掉衣服，游戏删掉的衣服下皮肤用裸模 %s 的身体补全（complete_nude.py）"
+                        % (nude["model"], completed)))
+    else:
+        badges = ('<span class="badge badge-suit" title="官方裸体基础模型：H 场景用的身体（export_nude_models.ps1，'
+                  '游戏材质 hq_materials_blender.py）">裸模</span>')
     if nude["fm"]:
         badges += '<span class="badge badge-fix" title="魔化（fm）形态的身体">魔化</span>'
+    rows = format_rows(nude)
+    if completed:              # the dressed version over the whole body; XPS / PMX links point at the folder
+        for label, path, link, note in (
+                ("带衣服", nude.get("full"), nude.get("full"), "衣服下是完整身体，爆衣插件用"),
+                ("带衣服 XPS", nude.get("full_xps"), os.path.dirname(nude.get("full_xps") or ""),
+                 "衣服是可选部件，XNALara / XPS 里可以单独勾掉"),
+                ("带衣服 PMX", nude.get("full_pmx"), os.path.dirname(nude.get("full_pmx") or ""),
+                 "表情「衣服非表示」= 1 脱掉衣服（含胸部 B 版）")):
+            if path:
+                rows += ('<dt>%s</dt>\n            <dd><a href="%s" title="%s">%s</a>\n'
+                         '                <button class="copy" data-copy="%s">复制</button>'
+                         ' <span class="rigspec">%s</span></dd>\n            '
+                         % (label, esc(file_uri(link)), esc(path), esc(path), esc(path), note))
+    spec = ("%s 的头、头发、骨架 + %s 的完整身体，游戏原始材质" % (nude["model"], completed) if completed
+            else "身体 + 脸 + 头发，游戏原始材质")
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(nude["key"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
-    search_blob = esc(" ".join([nude["key"], "nude 裸模 nk_bs", nude["blend"], nude["xps"], nude["pmx"]]).lower())
+    search_blob = esc(" ".join([nude["key"], "nude 裸模 nk_bs", "补全 complete" if completed else "", nude["blend"],
+                                nude["xps"], nude["pmx"]]).lower())
     return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="0" data-kind="nude">
         <a class="shot" href="{preview}" target="_blank" rel="noopener"
            title="点击查看原图（{family} 家族）">{figure}</a>
@@ -391,13 +448,13 @@ def render_nude_card(nude):
             <dd><a href="{blend_uri}" title="{blend}">{blend}</a>
                 <button class="copy" data-copy="{blend}">复制</button></dd>
             {rows}<dt>规格</dt>
-            <dd>身体 + 脸 + 头发，游戏原始材质 · {size}</dd>
+            <dd>{spec} · {size}</dd>
           </dl>
         </div>
       </article>
 """.format(search=search_blob, family=esc(nude["family"]), preview=esc(file_uri(nude["preview"])),
            figure=figure, key=esc(nude["key"]), badges=badges, blend_uri=esc(file_uri(nude["blend"])),
-           blend=esc(nude["blend"]), rows=format_rows(nude), size=human_size(nude["blend_size"]))
+           blend=esc(nude["blend"]), rows=rows, spec=esc(spec), size=human_size(nude["blend_size"]))
 
 
 def render(manifest, models, nomesh, source_root, suits=(), nudes=()):
@@ -654,6 +711,18 @@ python export_hq.py --todo --skip h,i --lanes 4    # 没做全的全部做（h�
       <code>pc_&lt;id&gt;_nk_bs</code>，主模型写编号（<code>a08</code>）。日志在
       <code>D:\\roe_exports\\_hq_runs\\&lt;stem&gt;\\</code>，详细说明见 <code>scripts\\riseoferos\\README.md</code> §8.5。</p>
 
+    <h3>补全身体 · complete_nude.py</h3>
+    <p>主模型（穿着衣服的造型）里，衣服盖住的皮肤游戏是删掉的。这个脚本用同一角色的裸模（<code>pc_&lt;字母&gt;01_nk_bs</code>）
+      把身体补全，出两份，各有 .blend + XPS + PMX（含胸部 B 版）：<code>&lt;stem&gt;_nude</code>（去掉衣服的裸模，卡片标「补全裸模」）
+      和 <code>&lt;stem&gt;_full</code>（衣服还在、下面是完整身体，卡片上「带衣服」那几行）。带衣服版一个文件两种用法：
+      XPS 里衣服是可选部件（XNALara / XPS 可以单独勾掉），PMX 里表情「衣服非表示」= 1 就是裸的；.blend 给爆衣插件用。
+      游戏战斗时才拿的武器（a08 的大剑）也加进去，PMX 里表情「武器非表示」收起。</p>
+    <pre>python complete_nude.py a08                        # pc_a08_hd -&gt; pc_a08_hd_nude + pc_a08_hd_full
+python complete_nude.py a08 g04 --archive          # 做完归档到 E 盘、刷新本页
+python complete_nude.py g04 --variants full --formats pmx   # 只重出带衣服版的 PMX
+python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs      # 裸模默认是同字母的 01，也可以指定</pre>
+    <p>原理和坑见 <code>docs\\roe-complete-nude.md</code>，日志在 <code>D:\\roe_exports\\_hq_runs\\&lt;stem&gt;_nude\\</code>。</p>
+
     <h3>重新生成本页</h3>
     <pre>python scripts\\riseoferos\\html\\make_gallery.py</pre>
     <p>读 <code>character_models_manifest.json</code>、<code>_suits\\manifest.json</code> 和
@@ -774,6 +843,7 @@ def main():
     suits = collect_suits(source_root, thumb_dir, args.force)
     main_stems = {os.path.splitext(os.path.basename(model["blend"]))[0] for model in models}
     nudes = collect_nudes(source_root, thumb_dir, args.force, main_stems)
+    nudes += collect_completed(source_root, thumb_dir, args.force)
 
     page = render(manifest, models, nomesh, source_root, suits, nudes)
     with open(out_path, "w", encoding="utf-8", newline="\n") as handle:

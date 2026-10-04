@@ -53,7 +53,9 @@ NAMES = {"a": "Inase", "b": "Kart", "c": "Misa", "d": "Erin", "e": "Miri", "f": 
 # outputs other scripts patch after an export: a re-export drops the patch
 AFTER_EXPORT = {
     "g04": "the fan-shrink morph: python pmx_add_scale_morph.py ... 扇子縮小 (docs/roe-motion-to-vmd.md)",
-    "a08": "the greatsword: pmx_add_weapon.py (ROE motion work, docs/roe-motion-to-vmd.md)",
+    "a08": "the greatsword - PMX and _bustB.pmx: pmx_add_weapon.py a08 --pmx X --out X each (ROE motion work, "
+           "docs/roe-motion-to-vmd.md); .blend + XPS: weapon_dump.py a08 --out w.json, add_weapon_blender.py --dump "
+           "w.json, export_suit_xps_blender.py (docs/roe-complete-nude.md section 14)",
     "pc_a01_nk_bs": "the H-scene morphs: python export_roe_eros.py a08",
     "pc_g01_nk_bs": "the H-scene morphs: python export_roe_eros.py g04",
     "pc_g01_fm_nk_bs": "the H-scene morphs: python export_roe_eros.py g04",
@@ -160,9 +162,13 @@ def tagged(text, tag):
         return None
 
 
-def bust_b(pmx, logs, dry):
+def bust_b(pmx, logs, dry, exports=EXPORTS):
     """The bust-B copy (scripts/mmd_physics/tune_bust_pmx.py) when the PMX has bust physics."""
-    report = load_json(pmx[:-4] + ".report.json", {})
+    report = load_json(pmx[:-4] + ".report.json", None)
+    if report is None:          # a main model: the batch keeps its PMX report in the manifest (mmdConvert)
+        manifest = load_json(os.path.join(exports, "character_models_manifest.json"), {})
+        report = next((e.get("mmdConvert") or {} for e in manifest.get("results", [])
+                       if os.path.normcase((e.get("outputs") or {}).get("pmx") or "") == os.path.normcase(pmx)), {})
     if not dry and not (report.get("physics") or {}).get("bust"):
         return "no bust physics, skipped"
     code, _ = run([sys.executable, os.path.join(SCRIPTS, "mmd_physics", "tune_bust_pmx.py"), pmx, pmx[:-4] + "_bustB.pmx"],
@@ -221,7 +227,7 @@ def do_pmx(stem, info, args, logs, result):
         result["pmx"] = {"torn": data.get("torn"), "morphs": data.get("face_morphs"),
                          "bust": (data.get("physics") or {}).get("bust"),
                          "grant_order_violations": data.get("grant_order_violations")}
-    result["bustB"] = bust_b(pmx, logs, args.dry_run)
+    result["bustB"] = bust_b(pmx, logs, args.dry_run, args.exports)
     return result["bustB"] in ("ok", "no bust physics, skipped")
 
 
@@ -283,9 +289,19 @@ def do_main(stem, info, formats, args, logs):
         "ok" if code == 0 and done and int(done.group(1)) > 0 and done.group(2) == "0"
         else "FAILED, see %s" % os.path.join(logs, "export.log"))
     ok = result["export"] in ("ok", "dry")
+    own = info["outputs"].get("pmx") or pmx_of(info["cid"], stem, args.exports)
+    # -Only matches the outfit id too: a08 brings a08_outfit1 along (its .blend / PMX / XPS are new on D: as well)
+    others = [p for p in re.findall(r"^\s*PMX: (.+?\.pmx)\s*$", text or "", re.MULTILINE)
+              if os.path.normcase(p) != os.path.normcase(own)]
+    if others:
+        result["also_exported"] = [os.path.splitext(os.path.basename(p))[0] for p in others]
     if ok and "pmx" in formats:
-        result["bustB"] = bust_b(info["outputs"].get("pmx") or pmx_of(info["cid"], stem, args.exports), logs, args.dry_run)
+        result["bustB"] = bust_b(own, logs, args.dry_run, args.exports)
         ok = result["bustB"] in ("ok", "no bust physics, skipped", "dry")
+        for path in others:
+            other = os.path.splitext(os.path.basename(path))[0]
+            result.setdefault("also_bustB", {})[other] = bust_b(
+                path, os.path.join(args.exports, "_hq_runs", other), args.dry_run, args.exports)
     result["ok"] = ok
     return result
 
@@ -462,7 +478,7 @@ def main():
             result = (do_main(stem, info, job_formats, args, logs) if kind == "main"
                       else do_suit_or_nude(stem, kind, info, job_formats, args, logs))
             reminder = AFTER_EXPORT.get(stem) or AFTER_EXPORT.get(info.get("key", ""))
-            if reminder and ("pmx" in job_formats):
+            if reminder and ("pmx" in job_formats or "blend" in job_formats):     # a08's sword is in the .blend too
                 result["reminder"] = "re-add " + reminder
                 print("   NOTE: re-add " + reminder)
             result["seconds"] = round(time.time() - t0)

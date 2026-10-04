@@ -948,6 +948,82 @@ python export_hq.py c01:student --dry-run          # 只打印要跑的命令
 - 重出 PMX 会丢掉别的脚本后加的东西，脚本会提醒：g04 的扇子缩小表情、a08 的大剑、a01 / g01 裸模的 H 场景表情、
   a00 的液体表情（见 [roe-motion-to-vmd.md](../../docs/roe-motion-to-vmd.md)）。
 
+## 8.6 补全身体：穿衣模型去掉衣服后的完整裸模（complete_nude.py，2026-10-03）
+
+主模型（穿衣服的造型，比如 a08 金色女武神）里，衣服盖住的皮肤游戏是删掉的：a08 只剩裸模身体 36,142 个面里的
+16,325 个，小腿、脚背、乳头、前臂、脖子都是洞，把衣服藏起来或者用爆衣插件炸开，身体是残的。同一角色的裸模
+（`nude_materials\pc_<字母>01_nk_bs.blend`）是同一张皮的完整版，`complete_nude.py` 把它装到穿衣模型的骨架上，
+每个模型出两份：`_nude`（去掉衣服）和 `_full`（衣服还在、下面是完整身体），各 .blend + XPS + PMX（+ 胸部 B 版）。
+
+```powershell
+python complete_nude.py a08 g04 --archive    # 两个模型各出两份，做完复制到 E 盘、刷新画廊
+python complete_nude.py <编号>               # 别的穿衣模型：主模型的编号（a08、a08_outfit1）或 stem
+python complete_nude.py g04 --variants full --formats pmx   # 只重出带衣服版的 PMX
+python complete_nude.py a08 --archive-only   # 不导出，只归档 + 画廊
+python complete_nude.py a08 --weapon no      # 不加战斗武器（默认：模型自己没有 wp_* 网格才加）
+python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs --dry-run   # 指定裸模；只打印要跑的命令
+```
+
+| 产物（`D:\roe_exports\<id>\blend\` 下） | 是什么 |
+|---|---|
+| `<stem>_nude.blend` + `_preview.png` | 去掉衣服：原模型的头、头发（a08 的辫子和金发圈）、武器、骨架 + 裸模的完整身体 |
+| `xps\<stem>_nude\<stem>_nude.mesh` | XPS，和套装同一个导出（游戏材质 render group 24 / 25），武器是可选部件 |
+| `pmx\<stem>_nude\<stem>_nude.pmx` + `_bustB.pmx` | PMX（Convert_to_MMD5：MMD 骨架、58 个表情、胸部 + 头发物理） |
+| `<stem>_full.blend` + `_preview.png` | 衣服还穿着、下面是完整身体，给爆衣插件用；身体收进衣服里，原样的形状在形态键 `裸体形状` |
+| `xps\<stem>_full\<stem>_full.mesh` | XPS：衣服、武器是可选部件（`+outfit` / `+weapon`）；脱衣服 = 取消 outfit、勾上 nude |
+| `pmx\<stem>_full\<stem>_full.pmx` + `_bustB.pmx` | PMX：组表情「衣服非表示」= 衣服藏起 + 身体复原 |
+
+- **认零件**：
+  - 皮肤槽按形状找（槽里 ≥60% 的顶点离裸模身体不到 1.5 mm）；
+  - 头 = 眼球骨（`eyeball_L` / `eye_L`）权重顶点最多的网格，找不到就用挂着 `eye` 材质的网格；头发 = 名字带 hair；
+  - 武器 = `wp_*` 或加进来的战斗武器，两份都保留；
+  - 尾巴（材质名带 `tail`，或大半顶点在 `tail*` 骨头上）是身体部件，两份都保留，不算衣服；
+  - 用脸材质的零件算「保留」，其余都是衣服。
+
+  没有一个槽够 60%（f06：皮肤和衣服同一个材质），报告里记 `skin_note`，这个槽归衣服。
+  - 皮肤槽再按颜色查一遍（槽的 `hq_albedo` 和裸模身体同一位置的颜色比），报告里是 `painted`：
+    - 整个槽差得多（中位数 > 0.08）是贴在皮肤上的衣服，归衣服（l01 的连体衣 + 丝袜）；
+    - 带衣服版里，成片差得多的面（> 0.12，至少 12 个）是画在皮肤上的，挪到新槽归衣服，留在身体上面（m02 的藤蔓纹）。
+- **骨架**：身体用到的每根裸模骨头，依次找（2–5 都要在裸模骨头 3 cm 以内）：
+  1. 同名；
+  2. 只差大小写（`Bip001 Chin` / `chin`）；
+  3. 只差空格、下划线（d08 的 `Bip001 LThigh` / `LCalf`，裸模叫 `Bip001 L Thigh` / `L Calf`）；
+  4. 别名（`ALIASES`：g04 的胸骨叫 `chest_L`，裸模叫 `Breast_L`）；
+  5. 子骨头在模型里对应的那根骨头的父骨头（d08 的上臂 `LUpArm` 是 `L Forearm` 的父骨头，d09 的小腿 `LCalfTwist` 是
+     `L Foot` 的父骨头）；
+  6. 都没有的，按裸模的位置加进原骨架。a08 加 71 根、g04 加 76 根：生殖器、脚趾、臀、乳头、肌肉辅助骨。
+
+  没认出来的同一根骨头会变成第二套腿 / 手臂（d08 原来就是这样）：PMX 选了裸模那套，挂在模型自己那套上的衣服不跟动作走。
+- **静止姿势**：模型骨架的某条肢体和裸模差 ≥ 10°（`POSE_MIN`，只有 c10：和服的手臂垂下 44°）时，先把裸模这条肢体的
+  骨头逐根转到模型的方向，身体按权重跟着变形，再定为裸模的静止姿势（`repose_nude`，报告里是 `reposed`）。
+- **脖子**：头网格没盖住的那部分裸模脸槽（g04 的头只到下巴）接上，替掉模型自己的脖子片。
+  - 「盖住」：
+    - 顶点都在头顶点 1 mm 以内；
+    - 或者有一个顶点沿法线 8 mm 内碰到头的皮肤（c02 的脸和裸模差 1–5 mm）；
+    - 和身体不连着的碎片（从眼睛、鼻孔透出来的）也删。
+  - 和头的接缝挪到头的顶点上，抄头的权重和法线。头开口和裸模脖子不是同一套顶点时（c02：44 对 48），`stitch` 把脖子上沿
+    按周长比例挪到头开口上（可以落在两个头顶点之间，按两边插值），补细三角，附近 2 cm 的顶点跟着挪一点。
+- **权重**：整个身体用裸模自己的权重。原皮肤的权重没有沿用：它靠游戏动画驱动的辅助骨（a08 的小腿扭转骨挂在大腿下面），
+  混进去以后一弯膝盖小腿就被拉开。
+- **带衣服版**：
+  - 原来有皮肤的地方贴回原皮肤；
+  - 新补的部分往骨头那边收到衣服里面 1.5 mm（尖头鞋里的脚趾变细，不会折叠），最后按「看不看得见」再查一遍；
+  - 收进去的是基础形状，原样的形状存成形态键 `裸体形状`。XPS 把动过的那块写两份（`+outfit` / `-nude`），
+    PMX 的「衣服非表示」是组表情，同时打开它。
+- **战斗武器**：
+  - `weapon_dump.py` 从战斗包读出蒙皮的武器网格；
+  - `add_weapon_blender.py` 装进 .blend（a08 的大剑：Point007_L/R、chain 骨头，游戏材质），XPS 里是可选部件；
+  - PMX 转换前拿掉，由 `pmx_add_weapon.py` 照原版的做法加回去（带「武器非表示」）。导出时索引宽度已经把武器算进去了
+    （`reserve_indices`）。
+- **PMX 补丁**：`PMX_PATCHES` 里的照原模型再做一遍（g04 的「扇子縮小」）。
+- **A 字姿势**：`export_suit_pmx_blender.py` 给 Convert_to_MMD5 的 A 字姿势一步包了一层，带形态键的网格也会一起放下手臂
+  （原来会跳过）。
+- **扭转骨**：PMX 导出按辅助骨带的皮肤判它属于哪段肢体，A 字姿势前挂过去。带衣服版里模型的皮肤换成了裸模身体，
+  模型自己的扭转骨可能只剩几块衣服、判不出来（f10 的 `LUpArmTwist`，袖子被拉长 2–4 cm）；名字带 twist 的现在改按
+  骨头自己的位置判（`export_character_model_blender.py` 的 `plan_joint_helper_moves`）。
+- 日志在 `D:\roe_exports\_hq_runs\<stem>_nude\`；画廊「裸模」分类里是标「补全裸模」的卡片，「带衣服」几行是 `_full` 的
+  blend / XPS / PMX。原理、数字和踩过的坑见 [roe-complete-nude.md](../../docs/roe-complete-nude.md)。
+
 ---
 
 ## 9. 已知兼容坑速查

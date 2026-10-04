@@ -640,6 +640,7 @@ def mesh_distortion(before, meshes, ratio_limit=3.0, growth_fraction=0.008):
 # the joint pads.  Matching the convention (then checking the geometry) is what
 # keeps garment bones — buttocks, skirts, pauldrons — out of the limb chains.
 LIMB_HELPER_NAME = re.compile(r"twist|elbow|knee|ankle|muscle\s*strand", re.IGNORECASE)
+TWIST_HELPER_NAME = re.compile(r"twist", re.IGNORECASE)    # ... of those, placed by their head when the skin is unclear
 
 
 # How far past a joint the skin blend from one bone to the next reaches, in
@@ -899,6 +900,21 @@ def plan_joint_helper_moves(arm, meshes, slots):
                      + 0.15 * length * max(0.0, t - 0.5))
             if best is None or score < best[0]:
                 best = (score, joint.name, t, lateral / length, start, segment)
+        if best is None and TWIST_HELPER_NAME.search(bone.name):
+            # Biped's twist bones belong to their limb by name.  When the skin alone does not tell, the bone's own
+            # head does: f10's LUpArmTwist (under the clavicle) kept only a shoulder piece of the outfit once a
+            # completed body (complete_nude.py) took over the bare arm, its centroid 0.351 lengths off the upper arm,
+            # so it stayed out of the A-pose and the sleeves tore 2-4 cm.  A head on a segment's start rides that
+            # segment (ForeTwist at the elbow: the forearm, not the upper arm's end).
+            head = matrix @ bone.head_local
+            for joint, start, segment in joints:
+                length = segment.length
+                t = (head - start).dot(segment) / (length * length)
+                lateral = (head - (start + segment * max(0.0, min(1.0, t)))).length
+                if -0.02 <= t <= 0.98 and lateral <= 0.05 * length and (best is None or lateral < best[0]):
+                    best = (lateral, joint.name, t, lateral / length, start, segment)
+            if best is not None:
+                entry["by"] = "head"
         if best is None:
             entry["verdict"] = "skin not on any limb"
             continue
