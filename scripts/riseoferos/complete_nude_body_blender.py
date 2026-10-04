@@ -75,6 +75,14 @@ SLOT_PAINTED = 0.08      # a skin slot whose colour differs from the nude body's
                          # clothing lying on the skin: l01's leotard + stockings (0.144); real skin 0.004-0.007
 FACE_PAINTED = 0.12      # full variant: faces of a skin slot this far off are paint on the skin (m02's vines, 25 %)
 PAINT_MIN = 12           # ... in patches of at least this many such faces (b01 / d01: 0.3 % scattered specks)
+TONE_MIN = 1.5           # CIELAB distance at the neck seam between the model's face colour and the colour the nude
+                         # base's own face would have there, over which the body is tinted to the model's skin
+                         # (b08_outfit1 tanned 20.6, k07 / k03 pale 14.0 / 12.2, b14 4.4; every other model 0 - 0.5)
+TONE_REACH = 0.008       # ... the colour on either side of a seam vertex: faces whose centre is this close to it
+TONE_TOUCH = 0.0005      # ... a body vertex this close to a vertex in the face material is on the seam
+TONE_SEAM_MIN = 20       # ... seam vertices with colour on both sides needed for a measurement
+TONE_SPREAD = 0.1        # ... and no tint when the gain of the front half of the neck and of the back half differ more
+                         # (b14: its face's AO is 18 % lighter than the family's under the jaw, the same at the nape)
 EYE_GROUP = re.compile(r"\beye(ball)?_[lr]$", re.IGNORECASE)     # Bip001 eyeball_L (most), Bip001 eye_L (b01)
 TAIL = re.compile(r"(^|[\W_])tail(\d|_|$)", re.IGNORECASE)        # e05: pc_e05_hd_tail / tail2, bones tail_01-04
 TAIL_SHARE = 0.5         # ... or a slot with this share of its vertices on tail bones: part of the body, kept
@@ -1365,6 +1373,226 @@ def painted_skin(kinds, nude_body, body_slot, variant):
     return found
 
 
+def srgb_linear(c):
+    return np.where(c <= 0.04045, c / 12.92, ((np.maximum(c, 0.0) + 0.055) / 1.055) ** 2.4)
+
+
+def linear_srgb(c):
+    c = np.clip(c, 0.0, 1.0)
+    return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1.0 / 2.4) - 0.055)
+
+
+def cielab(lin):
+    """Linear RGB (D65) -> CIELAB."""
+    xyz = np.asarray(lin, dtype=np.float64) @ np.array([[0.4124, 0.3576, 0.1805], [0.2126, 0.7152, 0.0722],
+                                                         [0.0193, 0.1192, 0.9505]]).T
+    f = xyz / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(f > (6 / 29) ** 3, np.cbrt(f), f / (3 * (6 / 29) ** 2) + 4 / 29)
+    return np.stack([116 * f[..., 1] - 16, 500 * (f[..., 0] - f[..., 1]), 200 * (f[..., 1] - f[..., 2])], -1)
+
+
+def recorded_map(mat, key):
+    """A texture file hq_materials_blender.py recorded on an HQ material: roe_hq_xps[key], or roe_hq_pmx for "pmx"."""
+    if mat is None:
+        return None
+    if key == "pmx":
+        return mat.get("roe_hq_pmx")
+    try:
+        return json.loads(mat.get("roe_hq_xps", "")).get(key)
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def file_pixels(path, size=None):
+    """An image file as an (h, w, 4) array of its stored (sRGB-encoded) values, scaled to size x size if given."""
+    img = bpy.data.images.load(path, check_existing=False)
+    try:
+        if size:
+            img.scale(size, size)
+        w, h = img.size
+        px = np.empty(w * h * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(h, w, 4)
+        if img.is_float:                    # a float image holds linear values
+            px[:, :, :3] = linear_srgb(px[:, :, :3])
+        return px
+    finally:
+        bpy.data.images.remove(img)
+
+
+def tinted_copy(src, dst, gain, rows=256):
+    """src with every texel's linear RGB times gain (alpha kept), written as an 8-bit PNG at dst."""
+    px = file_pixels(src)
+    h, w = px.shape[:2]
+    for y in range(0, h, rows):
+        block = px[y:y + rows, :, :3]
+        px[y:y + rows, :, :3] = linear_srgb(srgb_linear(block) * gain)
+    out = bpy.data.images.new("roe_tone_tmp", w, h, alpha=True)
+    try:
+        out.pixels.foreach_set(px.ravel())
+        out.filepath_raw = dst
+        out.file_format = "PNG"
+        out.save()
+    finally:
+        bpy.data.images.remove(out)
+
+
+def uv_name(mat):
+    """The UV map an HQ material reads (node hq_uv), "" for the active one."""
+    node = mat.node_tree.nodes.get("hq_uv") if mat is not None and mat.use_nodes and mat.node_tree else None
+    return node.uv_map if node is not None else ""
+
+
+def material_faces(obj, mat):
+    slots = {i for i, s in enumerate(obj.material_slots) if s.material == mat}
+    return [p.index for p in obj.data.polygons if p.material_index in slots]
+
+
+def face_samples(parts, tex):
+    """[(obj, faces, uv map)] -> (face centres, linear colour of tex at each face's UV centre, the faces' vertices),
+    world space; None without faces."""
+    cen, col, verts = [], [], []
+    for obj, faces, uvmap in parts:
+        uv = loop_uvs(obj, uvmap)
+        if not faces or uv is None:
+            continue
+        co = world_co(obj)
+        lv = np.empty(len(obj.data.loops), dtype=np.int64)
+        obj.data.loops.foreach_get("vertex_index", lv)
+        polys = obj.data.polygons
+        c, at, vs = [], [], set()
+        for f in faces:
+            li = np.array(polys[f].loop_indices)
+            c.append(co[lv[li]].mean(0))
+            at.append(uv[li].mean(0))
+            vs.update(lv[li].tolist())
+        cen.append(np.array(c))
+        col.append(srgb_linear(texel(tex, np.array(at))))
+        verts.append(co[sorted(vs)])
+    if not cen:
+        return None
+    return np.concatenate(cen), np.concatenate(col), np.concatenate(verts)
+
+
+def seam_ratio(face_parts, face_tex, body_parts, body_tex, extra=()):
+    """Colour jump at the seam between a face-material side and a body side: per seam vertex (a body-side vertex
+    within TONE_TOUCH of a face-side one, plus `extra` points), the mean colour of each side's faces within
+    TONE_REACH; returns (median face / body ratio, median face colour, median body colour, seam vertices, their
+    positions, their ratios) in linear RGB, or None."""
+    fs, bs = face_samples(face_parts, face_tex), face_samples(body_parts, body_tex)
+    if fs is None or bs is None:
+        return None
+    near = kd_of(fs[2])
+    seam = [p for p in bs[2] if near.find(Vector(p))[2] <= TONE_TOUCH] + [p for p in extra]
+    fkd, bkd = kd_of(fs[0]), kd_of(bs[0])
+    fside, bside, at = [], [], []
+    for p in seam:
+        fi = [k for _co, k, _d in fkd.find_range(Vector(p), TONE_REACH)]
+        bi = [k for _co, k, _d in bkd.find_range(Vector(p), TONE_REACH)]
+        if fi and bi:
+            fside.append(fs[1][fi].mean(0))
+            bside.append(bs[1][bi].mean(0))
+            at.append(p)
+    if len(fside) < TONE_SEAM_MIN:
+        return None
+    fside, bside = np.array(fside), np.array(bside)
+    ratio = fside / np.maximum(bside, 1e-4)
+    return np.median(ratio, 0), np.median(fside, 0), np.median(bside, 0), len(fside), np.array(at), ratio
+
+
+def front_of(head, centre):
+    """Horizontal unit vector from the neck towards the face: the head's eye slot (else the whole head) seen from
+    the seam's centre."""
+    co = world_co(head)
+    eye = {i for i, s in enumerate(head.material_slots) if s.material and base(s.material.name) == "eye"}
+    verts = sorted({v for p in head.data.polygons if p.material_index in eye for v in p.vertices})
+    d = (co[verts] if verts else co).mean(0) - centre
+    d[2] = 0.0
+    n = np.linalg.norm(d)
+    return d / n if n > 1e-6 else np.array([0.0, -1.0, 0.0])
+
+
+def tone_match(head, body, body_mat, seam, nude_body, nude_slot, face_slot, stem):
+    """Tint the body to the model's skin when its face is coloured unlike the family's: the body is the family nude
+    base's skin, the head the model's own, so a tanned (b08_outfit1) or pale (k03, k07) face met the nude body in a
+    colour line at the neck.  Measured on the PMX diffuse textures (albedo x _BaseColor x AO, what all three formats
+    show): the colour jump across the model's seam (face side / body side, median over the seam vertices) against
+    the jump across the nude base's own face / body seam; their ratio, per channel in linear RGB, is the gain that
+    makes head and body meet as they do on the nude base (b14's face differs from the family's only in its AO, 16 %
+    lighter along the neck's lower edge).  Applied over TONE_MIN to: the HQ material's _BaseColor (node hq_tint,
+    the .blend) and tinted copies of its XPS / PMX diffuse files (same names, in <cache>\\tone\\<stem>\\) recorded on
+    the material, so XPS and PMX carry it too."""
+    face = head.material_slots[0].material if head is not None and head.material_slots else None
+    base_face = nude_body.material_slots[face_slot].material if face_slot is not None else None
+    paths = [recorded_map(m, "pmx") for m in (face, base_face, body_mat)]
+    if body_mat is None or not all(p and os.path.isfile(p) for p in paths):
+        return {"skipped": "no PMX diffuse on the face / nude face / body material"}
+    if os.path.normcase(os.path.abspath(paths[0])) == os.path.normcase(os.path.abspath(paths[1])):
+        return {"skipped": "the family's own face"}
+    face_tex, base_tex, body_tex = (file_pixels(p, 1024)[:, :, :3] for p in paths)
+    body_faces = (body, material_faces(body, body_mat), uv_name(body_mat))
+    model = seam_ratio([(head, material_faces(head, face), uv_name(face)),
+                        (body, material_faces(body, face), uv_name(face))], face_tex, [body_faces], body_tex,
+                       extra=world_co(body)[[i for i, _obj, _j in seam]] if seam else ())
+    polys = nude_body.data.polygons
+    base = seam_ratio([(nude_body, [p.index for p in polys if p.material_index == face_slot], uv_name(base_face))],
+                      base_tex,
+                      [(nude_body, [p.index for p in polys if p.material_index == nude_slot], uv_name(body_mat))],
+                      body_tex)
+    if model is None or base is None:
+        return {"skipped": "no seam measured (model %s, nude base %s)" % (model is not None, base is not None)}
+    gain = model[0] / base[0]
+    dE = float(np.linalg.norm(cielab(model[1]) - cielab(model[1] / gain)))     # the face against what it would be
+    front = front_of(head, model[4].mean(0))
+    halves = []
+    for res in (model, base):
+        ahead = (res[4] - res[4].mean(0)) @ front > 0.0
+        halves.append([np.median(res[5][ahead], 0), np.median(res[5][~ahead], 0)])
+    by_half = [halves[0][k] / halves[1][k] for k in (0, 1)]             # front, back
+    spread = float(np.max(np.abs(by_half[0] / by_half[1] - 1.0)))
+    out = {"dE": round(dE, 2), "gain": [round(float(g), 4) for g in gain],
+           "front_back": [[round(float(g), 3) for g in h] for h in by_half], "spread": round(spread, 3),
+           "jump": [round(float(x), 3) for x in model[0]], "nude_base_jump": [round(float(x), 3) for x in base[0]],
+           "seam_points": [model[3], base[3]], "tinted": False}
+    if dE < TONE_MIN:
+        return out
+    if spread > TONE_SPREAD:
+        out["skipped"] = "the difference changes around the neck: one tint cannot match the front and the back"
+        return out
+    users = [o for o in bpy.data.objects if o not in (body, nude_body) and o.type == "MESH"
+             and any(s.material == body_mat for s in o.material_slots)]
+    if users:                                   # never tint another mesh's material with it (the nude base goes)
+        mine = body_mat.copy()
+        for s in body.material_slots:
+            if s.material == body_mat:
+                s.material = mine
+        body_mat = mine
+    tint = body_mat.node_tree.nodes.get("hq_tint") if body_mat.use_nodes else None
+    if tint is not None and tint.type == "MIX_RGB":
+        c = tint.inputs["Color2"].default_value
+        tint.inputs["Color2"].default_value = (c[0] * gain[0], c[1] * gain[1], c[2] * gain[2], c[3])
+        out["base_color"] = "hq_tint x gain"
+    files = {}
+    for key in ("diffuse", "pmx"):
+        src = recorded_map(body_mat, key)
+        if not (src and os.path.isfile(src)):
+            continue
+        folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(src))), "tone", stem)
+        os.makedirs(folder, exist_ok=True)
+        dst = os.path.join(folder, os.path.basename(src))   # same name: the XPS / PMX textures are replaced, not added
+        tinted_copy(src, dst, gain)
+        files[key] = dst
+    if "diffuse" in files:
+        maps = json.loads(body_mat["roe_hq_xps"])
+        maps["diffuse"] = files["diffuse"]
+        body_mat["roe_hq_xps"] = json.dumps(maps)
+    if "pmx" in files:
+        body_mat["roe_hq_pmx"] = files["pmx"]
+    body_mat["roe_tone_gain"] = out["gain"]
+    out.update(tinted=True, material=body_mat.name, files=files)
+    return out
+
+
 def own_materials(kept, outfit):
     """Full variant: a kept slot sharing a material with the outfit gets a copy (the PMX hide morph hides by
     material; a08's braid ring uses the outfit atlas)."""
@@ -1603,6 +1831,8 @@ def main():
         if not obj.get("roe_xps_optional"):
             obj["roe_xps_optional"] = "+weapon"
 
+    report["tone"] = tone_match(head, body, nude_body.material_slots[nude_slot].material, seam, nude_body, nude_slot,
+                                face_slot, stem)
     for obj in (nude_body, nude_arm):
         data = obj.data
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -1639,7 +1869,7 @@ def main():
             json.dump(report, handle, ensure_ascii=False, indent=1, default=str)
     print("ROE_COMPLETE_NUDE=" + json.dumps({k: report.get(k) for k in ("variant", "body", "weights", "seam",
                                                                          "neck_from_nude", "fit", "outfit",
-                                                                         "weapons", "aliases", "pack")},
+                                                                         "weapons", "aliases", "pack", "tone")},
                                             ensure_ascii=True, default=str))
 
 

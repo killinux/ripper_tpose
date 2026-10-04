@@ -88,7 +88,7 @@ def one_version(stem, variant, info, base_blend, args, logs, dump, result):
             if code != 0 or data is None:
                 res["error"] = "body step failed (exit %d), see %s" % (code, logs)
                 return False
-            res.update({k: data.get(k) for k in ("body", "weights", "fit", "outfit", "weapons", "aliases")})
+            res.update({k: data.get(k) for k in ("body", "weights", "fit", "outfit", "weapons", "aliases", "tone")})
         # the model's own weapon (g04's fan) or one added earlier (inherited from its .blend) stays as it is
         has_weapon = bool((data or {}).get("weapons")) and not args.dry_run
         if dump and (args.weapon == "yes" or not has_weapon):

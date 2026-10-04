@@ -10,6 +10,11 @@
 2+6 段、脸颊 2、鼻翼 2、下巴 1、嘴唇 8、舌头 3、牙齿 2），一根 shape key 都没有。
 PMX 的骨骼 morph 正好能表达这种脸，VMD 里的表情键也就能驱动它。
 
+> 2026-10-04 起，ROE 的批量导出默认把这些骨骼 morph 烘成同名的**顶点 morph** 再写 PMX
+> （`export_character_model_blender.bake_bone_morphs`，要骨骼 morph 加 `--pmx-morphs bone`，见
+> [riseoferos README](../../riseoferos/README.md) PMX 转换第 5 步）。已经导出的 PMX 用
+> `scripts/riseoferos/pmx_vertex_morphs.py` 在文件里直接转，不用重出。插件本身照旧只建骨骼 morph。
+
 ```
 scripts/blender_addons/mmd_face_morphs/
   __init__.py     插件入口：侧栏 MMD 页签 → Face Morphs 面板

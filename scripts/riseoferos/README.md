@@ -324,7 +324,11 @@ D:\roe_exports\character_models_manifest.json   # 全量清单
 >      `export_hq.py` / `complete_nude.py` 加 `--pmx-morphs bone`，`export_suit_pmx_blender.py` 在 PMX 路径后加
 >      `--pmx-morphs bone`；侧边栏 ROE PMX Tools 第 ④ 步上面有「表情：顶点表情 / 骨骼表情」。
 >    - 报告里是 `face_morph_kind` 和 `vertex_morph_bake`（转了几个、每个网格几个形态键、最大位移）。PMX 大约大 1 MB
->      （d08 带衣服版 6.1 → 7.1 MB）。已经导出的 PMX 没有重出，还是骨骼表情。
+>      （d08 带衣服版 6.1 → 7.1 MB）。
+>    - 已经导出的 PMX 不用重出：`pmx_vertex_morphs.py` 在 PMX 文件里直接把骨骼表情换成同名顶点表情（按 MMD 的骨骼
+>      变换算位移，序号不变，文件其余字节不变；和导出时烘的结果差 ≤ 0.08 mm）。E 盘归档的 842 个 PMX 10-04 晚已经
+>      转了；骨骼表情的原版就是 D 盘 `roe_exports` 里的工作副本（没转）。
+>      `python pmx_vertex_morphs.py <pmx 或文件夹> --backup <备份目录> --base <路径的起点>`（`--dry-run` 只报告）。
 >
 > **踩过的坑（都已修，改动在 worker 里）**
 >
@@ -1016,6 +1020,12 @@ python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs --dry-run   # 指定裸模
     按周长比例挪到头开口上（可以落在两个头顶点之间，按两边插值），补细三角，附近 2 cm 的顶点跟着挪一点。
 - **权重**：整个身体用裸模自己的权重。原皮肤的权重没有沿用：它靠游戏动画驱动的辅助骨（a08 的小腿扭转骨挂在大腿下面），
   混进去以后一弯膝盖小腿就被拉开。
+- **肤色**（`tone_match`，10-04 晚）：模型的脸和家族的颜色不一样时（b08_outfit1 晒黑，k03、k07 偏白偏粉），身体按
+  模型的肤色调色，消掉脖子上的色差线。
+  - 在 PMX 漫反射贴图上量：模型接缝两边颜色之比，除以裸模自己接缝两边颜色之比，得到身体每个通道（线性 RGB）要乘的倍数。
+  - 乘到 `.blend` 身体材质的 `_BaseColor`（`hq_tint`）上；XPS / PMX 漫反射贴图各调一份，放在
+    `D:\roe_exports\_hq_materials\tone\<模型>\`，文件名不变。
+  - 差 ≥ 1.5（ΔE，`TONE_MIN`）才调；前后半圈的倍数相差超过 10%（`TONE_SPREAD`，b14）不调。报告里是 `tone`。
 - **带衣服版**：
   - 原来有皮肤的地方贴回原皮肤；
   - 新补的部分往骨头那边收到衣服里面 1.5 mm（尖头鞋里的脚趾变细，不会折叠），最后按「看不看得见」再查一遍；
