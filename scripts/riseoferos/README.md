@@ -986,7 +986,7 @@ python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs --dry-run   # 指定裸模
 | `pmx\<stem>_nude\<stem>_nude.pmx` + `_bustB.pmx` | PMX（Convert_to_MMD5：MMD 骨架、58 个表情、胸部 + 头发物理） |
 | `<stem>_full.blend` + `_preview.png` | 衣服还穿着、下面是完整身体，给爆衣插件用；身体收进衣服里，原样的形状在形态键 `裸体形状` |
 | `xps\<stem>_full\<stem>_full.mesh` | XPS：衣服、武器是可选部件（`+outfit` / `+weapon`）；脱衣服 = 取消 outfit、勾上 nude |
-| `pmx\<stem>_full\<stem>_full.pmx` + `_bustB.pmx` | PMX：组表情「衣服非表示」= 衣服藏起 + 身体复原 |
+| `pmx\<stem>_full\<stem>_full.pmx` + `_bustB.pmx` | PMX：身体有两份（穿衣的、裸体的）；组表情「衣服非表示」= 衣服藏起 + 换上裸体那份（`pmx_two_bodies.py`，2026-10-05 起） |
 
 - **认零件**：
   - 皮肤槽按形状找（槽里 ≥60% 的顶点离裸模身体不到 1.5 mm）；
@@ -1029,8 +1029,15 @@ python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs --dry-run   # 指定裸模
 - **带衣服版**：
   - 原来有皮肤的地方贴回原皮肤；
   - 新补的部分往骨头那边收到衣服里面 1.5 mm（尖头鞋里的脚趾变细，不会折叠），最后按「看不看得见」再查一遍；
-  - 收进去的是基础形状，原样的形状存成形态键 `裸体形状`。XPS 把动过的那块写两份（`+outfit` / `-nude`），
-    PMX 的「衣服非表示」是组表情，同时打开它。
+  - 收进去的是基础形状，原样的形状存成形态键 `裸体形状`。
+  - **两份身体**（2026-10-05 起，用户定的做法）：MMD 的顶点表情不重算法线，一份身体靠 `裸体形状` 变回去，光照还是
+    收在衣服里那个形状的（胸部凹坑、指甲黑口）。所以身体放两份：
+    - XPS 把整个身体写两份（`+outfit` 收在衣服里的、`-nude` 原样的），各带各自形状的法线；
+    - PMX 里 `pmx_two_bodies.py` 在文件里直接加一份裸体身体（材质 `<身体>_nude`，文件里透明，法线从 nude 版 PMX 拿），
+      `裸体形状` 原地改成换身体的材质表情，「衣服非表示」（组表情）照旧一拉就脱，其余字节不变。脖子在脸材质里的模型
+      脸也复制一份，表情跟着复制。`complete_nude.py` 出完带衣服版的 PMX 自动跑，单独用：
+      `python pmx_two_bodies.py <pmx 或文件夹> [--nude <nude 版 pmx>] [--backup <备份目录> --base <起点>] [--dry-run]`
+      （已经是两份身体的跳过）。
 - **战斗武器**：
   - `weapon_dump.py` 从战斗包读出蒙皮的武器网格；
   - `add_weapon_blender.py` 装进 .blend（a08 的大剑：Point007_L/R、chain 骨头，游戏材质），XPS 里是可选部件；

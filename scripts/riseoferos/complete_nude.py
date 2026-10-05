@@ -3,8 +3,9 @@ the family nude base.  Makes two versions, each as .blend + XPS + PMX (+ bust B)
 gallery:
   <stem>_nude   outfit removed
   <stem>_full   outfit kept over the whole body: in XPS the outfit meshes are optional items (+outfit|..., XNALara /
-                XPS can hide them), in PMX the morph 衣服非表示 hides them; the .blend is what the clothes burst
-                add-on works on
+                XPS can hide them) and the body goes out twice (fitted with the outfit, nude as -nude); in PMX the
+                body is in twice too - the morph 衣服非表示 hides the outfit and swaps the fitted body for the nude
+                one (pmx_two_bodies.py, lit right in MMD); the .blend is what the clothes burst add-on works on
 
     python complete_nude.py a08                        # pc_a08_hd -> pc_a08_hd_nude + pc_a08_hd_full
     python complete_nude.py a08 g04 --archive          # ... then to E: + gallery
@@ -19,7 +20,8 @@ nude_materials\\ (a demon form: pc_<letter>01_fm_nk_bs).
 Per version: complete_nude_body_blender.py (the body; how and why: docs/roe-complete-nude.md) -> the battle weapon
 the HD model lacks (--weapon auto: weapon_dump.py + add_weapon_blender.py, a08's greatsword; a model that has its
 own wp_* mesh keeps it) -> preview -> export_suit_xps_blender.py -> export_suit_pmx_blender.py -> PMX patches
-(PMX_PATCHES: the weapon via pmx_add_weapon.py, g04's 扇子縮小 morph) -> tune_bust_pmx.py bust B.
+(PMX_PATCHES: the weapon via pmx_add_weapon.py, g04's 扇子縮小 morph) -> full: pmx_two_bodies.py (the nude copy's
+normals from the nude version made just before) -> tune_bust_pmx.py bust B.
 Outputs on D:, beside the model's own:
   <id>\\blend\\<stem>_<version>.blend + _preview.png
   <id>\\blend\\xps\\<stem>_<version>\\<stem>_<version>.mesh (+ textures)
@@ -138,6 +140,16 @@ def one_version(stem, variant, info, base_blend, args, logs, dump, result):
         for label, argv in patches:
             res.setdefault("pmx_patches", {})[label] = run_patch(argv, values, logs, "%s_%s" % (label, variant),
                                                                  args.dry_run)
+        if variant == "full":
+            # the body twice - dressed and nude - in the PMX itself (pmx_two_bodies.py; the nude version was made
+            # just before, its PMX gives the nude copy's normals); bust B is made from this
+            nude_pmx = os.path.join(args.exports, cid, "blend", "pmx", "%s_nude" % stem, "%s_nude.pmx" % stem)
+            cmd = [sys.executable, os.path.join(HERE, "pmx_two_bodies.py"), pmx,
+                   "--nude", nude_pmx if os.path.isfile(nude_pmx) or args.dry_run else "none"]
+            code, text = hq.run(cmd, os.path.join(logs, "two_bodies.log"), args.dry_run)
+            res["two_bodies"] = "dry" if args.dry_run else ("ok" if code == 0 else "FAILED (exit %d)" % code)
+            if code != 0 and not args.dry_run:
+                return False
         bust_log = os.path.join(logs, "bustB_%s" % variant)
         res["bustB"] = hq.bust_b(pmx, bust_log, args.dry_run, args.exports)
     return True

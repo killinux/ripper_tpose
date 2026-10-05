@@ -17,8 +17,9 @@ What a suit needs on top of the batch:
     become XPS optional items: XNALara / XPS list meshes named <render group>_+<group>|<name> with a check box
     (+ shown, - hidden when the model loads), so one file is dressed or nude - the object is renamed
     <mark>|<name> in memory before the export (the .blend is not saved)
-  * the full version's body, fitted under the outfit with its own shape kept as shape key 裸体形状: the part that
-    key moves goes out twice, fitted with the outfit's group and in its own shape as "-nude" (split_fitted_body)
+  * the full version's body, fitted under the outfit with its own shape kept as shape key 裸体形状: it goes out
+    twice, fitted with the outfit's group and in its own shape as "-nude", each with the normals of that shape
+    (split_fitted_body)
 
   blender -b --factory-startup <suit.blend> --python export_suit_xps_blender.py -- <out.mesh>
 The .blend is not saved.  Prints ROE_SUIT_XPS={json} (read back with XNALaraMesh: mesh names = render group,
@@ -155,13 +156,34 @@ class AlphaRule:
 NUDE_SHAPE = "裸体形状"     # complete_nude_body_blender.py: the full version's body keeps its own shape here
 
 
+def shape_normals(body, co):
+    """The body's split normals (custom ones included) with its vertices at `co`, one per loop: what Blender shows
+    with the shape key on - custom normals are stored relative to the surface, so they turn with the shape."""
+    data = body.data.copy()
+    try:
+        if data.shape_keys:
+            holder = bpy.data.objects.new("roe_shape_normals", data)
+            for kb in reversed(list(data.shape_keys.key_blocks)):
+                holder.shape_key_remove(kb)
+            bpy.data.objects.remove(holder)
+        data.vertices.foreach_set("co", co.astype(np.float32))
+        data.update()
+        data.calc_normals_split()
+        normals = np.empty(len(data.loops) * 3, dtype=np.float32)
+        data.loops.foreach_get("normal", normals)
+        return normals
+    finally:
+        bpy.data.meshes.remove(data)
+
+
 def split_fitted_body(meshes):
     """The full version's body (complete_nude_body_blender.py --variant full) is fitted under the outfit and keeps
-    its own shape as the shape key NUDE_SHAPE.  XPS has no morphs, so the part of the body that shape key moves
-    goes out twice: fitted, in the outfit's optional group (it hides with the outfit), and in its own shape in an
-    optional group "nude" that loads hidden - in XNALara / XPS untick outfit and tick nude for the nude look.
-    In memory only (the .blend is not saved).  Returns the new pieces."""
-    import bmesh
+    its own shape as the shape key NUDE_SHAPE.  XPS has no morphs, so the body goes out twice: fitted, in the
+    outfit's optional group (it hides with the outfit), and in its own shape in an optional group "nude" that loads
+    hidden - in XNALara / XPS untick outfit and tick nude for the nude look.  Each copy is the whole body with the
+    normals the whole body has in that shape (until 10-05 only the part the shape key moves went out twice and the
+    rest once: each part re-derived its normals from its own faces, a shading line along the cut - at the neck -
+    in both looks).  In memory only (the .blend is not saved).  Returns the new pieces."""
     made = []
     for body in [o for o in meshes if o.data.shape_keys and o.data.shape_keys.key_blocks.get(NUDE_SHAPE)]:
         keys = body.data.shape_keys.key_blocks
@@ -169,34 +191,25 @@ def split_fitted_body(meshes):
         fitted, nude = np.empty(n * 3), np.empty(n * 3)
         keys[0].data.foreach_get("co", fitted)
         keys[NUDE_SHAPE].data.foreach_get("co", nude)
-        moved = np.linalg.norm((nude - fitted).reshape(-1, 3), axis=1) > 1e-6
-        faces = {p.index for p in body.data.polygons if moved[list(p.vertices)].any()}
+        normals = {"fit": shape_normals(body, fitted), "nude": shape_normals(body, nude)}
         outfit_mark = next((str(o["roe_xps_optional"]) for o in meshes
                             if o.get("roe_outfit") and str(o.get("roe_xps_optional", ""))[:1] in "+-"), "+outfit")
-        pieces = []
-        for suffix, co, mark in (("_fit", fitted, outfit_mark), ("_nude", nude, "-nude"), ("", fitted, None)):
-            obj = body
-            if suffix:
-                obj = body.copy()
-                obj.data = body.data.copy()
-                for coll in body.users_collection:
-                    coll.objects.link(obj)
-                obj.name = obj.data.name = body.name + suffix
+        nude_copy = body.copy()
+        nude_copy.data = body.data.copy()
+        for coll in body.users_collection:
+            coll.objects.link(nude_copy)
+        nude_copy.name = nude_copy.data.name = body.name + "_nude"
+        for obj, co, mark, which in ((body, fitted, outfit_mark, "fit"), (nude_copy, nude, "-nude", "nude")):
+            if obj is body:
+                obj.name = obj.data.name = body.name + "_fit"
             for kb in reversed(list(obj.data.shape_keys.key_blocks)):
                 obj.shape_key_remove(kb)
             obj.data.vertices.foreach_set("co", co.astype(np.float32))
-            bm = bmesh.new()
-            bm.from_mesh(obj.data)
-            bm.faces.ensure_lookup_table()
-            bmesh.ops.delete(bm, geom=[f for f in bm.faces if (f.index in faces) != bool(suffix)], context="FACES_ONLY")
-            bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
-            bm.to_mesh(obj.data)
-            bm.free()
             obj.data.update()
-            if mark:
-                obj["roe_xps_optional"] = mark
-                pieces.append(obj)
-        made += pieces
+            obj.data.use_auto_smooth = True
+            obj.data.normals_split_custom_set(normals[which].reshape(-1, 3).tolist())
+            obj["roe_xps_optional"] = mark
+            made.append(obj)
     return made
 
 
@@ -265,7 +278,7 @@ def main():
         raise SystemExit("expected one armature, found %s" % [a.name for a in armatures])
     arm = armatures[0]
     split = split_fitted_body(meshes)
-    meshes += split
+    meshes += [o for o in split if o not in meshes]        # the fitted copy is the body itself
     report = {"source": bpy.data.filepath, "skinned_pieces": skin_bone_parented(arm, meshes),
               "fitted_body_split": [o.name for o in split], "optional_items": optional_items(meshes)}
     unweighted = [o.name for o in meshes if not o.vertex_groups]

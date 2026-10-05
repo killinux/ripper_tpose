@@ -10,9 +10,13 @@ material morph that swaps them (--no-swap keeps the one body with its vertex mor
 from the nude version's PMX (--nude-pmx; by default <...>_nude/<...>_nude.pmx beside a <...>_full/<...>_full.pmx),
 else from Blender's turned custom normals (a08: 94 vertices at the nails more than 5 degrees off).
 
+  --only-bodies: no burst - only the body put in twice (the plain full version, complete_nude.py's last PMX step):
+the dressed body and the nude copy swapped by 裸体形状 (now a material morph), 衣服非表示 still hides the outfit and
+puts the nude body in; nothing else added.  Exits 3 when the model has no 裸体形状 to swap.
+
   blender -b --factory-startup --python burst_pmx_blender.py -- <in.pmx> <out.pmx>
-      [--style SHARDS|VANISH] [--no-swap] [--nude-pmx <pmx>|none] [--outfit mat1,mat2] [--size 0.1] [--seed 1]
-      [--vmd <out.vmd> [--start 120] [--slow 1.0] [--vanish-frames 1] [--merge <motion.vmd>]]
+      [--style SHARDS|VANISH | --only-bodies] [--no-swap] [--nude-pmx <pmx>|none] [--outfit mat1,mat2] [--size 0.1]
+      [--seed 1] [--vmd <out.vmd> [--start 120] [--slow 1.0] [--vanish-frames 1] [--merge <motion.vmd>]]
 Prints ROE_BURST_PMX=<json>.
 """
 import argparse
@@ -35,6 +39,7 @@ def args():
     ap.add_argument("pmx")
     ap.add_argument("out")
     ap.add_argument("--style", choices=("SHARDS", "VANISH"), default="SHARDS")
+    ap.add_argument("--only-bodies", action="store_true", help="no burst: only the two bodies (plain full version)")
     ap.add_argument("--no-swap", action="store_true")
     ap.add_argument("--nude-pmx", default="")
     ap.add_argument("--outfit", default="")
@@ -67,9 +72,16 @@ def main():
         guess = os.path.join(os.path.dirname(folder), os.path.basename(folder).replace("_full", "_nude"),
                              name.replace("_full", "_nude"))
         nude = guess if "_full" in name and os.path.isfile(guess) else ""
-    opts = dict(style=a.style, swap=not a.no_swap, size=a.size, seed=a.seed, scale=SCALE,
+    if a.only_bodies and a.no_swap:
+        raise SystemExit("--only-bodies swaps the bodies: drop --no-swap")
+    # VANISH adds no fragments, and on a full PMX its only morph (衣服非表示_材質) is there already: just the swap
+    style = "VANISH" if a.only_bodies else a.style
+    opts = dict(style=style, swap=not a.no_swap, size=a.size, seed=a.seed, scale=SCALE,
                 nude_pmx="" if nude == "none" else nude)
     report = cb_mmd.make(root, outfit, opts)
+    if a.only_bodies and not report.get("swapped_bodies"):
+        print("ROE_BURST_PMX=" + json.dumps(dict(report, error="no 裸体形状 to swap"), ensure_ascii=True, default=str))
+        sys.exit(3)
     out = os.path.abspath(a.out)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
