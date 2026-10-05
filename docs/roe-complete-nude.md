@@ -767,9 +767,9 @@ b08_outfit1 的脸是晒黑的，k03、k07 的脸偏白偏粉（核对图「脖�
 - **XPS**：`export_suit_xps_blender.py` 把整个身体写两份（`+outfit` 收在衣服里的、`-nude` 原样的），各带各自形状的法线。
   原来只把动过的那块写两份、其余写一份，两块各自算法线，切口（脖子）两边有一条明暗线。
 - **批量**（10-05）：
-  - PMX：E 盘归档的 123 个带衣服版，`_full.pmx` 和 `_full_bustB.pmx` 共 246 个在原处改，原文件备份在
-    `E:\game_export\RiseOfEros\_meta\full_one_body\`。
-  - XPS：从 full 版 .blend 重新导出 123 个，只换 .mesh（旧的同样备份），读回检查都通过。贴图不动：重新导出的贴图和
+  - PMX：E 盘归档的 123 个带衣服版，`_full.pmx` 和 `_full_bustB.pmx` 共 246 个在原处改。原文件先备份在
+    `E:\game_export\RiseOfEros\_meta\full_one_body\`，用户确认后删了（10-05）。
+  - XPS：从 full 版 .blend 重新导出 123 个，只换 .mesh（旧的同样先备份、后来删了），读回检查都通过。贴图不动：重新导出的贴图和
     原来逐字节一样，只有 k03 的身体贴图差 1/255 的取整（10-04 调色那一步后来又存过一次）。
   - 以后：`complete_nude.py` 出带衣服版时，PMX 导出、打完补丁以后自动跑 `pmx_two_bodies.py`，胸部 B 版从它再做。
 - **验证**：
