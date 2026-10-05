@@ -13,6 +13,7 @@
      这里推力按「重力的倍数」给：每件衣服按自己（要爆开的那部分、按裂缝拆开后）的面积和顶点数算出要的强度，
      力场强度取最大的那件，其余各件用布料的力场权重（≤ 1）按比例减小——大块布和细布条推得一样远。
      力场用 Child Of 约束跟着那部分衣服权重最大的骨骼，角色在动时也是从身体往外推。
+  4. 外观（look.py，1.1）：撕口毛边、碎片淡出 / 溶解，只改渲染，不用重新烘焙。
 
 详细说明和测试见 docs/clothes-burst-guide.md。
 """
@@ -24,6 +25,8 @@ import bpy
 from mathutils import Vector
 
 from cloth_tear import core as ct
+
+from . import look
 
 FIELD, FIELD_COLL = "CB_爆衣推力", "CB_爆衣力场"   # 每次「一键爆衣」一组：CB_爆衣推力_1 + CB_爆衣力场_1 ……
 FOLLOW_CON = "CB 跟随身体"
@@ -427,10 +430,40 @@ def any_baked(scene=None):
     return any(c.is_baked for c in caches)
 
 
+def _kept_verts(obj):
+    vg = obj.vertex_groups.get(KEEP_GROUP)
+    if vg is None:
+        return []
+    gi = vg.index
+    return [v.index for v in obj.data.vertices if any(e.group == gi and e.weight >= 0.5 for e in v.groups)]
+
+
+def write_look_attributes(obj):
+    """按这件衣服上次爆衣的设置（cb_burst）、裂缝和 CB_Keep 写外观用的顶点属性（look.write_attributes）。"""
+    s = dict(DEFAULTS)
+    s.update(last_settings(obj))
+    frame = int(s["frame"])
+    return look.write_attributes(obj, frame, frame + max(1, int(s["duration"])), float(s["width"]), bool(s["invert"]),
+                                 _kept_verts(obj))
+
+
+def sync_look(opts, scene=None):
+    """面板上的外观设置用到场景里所有爆过的衣服（改了马上生效，不用重新烘焙）。返回说明文字列表。"""
+    o = dict(look.DEFAULTS)
+    o.update({k: v for k, v in (opts or {}).items() if k in look.DEFAULTS})
+    garments = burst_garments(scene)
+    if look.enabled(o):
+        for g in garments:
+            if not look.has_attributes(g):          # 1.0 爆的衣服没有外观属性，现补
+                write_look_attributes(g)
+    return look.sync(garments, o)
+
+
 def burst(garments, regions, opts):
-    """一键爆衣。garments：衣服网格；regions：{物体名: 面序号集合 | None（整件）}；opts：DEFAULTS 里的各项。
-    再点一次就按新的设置重做（裂缝默认重新生成）。返回说明文字列表。"""
+    """一键爆衣。garments：衣服网格；regions：{物体名: 面序号集合 | None（整件）}；opts：DEFAULTS 和
+    look.DEFAULTS 里的各项。再点一次就按新的设置重做（裂缝默认重新生成）。返回说明文字列表。"""
     o = dict(DEFAULTS)
+    o.update(look.DEFAULTS)
     o.update(opts or {})
     garments = [g for g in garments if g is not None and g.type == "MESH" and g.name != ct.FLOOR
                 and getattr(g, "mmd_type", "NONE") == "NONE" and len(g.data.polygons)]
@@ -462,6 +495,8 @@ def burst(garments, regions, opts):
     notes.append("身高 %.1f → 布料 2 速度 %g、质量步数 %d%s" % (height, speed, quality, "（快速预览）" if o["fast"] else ""))
     for g in garments:
         g[BURST] = json.dumps({k: o[k] for k in DEFAULTS}, ensure_ascii=False)
+        write_look_attributes(g)
+    notes += look.sync(burst_garments(scene), o)
     land = end + int(o["push_frames"]) + 40
     if scene.frame_end < land:
         notes.append("注意：场景结束帧是 %d，碎片大约第 %d 帧才落地，可以把结束帧改大再点一次「一键爆衣」"
@@ -473,7 +508,9 @@ def burst(garments, regions, opts):
 
 def remove_burst(obj):
     """撤掉一件衣服的爆衣：撕裂修改器、跟随身体的布料 1（衣服原来就有布料的还原设置）、CT_ / CB_ 顶点组、
-    裂缝、爆开范围。身体上的碰撞和地面是几件衣服共用的，留着（「全部清理」才删）。返回做了什么。"""
+    裂缝、爆开范围、外观（属性；材质别的爆过的衣服不用时还原）。身体上的碰撞和地面是几件衣服共用的，
+    留着（「全部清理」才删）。返回做了什么。"""
+    others = [g for g in burst_garments() if g is not obj]
     parts = ct.remove_tear(obj)
     cloth = ct.source_cloth(obj)
     backup = obj.get(ct.CLOTH_BACKUP)
@@ -504,13 +541,14 @@ def remove_burst(obj):
     if obj.data.attributes.get(REGION) is not None:
         set_region(obj, None)
         parts.append("爆开范围")
+    parts += look.forget(obj, others)
     parts += prune_fields()
     return parts
 
 
 def cleanup_all():
-    """全部清理：撤掉所有爆过的衣服，删掉爆衣的推力场；再用布料撕裂插件的「全部清理」删掉身体上的碰撞、地面、
-    它的推力场和没人用的节点组（布料撕裂插件撕过的衣服也会一起清掉）。返回做了什么。"""
+    """全部清理：撤掉所有爆过的衣服，删掉爆衣的推力场和外观（材质还原）；再用布料撕裂插件的「全部清理」删掉
+    身体上的碰撞、地面、它的推力场和没人用的节点组（布料撕裂插件撕过的衣服也会一起清掉）。返回做了什么。"""
     done = []
     for g in burst_garments():
         parts = remove_burst(g)
@@ -522,6 +560,7 @@ def cleanup_all():
             if vg is not None:
                 o.vertex_groups.remove(vg)
             set_region(o, None)
+    done += look.cleanup()
     field = remove_fields()
     if field:
         done.append("推力场：%s" % "、".join(field))

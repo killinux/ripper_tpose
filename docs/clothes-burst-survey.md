@@ -432,9 +432,9 @@ Tifa 的 GANTZ 战斗服（12 件，场景副本 `tifa_live_copy.blend`）更不
 | # | 做什么 | 从哪借 | 工作量 | 说明 |
 |---|---|---|---|---|
 | 1 | **推力改成「重力的倍数」，按每件衣服自动换算**，加一个「爆衣」预设（10-02 已做成爆衣插件） | 实测（第 8 节）、ClothingRipper 的「Rip Burst Force」 | 小 | 每件衣服要的强度按「推力倍数 × 质量 × 顶点数 × 帧率 × 9.81 × 0.001 ÷（0.02 × 面积）」算。力场只有一个：强度取最难推的那件，其余各件用布料的力场权重（≤ 1）按比例减小。Tifa 那种细布条差了几百倍，也照样补得上。「爆衣」按钮一键设好：裂缝多一些、3 帧内全部松开、推力脉冲 |
-| 2 | **撕口和碎片的外观**：撕口毛边或烧边、飞远的碎片淡出、拉得太长的三角形隐藏 | ClothingRipper、ClothingDissolve、溶解着色器、わたり 分解 MME | 小 | 用着色器按每个点的松开时间做；只影响渲染，不影响模拟 |
+| 2 | **撕口和碎片的外观**：撕口毛边或烧边、飞远的碎片淡出、拉得太长的三角形隐藏（10-03 已做成爆衣 1.1 的「外观」：撕口毛边、碎片淡出 / 溶解） | ClothingRipper、ClothingDissolve、溶解着色器、わたり 分解 MME | 小 | 用着色器按每个点的松开时间做；只影响渲染，不影响模拟。做法见 [clothes-burst-guide.md](clothes-burst-guide.md) 第 7 节。拉长的三角形在我们的做法里不会出现（裂缝是真的拆开），没做 |
 | 3 | **更多触发方式和裂缝来源** | Jaeger 的动态绘画笔刷、ClothFX 的碰撞触发、Maya 胶水贴图、tyFlow 弱点贴图、ZipUnzipIt 的「阈值 + 带宽」、Stripwise 的静止姿势空间范围、Marvelous Designer 的缝纫线、Blender 5.2 的 Voronoi、ClothingRipper 的平面切 | 中 | 触发：从某个物体（手、刀、子弹）附近开始撕，以及用权重绘制的「松开时间贴图」。裂缝：沿 UV 缝或材质边界、Voronoi 碎块、平面切 |
-| 4 | **带进 MMD** | Dem Bones、MMDAlembic、mmd_tools 表情、わたり 分解 MME | 中 | 先试 MMDAlembic（可能零转换）。不行就烘到骨骼：我们知道每块碎片有哪些顶点，每块用几根骨骼拟合刚体运动，写 VMD，复用 ROE 的写出器。最简单的是爆衣表情：几个阶段的顶点表情 + 每块淡出的材质表情 |
+| 4 | **带进 MMD**（10-05 已做成爆衣 2.0 的「MMD 表情」：碎片飞散 / 直接消失做成 mmd_tools 表情，导出 PMX + VMD；见 [clothes-burst-guide.md](clothes-burst-guide.md) 第 8 节。布料撕裂本身带进 MMD 没做） | Dem Bones、MMDAlembic、mmd_tools 表情、わたり 分解 MME | 中 | 先试 MMDAlembic（可能零转换）。不行就烘到骨骼：我们知道每块碎片有哪些顶点，每块用几根骨骼拟合刚体运动，写 VMD，复用 ROE 的写出器。最简单的是爆衣表情：几个阶段的顶点表情 + 每块淡出的材质表情 |
 | 5 | **按受力撕**（真正的「拉扯撕开」） | Blender 5.2 Cloth Dynamics；FleX 的分裂算法 | 大 | 3.6 内置布料做不到。一条路是 5.2 后端：Custom 边组 = 我们的裂缝，固定组 = 跟随身体，结果用 Alembic 带回 3.6 或者给 MMDAlembic，要先装 5.2 试。另一条是在 Bone Cloth 的 numpy 求解器上移植 FleX 的分裂算法 |
 | 6 | 给 VaM / HS2 | VaM 自带的脱衣、ClothingRipper；HS2 的 `breakRate` | 以后 | VaM 导出可模拟的衣服，让它自己撕。HS2 把撕开时间烘成贴图，用破损度重放（没测） |
 

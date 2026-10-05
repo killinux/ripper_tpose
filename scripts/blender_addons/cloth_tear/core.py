@@ -672,7 +672,9 @@ def follow_body(garments, add_collision=True, floor=True, skip_accessories=True)
         notes.append("注意：%s 已经有碰撞（可能是旧版加的），碎片会被它挂住，可以用「全部清理」或手动删掉" % "、".join(stale))
     arm_mod = next((m for g in garments for m in g.modifiers if m.type == "ARMATURE" and m.object), None)
     if floor and arm_mod is not None:
-        meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o not in garments
+        # 衣服本身也算：游戏的成套模型常把皮肤和衣服放在同一个网格里（ROE 的 pc_a08_hd：皮肤 + 衣服都在 body1，
+        # 另外只有头和头发），只看衣服以外的网格时地面放到了头的下沿（1.4 米高）
+        meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"
                   and any(m.type == "ARMATURE" and m.object is arm_mod.object for m in o.modifiers)]
         if meshes:
             pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]

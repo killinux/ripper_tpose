@@ -7,7 +7,7 @@
 bl_info = {
     "name": "布料撕裂 Cloth Tear",
     "author": "ripper_tpose",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (3, 6, 0),
     "location": "3D 视图 > 侧栏 > 布料撕裂",
     "description": "一键布料撕裂：裂缝（边折痕）+ 几何节点按帧松开固定组 + 第二个布料修改器，附示例场景",
