@@ -88,12 +88,18 @@ def burst_morphs(root):
 
 
 def imported_burst(root):
-    """模型带着爆衣表情、却不是在这个文件里生成的（导入的爆衣 PMX）：不能再生成一次，可以直接预览、导出 VMD。"""
+    """模型带着爆衣碎片的表情、却不是在这个文件里生成的（导入的爆衣 PMX）：不能再生成一次，可以直接预览、导出 VMD。
+    只有两份身体（`裸体形状` 是换身体的材质表情，ROE 的 full 版 10-05 起都是）不算：照常生成碎片，身体不再换。"""
     if has_burst(root):
         return False
     mm = root.mmd_root
-    return (mm.vertex_morphs.get(vmd.THROW) is not None or mm.material_morphs.get(vmd.SHARDS) is not None
-            or mm.material_morphs.get(vmd.BODY) is not None)
+    return mm.vertex_morphs.get(vmd.THROW) is not None or mm.material_morphs.get(vmd.SHARDS) is not None
+
+
+def two_bodies(root):
+    """模型里已经有两份身体：`裸体形状` 是材质表情、有加回透明度的条目（pmx_two_bodies.py 或这个插件做的）。"""
+    morph = root.mmd_root.material_morphs.get(vmd.BODY)
+    return morph is not None and any(d.offset_type == "ADD" for d in morph.data)
 
 
 def outfit_names(root):

@@ -9,10 +9,13 @@ With 裸体形状 on the body (a full version) the body is also put in twice - d
 material morph that swaps them (--no-swap keeps the one body with its vertex morph).  The nude copy's normals come
 from the nude version's PMX (--nude-pmx; by default <...>_nude/<...>_nude.pmx beside a <...>_full/<...>_full.pmx),
 else from Blender's turned custom normals (a08: 94 vertices at the nails more than 5 degrees off).
+A full version that has the two bodies already (the archived ones since 10-05, pmx_two_bodies.py) only gets the burst:
+its 裸体形状 (a material morph) and nude copy stay as they are.
 
   --only-bodies: no burst - only the body put in twice (the plain full version, complete_nude.py's last PMX step):
 the dressed body and the nude copy swapped by 裸体形状 (now a material morph), 衣服非表示 still hides the outfit and
-puts the nude body in; nothing else added.  Exits 3 when the model has no 裸体形状 to swap.
+puts the nude body in; nothing else added.  Exits 3 when the model has no 裸体形状 to swap (or has the two bodies
+already).  pmx_two_bodies.py does the same in the PMX file without the mmd_tools round trip.
 
   blender -b --factory-startup --python burst_pmx_blender.py -- <in.pmx> <out.pmx>
       [--style SHARDS|VANISH | --only-bodies] [--no-swap] [--nude-pmx <pmx>|none] [--outfit mat1,mat2] [--size 0.1]
@@ -74,6 +77,9 @@ def main():
         nude = guess if "_full" in name and os.path.isfile(guess) else ""
     if a.only_bodies and a.no_swap:
         raise SystemExit("--only-bodies swaps the bodies: drop --no-swap")
+    if a.only_bodies and cb_mmd.two_bodies(root):
+        print("ROE_BURST_PMX=" + json.dumps(dict(error="the two bodies are there already"), ensure_ascii=True))
+        sys.exit(3)
     # VANISH adds no fragments, and on a full PMX its only morph (衣服非表示_材質) is there already: just the swap
     style = "VANISH" if a.only_bodies else a.style
     opts = dict(style=style, swap=not a.no_swap, size=a.size, seed=a.seed, scale=SCALE,

@@ -487,6 +487,8 @@ class CB_OT_mmd_make(_NeedsModel, bpy.types.Operator):
         parts = ["%d 块碎片" % rep["fragments"]] if s.style == "SHARDS" else ["衣服可以直接消失"]
         if rep.get("swapped_bodies"):
             parts.append("身体换成完整的（两份身体）")
+        elif mmd.two_bodies(root):
+            parts.append("身体本来就是两份")
         hit = sum(i.get("normals_from_pmx", 0) for i in rep.get("nude_copies", {}).values())
         loops = sum(i.get("loops", 0) for i in rep.get("nude_copies", {}).values())
         if loops:
@@ -646,18 +648,25 @@ def draw_mmd(layout, context):
     box.label(text="2. 做法", icon="MOD_EXPLODE")
     box.row().prop(s, "style", expand=True)
     if not imported:
+        # the file has the two bodies already (ROE full versions since 10-05): nothing to swap
+        given = mmd.two_bodies(root) and not mmd._record(root).get("swapped")
         has_body = any(mmd.body_key(m) is not None for m in mmd.parts(root)[1]) or mmd.has_burst(root)
-        row = box.row()
-        row.active = has_body
-        row.prop(s, "swap")
-        if not has_body:
+        if given:
             col = box.column(align=True)
-            col.label(text="模型没有「裸体形状」", icon="INFO")
-            col.label(text="衣服下要本来就有完整身体")
-        elif s.swap:
-            col = box.column(align=True)
-            col.label(text="nude 版 PMX（可选）：")
-            col.prop(s, "nude_pmx", text="")
+            col.label(text="身体已经有两份", icon="CHECKMARK")
+            col.label(text="（「裸体形状」换身体，不用再换）")
+        else:
+            row = box.row()
+            row.active = has_body
+            row.prop(s, "swap")
+            if not has_body:
+                col = box.column(align=True)
+                col.label(text="模型没有「裸体形状」", icon="INFO")
+                col.label(text="衣服下要本来就有完整身体")
+            elif s.swap:
+                col = box.column(align=True)
+                col.label(text="nude 版 PMX（可选）：")
+                col.prop(s, "nude_pmx", text="")
         if s.style == "SHARDS":
             col = box.column(align=True)
             col.prop(s, "size", text="碎片大小 cm")
