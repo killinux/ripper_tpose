@@ -12,15 +12,25 @@ its game material and builds the lit ones with all their inputs:
   hair  albedo x _BaseColor (the per-character hair colour: the family's grey albedo is tinted, g by
         sRGB 0.54 / 0.41 / 0.41) x strand occlusion, alpha cut at _Cutoff, hair normal map
   colours (_BaseColor, _EmissionColor) are stored in sRGB and converted to linear, as the game does
-  alpha test / transparency / emission follow the game flags.  Eyes, brows / lashes and tears keep
-  what they have.
+  alpha test / transparency / emission follow the game flags.
+  glass / flat  no colour texture (lenses, glass, glowing parts): _BaseColor, the material's own metallic /
+        smoothness, its normal map if any; premultiplied see-through (URP _ALPHAPREMULTIPLY_ON: the diffuse x alpha,
+        the reflections whole) is drawn by keep_reflections() - glass at alpha 0 shows only its reflections (h06's
+        clear holographic raincoat, c05's lenses)
+  brows / lashes  the add-on's "lash" / "brow" slots keep their material, its texture becomes the game's
+        eyebrow blend (colour x alpha^2 over the face, no darkening): <game>__stroke.png
+  iris  the add-on's "eye" slot keeps its procedural eye, its iris texture gets the game's _IrisColor
+        tint: <game>__iris.png.  Both written to <cache>\\export and used by the PMX / XPS too
+  tears keep what they have.
 
 Slot -> game material, by the slot's colour texture: a game material's _BaseMap (FBX import), or the
 export textures hq_material_data.py wrote (<material>__pmx_diffuse / __xps_diffuse: a PMX or XPS
 import).  The name the ROE add-on stored from the FBX (``roe_source_materials`` + per-face
 ``roe_source_material_index``) breaks ties (body and skin share one albedo); in a suit's file
 (pc_g01_yoga) the suit's own <material>@<suit> comes first, and a material uses its own copy of a
-texture whose name other data shares (hq_material_data "overrides", on every slot).
+texture whose name other data shares (hq_material_data "overrides", on every slot).  The stored name wins
+when the texture match went wrong (source_material: the add-on placed a texture by name - b04's yarn, e05's tails,
+j07's / b14's hair with the outfit's hair texture - or the piece is glass), except on the add-on's head slots.
 
 Two ways of building:
   new materials (default)  one shared "HQ_<game>" material per game material replaces the slot's -
@@ -109,6 +119,9 @@ def slot_albedo(material):
     XPS shader's Diffuse (XPS import)."""
     if material is None or not material.use_nodes or material.node_tree is None:
         return ""
+    source = bpy.data.images.get(material.get("roe_hq_source_image") or "")
+    if source is not None:                      # a lash / brow / eye an earlier run converted
+        return image_stem(source)
     bsdf = _principled(material)
     image = _upstream_image(bsdf.inputs["Base Color"]) if bsdf else None
     nodes = material.node_tree.nodes
@@ -179,13 +192,79 @@ def pick_material(materials, albedo, source, old_name, suit=None):
     return cands[0] if cands else None
 
 
+HEAD_SLOTS = ("face", "eye", "lash", "brow", "eye_overlay")    # the ROE add-on's own head slots
+FACE = re.compile(r"pc_[a-z]\d*(_fm)?_nk_face$")               # the family face (a nude base merges it into the body)
+
+
+def source_material(materials, picked, source, slot_name=""):
+    """The slot's own game material when the colour-texture match picked another one.  The ROE add-on gives a slot
+    its texture by name, which can miss: every slot of a mesh named *hair* gets the hair texture (a08's braid ring is
+    drawn with the outfit atlas pc_a08_hd_body2, h01's scalp piece with the face), a name it cannot place gets the
+    mesh's first texture (b04's yarn: material pc_b04_hd_yam, texture pc_b04_hd_yarn_...; f08's feathers use f04's
+    texture), e05's tails came out one slot off, j07's and b14's hair carry the outfit's hair texture.  The FBX names
+    the game material (source), so it wins when it is a lit one (pbr / skin / hair) with another colour texture, or a
+    texture-less one (flat_kind: lenses, glass, a glowing part) where a texture was picked; where nothing matched (no
+    texture, or one no game material uses: e08's hair, j06's weapon) a lit one is built too.  The add-on's head slots
+    and a face keep the match (their stored names are not reliable: e04's face says eyebrow, l01's merged face body)."""
+    if not source or source == picked or source not in materials:
+        return picked
+    name = re.sub(r"\.\d{3}$", "", slot_name or "")
+    if name in HEAD_SLOTS or "eye_overlay" in name or (picked and FACE.match(picked)):
+        return picked
+    own = materials[source]
+    if not picked or picked not in materials:
+        return source if role_of(own) is not None and _base_map(own) else picked
+    pick = materials[picked]
+    if role_of(own) is not None and _base_map(own):
+        return source if _base_map(own).lower() != _base_map(pick).lower() else picked
+    if flat_kind(own) and _base_map(pick):
+        return source
+    return picked
+
+
+EYE_TEXTURES = ("_IrisAlbedoTex", "_ScleraAlbedoTex", "_EyeBumpMap")
+
+
+def flat_kind(mdef):
+    """A lit material with no colour texture - the shader samples Unity's white default, so _BaseColor is the colour:
+    "glass" when see-through (lenses, glass), "flat" when opaque (glowing parts).  None for textured materials, hair
+    (k06's hair albedo sits in k04's bundle: hq_material_data reads it through the game's manifest) and eyes."""
+    tex, kw = mdef["textures"], set(mdef["keywords"])
+    if "_BaseMap" in tex or "_BaseColor" not in mdef["colors"]:
+        return None
+    if "_ShiftNoiseMap" in tex or "HAIR_AM" in kw or any(k in tex for k in EYE_TEXTURES):
+        return None
+    return "glass" if mdef["floats"].get("_Surface", 0.0) > 0.0 else "flat"
+
+
+def premultiplied(mdef):
+    """See-through with premultiplied alpha (URP Lit _ALPHAPREMULTIPLY_ON): the diffuse is scaled by alpha, the
+    reflections stay whole - glass with _BaseColor alpha 0 shows only its reflections."""
+    fl, kw = mdef["floats"], set(mdef["keywords"])
+    return fl.get("_Surface", 0.0) > 0.0 and (fl.get("_EnablePremultiplyAlpha", 0.0) > 0.0 or "_ALPHAPREMULTIPLY_ON" in kw)
+
+
+def see_through(mdef):
+    """The game draws the material see-through: transparent surface, not hair (alpha-cut instead)."""
+    return mdef["floats"].get("_Surface", 0.0) > 0.0 and role_of(mdef) != "hair"
+
+
+def xps_alpha(mdef):
+    """The XPS draws the slot with alpha (render group 7 -> 25; the add-on keeps a ROE model's other slots opaque, its
+    atlases carry junk alpha): texture-less glass and see-through pieces whose _BaseColor alpha is below 1 (a clear
+    coat, a glass slipper, a veil) - their export textures carry the alpha the game shows (hq_material_data)."""
+    base = mdef["colors"].get("_BaseColor", [1.0, 1.0, 1.0, 1.0])
+    return see_through(mdef) and (flat_kind(mdef) == "glass" or (len(base) > 3 and base[3] < 1.0))
+
+
 def role_of(mdef):
     tex, kw = mdef["textures"], set(mdef["keywords"])
     if "_ShiftNoiseMap" in tex or "HAIR_AM" in kw:
         return "hair"
     if "_IrisAlbedoTex" in tex or "_BaseMap" not in tex:
         return None                        # eyes (procedural shader), tears, empties: keep
-    if "_BumpMap" in tex or "_MetallicGlossMap" in tex:
+    # the lit shader with only a colour texture (b04's yarn, a01's glass slipper: DIRECT_SPECULAR) is pbr too
+    if "_BumpMap" in tex or "_MetallicGlossMap" in tex or "DIRECT_SPECULAR" in kw:
         skin = "_SkinLutMap" in tex or mdef["floats"].get("_EanbleTranslucency", 0.0) > 0.0  # sic
         return "skin" if skin else "pbr"
     return None                            # albedo-only (brows / lashes): keep
@@ -193,12 +272,12 @@ def role_of(mdef):
 
 def infer_cid(stem, albedos=()):
     """Character id (a01, g05 ...) from a model / file name, else from the texture names."""
-    match = re.search(r"pc[_ ]([a-z]\d+)", (stem or "").lower())
+    match = re.search(r"pc[_ ]([a-z]\d+|[a-z]_[a-z]+\d+)", (stem or "").lower())
     if match:
         return match.group(1)
     found = {}
     for name in albedos:
-        m = re.search(r"pc_([a-z]\d+)", name.lower())
+        m = re.search(r"pc_([a-z]\d+|[a-z]_[a-z]+\d+)", name.lower())
         if m:
             found[m.group(1)] = found.get(m.group(1), 0) + 1
     return max(found, key=found.get) if found else ""
@@ -240,9 +319,13 @@ def load_data(cid, cache, materials=(), albedos=(), python=None, log=print, game
             for name, normal in needed_textures(mats[n], data.get("overrides", {}).get(n, {})):
                 if not os.path.isfile(texture_path(cache, name, normal)):
                     return False
-            if role_of(mats[n]) is not None:         # XPS / PMX export textures (hq_material_data.py)
+            if role_of(mats[n]) is not None or flat_kind(mats[n]):   # XPS / PMX export textures (hq_material_data.py)
                 maps = data.get("exports", {}).get(n)
                 if not maps or not all(os.path.isfile(os.path.join(cache, p)) for p in maps.values()):
+                    return False
+                if n not in data.get("export_signatures", {}):     # made before the signatures: check once
+                    return False
+                if "bump" not in maps:                  # (10-04) every material has one now, flat if need be
                     return False
         # an albedo that is no game _BaseMap (eye iris, a prop from another bundle) stays unmatched on
         # a re-run too, so it does not make the cache incomplete - except a shared piece
@@ -260,8 +343,9 @@ def load_data(cid, cache, materials=(), albedos=(), python=None, log=print, game
             data = json.load(fh)
     summary = None
     # schema 2 (2026-10-01) added the suits' component bundles, 3 the shared accessory pieces (found by
-    # albedo name), 4 the same-name textures told apart + <material>@<suit>: an older cache lacks those
-    if data is None or data.get("schema", 1) < 4 or not complete(data):
+    # albedo name), 4 the same-name textures told apart + <material>@<suit>, 5 (10-04) the manifest's texture
+    # bundles (another character's textures) + glass / glowing parts' export maps: an older cache lacks those
+    if data is None or data.get("schema", 1) < 5 or not complete(data):
         cmd = [python or os.environ.get("ROE_PYTHON") or "python", DATA_SCRIPT, cid, "--out", cache,
                "--materials", ",".join(sorted(m for m in materials if m)),
                "--albedos", ",".join(sorted(a for a in albedos if a))]
@@ -339,9 +423,10 @@ class Builder:
         if target is None and (game, self.uv) in self.built:
             return self.built[(game, self.uv)]
         mdef = self.data["materials"][game]
-        role = role_of(mdef)
+        role = role_of(mdef) or flat_kind(mdef)
         if role is None:
             return None
+        flat = role in ("glass", "flat")        # no colour texture: _BaseColor is the colour
         tex, fl, col, kw = mdef["textures"], mdef["floats"], mdef["colors"], set(mdef["keywords"])
         override = self.data.get("overrides", {}).get(game, {})
 
@@ -361,13 +446,19 @@ class Builder:
         bsdf = n.new("ShaderNodeBsdfPrincipled", 550, 0, "bsdf")
         n.link(bsdf.outputs["BSDF"], out.inputs["Surface"])
         uv = n.new("ShaderNodeUVMap", -1300, 0, "uv", uv_map=self.uv)
-        albedo = self.tex(n, tname("_BaseMap"), -900, 350, uv.outputs["UV"], "albedo")
-        tint = n.new("ShaderNodeMixRGB", -550, 350, "tint", blend_type="MULTIPLY")
-        tint.inputs["Fac"].default_value = 1.0
-        n.link(albedo.outputs["Color"], tint.inputs["Color1"])
         base_color = col.get("_BaseColor", [1.0, 1.0, 1.0, 1.0])
-        tint.inputs["Color2"].default_value = linear(base_color) + (1.0,)
-        base = tint.outputs["Color"]
+        if flat:
+            albedo = None
+            colour = n.new("ShaderNodeRGB", -550, 350, "tint")
+            colour.outputs["Color"].default_value = linear(base_color) + (1.0,)
+            base = colour.outputs["Color"]
+        else:
+            albedo = self.tex(n, tname("_BaseMap"), -900, 350, uv.outputs["UV"], "albedo")
+            tint = n.new("ShaderNodeMixRGB", -550, 350, "tint", blend_type="MULTIPLY")
+            tint.inputs["Fac"].default_value = 1.0
+            n.link(albedo.outputs["Color"], tint.inputs["Color1"])
+            tint.inputs["Color2"].default_value = linear(base_color) + (1.0,)
+            base = tint.outputs["Color"]
 
         # ambient occlusion: MGAC B (pbr / skin), strand occlusion R of the common hair MGA (hair)
         occ_slot = "_OcclusionMaskMap" if role == "hair" else "_MetallicGlossMap"
@@ -401,6 +492,9 @@ class Builder:
             n.link(sep.outputs["G"], rough.inputs[0])                                    # 1 - g * smoothness
             rough.inputs[2].default_value = 1.0
             n.link(rough.outputs["Value"], bsdf.inputs["Roughness"])
+        elif flat or premultiplied(mdef):   # glass, a glowing part: the material's own values
+            bsdf.inputs["Metallic"].default_value = min(1.0, max(0.0, fl.get("_Metallic", 0.0)))
+            bsdf.inputs["Roughness"].default_value = min(1.0, max(0.05, 1.0 - fl.get("_Smoothness", 0.5)))
         else:                               # no MGAC map: the flat values
             bsdf.inputs["Metallic"].default_value = 0.0
             bsdf.inputs["Roughness"].default_value = min(1.0, max(0.3, 1.0 - fl.get("_Smoothness", 0.5)))
@@ -408,20 +502,30 @@ class Builder:
         # transparency: the game flags; a new material also inherits a transparent slot's blend settings
         old_bsdf = _principled(old) if target is None else None
         old_alpha = bool(old_bsdf and old_bsdf.inputs["Alpha"].is_linked)
-        cut = role == "hair" or fl.get("_EnableAlphaTest", 0.0) > 0.0 or "_ALPHATEST_ON" in kw
-        see_through = fl.get("_Surface", 0.0) > 0.0 and role != "hair"
-        if cut or see_through or old_alpha:
+        cut = role == "hair" or (not flat and (fl.get("_EnableAlphaTest", 0.0) > 0.0 or "_ALPHATEST_ON" in kw))
+        clear = see_through(mdef)
+        premult = clear and premultiplied(mdef)
+        alpha = None
+        if cut or clear or (old_alpha and not flat):
             if cut:
                 alpha = n.new("ShaderNodeMath", -250, -450, "alpha", operation="GREATER_THAN")
                 n.link(albedo.outputs["Alpha"], alpha.inputs[0])
                 alpha.inputs[1].default_value = fl.get("_Cutoff", 0.5)
+            elif flat:
+                alpha = n.new("ShaderNodeValue", -250, -450, "alpha")
+                alpha.outputs["Value"].default_value = base_color[3] if clear else 1.0
             else:
                 alpha = n.new("ShaderNodeMath", -250, -450, "alpha", operation="MULTIPLY")
                 n.link(albedo.outputs["Alpha"], alpha.inputs[0])
                 alpha.inputs[1].default_value = base_color[3]
-            n.link(alpha.outputs["Value"], bsdf.inputs["Alpha"])
+            if not premult:                 # premultiplied: keep_reflections() below mixes by it
+                n.link(alpha.outputs["Value"], bsdf.inputs["Alpha"])
             if target is None:
-                if old_alpha:
+                if premult or (flat and clear):
+                    # glass: sorted blending, no shadow (the game's transparent pass writes no depth)
+                    mat.blend_method, mat.shadow_method = "BLEND", "NONE"
+                    mat.show_transparent_back = False
+                elif old_alpha and not flat:
                     mat.blend_method, mat.shadow_method = old.blend_method, old.shadow_method
                     mat.alpha_threshold = old.alpha_threshold
                     mat.show_transparent_back = old.show_transparent_back
@@ -483,6 +587,8 @@ class Builder:
             n.link(packed, nmap.inputs["Color"])
             n.link(nmap.outputs["Normal"], bsdf.inputs["Normal"])
 
+        if premult:
+            keep_reflections(n, bsdf, out, alpha.outputs["Value"], base)
         mat["roe_game_material"] = game
         mat["roe_hq_role"] = role
         mat["roe_hq_base"] = json.dumps({"bump": fl.get("_BumpScale", 1.0), "detail": detail_scale,
@@ -495,6 +601,193 @@ class Builder:
         else:
             self.built[(game, self.uv)] = mat
         return mat
+
+
+def keep_reflections(n, bsdf, out, alpha, base):
+    """Premultiplied alpha (URP Lit _ALPHAPREMULTIPLY_ON, blend One / OneMinusSrcAlpha): the diffuse fades with alpha,
+    the reflections and the glow stay whole - glass at alpha 0 is only its reflections.  Surface = mix(alpha;
+    transparent + reflections + glow, the full BSDF): the reflections are a metal BSDF on the material's F0 (0.04 grey
+    for a dielectric, the colour for a metal: mixed by metallic) with the same roughness and normal."""
+    def same(src, dst):
+        if src.is_linked:
+            n.link(src.links[0].from_socket, dst)
+        elif hasattr(dst, "default_value"):
+            dst.default_value = src.default_value
+
+    refl = n.new("ShaderNodeBsdfPrincipled", 550, -900, "reflect")
+    f0 = n.new("ShaderNodeMixRGB", 300, -900, "f0", blend_type="MIX")
+    f0.inputs["Color1"].default_value = (0.04, 0.04, 0.04, 1.0)
+    n.link(base, f0.inputs["Color2"])
+    same(bsdf.inputs["Metallic"], f0.inputs["Fac"])
+    n.link(f0.outputs["Color"], refl.inputs["Base Color"])
+    refl.inputs["Metallic"].default_value = 1.0
+    same(bsdf.inputs["Roughness"], refl.inputs["Roughness"])
+    if bsdf.inputs["Normal"].is_linked:
+        same(bsdf.inputs["Normal"], refl.inputs["Normal"])
+    clear = n.new("ShaderNodeBsdfTransparent", 550, -650, "clear")
+    add = n.new("ShaderNodeAddShader", 750, -700, "add_reflect")
+    n.link(clear.outputs["BSDF"], add.inputs[0])
+    n.link(refl.outputs["BSDF"], add.inputs[1])
+    glow = bsdf.inputs["Emission"]
+    if glow.is_linked or max(glow.default_value[:3]) > 0.0:
+        emit = n.new("ShaderNodeEmission", 550, -1250, "glow")
+        same(glow, emit.inputs["Color"])
+        emit.inputs["Strength"].default_value = bsdf.inputs["Emission Strength"].default_value
+        add2 = n.new("ShaderNodeAddShader", 750, -1000, "add_glow")
+        n.link(add.outputs["Shader"], add2.inputs[0])
+        n.link(emit.outputs["Emission"], add2.inputs[1])
+        add = add2
+    mix = n.new("ShaderNodeMixShader", 750, -150, "premult")
+    n.link(alpha, mix.inputs["Fac"])
+    n.link(add.outputs["Shader"], mix.inputs[1])
+    n.link(bsdf.outputs["BSDF"], mix.inputs[2])
+    n.link(mix.outputs["Shader"], out.inputs["Surface"])
+
+
+# --- brows / lashes and the iris -----------------------------------------------------------------------
+# The ROE add-on's head slots "lash" / "brow" draw the family's eyebrow atlas (the lashes darkened to 0.55 and
+# their alpha x 1.5), "eye" the raw iris texture.  The game's own shaders (as the fighter project's RoeEyebrow /
+# RoeEye.shader read them from the compiled code) do otherwise:
+#   Pinkcore/Heros/Eyebrow  Lambert on albedo x _BaseColor x 0.96, no highlight; _ALPHAPREMULTIPLY_ON multiplies
+#                           the colour by alpha and SrcBlend SrcAlpha by alpha again, DstBlend OneMinusSrcAlpha:
+#                           colour x alpha^2 over the face x (1 - alpha) (c: SrcBlend One, colour x alpha)
+#   Pinkcore/Heros/Eye      iris x _IrisColor (lerp by its alpha), 31 of the 55 eye materials tint it - m's
+#                           pale blue iris is drawn dark purple, c's red, j's pink
+# Both go into a texture (<cache>\export\<game>__stroke.png / __iris.png) the slot's image node then shows:
+# straight alpha blending of colour x alpha (or the tinted iris) gives the game's result in the .blend, and
+# the PMX / XPS, which copy that image (and bake the eye from it), draw the same.
+STROKE_SLOTS = ("lash", "brow")
+EYE_SLOTS = ("eye",)
+DIELECTRIC_DIFFUSE = 0.96        # URP: the diffuse share of a non-metal (kDielectricSpec.a)
+
+
+def _to_linear(x):
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
+def _to_srgb(x):
+    x = np.clip(x, 0.0, 1.0)
+    return np.where(x <= 0.0031308, x * 12.92, 1.055 * np.power(x, 1.0 / 2.4) - 0.055)
+
+
+def _image_node(material):
+    """The one texture node of an add-on lash / brow / eye material."""
+    if material is None or not material.use_nodes or material.node_tree is None:
+        return None
+    return next((n for n in material.node_tree.nodes if n.type == "TEX_IMAGE" and n.image), None)
+
+
+def _source_image(material, node):
+    """The texture the add-on gave the slot - on a second run too (kept with a fake user, the node then
+    shows the converted one)."""
+    image = bpy.data.images.get(material.get("roe_hq_source_image") or "")
+    if image is None:
+        image = node.image
+        image.use_fake_user = True
+        material["roe_hq_source_image"] = image.name
+    return image
+
+
+def _pixels(image):
+    """RGBA as stored (an 8-bit sRGB image: the file's values / 255, no colour conversion)."""
+    w, h = image.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    image.pixels.foreach_get(px)
+    return px.reshape(h, w, 4), (w, h)
+
+
+def _write_image(path, rgba, size):
+    """Save RGBA as an 8-bit PNG (written aside, then moved: another lane may convert the same family
+    texture at the same time) and return it loaded."""
+    tmp = bpy.data.images.new("hq_tmp", size[0], size[1], alpha=True)
+    tmp.pixels.foreach_set(np.ascontiguousarray(rgba, dtype=np.float32).ravel())
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    part = "%s.%d.png" % (path[:-4], os.getpid())
+    tmp.filepath_raw = part
+    tmp.file_format = "PNG"
+    tmp.save()
+    bpy.data.images.remove(tmp)
+    os.replace(part, path)
+    image = bpy.data.images.load(path, check_existing=True)
+    if image.packed_file:                # an earlier run's copy, packed into this .blend
+        image.unpack(method="REMOVE")
+    image.reload()
+    return image
+
+
+def stroke_texture(px, mdef):
+    """The eyebrow atlas (file values) -> what straight alpha blending needs to draw the game's result."""
+    rgb = _to_linear(px[..., :3]) * np.array(linear(mdef.get("colors", {}).get("_BaseColor", (1, 1, 1))),
+                                              np.float32) * DIELECTRIC_DIFFUSE
+    alpha = px[..., 3:4]
+    floats, keywords = mdef.get("floats", {}), set(mdef.get("keywords", ()))
+    premultiply = floats.get("_EnablePremultiplyAlpha", 0.0) > 0.5 or "_ALPHAPREMULTIPLY_ON" in keywords
+    if premultiply and int(round(floats.get("_SrcBlend", 5.0))) == 5:      # SrcAlpha: x alpha twice
+        rgb = rgb * alpha
+    return np.concatenate([_to_srgb(rgb), alpha], axis=-1)
+
+
+def iris_texture(px, mdef):
+    tint = mdef.get("colors", {}).get("_IrisColor", (1, 1, 1, 1))
+    amount = float(tint[3]) if len(tint) > 3 else 1.0
+    lin = _to_linear(px[..., :3])
+    lin = lin * (1.0 - amount) + lin * np.array(linear(tint), np.float32) * amount
+    return np.concatenate([_to_srgb(lin), px[..., 3:4]], axis=-1)
+
+
+def pick_eye(materials, iris, source, suit=None, cid=None):
+    """The game eye material of an "eye" slot: the slot's FBX source when it is one, else the one whose
+    _IrisAlbedoTex is the slot's iris (the suit's own, then the character's, then the family's)."""
+    def eye(name):
+        return "_IrisColor" in materials[name].get("colors", {})
+    if source in materials and eye(source):
+        return source
+    cands = [n for n, d in materials.items() if eye(n) and iris
+             and d["textures"].get("_IrisAlbedoTex", {}).get("texture", "").lower() == iris.lower()]
+    own = [n for n in cands if suit and n.lower().endswith("@" + suit)]
+    cands = own or [n for n in cands if "@" not in n] or cands
+    cands = [n for n in cands if cid and ("pc_%s_" % cid) in n.lower()] or cands
+    cands.sort(key=lambda n: ("_ld_" in n.lower(), len(n), n))
+    return cands[0] if cands else None
+
+
+def game_stroke(material, game, mdef, cache):
+    """Lash / brow slot -> the game's eyebrow blend (see above).  Returns the texture written."""
+    node, bsdf = _image_node(material), _principled(material)
+    if node is None or bsdf is None:
+        return None
+    px, size = _pixels(_source_image(material, node))
+    name = safe_name(game) + "__stroke.png"
+    node.image = _write_image(os.path.join(cache, "export", name), stroke_texture(px, mdef), size)
+    nt = material.node_tree
+    for socket, output in (("Base Color", "Color"), ("Alpha", "Alpha")):
+        for link in list(bsdf.inputs[socket].links):
+            if link.from_node.type in ("HUE_SAT", "MATH"):          # the add-on's darkening / alpha gain
+                nt.nodes.remove(link.from_node)
+        nt.links.new(node.outputs[output], bsdf.inputs[socket])
+    bsdf.inputs["Specular"].default_value = 0.0                     # the game's eyebrow shader: Lambert only
+    bsdf.inputs["Roughness"].default_value = 1.0
+    material.blend_method = "BLEND"
+    material.shadow_method = "NONE"
+    material["roe_hq_stroke"] = game
+    return name
+
+
+def game_iris(material, game, mdef, cache):
+    """Eye slot -> its iris texture x the game's _IrisColor.  Returns the texture written (None: no tint)."""
+    node = _image_node(material)
+    if node is None:
+        return None
+    source = _source_image(material, node)
+    material["roe_hq_iris"] = game
+    tint = mdef.get("colors", {}).get("_IrisColor", (1, 1, 1, 1))
+    if all(abs(float(c) - 1.0) < 1e-4 for c in tint[:3]):
+        node.image = source
+        return None
+    px, size = _pixels(source)
+    name = safe_name(game) + "__iris.png"
+    node.image = _write_image(os.path.join(cache, "export", name), iris_texture(px, mdef), size)
+    return name
 
 
 # --- live tuning / looks -------------------------------------------------------------------------------
@@ -614,7 +907,9 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
     data, summary = load_data(cid, cache, names, plain, python, log, game)
     suit = re.match(r"pc_%s_(.+)$" % cid, (stem or "").lower())
     suit = suit.group(1) if suit else None       # pc_g01_yoga -> yoga (accessory_components_pc_g01_suit_yoga)
-    picks = [pick_material(data["materials"], albedo, source, old.name if old else "", suit)
+    picks = [source_material(data["materials"],
+                             pick_material(data["materials"], albedo, source, old.name if old else "", suit), source,
+                             old.name if old else "")
              for _obj, _index, old, albedo, source in slots]
     wanted = sorted({g for g in picks if g})
     if wanted:                              # PMX / XPS names resolve only once the definitions are read
@@ -623,8 +918,24 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
     # each slot samples its own mesh's first UV layer: a suit's FBX pieces call it UVMap, the body UV0
     builder = Builder(data, cache, "UVMap", params)
     state, upgraded, kept, errors, done = [], [], [], [], set()
+    strokes, irises = [], []
     for (obj, index, old, albedo, source), game_mat in zip(slots, picks):
         label = "%s[%d]" % (obj.name, index)
+        # brows / lashes / iris: the add-on's own materials, converted in place (the XPS and PMX use them)
+        kind = None if in_place or old is None else \
+            "stroke" if old.name in STROKE_SLOTS else "eye" if old.name in EYE_SLOTS else None
+        if kind == "eye":
+            game_mat = pick_eye(data["materials"], albedo, source, suit, cid)
+        if kind and game_mat and (kind == "eye" or "_BaseMap" in data["materials"][game_mat]["textures"]):
+            if old.name not in done:
+                try:
+                    fn = game_iris if kind == "eye" else game_stroke
+                    written = fn(old, game_mat, data["materials"][game_mat], cache)
+                    (irises if kind == "eye" else strokes).append("%s %s (%s)" % (label, game_mat, written or "untinted"))
+                except Exception as exc:
+                    errors.append("%s %s: %s" % (label, game_mat, exc))
+                done.add(old.name)
+            continue
         if not in_place and old is not None and old.get("roe_hq_role"):
             if not rebuild:
                 # an earlier run's material: a second run (pieces it could not resolve then) leaves it
@@ -662,7 +973,12 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
                 if mat is not None:
                     mat["roe_hq_xps"] = json.dumps(xps)
                     mat["roe_hq_pmx"] = os.path.join(cache, maps["pmx"])
+                    if xps_alpha(data["materials"][game_mat]):
+                        mat["roe_hq_alpha"] = 1     # roe_xps_addon.roe_xps_render_group: alpha group
+                    elif "roe_hq_alpha" in mat:
+                        del mat["roe_hq_alpha"]
     report = {"cache": cache, "character": cid, "upgraded": upgraded, "kept": kept, "errors": errors,
+              "strokes": strokes, "irises": irises,
               "overrides": data.get("overrides", {}), "images": len(set(builder.images))}
     if summary:
         report["decoded"] = summary.get("decoded")

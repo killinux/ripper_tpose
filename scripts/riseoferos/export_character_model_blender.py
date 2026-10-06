@@ -2406,7 +2406,7 @@ def main():
         nude_split = split_combined_nude_body(module, texture_dir)
     armatures = module.related_armatures(meshes)
 
-    id_match = re.match(r"pc_([a-z]\d+)", stem.lower())
+    id_match = re.match(r"pc_([a-z]\d+|[a-z]_[a-z]+\d+)", stem.lower())
     character_id = id_match.group(1) if id_match else ""
     albedo_index = build_albedo_index(texture_dir)
     recovered = []

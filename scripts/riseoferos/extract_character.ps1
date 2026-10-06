@@ -114,9 +114,10 @@ if ($Format) {
 if ($List) {
     # Only model-bearing bundles count. This includes bare-only/NPC models while
     # excluding IDs that occur solely in voice, SFX, metadata, or video bundles.
+    # A family's seasonal outfit has no number of its own: pc_a_swimsuit01, pc_e_xmas01.
     $ids = $bundleFiles |
         ForEach-Object {
-            if ($_.BaseName -match '^chara_(?:armor|bare)_pc_([a-z]\d+)(?:_|$)') {
+            if ($_.BaseName -match '^chara_(?:armor|bare)_pc_([a-z]\d+|[a-z]_[a-z]+\d+)(?:_|$)') {
                 $Matches[1].ToLowerInvariant()
             }
         } |
@@ -270,7 +271,8 @@ foreach ($id in $allIds) {
     $commonFiles = $bundleFiles | Where-Object { $_.Name -like "chara_armor_common*.ab" }
 
     # 体型共享包：脸/眼球/眉毛/头发贴图在 chara_tex_bare_pc_<体型>_common*（不含角色 ID）
-    $bodyType = ($id -replace '[0-9].*$', '')
+    # = the id's letter (a01 -> a; a seasonal outfit a_swimsuit01 -> a, not a_swimsuit)
+    $bodyType = ($id -replace '^([a-z]).*$', '$1')
     $bodyCommonFiles = @()
     if ($bodyType) {
         $bodyTypePattern = [regex]::Escape($bodyType)

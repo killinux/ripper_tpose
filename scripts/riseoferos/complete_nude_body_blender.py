@@ -103,7 +103,17 @@ POSE_MIN = 10.0          # degrees: a limb of the model's rest pose this far off
                          # (c10, the kimono, is rigged with the arms 44 degrees down; every other rest pose is a T within 5)
 LIMBS = (("Bip001 %s UpperArm", "Bip001 %s Forearm", "Bip001 %s Hand", "Bip001 %s Finger2"),
          ("Bip001 %s Thigh", "Bip001 %s Calf", "Bip001 %s Foot", "Bip001 %s Toe0"))    # nude names; the last only aims
-ALIASES = [(re.compile(r"^Bip001 Breast_([LR])(\d*)$"), r"Bip001 chest_\1\2")]   # nude name -> model name
+# nude name -> model name, within the distance given.  The breasts: the outfit's own breast bones carry its cups, so
+# the body's breasts go on them too and one rigid body (pmx_add_bust.py) swings both - g04 chest_L; Kart b01-b06 /
+# Misa c03-c06 and their seasonal outfits Bip001 OPAI_L; Inase a03-a06 and pc_a_swimsuit01 Biped extras,
+# Bip001 Xtra01Opp on the left and Bip001 Xtra01 on the right.  Breast roots may sit BREAST_DIST apart (Kart's
+# pc_b_halloween01 OPAI_L: 3.3 cm from the nude Breast_L; added as a second root, the exporter swung that one alone
+# and the cups stayed still); the other side's bone is 12 cm away, so a wrong side is still rejected.
+BREAST_DIST = 0.05
+ALIASES = [(re.compile(r"^Bip001 Breast_([LR])(\d*)$"), r"Bip001 chest_\1\2", BREAST_DIST),
+           (re.compile(r"^Bip001 Breast_([LR])(\d*)$"), r"Bip001 OPAI_\1\2", BREAST_DIST),
+           (re.compile(r"^Bip001 Breast_L(\d*)$"), r"Bip001 Xtra01Opp\1", BREAST_DIST),
+           (re.compile(r"^Bip001 Breast_R(\d*)$"), r"Bip001 Xtra01\1", BREAST_DIST)]
 DEBUG_ATTR = bool(os.environ.get("ROE_COMPLETE_DEBUG"))   # keep cn_old_skin / cn_push point attributes
 
 
@@ -440,8 +450,8 @@ def bone_resolver(model_arm, nude_arm, log):
     for n in have:
         squeezed.setdefault(re.sub(r"[\s_]", "", n.lower()), []).append(n)
 
-    def near(name, other):
-        return name in n_head and (m_head[other] - n_head[name]).length <= ALIAS_DIST
+    def near(name, other, limit=ALIAS_DIST):
+        return name in n_head and (m_head[other] - n_head[name]).length <= limit
 
     def alias(name, other, why=""):
         mapping[name] = other
@@ -461,10 +471,10 @@ def bone_resolver(model_arm, nude_arm, log):
                        key=lambda n: (m_head[n] - n_head[name]).length)
         if spelt:
             return alias(name, spelt[0])
-        for pattern, repl in ALIASES:
+        for pattern, repl, limit in ALIASES:
             if pattern.match(name):
                 other = pattern.sub(repl, name)
-                if other in have and near(name, other):
+                if other in have and near(name, other, limit):
                     return alias(name, other)
         mapping[name] = None                          # to add, unless a child tells (set first: no cycles)
         bone = nude_arm.data.bones.get(name)

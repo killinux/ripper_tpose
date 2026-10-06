@@ -11,12 +11,19 @@ cache shared by all characters:
                             written as a standard tangent-space RGB map <name>__nrm.png (Z rebuilt)
   <cache>/export/*.png      per lit material, for the formats that cannot run a node tree: XPS diffuse
                             (albedo x _BaseColor), lightmap (AO), bump (green flipped: XPS default
-                            tangent space), specular (sqrt smoothness); PMX diffuse (albedo x _BaseColor x AO)
+                            tangent space; flat when none), specular (sqrt smoothness); PMX diffuse (albedo x
+                            _BaseColor x AO); see-through: alpha x _BaseColor alpha, premultiplied glass at
+                            least --glass-alpha (neither format draws its reflections)
 
 Bundles (install dir + runtime cache, newest copy wins): every chara_mat_* whose name has pc_<id>,
 pc_<family>_common, or is a shared bare / armor / system bundle (families name their head bundles
 differently: pc_a_common_head_tutorial, pc_g_common_head_prelude ...), plus the paired chara_tex_*
-bundles and the shared texture bundles (hair normal / strand occlusion, skin detail normal, eyes ...).
+bundles and the shared texture bundles (hair normal / strand occlusion, skin detail normal, eyes ...),
+plus every chara_tex_* bundle the game's Manifest.ab lists as a dependency of those material bundles: 32
+materials draw another character's texture (k06's hair = k04's albedo, e06's = the d family's, the i family's
+head = the h family's iris / eyebrow), and read by name alone those slots came out empty.
+Glass and glowing parts have no colour texture (Unity's white default: the colour is _BaseColor): flat_kind()
+"glass" / "flat", with 8 x 8 export maps.
 The outfit suits (export_suits.py: pc_a01_fm, pc_j01_prouniform ...) add their component bundles:
 accessory_components_pc_<id>_suit_* (materials) + chara_tex_components_pc_<id>_suit_* (textures), and the
 shared fm pieces' accessory_components_common_* / chara_tex_components_common_*.  The other shared pieces
@@ -57,6 +64,10 @@ CACHE = os.path.join(os.path.expanduser("~"), "AppData", "LocalLow", "Pinkcore",
 NORMAL_SLOTS = {"_BumpMap", "_DetailNormalMap", "_EyeBumpMap"}
 SHARED_MAT = ("chara_mat_bare_common", "chara_mat_armor_common", "chara_mat_armor__system")
 SHARED_TEX = ("chara_tex_bare_common", "chara_tex_armor_common", "chara_tex_armor__system")
+MANIFEST = "Manifest.ab"          # the game's bundle list with each bundle's dependencies
+# least alpha of premultiplied glass in the XPS / PMX textures: env ROE_GLASS_ALPHA (the exports pick it up too) or
+# --glass-alpha; a change rebuilds the affected maps by itself (export_signatures)
+GLASS_ALPHA = float(os.environ.get("ROE_GLASS_ALPHA", "0.25"))
 
 
 def _items(x):
@@ -89,7 +100,26 @@ def shared_pieces(albedos):
     return {m.group(1) for m in (re.match(r"common_(.+?)_rgbx_albedo$", a.lower()) for a in albedos) if m}
 
 
-def select_bundles(cid, bundles, albedos=(), pieces=()):
+def manifest_deps(bundles):
+    """{bundle (no .ab): [the bundles it depends on]} from the game's Manifest.ab (a MonoBehaviour m_Keys / m_Values).
+    A material can point at another character's texture bundle: k06's hair draws k04's hair albedo, e06's the d
+    family's, the i family's head the h family's iris - 32 such links; read by name only, those slots came out empty."""
+    path = bundles.get(MANIFEST)
+    if not path:
+        return {}
+    try:
+        env = UnityPy.load(path)
+        for obj in env.objects:
+            if obj.type.name == "MonoBehaviour":
+                tree = obj.read_typetree()
+                if "m_Keys" in tree and "m_Values" in tree:
+                    return {k: list(v.get("m_Dependencies") or ()) for k, v in zip(tree["m_Keys"], tree["m_Values"])}
+    except Exception as exc:              # no manifest: the name rule alone, as before
+        print("manifest unreadable: %s" % exc, file=sys.stderr)
+    return {}
+
+
+def select_bundles(cid, bundles, albedos=(), pieces=(), deps=None):
     fam = cid[0]
     mats = sorted(n for n in bundles if n.startswith("chara_mat_") and (
         "pc_%s" % cid in n or "pc_%s_common" % fam in n or n.startswith(SHARED_MAT)))
@@ -114,6 +144,11 @@ def select_bundles(cid, bundles, albedos=(), pieces=()):
                 mats.append(name)
             else:
                 texs.add(name)
+    # + the texture bundles the game's manifest lists for those material bundles (another character's, too)
+    for name in mats:
+        for dep in (deps or {}).get(name[:-3] if name.endswith(".ab") else name, ()):
+            if dep.startswith("chara_tex_") and dep + ".ab" in bundles:
+                texs.add(dep + ".ab")
     return mats, sorted(texs)
 
 
@@ -147,10 +182,42 @@ def role_of(mdef):
         return "hair"
     if "_IrisAlbedoTex" in tex or "_BaseMap" not in tex:
         return None
-    if "_BumpMap" in tex or "_MetallicGlossMap" in tex:
+    if "_BumpMap" in tex or "_MetallicGlossMap" in tex or "DIRECT_SPECULAR" in kw:     # + the lit shader, albedo only
         skin = "_SkinLutMap" in tex or mdef["floats"].get("_EanbleTranslucency", 0.0) > 0.0   # sic
         return "skin" if skin else "pbr"
     return None
+
+
+EYE_TEXTURES = ("_IrisAlbedoTex", "_ScleraAlbedoTex", "_EyeBumpMap")
+
+
+def flat_kind(mdef):
+    """Same rule as hq_materials_blender.flat_kind: a lit material with no colour texture (the shader samples
+    Unity's white default, so _BaseColor is the colour): "glass" when see-through (lenses, glass, tears), "flat"
+    when opaque (glowing parts).  None for textured materials, hair and eyes."""
+    tex, kw = mdef["textures"], set(mdef["keywords"])
+    if "_BaseMap" in tex or "_BaseColor" not in mdef["colors"]:
+        return None
+    if "_ShiftNoiseMap" in tex or "HAIR_AM" in kw or any(k in tex for k in EYE_TEXTURES):
+        return None
+    return "glass" if mdef["floats"].get("_Surface", 0.0) > 0.0 else "flat"
+
+
+def premultiplied(mdef):
+    """See-through with premultiplied alpha: the diffuse x alpha, the reflections kept whole (URP Lit
+    _ALPHAPREMULTIPLY_ON) - glass with _BaseColor alpha 0 shows only its reflections."""
+    fl, kw = mdef["floats"], set(mdef["keywords"])
+    return fl.get("_Surface", 0.0) > 0.0 and (fl.get("_EnablePremultiplyAlpha", 0.0) > 0.0 or "_ALPHAPREMULTIPLY_ON" in kw)
+
+
+def emission_colour(mdef):
+    """The glow colour scaled into 0..1 (sRGB) for the formats without emission, or None."""
+    col, fl = mdef["colors"], mdef["floats"]
+    em = col.get("_EmissionColor", [0.0, 0.0, 0.0, 1.0])[:3]
+    if fl.get("_EnableEmission", 0.0) <= 0.0 or max(em) <= 1e-4:
+        return None
+    top = max(em)
+    return [c / top if top > 1.0 else c for c in em]
 
 
 def srgb_to_linear(a):
@@ -166,32 +233,57 @@ def safe_name(name):
     return "".join(c if c.isalnum() or c in "-." else "_" for c in name)
 
 
-def export_maps(out_dir, mname, mdef, override, force=False):
+def export_signature(mdef, sources, glass_alpha):
+    """What export_maps makes a material's maps of: its textures, the alpha factor, a flat material's colour."""
+    base = mdef["colors"].get("_BaseColor", [1, 1, 1, 1])
+    role = role_of(mdef)
+    factor = 1.0
+    if mdef["floats"].get("_Surface", 0.0) > 0.0 and role != "hair" and len(base) > 3 and base[3] < 1.0:
+        factor = round(max(float(base[3]), glass_alpha if premultiplied(mdef) else 0.0), 4)
+    kind = None if role else flat_kind(mdef)
+    if kind:
+        return json.dumps([sorted(sources), factor, kind, [round(c, 4) for c in (emission_colour(mdef) or base[:3])]])
+    return json.dumps([sorted(sources), factor])
+
+
+def export_maps(out_dir, mname, mdef, override, force=False, glass_alpha=None):
     """Textures for the formats that cannot run the Blender node tree (paths relative to out_dir):
       xps: diffuse = albedo x _BaseColor (alpha kept), lightmap = the AO the .blend uses, bump = the
            normal map with green flipped (XPS default tangent space inverts Y), specular = sqrt(smoothness)
            (XPS Tools reads roughness = 1 - spec^2), hair: flat 0.35
-      pmx: diffuse = albedo x _BaseColor x AO (MMD has no normal / metal / AO input)"""
+      pmx: diffuse = albedo x _BaseColor x AO (MMD has no normal / metal / AO input)
+    A see-through material's alpha also takes _BaseColor's alpha; premultiplied glass (alpha 0: only its reflections
+    show in the game) keeps at least glass_alpha, as neither format draws reflections.  A material with no colour
+    texture (flat_kind: lenses, glass, glowing parts) gets 8 x 8 maps of its colour (a glowing part: its glow's)."""
+    glass_alpha = GLASS_ALPHA if glass_alpha is None else glass_alpha
     role = role_of(mdef)
-    if role is None:
+    kind = None if role else flat_kind(mdef)
+    if role is None and kind is None:
         return None
     tex, fl, col = mdef["textures"], mdef["floats"], mdef["colors"]
     stem = safe_name(mname)
+    # render group 24 / 25 takes four maps: a material without a normal map gets a flat one (not missing.png)
     rel = {"diffuse": "export/%s__xps_diffuse.png" % stem, "lightmap": "export/%s__xps_light.png" % stem,
            "bump": "export/%s__xps_bump.png" % stem, "specular": "export/%s__xps_spec.png" % stem,
            "pmx": "export/%s__pmx_diffuse.png" % stem}
-    if "_BumpMap" not in tex:
-        rel.pop("bump")
     paths = {k: os.path.join(out_dir, v) for k, v in rel.items()}
     if not force and all(os.path.isfile(p) for p in paths.values()):
         return rel
     os.makedirs(os.path.join(out_dir, "export"), exist_ok=True)
-    albedo_name = override.get("_BaseMap", tex["_BaseMap"]["texture"])
-    albedo = np.asarray(Image.open(os.path.join(out_dir, "textures", albedo_name + ".png")).convert("RGBA"),
-                        dtype=np.float32) / 255.0
-    tint = srgb_to_linear(np.asarray(col.get("_BaseColor", [1, 1, 1, 1])[:3], dtype=np.float32))
+    base = col.get("_BaseColor", [1, 1, 1, 1])
+    if kind:
+        albedo = np.ones((8, 8, 4), dtype=np.float32)
+        albedo[..., :3] = np.clip(np.asarray(emission_colour(mdef) or base[:3], dtype=np.float32), 0.0, 1.0)
+        tint = np.ones(3, dtype=np.float32)
+    else:
+        albedo_name = override.get("_BaseMap", tex["_BaseMap"]["texture"])
+        albedo = np.asarray(Image.open(os.path.join(out_dir, "textures", albedo_name + ".png")).convert("RGBA"),
+                            dtype=np.float32) / 255.0
+        tint = srgb_to_linear(np.asarray(base[:3], dtype=np.float32))
     rgb = srgb_to_linear(albedo[..., :3]) * tint
     alpha = albedo[..., 3:4]
+    if fl.get("_Surface", 0.0) > 0.0 and role != "hair" and len(base) > 3 and base[3] < 1.0:
+        alpha = alpha * max(float(base[3]), glass_alpha if premultiplied(mdef) else 0.0)
     occ_slot = "_OcclusionMaskMap" if role == "hair" else "_MetallicGlossMap"
     mask = None
     if occ_slot in tex:
@@ -214,12 +306,16 @@ def export_maps(out_dir, mname, mdef, override, force=False):
     else:
         ao_full = ao
     save("pmx", np.concatenate([linear_to_srgb(rgb * ao_full[..., None]), alpha], axis=-1), "RGBA")
-    if "bump" in paths:
+    if "_BumpMap" in tex:
         nrm = np.asarray(Image.open(os.path.join(out_dir, "textures", override.get("_BumpMap", tex["_BumpMap"]["texture"])
                                                  + "__nrm.png")).convert("RGB"), dtype=np.float32) / 255.0
         nrm[..., 1] = 1.0 - nrm[..., 1]
         save("bump", nrm, "RGB")
-    if role == "hair" or mask is None:
+    else:
+        save("bump", np.tile(np.array([0.5, 0.5, 1.0], dtype=np.float32), (8, 8, 1)), "RGB")
+    if kind and mask is None:
+        spec = np.full((8, 8), np.sqrt(np.clip(fl.get("_Smoothness", 0.5), 0.0, 1.0)), dtype=np.float32)
+    elif role == "hair" or mask is None:
         spec = np.full((8, 8), 0.35, dtype=np.float32)
     else:
         spec = np.sqrt(np.clip(mask[..., 1] * fl.get("_Smoothness", 1.0), 0.0, 1.0))
@@ -279,10 +375,13 @@ def main():
     ap.add_argument("--all", action="store_true", help="decode every material found for the id")
     ap.add_argument("--force-exports", action="store_true",
                     help="rebuild the XPS / PMX export textures even when they exist")
+    ap.add_argument("--glass-alpha", type=float, default=GLASS_ALPHA,
+                    help="least alpha of premultiplied glass in the XPS / PMX textures (default %(default)s, env "
+                         "ROE_GLASS_ALPHA - set that one for the exports, which run this script themselves)")
     ap.add_argument("--game", default=GAME)
     args = ap.parse_args()
     t0 = time.time()
-    cid = re.match(r"[a-z]\d+", args.cid.lower()).group(0)
+    cid = re.match(r"[a-z]\d+|[a-z]_[a-z]+\d+", args.cid.lower()).group(0)
     fam = cid[0]
     bundles = inventory([args.game, CACHE])
     out_json = os.path.join(args.out, "%s.json" % cid)
@@ -296,7 +395,7 @@ def main():
     # the shared pieces stay in the cache once looked up: a later run for another suit of the character
     # (no Common_* albedos) must not drop the fm suit's ring / arm-hair definitions
     pieces = shared_pieces(s for s in args.albedos.split(",") if s) | set(prev.get("pieces", []))
-    mat_names, tex_names = select_bundles(cid, bundles, (), pieces)
+    mat_names, tex_names = select_bundles(cid, bundles, (), pieces, manifest_deps(bundles))
     if not mat_names:
         sys.exit("no material bundles for %s" % cid)
     env = UnityPy.load(*[bundles[n] for n in mat_names + tex_names])
@@ -406,27 +505,34 @@ def main():
             decoded.append(tname)
         tex_info[tname] = entry
 
-    exports, export_errors = {}, {}
+    exports, export_errors, signatures = {}, {}, {}
     fresh = set(decoded)
     for n in selected:
         sources = {s["texture"] for s in found[n]["textures"].values()} | set(overrides.get(n, {}).values())
+        # what the maps are made of: rebuilt when that changes (a slot the manifest resolved, the alpha rule);
+        # maps from before the signatures count as made with the alpha factor 1
+        signatures[n] = export_signature(found[n], sources, args.glass_alpha)
+        made = prev.get("export_signatures", {}).get(n, json.dumps([sorted(sources), 1.0]))
         try:
             maps = export_maps(args.out, n, found[n], overrides.get(n, {}),
-                               force=args.force_exports or bool(sources & fresh))
+                               force=args.force_exports or bool(sources & fresh) or made != signatures[n],
+                               glass_alpha=args.glass_alpha)
         except Exception as exc:          # a missing source texture: the material keeps albedo-only exports
             export_errors[n] = str(exc)
+            signatures.pop(n)
             continue
         if maps:
             exports[n] = maps
 
-    data = {"schema": 4,                 # 2: the suits' component bundles; 3: + shared accessory pieces by albedo;
-            # 4: + texture sources, same-name textures told apart, <material>@<suit>
+    data = {"schema": 5,                 # 2: the suits' component bundles; 3: + shared accessory pieces by albedo;
+            # 4: + texture sources, same-name textures told apart, <material>@<suit>; 5: + the manifest's texture
+            # bundles (another character's textures), texture-less glass / glowing parts, export signatures
             "character": cid, "family": fam, "bundles": mat_names + tex_names, "materials": found,
             "selected": sorted(selected), "textures": tex_info, "overrides": overrides, "missing": missing,
-            "exports": exports, "export_errors": export_errors,
+            "exports": exports, "export_errors": export_errors, "export_signatures": signatures,
             "pieces": sorted(pieces)}    # Common_<piece> albedos looked up (hq_materials_blender.load_data)
     os.makedirs(args.out, exist_ok=True)
-    for key in ("textures", "exports"):
+    for key in ("textures", "exports", "export_signatures"):
         for name, value in prev.get(key, {}).items():
             data[key].setdefault(name, value)
     data["selected"] = sorted(set(selected) | (set(prev.get("selected", [])) & set(found)))

@@ -645,17 +645,17 @@ def apply_all(tex_dir, source_fbx=''):
     bt = None
     character_prefix = None
     for o in meshes:
-        match = re.match(r'pc_([a-z])\d', o.name.lower())
+        match = re.match(r'pc_([a-z])(?:\d|_[a-z]+\d)', o.name.lower())
         if match:
             bt = match.group(1)
-        prefix_match = re.match(r'(pc_[a-z]\d+_(?:hd|ld))', o.name.lower())
+        prefix_match = re.match(r'(pc_(?:[a-z]\d+|[a-z]_[a-z]+\d+)_(?:hd|ld))', o.name.lower())
         if prefix_match:
             character_prefix = prefix_match.group(1)
         if bt and character_prefix:
             break
     if not (bt and character_prefix):
         path_match = re.search(
-            r'(pc_([a-z])\d+_(?:hd|ld))', source_fbx.lower())
+            r'(pc_([a-z])(?:\d+|_[a-z]+\d+)_(?:hd|ld))', source_fbx.lower())
         if path_match:
             character_prefix = character_prefix or path_match.group(1)
             bt = bt or path_match.group(2)

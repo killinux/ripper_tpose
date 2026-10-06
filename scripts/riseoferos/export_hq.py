@@ -75,6 +75,13 @@ def load_json(path, default):
     return default
 
 
+def model_cid(key):
+    """A model key's character id: a08_outfit1 -> a08; a family's seasonal outfit keeps its whole name
+    (a_swimsuit01 - the game numbers it in the name, not in the id)."""
+    m = re.match(r"[a-z]_[a-z]+\d+|[a-z]\d+", key.lower())
+    return m.group(0) if m else key.split("_")[0]
+
+
 def catalogue(exports):
     """{stem: (kind, info)} for every main model, suit and nude base on D:."""
     out = {}
@@ -83,7 +90,7 @@ def catalogue(exports):
         blend = (entry.get("outputs") or {}).get("blend") or entry.get("output")
         if entry.get("status") == "PASS" and blend:
             stem = os.path.splitext(os.path.basename(blend))[0]
-            out[stem] = ("main", {"key": entry["model"], "cid": entry["model"].split("_")[0], "blend": blend,
+            out[stem] = ("main", {"key": entry["model"], "cid": model_cid(entry["model"]), "blend": blend,
                                   "outputs": entry.get("outputs") or {}})
     suits = {(e["id"], e["suit"]) for e in load_json(os.path.join(exports, "_suits", "manifest.json"), {}).get("suits", [])}
     for path in glob.glob(os.path.join(exports, "_suits", "*", "*", "suit.json")):   # the parts dump of every suit
@@ -95,7 +102,7 @@ def catalogue(exports):
                                        "blend": os.path.join(exports, cid, "blend", stem + ".blend")}))
     for blend in glob.glob(os.path.join(exports, "nude_materials", "pc_*.blend")):
         stem = os.path.splitext(os.path.basename(blend))[0]
-        out.setdefault(stem, ("nude", {"cid": re.match(r"pc_([a-z]\d+)", stem).group(1), "blend": blend}))
+        out.setdefault(stem, ("nude", {"cid": re.match(r"pc_([a-z]\d+|[a-z]_[a-z]+\d+)", stem).group(1), "blend": blend}))
     return out
 
 
@@ -371,7 +378,7 @@ def lanes_of(jobs, count):
     """Jobs grouped by character id (they share <cache>\\<id>.json), groups spread over `count` lanes by cost."""
     groups = {}
     for stem, formats in jobs:
-        cid = re.match(r"pc_([a-z]\d+)", stem).group(1) if stem.startswith("pc_") else stem.split("_")[0]
+        cid = re.match(r"pc_([a-z]\d+|[a-z]_[a-z]+\d+)", stem).group(1) if stem.startswith("pc_") else model_cid(stem)
         groups.setdefault(cid, []).append((stem, formats))
     weight = lambda job: (6 if "blend" in job[1] else 0) + (3 if "pmx" in job[1] else 0) + (1 if "xps" in job[1] else 0)
     lanes = [[] for _ in range(count)]

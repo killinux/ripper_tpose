@@ -49,7 +49,7 @@ SAMPLES = 20000
 def texture_dir(blend):
     """The character's extracted textures (<exports>\\<cid>\\_textures): where the add-on looks for the iris.
     Left empty, its search would glob the working directory recursively."""
-    cid = re.match(r"pc_([a-z]\d+)", os.path.basename(blend))
+    cid = re.match(r"pc_([a-z]\d+|[a-z]_[a-z]+\d+)", os.path.basename(blend))
     if not cid:
         return ""
     up = os.path.dirname(os.path.dirname(os.path.abspath(blend)))   # <exports>\<cid> (suit) / <exports> (nude base)

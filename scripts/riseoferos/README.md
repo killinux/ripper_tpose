@@ -32,6 +32,7 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `export_character_model_blender.py` | 被上一脚本调用（Blender 无头） | 穿衣角色材质重建、贴图打包、三视图预览合成 | 内部 worker |
 | `html/make_gallery.py` | 任意 Python 3 | 按 manifest 生成可浏览的模型总览网页 | 本页 §5 |
 | `prune_exports.py` | 任意 Python 3 | 清理导出目录里的重复贴图副本与 Blender 备份 | 本页 §5 |
+| `pmx_copy_face_morphs.py` | 任意 Python 3（numpy + mmd_tools 的 pmx 模块） | 给没有脸部骨骼的 PMX 从同家族的 PMX 搬表情（Inase 泳装） | 本页 §5「节日服装」 |
 | `roe_xps_addon.py` | Blender 3.6 插件 | HD 角色一步步转带材质的 XPS（**主推**） | [xps-addon.md](../../docs/xps-addon.md) |
 | `../blender_addons/roe_pmx_tools` | Blender 3.6 插件 | 在 Blender 里手动四步转 PMX（与批处理同一套函数） | [roe-pmx-manual-guide.md](../../docs/roe-pmx-manual-guide.md) |
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
@@ -493,6 +494,30 @@ manifest 逐模型记录源 FBX、产物路径、网格/材质槽/贴图数与�
 （包里只有场景/道具数据），以及全部候选都是纯骨架壳的（d10 / e11 / i06 只有
 0.3 MB 的 `*_nk_bs.fbx`）。这两类的本体都复用同字母基础体，是资源本身的性质。
 
+### 节日服装（家族款，2026-10-06）
+
+游戏里还有 9 套按家族发的节日服装，名字里没有角色编号：`pc_a_swimsuit01`、`pc_c_swimsuit01`、`pc_d_swimsuit01`、
+`pc_f_swimsuit01`（泳装），`pc_b_halloween01`、`pc_d_halloween01`（万圣节），`pc_e_xmas01`、`pc_f_xmas01`、
+`pc_h_xmas01`（圣诞）。字母是家族（a = Inase …），每套都是完整的穿衣模型（身体、头、头发）。各脚本认角色编号的
+规则（`[a-z]\d+`）都加了一种 `[a-z]_[a-z]+\d+`，key 就是 `a_swimsuit01` 这样，原来的编号照旧：
+
+```powershell
+.\extract_character.ps1 a_swimsuit01 -ExportTextures                      # 家族共用的脸 / 眼 / 头发贴图按首字母找
+.\export_character_models.ps1 -Only a_swimsuit01 -Format blend,pmx,xps -Force
+python complete_nude.py a_swimsuit01                                      # _nude / _full，裸模用家族的 pc_a01_nk_bs
+```
+
+和带编号的服装不一样的两处，PMX 导出后要补：
+
+- **Inase 泳装的头没有脸部骨骼**（另外 8 套有，PMX 自带 56–58 个表情）：导出器的表情是摆脸部骨骼再烘成顶点表情，
+  这套没有骨骼可摆，PMX 里一个表情都没有。它的脸就是家族的脸网格，`pmx_copy_face_morphs.py --family` 从
+  `pc_a01_hd.pmx` 把 58 个表情按位置搬过来：同一贴图坐标的顶点优先（这套的牙齿和舌头整体偏了 2.6 mm），其次是
+  重合且朝向相同的顶点（闭嘴时上下唇重合），其余按距离和朝向加权。
+- **Inase / Kart / Misa 的胸骨名字导出器不认识**（`Xtra01Opp` / `Xtra01`、`OPAI_L` / `OPAI_R`，和 a03–a06、
+  b01–b06、c03–c06 一样），没加胸部刚体：`scripts\mmd_dances\pmx_add_bust.py in.pmx out.pmx` 补刚体、关节，
+  改名 左胸 / 右胸，并出 `_bustB.pmx`。补全身体时（`complete_nude_body_blender.py` 的 `ALIASES`）裸模的胸部权重
+  也挂到服装自己的这几根胸骨上，一个刚体同时带动身体和泳衣。Erin / Miri / Rana / Fen 的几套导出器自己就加了胸部物理。
+
 ### 二次贴图解析
 
 插件挂完材质后，仍没有 Base Color 的槽会再查一次 Albedo 索引，探针逐级放宽：
@@ -559,17 +584,32 @@ python prune_exports.py --apply    # 真删
 - 头发：`_BaseColor` 发色、发丝遮蔽、头发法线、按 `_Cutoff` 裁切。
   发色原来没乘，g 家族（Luf）的头发因此一直是浅灰，游戏里是深棕；
 - 材质颜色按 sRGB 转线性，和游戏一样；
-- 眼睛、眉毛 / 睫毛、泪膜保留插件原来的材质。
+- 眼睛、眉毛 / 睫毛、泪膜保留插件原来的材质；
+- 玻璃 / 镜片 / 发光件（游戏里没有颜色贴图，2026-10-04 起）：按游戏的预乘透明做成「透明 + 保留反光」，
+  发光件按自发光颜色；原来被画成不透明的身体贴图（h06 的透明雨衣、c05 的眼镜、d04 的发光球）。
+
+槽对应哪个游戏材质：先按颜色贴图找，**FBX 记下的游戏材质名和它不一样时多数情况以记下的为准**（2026-10-04 起；
+原来插件按名字挂贴图，挂错的有 b04 的毛线、e05 的尾巴、j07 / b14 的头发挂成了 outfit1 的贴图）。
+脸、眼睛、眉毛 / 睫毛这些头部槽不按这条换。
 
 材质数据由 worker 自动调用 `hq_material_data.py`（系统 Python + UnityPy），直接从游戏包里读取，缓存在
 `D:\roe_exports\_hq_materials\`（`<id>.json` + 共享的 `textures\` + 各格式用的 `export\`），同一家族的头部贴图只解码一次。
+选包时还会读游戏的包清单 `Manifest.ab`，把材质依赖的别的角色的贴图包一起加载（2026-10-04 起：k06 的头发用 k04 的贴图，
+游戏里是银白发，原来读不到、导出成了粉色）。
 
 XPS 和 PMX 跑不了 Blender 节点，各带上格式本身能装的部分：
 
 | 格式 | 带什么 |
 |---|---|
-| XPS | XNALara render group **24**（带透明的是 **25**）：颜色（已乘发色）+ lightmap（AO）+ bump（法线，绿通道翻转：XPS 默认的切线空间就是反 Y）+ specular（光滑度开方）；眼睛 / 睫毛 / 眉毛照旧 5 / 7 |
-| PMX | 颜色贴图里烘进发色和 AO（MMD 没有法线、金属度、AO 输入） |
+| XPS | XNALara render group **24**（带透明的是 **25**）：颜色（已乘发色）+ lightmap（AO）+ bump（法线，绿通道翻转：XPS 默认的切线空间就是反 Y；没有法线的给一张平的）+ specular（光滑度开方）；眼睛 / 睫毛 / 眉毛照旧 5 / 7；玻璃、透明雨衣这类透明槽进 25 |
+| PMX | 颜色贴图里烘进发色和 AO（MMD 没有法线、金属度、AO 输入）；透明槽的透明度在贴图的 alpha 里 |
+
+玻璃在游戏里只看得到反光（底色透明度是 0），XPS / PMX 画不出反光，所以至少留 **0.25** 的透明度，不然整个看不见。
+要改这个值，设环境变量再重出模型，受影响的贴图会自动重算：
+`$env:ROE_GLASS_ALPHA = "0.35"; python export_hq.py c05`。
+
+改了材质规则或数据以后，先查哪些模型会变（只读，不导出）：`python hq_slot_survey.py [名字…]`。它会列出每个模型里
+要换游戏材质的槽，以及头部还没换成 10-02 眉毛 / 睫毛 / 虹膜画法的模型数。
 | GLB | 仍是插件的颜色贴图材质 |
 
 这一步失败不会让模型失败：该模型保留颜色贴图材质，原因写在 manifest 的 `hqMaterials` 里，控制台也会打印一行。

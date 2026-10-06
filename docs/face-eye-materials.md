@@ -75,6 +75,10 @@ FBX 导入 Blender 后给 head 网格整体挂脸部贴图，结果：
 - `LASH_ALPHA_GAIN / LASH_DARKEN`：睫毛浓密度/深浅
 - `SKIN_DESAT`：肤色饱和度
 
+> 2026-10-02：这两个睫毛参数只是插件自己的样子。导出流程里的游戏材质一步（`hq_materials_blender.py`）
+> 会把 lash / brow 换成游戏眉毛着色器的画法（颜色 × alpha² 盖在脸 × (1 − alpha) 上，不加深），
+> 虹膜乘游戏的 `_IrisColor`，原因和数字见 [roe-hq-materials.md](roe-hq-materials.md) §3「眉毛 / 睫毛和虹膜」。
+
 ## 五、踩坑记录
 
 1. **Principled alpha=0 ≠ 隐形**：EEVEE 的 BLEND 模式下镜面高光不受 alpha 控制，

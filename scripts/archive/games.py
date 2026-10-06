@@ -766,12 +766,12 @@ ROE = r"D:\roe_exports"
 ROE_EXTRA = [r"D:\roe_exports_probe", r"D:\roe_out_a01", r"D:\roe_stage_a01"]
 ROE_NAMES = {"a": "Inase", "b": "Kart", "c": "Misa", "d": "Erin", "e": "Miri", "f": "Rana", "g": "Luf", "h": "Fen",
              "i": "Sera", "j": "Lynn", "k": "Keleira", "l": "SFox", "m": "Amano"}
-ROE_ID = re.compile(r"^[a-z]\d\d$")
+ROE_ID = re.compile(r"^(?:[a-z]\d\d|[a-z]_[a-z]+\d+)$")   # a08; seasonal a_swimsuit01
 
 
 def roe_character(key):
     """a01 / pc_a01_nk_bs -> Inase（字母 = 角色，数字 = 服装变体，见 scripts/riseoferos/character-roster.md）。"""
-    m = re.match(r"^(?:pc_)?([a-z])\d", key)
+    m = re.match(r"^(?:pc_)?([a-z])(?:\d|_[a-z]+\d)", key)
     return ROE_NAMES.get(m.group(1), m.group(1)) if m else key
 
 

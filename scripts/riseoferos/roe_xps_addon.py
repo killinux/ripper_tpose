@@ -146,7 +146,7 @@ def scene_meshes():
 def effective_workflow(props, meshes):
     if props.workflow_mode != 'AUTO':
         return props.workflow_mode
-    roe_name = re.compile(r'^pc_[a-z]\d+_(?:hd|ld)_(?:body|head|hair)',
+    roe_name = re.compile(r'^pc_(?:[a-z]\d+|[a-z]_[a-z]+\d+)_(?:hd|ld)_(?:body|head|hair)',
                           re.IGNORECASE)
     return 'ROE' if any(roe_name.match(canonical_object_name(o.name))
                         for o in meshes) else 'GENERIC'
@@ -271,7 +271,7 @@ def cached_source_layout_is_suspicious(obj):
     # plugin versions could preserve their names while collapsing every face to
     # slot zero, which looks valid structurally but produces white/wrong legs.
     is_roe_body = re.match(
-        r'^pc_[a-z]\d+_(?:hd|ld)_body$',
+        r'^pc_(?:[a-z]\d+|[a-z]_[a-z]+\d+)_(?:hd|ld)_body$',
         canonical_object_name(obj.name),
         re.IGNORECASE,
     )
@@ -614,6 +614,8 @@ def roe_xps_render_group(obj, slot_index, material):
     """
     if 'hair' in canonical_object_name(obj.name).lower():
         return '7'
+    if material is not None and material.get('roe_hq_alpha'):
+        return '7'      # see-through game material (glass, a clear coat): hq_materials_blender.xps_alpha
     if not material_uses_alpha(material):
         return '5'
 
@@ -1469,17 +1471,17 @@ class ROE_OT_apply_materials(Operator):
         bt = None
         character_prefix = None
         for o in meshes:
-            mm = re.match(r'pc_([a-z])\d', o.name)
+            mm = re.match(r'pc_([a-z])(?:\d|_[a-z]+\d)', o.name)
             if mm:
                 bt = mm.group(1)
-            cm = re.match(r'(pc_[a-z]\d+_(?:hd|ld))', o.name.lower())
+            cm = re.match(r'(pc_(?:[a-z]\d+|[a-z]_[a-z]+\d+)_(?:hd|ld))', o.name.lower())
             if cm:
                 character_prefix = cm.group(1)
             if bt and character_prefix:
                 break
         if not (bt and character_prefix):
             path_match = re.search(
-                r'(pc_([a-z])\d+_(?:hd|ld))', fbx.lower())
+                r'(pc_([a-z])(?:\d+|_[a-z]+\d+)_(?:hd|ld))', fbx.lower())
             if path_match:
                 character_prefix = character_prefix or path_match.group(1)
                 bt = bt or path_match.group(2)
@@ -1699,7 +1701,7 @@ class ROE_OT_repair_eyes(Operator):
         body_type = None
         for obj in meshes:
             name = canonical_object_name(obj.name).lower()
-            prefix_match = re.match(r'(pc_([a-z])\d+_(?:hd|ld))', name)
+            prefix_match = re.match(r'(pc_([a-z])(?:\d+|_[a-z]+\d+)_(?:hd|ld))', name)
             if prefix_match:
                 character_prefix = prefix_match.group(1)
                 body_type = prefix_match.group(2)
@@ -1711,7 +1713,7 @@ class ROE_OT_repair_eyes(Operator):
                 identity_source = bpy.path.abspath(
                     head.get(SOURCE_FBX_KEY, ''))
             path_match = re.search(
-                r'(pc_([a-z])\d+_(?:hd|ld))', identity_source.lower())
+                r'(pc_([a-z])(?:\d+|_[a-z]+\d+)_(?:hd|ld))', identity_source.lower())
             if path_match:
                 character_prefix = character_prefix or path_match.group(1)
                 body_type = body_type or path_match.group(2)

@@ -96,7 +96,7 @@ function Get-OutfitFbx {
 $entries = @()
 $skipped = @()
 foreach ($dir in @(Get-ChildItem -LiteralPath $SourceRoot -Directory |
-        Where-Object { $_.Name -match '^[a-z]\d+$' } | Sort-Object Name)) {
+        Where-Object { $_.Name -match '^(?:[a-z]\d+|[a-z]_[a-z]+\d+)$' } | Sort-Object Name)) {
     $id = $dir.Name
     $textureDir = Join-Path $dir.FullName '_textures'
     if (-not (Test-Path -LiteralPath $textureDir)) { $textureDir = $dir.FullName }

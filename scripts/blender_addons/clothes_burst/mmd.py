@@ -141,6 +141,39 @@ def world_co(obj, co=None):
     return co.reshape(-1, 3) @ m[:3, :3].T + m[:3, 3]
 
 
+FOOT_BONES = ("足首", "つま先", "足先")
+
+
+def floor_and_height(arm, meshes):
+    """碎片落到哪、模型多高：脚底（最强权重在脚踝 / 脚尖骨上的顶点）到头顶（頭 和它下面的骨头）。
+    不取整个模型的最低、最高点：带道具的模型会算错——Inase a09 的武器在静止姿势里垂到脚下 1 米，
+    地面算成 -1.03 m、身高 2.83 m，碎片穿过舞台往下掉。找不到脚 / 头时退回全部顶点。"""
+    name_j = {pb.name: (pb.mmd_bone.name_j or pb.name) for pb in arm.pose.bones}
+    head = {b.name for b in arm.data.bones if any(name_j.get(a.name) == "頭" for a in [b] + list(b.parent_recursive))}
+    feet, tops, every = [], [], []
+    for m in meshes:
+        co = world_co(m)
+        every.append(co)
+        bone_of = {vg.index: vg.name for vg in m.vertex_groups if vg.name in name_j}   # 不算 mmd_edge_scale 这些组
+        if not bone_of:
+            continue
+        foot = {i for i, n in bone_of.items() if any(k in name_j[n] for k in FOOT_BONES)}
+        top = {i for i, n in bone_of.items() if n in head}
+        for v in m.data.vertices:
+            gs = [g for g in v.groups if g.group in bone_of]
+            if not gs:
+                continue
+            g = max(gs, key=lambda x: x.weight).group
+            if g in foot:
+                feet.append(co[v.index, 2])
+            elif g in top:
+                tops.append(co[v.index, 2])
+    every = np.concatenate(every)[:, 2]
+    floor = float(min(feet)) if feet else float(every.min())
+    top = float(max(tops)) if tops else float(every.max())
+    return floor, top - floor
+
+
 def physics_bones(root):
     """被物理（动态刚体）带着的骨头：碎片不挂在它们上面。"""
     out = set()
@@ -272,19 +305,22 @@ def _remove_named(collection, name):
 
 
 def display(root, name, morph_type, add=True):
+    """表情显示框里加上（add）或去掉 name；真的加了一条时返回 True。"""
     frame = root.mmd_root.display_item_frames.get("表情")
     if frame is None:
-        return
+        return False
     for i, item in enumerate(frame.data):
         if item.type == "MORPH" and item.name == name and item.morph_type == morph_type:
             if not add:
                 frame.data.remove(i)
-            return
+            return False
     if add:
         item = frame.data.add()
         item.type = "MORPH"
         item.morph_type = morph_type
         item.name = name
+        return True
+    return False
 
 
 def retype(root, name, old, new):
@@ -685,8 +721,7 @@ def make(root, outfit, opts=None):
         raise ValueError("模型上没有这些材质：%s" % "、".join(sorted(outfit)))
     rec = {"style": o["style"], "objects": [], "materials": [], "created_morphs": [], "vertex_morphs": [],
            "swapped": False}
-    co_all = np.concatenate([world_co(m) for m in meshes])
-    floor, height = float(co_all[:, 2].min()), float(co_all[:, 2].max() - co_all[:, 2].min())
+    floor, height = floor_and_height(arm, meshes)
     swap = {m.name: body_slots(m, outfit) for m in meshes} if o["swap"] else {}
     swap = {k: v for k, v in swap.items() if v}
     report = {"floor": round(floor, 4), "height": round(height, 4), "fragments": 0, "objects": {}}
@@ -783,6 +818,12 @@ def make(root, outfit, opts=None):
             d = group.data.add()
             d.name, d.morph_type, d.factor = name, kind, 1.0
             rec.setdefault("group_entries", []).append([name, kind])
+    # 爆衣 VMD 直接给 衣服非表示_材質 / 裸体形状 打帧，它们得在表情显示框里（MMD 的表情面板和时间轴只列显示框里的表情）。
+    # ROE 的 full 版（pmx_hide_morph.py）故意只把组合表情 衣服非表示 放进去，零件 衣服非表示_材質 不在
+    for name in (vmd.OUTFIT, vmd.BODY):
+        for kind in ("material_morphs", "vertex_morphs"):
+            if getattr(root.mmd_root, kind).get(name) is not None and display(root, name, kind):
+                rec.setdefault("displayed", []).append([name, kind])
     root[TAG] = json.dumps(dict(rec, opts=o), ensure_ascii=False)
     if placeholder is not None:
         _rebuild_sliders(rig, bound)
@@ -852,6 +893,8 @@ def remove(root):
     for name in rec.get("vertex_morphs", []):
         _remove_named(mm.vertex_morphs, name)
         display(root, name, "vertex_morphs", add=False)
+    for name, kind in rec.get("displayed", []):     # 原来就有、生成时才登记进显示框的
+        display(root, name, kind, add=False)
     group = mm.group_morphs.get(vmd.GROUP)
     for name, kind in rec.get("group_entries", []):
         if group is None:

@@ -155,7 +155,7 @@
 
 | 步骤 | 操作 | 成功的样子 |
 |---|---|---|
-| 1. 导入模型 | 文件 → 导入 → MikuMikuDance Model (.pmd, .pmx)，选 `E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_full\pc_a08_hd_full.pmx`。左边的设置不用动（你装的 mmd_tools 缩放默认 1.0） | 大纲视图多出 `Pc A08 Hd Full`，5 秒左右 |
+| 1. 导入模型 | 文件 → 导入 → MikuMikuDance Model (.pmd, .pmx)，选 `E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_full\pc_a08_hd_full.pmx`。左边的设置不用动（你装的 mmd_tools 缩放默认 1.0）。要乳摇就选旁边的 `pc_a08_hd_full_bustB.pmx`：同一个模型，胸部关节带弹簧；普通版的胸只挂在一个 ±10°、没有弹簧的关节上，几乎不动 | 大纲视图多出 `Pc A08 Hd Full`，5 秒左右 |
 | 2. 切到 MMD 表情 | 3D 视图按 N →「爆衣」页签 → 最上面点「MMD 表情」 | 面板变成上面 1–4 四栏 |
 | 3. 选中模型 | 在 3D 视图里点一下模型（身体、衣服、骨架都行） | 第 1 栏显示「模型：Pc A08 Hd Full」和一列材质按钮 |
 | 4. 选衣服 | 点「按「衣服非表示_材質」选」 | `pc_a08_hd_body1`、`pc_a08_hd_body2` 变成按下（蓝色）。ROE 的 full 版都带这个表情；别的模型点材质按钮自己选，或者编辑模式选几个衣服上的面 →「按选中的面选」 |

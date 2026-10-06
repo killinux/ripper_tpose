@@ -59,6 +59,8 @@ Blender 插件也彼此独立：
   原理和测试见 [`docs/clothes-burst-guide.md`](../docs/clothes-burst-guide.md)。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
+  衣服底下没有身体的模型（别的游戏的成套模型）先用 `scripts\clothes_burst` 放进裸体：`pmx_nude_switch.py`（裸体已在 PMX 里，
+  只加「衣服非表示」开关）、`pmx_add_nude.py`（裸体在另一个 PMX、骨架不同，先摆到衣服模型的姿势）；Fiona、Eve 是例子。
 按清单批量「提取 + Blender 材质化」36 个 Player 包，画廊在 `final\html\`；
 步骤见 [`docs/final-fantasy-vii-remake-extraction.md`](../docs/final-fantasy-vii-remake-extraction.md)。
 
