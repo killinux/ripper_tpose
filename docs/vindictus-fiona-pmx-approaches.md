@@ -188,6 +188,11 @@
 5. **头发**：A 的 `hair.py`，加上"贴头皮跟头走"选项（见 3.4）。
 6. **导出和检查**：付与计算顺序检查、MMD 单位下的站立测试和舞蹈预览、表情检查，脚本见第 5 节。
 
+**2026-09-27 进展**：表情部分现在有了独立插件 [Expression Kit](../scripts/blender_addons/expression_kit/README.md)（侧栏「表情」）。
+- 它把 DNA 读取、`faceit_arkit`、`mmd_face_morphs` 的做法合在一起，骨骼表情、顶点表情、「自动」（按 PMX 误差逐个选）都能做。
+- 在转换后的 Fiona 上也能先恢复完整权重。恢复后 54 个表情做成骨骼表情都会超过 0.3 mm，所以「自动」全部选了顶点表情。
+- 下面第一个选择因此不必二选一：在插件里按模型选，或选「自动」。流水线（`export_pmx.py`）要不要改成调用插件，还是要你定。
+
 **2026-10-02 进展**：B（`export_pmx.py`）能出服装了，第一个是 PCF_005（白裙），用户要的「高清版」。
 - 服装是 UE5 身体骨架，和 Fiona_BaseBody 的 Biped 不同。脚本按骨架自动选规则：下半身 = pelvis、胸部用 `breast_physics_02`、
   裙子挂到 下半身 并合成一圈，详见 `scripts/vindictus/README.md`「导出 PMX」。

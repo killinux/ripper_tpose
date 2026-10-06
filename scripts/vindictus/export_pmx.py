@@ -2,6 +2,9 @@
 
     blender -b --python export_pmx.py -- --xps <model.xps> --dna <face.dna> --out <dir>
             [--name Fiona_BaseBody] [--model-name Fiona] [--no-physics] [--no-morphs]
+            [--morphs vertex|bone] [--face-package <face>.uasset.bin]
+            [--bust "k=v,..." | --bust-template] [--no-sdef] [--sdef-joints 左ひじ,右ひじ] [--no-pad]
+            [--no-tune-materials]
     blender -b --python export_pmx.py -- --blend <build_blend.py output .blend> --dna <face.dna> --out <dir>
             [--max-texture 4096] [--ao 1.0] [--keep-xps] ...
 
@@ -16,19 +19,29 @@ Two body rigs come in (RIGS): Fiona_BaseBody's 3ds Max Biped body and the UE5 bo
 
 The conversion is the hand route of docs/vindictus-fiona-manual-export.md 6.10 (XNALaraMesh
 import -> Convert to MMD 5 with four slots corrected -> one-click with auto-identify off).  Around it:
-the UE body's helper bones go into their parents first (merge_into_parent), and weight the plugin still
-hands to non-MMD bones (feathers, sockets, cloth chains) goes to the nearest MMD bone after it
-(return_conversion_gains).  Then:
+the UE body's helper bones - twist bones included - go into the limb segment they hang under first
+(merge_into_parent), its forearms, bent 36.7 deg at rest, are laid straight with each vertex turning
+about the elbow by its forearm share (limbs.straighten_forearms; the plugin's own straightening is a
+linear blend that narrows the elbow, and it skips an arm that is already straight), and weight the
+plugin still hands to non-MMD bones (feathers, sockets, cloth chains) goes to the nearest MMD bone
+after it (return_conversion_gains).  Then:
 
 1. 両目 - the ROE worker's add_both_eyes_bone (grant rate 1, eyes on transform layer 1).
 2. Expressions - the face is a MetaHuman: no shape keys, ~630 FACIAL_* joints moved by RigLogic
-   from 269 raw controls.  metahuman_dna.DnaFace evaluates the face's own DNA (extracted from
-   the game by ``metahuman_dna.py extract``) for each MMD morph's control mix (RECIPES), and
-   every joint's rest -> posed world motion becomes a bone-morph offset on the rig.  The DNA's
-   neutral skeleton is fitted to the rig first (similarity transform; Fiona: 0.38 mm mean).
+   from 269 raw controls, evaluated from the face's own DNA (extracted from the game by
+   ``metahuman_dna.py extract``) for each MMD morph's control mix.  Since 2026-10-04 they are
+   VERTEX morphs by default (build_vertex_morphs, Expression Kit): the face's full skin weights
+   (up to 12 per vertex; UE Viewer keeps 4) are put back from the cooked face package while the
+   expressions are baked, so a morph is the skin as the game moves it; a bone morph can only move
+   the skin through the PMX's 4 weights and bulges (あ２ 7.8 mm off, ぺろっ 5.2, あ 4.7).
+   ``--morphs bone`` keeps the earlier route: metahuman_dna.DnaFace per RECIPES, every joint's
+   rest -> posed world motion a bone-morph offset (the DNA's neutral skeleton fitted to the rig
+   first: similarity transform, Fiona 0.38 mm mean).
 3. Physics - Convert to MMD 5's body colliders; the bust laid out as in the user's MMD template
    (static body on ``Bip001_*_bust_1``, dynamic sphere on ``Bip001_*_bust_2``, joint +-10 deg,
-   a group that collides with nothing) plus an angular spring (see BUST); hair chains by mmd_cloth_physics with the
+   a group that collides with nothing) plus an angular spring (see BUST), and once every body is in place
+   that joint re-sized for MMD's gravity by bust_physics.py (springs from the gravity torque, pitch +-25 deg,
+   damping 0.5; ``--bust-template`` keeps the template, ``--bust`` changes values); hair chains by mmd_cloth_physics with the
    ``FACIAL_*`` joints counted as body (the MetaHuman hairline joints are named ``*Hair*`` and
    are face skin, not hair); then bodies that start inside a collider stop colliding with it.
    The game weights the breast skin to ``bust_2`` at 0.24 at most - a swinging body would move
@@ -38,8 +51,14 @@ hands to non-MMD bones (feathers, sockets, cloth chains) goes to the nearest MMD
    soft-tissue bones under it (1.0 summed at the centre), which all swing with 02.  Skirts hang
    from 下半身 and their chains are joined into one ring (see merge_garments); skirts the game splits
    per leg stay one sheet per thigh; coat, shirt and jacket hems are joined the same way.
-4. PMX at scale 12.5 with textures, the ROE grant-order check, the converted .blend and a
-   JSON report next to it.
+4. PMX at scale 12.5 with textures; then the elbow rings (vertices on just 腕捩 + ひじ) turned to
+   SDEF in the written file (pmx_sdef.py; ``--no-sdef`` keeps them BDEF2 - the converted .blend has
+   none, an import of the PMX brings them); the colour maps edge-padded (pad_textures.py: the baked
+   maps end in transparent black at every island, a dark line along each UV seam - round the
+   shoulders on the UE body; ``--no-pad`` skips it); with ``--blend`` the materials' specular and
+   shininess by their game material (pmx_materials.py: skin and cloth matte, metal kept shiny;
+   ``--no-tune-materials`` skips it); the ROE grant-order check, the converted .blend and a JSON
+   report next to it.
 """
 import argparse
 import importlib.util
@@ -48,6 +67,7 @@ import math
 import os
 import re
 import shutil
+import subprocess
 import sys
 from collections import defaultdict
 
@@ -60,7 +80,24 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(REPO, "scripts", "blender_addons"))      # mmd_cloth_physics
+import bust_physics  # noqa: E402
+import limbs  # noqa: E402
 import metahuman_dna  # noqa: E402
+import pmx_sdef  # noqa: E402
+# pad_textures.py and pmx_materials.py need Pillow, which Blender's own Python lacks: they run in the system Python
+# (outside_blender), on the written PMX and its textures
+
+
+def outside_blender(code):
+    """Run ``code`` with the system Python (env VINDICTUS_PYTHON, else ``python`` on PATH) next to this script; its
+    last ``RESULT <json>`` line comes back as an object."""
+    exe = os.environ.get("VINDICTUS_PYTHON") or shutil.which("python") or "python"
+    r = subprocess.run([exe, "-c", "import sys; sys.path.insert(0, %r)\n%s" % (HERE, code)], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace")
+    lines = [line for line in r.stdout.splitlines() if line.startswith("RESULT ")]
+    if r.returncode or not lines:
+        raise RuntimeError("%s failed (%d):\n%s" % (exe, r.returncode, (r.stdout + r.stderr)[-3000:]))
+    return json.loads(lines[-1][len("RESULT "):])
 
 WORKER = os.path.join(REPO, "scripts", "riseoferos", "export_character_model_blender.py")
 
@@ -76,6 +113,10 @@ WORKER = os.path.join(REPO, "scripts", "riseoferos", "export_character_model_ble
 # below it (summed per vertex: 1.0 at the centre), so swinging 02 moves the whole breast.
 # ``body_regex``: bones mmd_cloth_physics must not take for cloth - FACIAL_* is face skin (the hairline
 # joints are named *Hair*), breast_* the bust above, *toe_## the UE toes (they came out as "ribbons").
+# ``into_parent``: the UE body's helper bones, weights folded into the limb segment they hang under before
+# the conversion (merge_into_parent).  Blender2XPS prefixes the helpers it knows ``unused_``; the MetaHuman
+# body has six more it leaves as they are: the upper-arm muscles, the wrist pads and the knee pads.
+UE_HELPERS = r"^unused_|^(?:upperarm_(?:bicep|tricep)|wrist_(?:inner|outer)|calf_knee(?:Back)?)_[lr]$"
 RIGS = {
     "biped": {
         "slots": {"center_bone": "", "lower_body_bone": "Bip001_Pelvis", "head_bone": "head neck upper",
@@ -88,7 +129,8 @@ RIGS = {
                   "left_eye_bone": "head eyeball left", "right_eye_bone": "head eyeball right"},
         "bust": (("breast_physics_01_l", "breast_physics_02_l"), ("breast_physics_01_r", "breast_physics_02_r")),
         "body_regex": r"^(FACIAL_|breast_|[a-z]+toe_\d)",
-        "into_parent": r"^unused_(?!(?:upper|lower)arm_twist_\d)",       # see merge_into_parent
+        "into_parent": UE_HELPERS,                                       # see merge_into_parent
+        "straighten": True,                                              # see limbs.py
     },
 }
 SLOT_FIX = RIGS["biped"]["slots"]
@@ -164,6 +206,9 @@ RECIPES = [
 # gravity 9.8 units/s^2): the sphere hangs ~1.56 units in front of the pivot, so gravity torque is
 # ~15 and a spring of 450 leaves ~2 deg of rest sag and bounces at ~2 Hz.  The Stellar Blade Fiona's 120
 # looks right in a metre-scale Blender preview but sags ~10 deg at MMD scale (measured by importing at 1.0).
+# (2026-10-04: MMD-compatible physics runs gravity 98, not 9.8 - with these values every breast droops 7-12 deg
+# against its 10 deg limit and bounces about 1 cm.  They only build the template now; add_physics re-sizes the
+# joint with bust_physics.py at the end, see there.)
 BUST = {
     "boost_to": 0.75, "limit_deg": 10.0, "spring": 450.0, "mass": 1.0, "lin_damp": 0.5, "ang_damp": 0.5,
     "friction": 0.5, "group": 15, "radius": (0.03, 0.06), "base_radius": 0.024, "centre_weight": 0.3,
@@ -326,8 +371,8 @@ def xps_from_blend(blend, xps, max_size, ao_strength=1.0):
 
 
 def relink_textures(out_dir, work):
-    """Point the converted .blend at the PMX's texture copies (<out>/textures) before the intermediate
-    XPS folder goes; images only the XPS used (normal maps ...) are dropped."""
+    """Point the converted .blend's images from the XPS folder ``work`` at the PMX's texture copies
+    (<out>/textures); images only the XPS used (normal maps ...) are dropped."""
     tex = os.path.join(out_dir, "textures")
     work = os.path.normcase(os.path.abspath(work))
     relinked = dropped = 0
@@ -373,9 +418,16 @@ def merge_into_parent(arm, pattern):
     - the chest correctives went into the breast soft-tissue bones and the head / neck ones into hair
       bones and coat chains: PCF_067's steel breastplate swung with the bust physics, its helmet with
       five hair strands (up to 1190 weight on one hair bone), the coat's first row with the coat.
-    In UE the correctives only move when the game's pose drivers move them, at rest they ride on their
-    parent, so their skin goes to the parent here, before the conversion.  The arm twist bones stay: the
-    plugin maps them onto 腕捩 / 手捩, which MMD motions do twist."""
+    In UE the correctives only move when the game's pose drivers move them (ABP_PCF_Corrective,
+    Rig_proc_ControlRig), at rest they ride on their parent, so their skin goes to the parent here, before
+    the conversion.  That includes the arm twist bones: the MetaHuman arm keeps no skin on upperarm /
+    lowerarm themselves, it is all on twist_01/02, twistCor_01/02, bicep, tricep and the correctives under
+    them.  The plugin does not take UE twist bones over - it builds its own 腕捩 / 手捩 (+1/2/3) and splits
+    腕 / ひじ weight onto them by position along the bone - and handed their skin to the nearest bone head
+    vertex by vertex: the lowest eighth of the upper arm went to ひじ (PCF_005: 0.88 of the way to the
+    elbow, 93 % upper arm in the game, 98 % ひじ after), so the arm bent above the elbow and the forearm
+    straightening baked a kink there; the forearm skin went to 手首 and the wrist pads and came back on
+    ひじ, a band 70 % down the forearm that did not twist while the skin on both sides did."""
     rx = re.compile(pattern)
     bones = arm.data.bones
     moved = defaultdict(float)
@@ -418,11 +470,11 @@ def weight_snapshot(arm):
 
 
 def return_conversion_gains(arm, snap):
-    """Convert to MMD 5 merges the bones it drops - the arm twist bones that merge_into_parent leaves to it, a few
-    weighted chain roots - into whichever bone is nearest, MMD or not.  PCF_005's forearm skin went to a hand
-    feather (263 weight on Outfit005_hand_feather_e_01, which swings), PCF_067's to the shield socket.  Weight that
-    a non-MMD bone (no Japanese name) gained in the conversion goes, vertex by vertex, to the nearest MMD deform bone;
-    what the bone had before stays.  The face's FACIAL_* bones are left alone."""
+    """Convert to MMD 5 merges the bones it drops - a few weighted chain roots; until 2026-10-04 also the arm twist
+    bones, which merge_into_parent now folds first - into whichever bone is nearest, MMD or not.  PCF_005's forearm
+    skin went to a hand feather (263 weight on Outfit005_hand_feather_e_01, which swings), PCF_067's to the shield
+    socket.  Weight that a non-MMD bone (no Japanese name) gained in the conversion goes, vertex by vertex, to the
+    nearest MMD deform bone; what the bone had before stays.  The face's FACIAL_* bones are left alone."""
     bones = arm.data.bones
     skip = re.compile(r"目|全ての親|センター|グルーブ|操作中心|IK")
     segs = []
@@ -486,6 +538,11 @@ def import_and_convert(xps):
     unhide_outfit_bones(arm)
     if RIGS[kind].get("into_parent"):
         merge_into_parent(arm, RIGS[kind]["into_parent"])
+    straightened = []
+    if RIGS[kind].get("straighten"):                       # before the plugin's own (chord) straightening
+        straightened = limbs.straighten_forearms(arm, skinned_meshes(arm))
+        for line in straightened:
+            log("forearm: " + line)
     snap = weight_snapshot(arm)
     arm.scale = (1.0, 1.0, 1.0)                            # the 214-unit trap (tutorial 6.10 step 2)
     activate(arm)
@@ -503,10 +560,65 @@ def import_and_convert(xps):
     if getattr(root, "mmd_type", "") != "ROOT":
         raise RuntimeError("no mmd root after the conversion")
     gains = return_conversion_gains(arm, snap)
-    return root, arm, kind, gains
+    return root, arm, kind, gains, straightened
 
 
 # -- 2. expressions from the DNA ---------------------------------------------------------------
+def skin_of(meshes):
+    """{mesh name: [[(group, weight), ...] per vertex]} - to put a skin back exactly."""
+    out = {}
+    for mesh in meshes:
+        names = {g.index: g.name for g in mesh.vertex_groups}
+        out[mesh.name] = [[(names[g.group], g.weight) for g in v.groups] for v in mesh.data.vertices]
+    return out
+
+
+def put_skin_back(meshes, skin):
+    """Vertices whose groups differ from ``skin`` get exactly those back; returns how many changed."""
+    changed = 0
+    for mesh in meshes:
+        old = skin.get(mesh.name)
+        if old is None or len(old) != len(mesh.data.vertices):
+            continue
+        for v in mesh.data.vertices:
+            now = sorted((mesh.vertex_groups[g.group].name, round(g.weight, 6)) for g in v.groups if g.weight > 0)
+            was = sorted((n, round(w, 6)) for n, w in old[v.index] if w > 0)
+            if now == was:
+                continue
+            for g in list(v.groups):
+                mesh.vertex_groups[g.group].remove([v.index])
+            for n, w in old[v.index]:
+                (mesh.vertex_groups.get(n) or mesh.vertex_groups.new(name=n)).add([v.index], w, "REPLACE")
+            changed += 1
+    return changed
+
+
+def build_vertex_morphs(root, meshes, dna_path, package=""):
+    """The MMD expressions as vertex morphs, through Expression Kit (scripts/blender_addons/expression_kit, DNA
+    source, its MMD set: 56 names on Fiona - ω, ω□, 歯無し上 / 下 have no MetaHuman recipe).  The cooked face
+    package (``package``, default the .uasset.bin next to the DNA) gives the face its full skin weights back only
+    while the expressions are baked; the skin the PMX deforms with - UE Viewer's 4 weights - goes back before
+    the export, so the morphs are the only thing that differs from a bone-morph export."""
+    from expression_kit import api
+
+    package = package or api.companion_package(dna_path)
+    skin = skin_of(meshes)
+    out = {"output": "VERTEX", "package": package}
+    if package:
+        restored = api.restore_weights(root, package, dna_path=dna_path)
+        out["full_weights"] = {name: r.get("rewritten", r.get("skipped")) for name, r in restored["meshes"].items()}
+    else:
+        log("expressions: no face package next to the DNA - baked with the 4-weight skin (bulges like bone morphs)")
+    built = api.build(root, "MMD", "DNA", output="VERTEX", dna_path=dna_path, log=log)
+    out["skin_put_back"] = put_skin_back(meshes, skin)
+    out["morphs"] = list(built.get("vertex", []))
+    out["skipped"] = built.get("skipped", [])
+    log("expressions: %d vertex morphs (full weights while baking: %s), skin put back on %d vertices; skipped %s" % (
+        len(out["morphs"]), "yes" if package else "no", out["skin_put_back"],
+        ", ".join(name for name, _why in out["skipped"]) or "none"))
+    return out
+
+
 def build_face_morphs(root, arm, face):
     bones = arm.data.bones
     joints = {}
@@ -812,7 +924,9 @@ def anchor_scalp_hair(arm, garments, below_eyes=HAIR_FREE_BELOW_EYES):
     return anchored, swinging
 
 
-def add_physics(root, arm, meshes, roe, rig):
+def add_physics(root, arm, meshes, roe, rig, bust_tune=None):
+    """``bust_tune``: bust_physics settings for the breast joints once every body exists (the cloth hung on a
+    breast counts in its spring); None keeps the template joint (BUST)."""
     out = {}
     bones = arm.data.bones
     activate(arm)
@@ -846,6 +960,10 @@ def add_physics(root, arm, meshes, roe, rig):
     out["hair"]["scalp_anchored"], out["hair"]["swinging"] = anchor_scalp_hair(arm, hair)
     out["released_overlaps"] = roe.release_rest_overlaps()
     scene = bpy.context.scene
+    if bust_tune is not None:
+        out["bust_tune"] = bust_physics.tune_scene(scene, bust_tune)
+        for line in out["bust_tune"]:
+            log("bust: " + bust_physics.describe(line))
     out["rigid_bodies"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY")
     out["joints"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "JOINT")
     return out
@@ -890,7 +1008,24 @@ def main():
     ap.add_argument("--model-name", default="")
     ap.add_argument("--no-physics", action="store_true")
     ap.add_argument("--no-morphs", action="store_true")
+    ap.add_argument("--morphs", choices=("vertex", "bone"), default="vertex",
+                    help="vertex (default): Expression Kit, full face weights while baking; bone: the 26 DNA bone morphs")
+    ap.add_argument("--face-package", default="",
+                    help="--morphs vertex: the cooked face package for the full weights (default: <dna>.uasset.bin)")
+    ap.add_argument("--bust-template", action="store_true",
+                    help="keep the template breast joint (spring 450, +-10 deg, damping 0.5) instead of bust_physics.py")
+    ap.add_argument("--bust", default="",
+                    help="bust_physics.py settings other than its defaults, e.g. 'sag=10,pitch_limit=20'")
+    ap.add_argument("--no-sdef", action="store_true", help="leave the elbow rings BDEF2 (see pmx_sdef.py)")
+    ap.add_argument("--sdef-joints", default=",".join(pmx_sdef.JOINTS),
+                    help="joint bones whose two-bone ring gets SDEF, each paired with its parent (default %(default)s)")
+    ap.add_argument("--no-pad", action="store_true",
+                    help="leave the colour maps without edge padding (dark lines along the UV seams, see pad_textures.py)")
+    ap.add_argument("--no-tune-materials", action="store_true",
+                    help="--blend: keep Convert to MMD 5's specular 1.0 / shininess 11.9 on every material "
+                         "(pmx_materials.py: skin and cloth matte, metal shiny)")
     args = ap.parse_args(argv)
+    bust_tune = None if args.bust_template else dict(bust_physics.DEFAULTS, **bust_physics.parse_overrides(args.bust))
     name = args.name or os.path.splitext(os.path.basename(args.xps or args.blend))[0]
     out_dir = os.path.join(os.path.abspath(args.out), name)
     os.makedirs(out_dir, exist_ok=True)
@@ -906,36 +1041,64 @@ def main():
         xps = os.path.join(work, name + ".xps")
         report["hd"] = xps_from_blend(os.path.abspath(args.blend), xps, args.max_texture, args.ao)
     report["xps"] = xps
-    root, arm, kind, gains = import_and_convert(xps)
+    root, arm, kind, gains, straightened = import_and_convert(xps)
     report["rig"] = kind
+    report["forearms_straightened"] = straightened
     report["conversion_gains_moved"] = gains
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.find_armature() == arm]
     report["both_eyes_bone"] = roe.add_both_eyes_bone(arm)
     activate(arm)
     bpy.ops.object.create_bone_group()                     # 両目 into the add-on's display frames
     if args.dna and not args.no_morphs:
-        face = metahuman_dna.DnaFace(open(args.dna, "rb").read())
-        report["expressions"] = build_face_morphs(root, arm, face)
+        if args.morphs == "vertex":
+            report["expressions"] = build_vertex_morphs(root, meshes, os.path.abspath(args.dna), args.face_package)
+        else:
+            face = metahuman_dna.DnaFace(open(args.dna, "rb").read())
+            report["expressions"] = build_face_morphs(root, arm, face)
     if not args.no_physics:
-        report["physics"] = add_physics(root, arm, meshes, roe, RIGS[kind])
+        report["physics"] = add_physics(root, arm, meshes, roe, RIGS[kind], bust_tune)
     comment = ("Vindictus: Defying Fate (2024 pre-alpha) %s. XPS -> Convert to MMD 5 -> ripper_tpose "
                "scripts/vindictus/export_pmx.py; expressions evaluated from the face's MetaHuman DNA." % name)
+    if not args.no_physics and bust_tune is not None:
+        comment += "\n" + bust_physics.MARK                  # mmd_tools writes \n as \r\n
     export(root, path, args.model_name or name, comment)
+    if not args.no_sdef:
+        joints = [j.strip() for j in args.sdef_joints.split(",") if j.strip()]
+        report["sdef"] = pmx_sdef.sdef_file(path, path, joints)
+        log("SDEF vertices %s" % report["sdef"])
+    if not args.no_pad:
+        # the kept intermediate XPS holds the same maps the PMX copied: padded alike
+        padded = outside_blender(
+            "import json, pad_textures\n"
+            "s = pad_textures.pad_pmx(%r, mirrors=%r, log=lambda line: None)\n"
+            "print('RESULT ' + json.dumps({n: {k: v.get(k) for k in ('opaque', 'changed')} for n, v in s.items()}))"
+            % (path, [work] if work and args.keep_xps else []))
+        report["texture_padding"] = padded
+        log("texture padding: %d of %d colour maps" % (sum(1 for s in padded.values() if s.get("changed")), len(padded)))
+    if args.blend and not args.no_tune_materials:
+        # the build_blend folder holds the game materials' report (build.log) and their ARM / ORM maps
+        report["materials"] = outside_blender(
+            "import json, pmx_materials\n"
+            "t = pmx_materials.tune_file(%r, %r)\n"
+            "print('RESULT ' + json.dumps({n: v[0] for n, v in t.items()}))"
+            % (path, os.path.dirname(os.path.abspath(args.blend))))
+        log("materials %s" % {k: sum(1 for v in report["materials"].values() if v == k)
+                               for k in ("skin", "cloth", "mixed", "metal", "keep")})
     report["grant_order_violations"] = roe.verify_grant_order(path)
     report["bones"] = len(arm.data.bones)
     report["bytes"] = os.path.getsize(path)
-    if work:
-        report["converted_blend_images"] = relink_textures(out_dir, work)
+    # the converted .blend uses the PMX's texture copies: the intermediate XPS of --blend is deleted, and an
+    # --xps source may be anywhere
+    report["converted_blend_images"] = relink_textures(out_dir, work or os.path.dirname(os.path.abspath(xps)))
     converted = os.path.join(out_dir, name + "_converted.blend")
     bpy.ops.wm.save_as_mainfile(filepath=converted)
-    if work:
-        # saved where it lives now, so "//textures/..." resolves next to it wherever the folder is copied
-        bpy.ops.file.make_paths_relative()
-        bpy.ops.wm.save_mainfile()
-        if os.path.isfile(converted + "1"):
-            os.remove(converted + "1")             # the backup the second save leaves
-        if not args.keep_xps:
-            shutil.rmtree(work, ignore_errors=True)
+    # saved where it lives now, so "//textures/..." resolves next to it wherever the folder is copied
+    bpy.ops.file.make_paths_relative()
+    bpy.ops.wm.save_mainfile()
+    if os.path.isfile(converted + "1"):
+        os.remove(converted + "1")                 # the backup the second save leaves
+    if work and not args.keep_xps:
+        shutil.rmtree(work, ignore_errors=True)
     with open(os.path.join(out_dir, name + ".pmx.report.json"), "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=1, default=str)
     print("VINDICTUS_PMX_REPORT=" + json.dumps(report, ensure_ascii=False, default=str), flush=True)

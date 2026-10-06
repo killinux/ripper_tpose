@@ -180,8 +180,9 @@ def collect_vindictus():
         if os.path.isfile(j(src, mid + ".pmx")):
             products.append(Product(vindictus_character(mid, info.get(mid, {})), "pmx", mid, src, main=mid + ".pmx",
                                     preview="preview.png" if exists(j(src, "preview.png")) else None,
-                                    desc="MMD PMX（scripts\\vindictus\\export_pmx.py：原尺寸贴图 × AO、DNA 骨骼表情、"
-                                         "胸 / 裙 / 头发物理；<id>_converted.blend 是转换后的场景）"))
+                                    desc="MMD PMX（scripts\\vindictus\\export_pmx.py：原尺寸贴图 × AO、DNA 顶点表情、"
+                                         "肘部 SDEF、胸 / 裙 / 头发物理；<id>_converted.blend 是转换后的场景，"
+                                         "<id>_dance.mp4 是手势舞预览）"))
     if os.path.isdir(j(FIONA_VAM, "vam", "Custom")):
         products.append(Product(
             "Fiona", "vam", "FionaDF", FIONA_VAM,

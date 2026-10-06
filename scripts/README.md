@@ -33,6 +33,9 @@ Blender 插件也彼此独立：
   形态键（UE Viewer 截断的蒙皮权重先从游戏包补全），注册到 Faceit，用 iPhone Face Cap 实时驱动；已有 ARKit 形态键的模型
   只做注册。步骤见 [`docs/faceit-arkit-guide.md`](../docs/faceit-arkit-guide.md)，Vindictus 的脸部数据用
   `vindictus\extract_face_data.py` 提取。
+- 表情工具箱（跨游戏，合一）：`scripts\blender_addons\expression_kit`，侧边栏 **表情** —— 一个插件做三种表情：MMD
+  骨骼表情、MMD 顶点表情（或按 PMX 4 权重误差自动二选一）、52 个 ARKit 形态键并注册到 Faceit；来源可以是 MetaHuman DNA、
+  模型已有的 ARKit 形态键、自己摆的姿势库，或骨骼脸自动配方。步骤见 [`docs/expression-kit-guide.md`](../docs/expression-kit-guide.md)。
 - FFVII Remake 的 MMD 表情：`scripts\blender_addons\ff7_face_morphs`，侧边栏 **MMD** —— 用游戏自己的表情姿势和口型数据
   生成 43 个 MMD 表情（形态键 → PMX 顶点表情），可以一键在后台导出带表情的 PMX；数据用 `final\ff7_face_data.py` 从游戏提取。
   使用说明见 [`docs/ff7-face-morphs-usage.md`](../docs/ff7-face-morphs-usage.md)。

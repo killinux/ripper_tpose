@@ -111,7 +111,11 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
   Principled，但烘焙只取 Base Color，于是颜色被乘了一次遮罩：裙子布料（alpha 0.4–0.6）烘出 0.49，原图是 0.87，PMX 里还是灰的。
   烘之前把带 alpha 的贴图设成 Channel Packed（RGB 和 alpha 各管各的，UE 就是这样把不透明度打包进颜色图的）。
   单独测过：同一张图只接颜色烘，普通模式 0.527，Channel Packed 0.870，和原图一样。ARM 这类非彩色贴图本来就不受影响，AO 一直是对的。
-- 中间的 XPS 写在 `<out>\<名字>\_xps\`，导完删掉（`--keep-xps` 保留）。转换后的 `<名字>_converted.blend` 改指向 PMX 旁边 `textures\` 里的贴图。
+- 中间的 XPS 写在 `<out>\<名字>\_xps\`，导完删掉（`--keep-xps` 保留）。
+
+归档里的高清 XPS（`E:\game_export\Vindictus\Fiona\xps\<id>\<id>.xps`）就是 `--blend` 留下的中间 XPS，换了导出设置要重导时
+直接拿它走 `--xps`，不用重新烘：贴图和 `--blend` 出的逐字节相同，一套 1–2 分钟（2026-10-04 的 15 套重导就是这样做的）。
+两种来源导完，转换后的 `<名字>_converted.blend` 都改指向 PMX 旁边 `textures\` 里的贴图。
 
 `export_pmx.py` 做的事：
 1. **转换**：XPS → Convert to MMD 5，和教程 6.10 的手工步骤一样。
@@ -122,8 +126,15 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
 3. **表情**：Vindictus 的玩家脸是 MetaHuman，没有形态键，表情靠 RigLogic 驱动约 630 根 `FACIAL_*` 骨。
    - 驱动数据在脸网格包里的 `DNAAsset` 中，UE Viewer 不导出。`metahuman_dna.py` 直接从 IoStore 容器里把它切出来，解析 DNA v2.1。
    - 求值和 RigLogic 一样：原始控制 → PSD（带权输入相乘，限制在 0～1）→ 关节增量（每组一个稠密矩阵，LOD 0）→ 正向运动学。
-   - 26 个标准 MMD 表情（まばたき、笑い、ウィンク、あいうえお、眉毛……）各按一组控制值求值，再把每根骨从静止到摆好的变化写成骨骼表情。
-   - 求值前先把 DNA 的中性骨架拟合到模型骨架上：620 根骨，平均误差 0.38 mm。
+   - **默认做顶点表情**（2026-10-04 起，用户：「后续默认做出的pmx表情都是顶点的」）：走 Expression Kit
+     （`scripts/blender_addons/expression_kit`，DNA 来源），PCF_005 / Fiona 出 56 个（ω、ω□、歯無し上 / 下 MetaHuman 没有对应控制）。
+     烘焙时先从脸的原始网格包（DNA 旁边的 `SK_Fiona_Face01.uasset.bin`，`--face-package` 可指定）把游戏的完整蒙皮权重
+     （每顶点最多 12 个，UE Viewer 只留 4 个）放回去，表情就是游戏里脸动起来的样子；烘完把 PMX 用的 4 权重蒙皮原样放回
+     （约 1.5 万个顶点），所以和骨骼表情版只差表情本身。找不到网格包就用 4 权重烘，日志会提示。
+   - `--morphs bone` 保留原来的做法：26 个标准 MMD 表情（まばたき、笑い、ウィンク、あいうえお、眉毛……）各按一组控制值求值，
+     再把每根骨从静止到摆好的变化写成骨骼表情；求值前先把 DNA 的中性骨架拟合到模型骨架上（620 根骨，平均误差 0.38 mm）。
+     骨骼表情只能通过 PMX 的 4 个权重带动皮肤，张嘴、单侧微笑时脸颊起包（あ２ 偏 7.8 mm、ぺろっ 5.2、あ 4.7）。
+   - 顶点表情的 PMX 大一倍（PCF_005：8.5 → 17.7 MB），MMD、Blender 里都照常用表情滑块。
 4. **物理**：
    - **身体碰撞体**：用 Convert to MMD 5 的。
    - **胸部**：刚体布局按你的 MMD 模板（`标准骨骼与刚体.pmx` 的 乳奶1/乳奶2）：
@@ -132,6 +143,8 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
      - **关节加了角度弹簧 450**。模板不带弹簧，站着时重力把乳房一直压在 10° 限位上，看起来整体下坠，右侧上缘还折出一道凹痕。
        弹簧值按 MMD 单位算：1 单位约 8 cm，重力 9.8 单位/s²，球离转轴约 1.56 单位。450 时静止只下坠约 3°，晃动频率约 2 Hz。
        星刃 Fiona 用的 120 在按米制导入的 Blender 预览里看着没问题，按 MMD 单位导入（1.0）实测会下坠 10°。
+     - **2026-10-04 起关节改由 `bust_physics.py` 按 MMD 的重力重新定**（见下面「胸部物理按 MMD 重力定」）。
+       上面的 450 / ±10° 只用来先把模板搭起来，所有刚体建好以后整个关节重算。
      - **权重**：游戏里 `bust_2` 的皮肤权重最高只有 0.24，刚体晃起来皮肤只动几毫米。所以放大到最高 0.75，多出的从同一顶点的其它骨扣。
        放大倍数随权重平方增长：峰值放大 3.1 倍，边缘（峰值的 30%）只放大约 1.2 倍。整体按一个倍数放大时，边缘过渡变陡，晃起来上缘会折出凹痕。
        T 恤按同样规则处理，跟着皮肤走。
@@ -139,7 +152,10 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
      - `FACIAL_*` 算身体骨：MetaHuman 发际线的关节名字里带 Hair，但它们是脸皮。
      - 波波头改用 `ornament`（保形）预设。
      - 每条发束从根部起，只要骨尾还在耳线以上（双眼下方 3 cm）就跟着头骨走，从第一节低于耳线开始才参与物理。原因见下面「已验证」。
-5. **导出**：按 12.5 倍导出 PMX 并复制贴图，查付与的计算顺序，另存转换后的 `.blend` 和 `.pmx.report.json`。
+5. **导出**：按 12.5 倍导出 PMX 并复制贴图；写好的 PMX 里肘部一圈改成 SDEF（`pmx_sdef.py`，见下面「手臂权重」，
+   `--no-sdef` 不改）；颜色贴图做扩边（`pad_textures.py`，见下面「贴图扩边」，`--no-pad` 不做）；用 `--blend` 导出时
+   按游戏材质设各材质的高光（`pmx_materials.py`，见下面「材质高光」，`--no-tune-materials` 不设）；查付与的计算顺序，
+   另存转换后的 `.blend` 和 `.pmx.report.json`。
 
 上面写的骨名是 `Fiona_BaseBody` 的（旧的 3ds Max Biped 身体）。**服装（`PCF_*`）和默认装是 UE5 的身体骨架**，脚本按有没有
 `Bip001_Pelvis` 自动判断，规则在 `RIGS` 里。和 Biped 版不同的地方：
@@ -147,7 +163,7 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
   转换时把它的蒙皮权重清掉：センター 和 下半身 都没有权重，胯部不跟 下半身 动（PCF_005：3235 个顶点、权重和 1207）。
 - **胸部 = `breast_physics_01` / `_02`**：游戏的胸是 `breast_l → breast_physics_01 → 02 → 03 → …`，02、03 下面还挂着一圈软组织骨。
   皮肤挂在 02 和它下面所有骨上，按顶点加起来中心正好是 1.0，所以动态球放在 02 上，整个胸跟着摆，权重不用放大。
-  模板、±10°、弹簧 450 都和 Biped 版一样。
+  模板和 Biped 版一样，关节同样最后由 `bust_physics.py` 重算。
 - **裙子**：游戏把裙子根骨挂在 `spine_02`（上半身2）上，MMD 习惯挂在 下半身：弯腰时整条裙子会跟着上身翻起来，所以改挂到 下半身。
   mmd_cloth_physics 按名字分组时只认大写的左右标记（`Skirt_L_01`），`Outfit005_skirt_a_01_l` 这种每条链都成了单独一件，
   链与链之间没有横向关节，裙片会各摆各的、从中间分开。现在同一锚点下的 `*_skirt_<字母>_<序号>_<l|r>` 合成一圈
@@ -167,8 +183,9 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
   - 胸口的矫正骨并进了胸部的软组织骨，头颈的并进了头发骨和外套下摆：PCF_067 的钢制胸甲跟着胸部物理晃，头盔跟着
     五束头发摆（一根头发骨多出 1190 的权重），PCF_005 手腕的皮肤跟着手臂上的羽毛摆。
   - 现在转换前先把这些骨的权重并进各自的父骨（`merge_into_parent`，`RIGS["ue"]["into_parent"]`）：UE 里矫正骨只在游戏的
-    姿态驱动下才动，静止时就跟着父骨。只有手臂扭转骨 `upperarm_twist_0N` / `lowerarm_twist_0N` 留给插件，它们对应 MMD 的
-    腕捩 / 手捩。
+    姿态驱动下才动，静止时就跟着父骨。2026-10-04 起手臂扭转骨也一起并（原来留给插件，以为它会对应到 腕捩 / 手捩，其实
+    不会，见下面「手臂权重」），另外加上 Blender2XPS 没加前缀的六根：`upperarm_bicep` / `upperarm_tricep`、
+    `wrist_inner` / `wrist_outer`、`calf_knee` / `calf_kneeBack`（`UE_HELPERS`）。
   - Blender2XPS 按名字判断辅助骨，会误伤服装骨：PCF_005 背后中间那条羽毛叫 `Outfit005_spine05_feather_g_bck_01`，`_bck`
     像手臂的矫正骨，就被改成了 `unused_…`，再被上一步并进羽毛根骨，14 条羽毛被绑成一整块甩。现在转换前先把
     `unused_Outfit*` / `unused_Armor*` / `unused_Fiona_*` 改回原名（`unhide_outfit_bones`），它们照常当布料。15 套里只有 PCF_005 有。
@@ -189,6 +206,149 @@ python .\metahuman_dna.py extract --out <目录>\SK_Fiona_Face01.dna      # 从�
   （`GARMENT_MERGE`，名字带 cape 用 coat 预设）。这套旧装的 Upper 和 Onepiece 两个部件各带一份披风（几乎重合，都显示），
   两份按同样的规则绑，一起动。
 
+#### 胸部物理按 MMD 重力定（`bust_physics.py`，2026-10-04）
+
+上面模板的弹簧 450 是 09-26 按重力 9.8 单位/s² 定的。和 MMD 兼容的物理实现（three.js MMDPhysics、saba、MMDAgent-EX）
+用的是 98（见 [`scripts/mmd_physics/README.md`](../mmd_physics/README.md)）。10-04 按这个重力把 15 套 PMX 都测了一遍
+（`checks/bust_check.py`、`checks/bust_dance.py`）：
+- 站着不动，每套的胸都下垂 7–12°，贴着 10° 的限位；
+- 限位卡住了幅度：转到 10° 时胸前只移动 1.0–1.7 cm，跳舞时来回约 1 cm；衣服都跟着动，没有穿模；
+- PCF_008 帽衫胸前的两片布料，每边 8 个刚体挂在胸部刚体上，重量是胸本身的 10 倍，胸一直被拽在下限，几乎不晃。
+
+现在导出的最后一步（所有刚体建好以后）由 `bust_physics.py` 重算每个胸部关节：
+- **弹簧按重力算**：静止下垂角 = 重力力矩 ÷（弹簧 − 重力刚度），所以弹簧 = 力矩 ÷ 下垂角 + 重力刚度。
+  - 力矩算上挂在胸上的所有刚体。这些刚体的质量和它们自己关节的弹簧先一起乘 0.2：它们自己怎么摆不变，
+    只是拖胸的力小了（和 ROE g05 的吊坠一样）。
+  - 重力刚度来自骨骼的位置：UE 身体的 `breast_physics_02` 在乳房里偏下，刚体（它带动的那片皮肤的中心）在它上方
+    1.5–7.6 cm，像一个倒立摆，往前倾得越多重力力矩越大。不算这一项的话，按 8° 算的弹簧实际停在 11°，
+    按 15° 算的直接垂到 25° 的限位上。
+- **限位** 俯仰 / 左右 / 扭转 ±25° / ±15° / ±5°。
+- **阻尼** 0.5（移動減衰、回転減衰都是）。
+
+限位和阻尼一开始定的是 ±18°、0.99（「C 方案」）：「来杯好茶摇一摇」30 秒里摆幅（10%–90%）从模板的 5.6–8.6° 变成 13–20°，
+平均下垂差不多，PCF_005 静止下垂 7.9°（目标 8°），停下来约 1 秒静住。用户在 Blender 里实时试过几组值，要晃得更明显，
+定了阻尼 0.5、±25°，看过 PCF_005 的视频后改成默认。手势舞（MMD 的重力）里 PCF_005 的摆幅（10%–90% / 最大）：
+
+| | 模板 | C（0.99 / ±18°） | 现在（0.5 / ±25°） |
+|---|---|---|---|
+| 摆幅 | 8.1–8.9° / 16–17.5° | 11.4–13.1° / 23–24° | 14.2–15.9° / 29–30° |
+
+代价：静止姿势里把胸骨直接转到 ±25°，5 套（默认装、PCF_003 / 005 / 006 / 008）领口附近的皮肤会从衣服里穿出来
+（最多 57 个顶点、1.7 cm）；±18° 时最多 0.8 cm，PCF_005 只有 19 个顶点、0.55 cm（连衣裙两层布之间）。哪套跳舞时看得出来，
+就单独用 `--bust "pitch_limit=18"` 导那一套；要回到 C 方案用 `--bust "lin_damp=0.99,ang_damp=0.99,pitch_limit=18"`。
+
+所有数值都有默认值，都能改：
+
+```powershell
+# 导出时默认就用这套
+... export_pmx.py -- --blend ... --bust "sag=10,pitch_limit=20"      # 改几个值
+... export_pmx.py -- --blend ... --bust-template                      # 不重算，保留模板（450 / ±10° / 阻尼 0.5）
+
+# 已经导出的 PMX 直接改，不用重新导出（普通 Python，几秒）
+python .\bust_physics.py <原.pmx> <新.pmx>                    # 默认值
+python .\bust_physics.py <原.pmx> <新.pmx> --pitch-limit 20   # 改值
+python .\bust_physics.py <原.pmx> <新.pmx> --hanging-only     # 只给挂在胸上的布料减重，关节不动
+python .\bust_physics.py <原.pmx> - --dry-run                 # 只打印
+```
+
+| 参数 | 默认 | 含义 |
+|---|---|---|
+| `sag` | 8 | 静止时胸往下垂的角度（俯仰），俯仰弹簧由它反推 |
+| `twist_sag` | 4 | 绕前后轴的静止侧倾，扭转弹簧由它反推 |
+| `yaw_scale` | 1 | 左右弹簧 = 俯仰弹簧 × 这个倍数 |
+| `pitch_limit` / `yaw_limit` / `twist_limit` | 25 / 15 / 5 | 转动限位（±度）；C 方案俯仰 18 |
+| `lin_damp` / `ang_damp` | 0.5 / 0.5 | 胸部刚体的移動減衰 / 回転減衰；C 方案 0.99 |
+| `hanging_scale` | 0.2 | 挂在胸上的刚体的质量和它们关节的弹簧乘这个倍数 |
+| `gravity` | 98 | MMD 的重力（单位/s²） |
+| `bones` | `胸\|乳\|chest\|breast\|bust\|oppai` | 按骨名找胸部刚体；只认挂在静态刚体上的那一个，所以 PCF_008 名字里带 breast 的布料不会被当成胸 |
+
+- 改过的 PMX 注释里有一行 `bust physics sized for gravity 98 ...`。命令行看到这一行就不再改第二遍（不然挂件会被减重两次），
+  要重来加 `--force`。
+- 新 PMX 写在别的文件夹时，旁边要有一份 `textures\`，不然贴图路径会指回原文件夹。读进来再原样写出去，文件逐字节相同。
+- 导出流水线和命令行用的是同一套计算：PCF_005 从存档的 XPS 重新导一次，和「存档 PMX + 命令行」的结果逐项相同，
+  和存档版只差两个胸部关节、两个胸部刚体的阻尼（当时的 C 方案）。
+- 量胸部的脚本：`checks/bust_check.py`（姿势测试：胸骨转到限位，逐材质看移动和穿模；原地跳测试）、`checks/bust_dance.py`
+  （跳舞时的摆幅）、`checks/bust_video.py` + `checks/bust_grid.py`（胸口特写视频、多段拼一起），物理设置都在 `checks/mmd_scene.py`。
+  默认的测试动作是 `E:\Downloads\mmd\0.meeynara手势舞2025.2.14by小王动画\适配瓦雷莎.vmd`（10 秒，`bust_grid.py --audio test`
+  配它的 WAV），在 `checks/test_motion.py` 里改；`--vmd` 换别的动作。
+- 每套 PMX 旁边的 `<id>_dance.mp4`（2026-10-04 起）就是这几个脚本拼的三格：全身（`bust_video.py --fixed --yaw 25
+  --distance 3.2 --lift -0.45 --sdef`，镜头不跟身体走）｜胸口特写｜左肘特写（`arm_video.py --sdef`），手势舞 + 配乐。
+  胸口镜头瞄准胸部刚体；没有胸部物理的（PCF_067 的钢胸甲）瞄准胸骨。
+- `bust_video.py --physics addon` 换成用户的 MMD Physics 插件（`E:\code\othercode\mmd_physics`）预览时的物理：重力
+  9.8 单位/s²、SPRING2、临界阻尼的 10 %（`mmd_scene.addon_like`）。默认的 `mmd` 是重力 98（three.js MMDPhysics、saba、
+  MMDAgent-EX 的值）。两种都把「和谁都不碰」的刚体放进单独的碰撞层：插件的预览没这么做，跳手势舞时手会撞到胸，
+  摆角冲到 44–58°（限位 18°），MMD 里不会。
+- 用插件调这批模型要注意：它按骨名认胸，`breast_physics_01`（静态锚点）和 `_02` 都算胸部刚体，面板读的是锚点的值；
+  套预设会把锚点也改成物理演算，胸就塌了。只读参数、预览没问题。
+
+#### 手臂权重：肘部和扭转（`limbs.py`，2026-10-04）
+
+用户反馈导出的 PMX 肘部权重不对。查下来是两件事，都出在 Convert to MMD 5 转换这一步（UE 身体的 14 套都有，Biped 身体的
+Fiona_BaseBody、Shiningwill_legacy 弯、扭都正常）：
+
+- **扭转骨的权重被按「离哪个骨头起点最近」逐个顶点分走。** 游戏的手臂是 MetaHuman 身体：`upperarm_l` / `lowerarm_l` 本身
+  不带皮肤，整条胳膊挂在扭转骨 `upperarm_twist_01/02`、`lowerarm_twist_01/02` 和它们下面的 `twistCor`、`bicep` / `tricep`、
+  矫正骨上；肘关节那一圈约 60 % 在 `upperarm_twistCor_02`（上臂），35 % 在前臂的矫正骨。游戏里这些骨由
+  `ABP_PCF_Corrective`、`Rig_proc_ControlRig`、`PA_female_base` 在运行时驱动，MMD 没有这套驱动。
+  插件不接手 UE 的扭转骨：它自己建 腕捩 / 手捩 和 腕捩1–3 / 手捩1–3（付与 0.25 / 0.5 / 0.75），再把 腕 / ひじ 的权重
+  按沿骨的位置切给它们（`convert/weights/twist.py`）；`unused_` 扭转骨则在 `transfer_unused_weights` 里逐个顶点给了
+  **骨头起点离它最近的骨**。结果：
+  - 上臂靠肘的最后约八分之一给了 ひじ（PCF_005 沿上臂 0.88 处的顶点：游戏里 93 % 上臂，转换后 98 % ひじ），弯肘时从上臂
+    中下段开始折；插件再把 36.7° 弯着的前臂拉直烘进静止网格时，这段跟着转，直臂站着肘上方就有一个 S 形扭折（最多 2.6 cm）。
+  - 前臂的皮肤先给了 手首 和手腕辅助骨，再被 `return_conversion_gains` 送回 ひじ：前臂 70 % 处一圈 100 % 在 ひじ 上，
+    手捩 一扭两边的皮肤转、这一圈不转。`upperarm_bicep` / `tricep` 没前缀、留成了单独的骨，挂在被插件改挂到 腕捩 下面的
+    扭转骨上，上臂中段整片跟着 腕捩 全扭。腕捩 转 80° 时肘部撕开一道缝，手捩 转 80° 时前臂起皱、手腕护臂撕裂。
+- **拉直前臂用的是线性蒙皮。** 插件把前臂摆直后应用骨架修改器（`fix_forearm_bend`），上臂、前臂各占一部分权重的顶点
+  会落在两边位置的连线上，肘部变细。
+
+修法（`export_pmx.py` + `limbs.py`，转换前做，插件不用改）：
+1. **辅助骨按骨架角色并回所属的那一段。** 扭转骨、`twistCor`、矫正骨、`bicep` / `tricep`、`wrist_inner` / `outer`、
+   `calf_knee` / `kneeBack` 全部并进父骨，一路并到 上臂 / 前臂 / 手 / 小腿（`UE_HELPERS`）。插件看到的就是干净的
+   腕 / ひじ / 手首，它的扭转切分（按位置平滑过渡，权重守恒）照常做；上臂、前臂、手之间的分界和游戏一模一样。
+2. **前臂自己拉直，按球面混合。** `limbs.straighten_forearms()`：每个顶点按它在前臂（及以下）上的权重比例，绕肘关节转
+   相应的角度，到关节的距离不变（MMD SDEF 的原理），形状键一起转；前臂、手、手指和挂在下面的骨跟着转。插件随后看到手臂
+   已经是直的（< 2°）就跳过它自己的烘焙。骨链名是参数，别的骨架也能用。
+3. **肘部 SDEF（导出默认做，`pmx_sdef.py`）**：PMX 写好以后，只挂在 腕捩 + ひじ 两根骨上的顶点（PCF_005 左 235、右 232 个）
+   改成 SDEF，C = R0 = R1 = ひじ 的位置。BDEF2 的顶点弯肘时走两根骨各自位置的连线，外侧变平、内侧往里挤；SDEF 按两根骨
+   旋转的混合绕肘关节转，弯到 130° 外侧还是圆的、内侧不挤。MMD、MMM 自己算 SDEF；Blender 里要手动绑定才看得到
+   （侧栏「杂项」→「MMD SDEF驱动器」→「绑定」，偏好设置 > 文件路径里要勾「自动运行 Python 脚本」）。
+   - 一开始没默认做：护臂的锯齿边和下面的皮肤，游戏里权重略有差别，SDEF 各按各的混合转，两层交叉的地方会露出几点。
+     用户比过带和不带 SDEF 的视频（`checks/arm_video.py --sdef`），选了带的。
+   - 只改写好的 PMX 文件，不动转换后的 `.blend`（那里没有 SDEF；把 PMX 导进 Blender 就有）。`--no-sdef` 不做；
+     `--sdef-joints 左ひじ,右ひじ,左ひざ,右ひざ` 连膝盖一起做（每根配它在 PMX 里的父骨，膝盖没测过）。
+   - 已经导出的 PMX 也能单独加，普通 Python：`python .\pmx_sdef.py <原.pmx> <新.pmx>`（`--dry-run` 只数顶点）。
+     读进来原样写出去逐字节相同，所以输出和输入只差这些顶点和注释里的一行；别的游戏的 PMX 同样能用。
+   - **还没解决（2026-10-06）**：用户看变身视频 1 说「胳膊肘的位置还是有缺陷」。弯到 110–145° 时，肘部外侧有一道折线。
+     查到的原因：SDEF 只给了正好挂在 腕捩 + ひじ 两根骨上的顶点（PCF_005 每边 232 个）。紧挨着的一圈顶点还带着扭转骨
+     手捩1 或 腕捩3，一共三根骨（PCF_005 每边 147 个，在肘下 4–6.6 cm 和肘上约 5.5 cm），只能线性混合，弯肘时往里瘪；
+     旁边的 SDEF 顶点保持圆，交界处就折出一道线。所有 UE 身体的服装都这样。
+     - 试过的修法是 `pmx_sdef.py --fold`（试验选项，默认不开）。横跨肘关节的顶点把扭转骨的权重并回同一段的主骨，也做成
+       SDEF。扭转骨只管扭、不管弯，所以弯曲时完全一样。前臂的扭转从这圈下面开始，按 ひじ→手捩 距离的 0.3 倍逐渐恢复，
+       扭的时候没有断层。
+     - 在 Blender 里：手势舞第 326 / 334 帧的折线和肘尖缺口小了很多，弯 130° 更干净，扭 80° 和原来一样
+       （`E:\game_export\Vindictus\_disperse\肘部检查\肘部折线_修前修后_*.jpg`）。
+     - 用户自己测完说肘部还有问题，所以默认没开，存档也没改。试验文件 `PCF_005_肘部修正.pmx`、`Fiona_肘部修正.pmx`
+       放在各自的 PMX 文件夹里。下次接着查。
+
+结果（PCF_005，对照游戏原骨架同样弯法的线性蒙皮）：
+- 沿手臂 0.4–1.7 每一格，上臂 / 前臂 / 手的权重占比和游戏完全相同（原来 0.9–1.0 处平均差 0.60）；转换后非 MMD 骨多出的
+  权重从 3159 变成 0。
+- 和只改了胸部的 `PCF_005_bustC.pmx` 逐顶点比：位置变的 1116 个全在手臂（肘部扭折拉平），权重变的在手臂和膝盖
+  （护膝骨并进 ひざD，和原来跟着 ひざ 转等价）；骨骼、表情、刚体、关节都一样。
+- 弯到 90° / 130°：肘部圆、折在肘上，和游戏一致；130° 内侧和游戏一样有线性蒙皮的挤压（游戏靠运行时的矫正骨补）。
+  扭 80°：上臂、前臂都平滑，没有撕裂。
+
+没改的：
+- 插件的两处设计照原样保留：腋窝平滑（`complete_missing_bones` 把 肩 的权重加一份给 腕，肩部更跟手臂）、手腕回收
+  （`add_twist_bone` 把前臂末端的 手首 权重收回 手捩，沿前臂 0.9–1.1 渐变）。
+
+检查脚本：
+- `checks/arm_shares.py`（转换前后每段权重占比，打印 `ARM_SHARES=`，正常 ≤ 0.02）：
+  `blender -b <id>_converted.blend --factory-startup --python checks\arm_shares.py -- <id>.xps`
+- `checks/arm_stills.py`（静止 / 弯 90° / 130° / 腕捩·手捩 扭 80°，灰模两个角度；`game` 模式拍 build_blend 的 .blend）+
+  `checks/arm_sheet.py`（拼图）；`checks/arm_video.py`（跟着上臂拍肘部的跳舞视频，配 `bust_grid.py` 并排；`--sdef`
+  用 mmd_tools 的 SDEF 驱动器带动 PMX 里的 SDEF 顶点，Blender 要加 `-y`）。
+
 Convert to MMD 5 插件那边（另一个窗口）同时做了一套通用的做法：
 - 骨架识别优先认 XPS 标准名；
 - 新增胸部、头发物理按钮。
@@ -196,14 +356,107 @@ Convert to MMD 5 插件那边（另一个窗口）同时做了一套通用的做
 两边的逐项对比、实测数据和合并建议见 [`docs/vindictus-fiona-pmx-approaches.md`](../../docs/vindictus-fiona-pmx-approaches.md)。
 重测用的脚本在 [`checks/`](checks/)。
 
+#### 贴图扩边：UV 接缝上的暗线（`pad_textures.py`，2026-10-05）
+
+现象：抬手时，从肩膀到腋下有一条锯齿状的细暗线。PCF_005 举手时、盔甲 Fiona 露出腋下时都有，Blender 和 MMD 里都会出现。
+
+原因：烘焙出来的颜色贴图（`*_baked.png`）在每个 UV 岛的边上，直接从皮肤色跳到透明黑 `(0,0,0,0)`，一个像素都没往外扩。
+Blender2XPS 烘焙时设了 8 像素的 margin，但那一圈的透明度是 0，存出来就是黑的。贴图采样是在像素之间插值的，离得越远用的
+mipmap 越小，岛外的透明黑就会沿着每条 UV 接缝混进来。UE 身体的 `MI_PCF_Upper01` 里，手臂岛的边正好绕肩一圈。
+跟权重无关：接缝两边被拆开的顶点权重完全相同（`chunk_seam` / `split_seam` 查过）。
+
+做法（导出时默认做，`--no-pad` 不做）：
+- **判断透明度**：按 PMX 里用到这张贴图的三角形，画出它的 UV 覆盖范围。
+  - 范围内（往里缩 2 像素）全都不透明的，算不透明贴图（皮肤、脸、布料），整张透明度改成 255。
+  - 范围内有镂空的（头发、睫毛、眉毛、蕾丝），透明度不动。
+- **填颜色**：有颜色（透明度 > 0）的像素一个都不改，其余的用金字塔填色，每一层先往外长 2 圈再缩小。这样紧挨着岛边的像素
+  拿到的是这个岛自己的颜色。如果只按 2×2 对齐分块，紧挨着岛的像素会拿到远处小岛的平均色：PCF_005 躯干岛下面一开始就成了
+  暗棕色。
+- **写文件**：一张 4K 贴图大约 4–8 秒。只有像素真的变了才重写，先写临时文件再替换，文件名大小写保持不变。
+
+已经导出的 PMX 可以单独做，用普通 Python：
+
+```powershell
+python .\pad_textures.py <id>.pmx --mirror <XPS 文件夹>   # --mirror：同名且逐字节相同的副本一起换；--dry-run 只统计
+```
+
+2026-10-05 已对存档的 16 套 PMX 和 XPS 里相同的副本做过。换装视频里 PCF_005 举手那几帧（第 211 帧）修前修后对比过：
+肩上的线没了。同一批视频是在 Blender 里渲的，当时没绑 SDEF，肘部也折；绑上以后变圆了（见上面「手臂权重」第 3 条）。
+
+#### 材质高光：皮肤、布料哑光，金属发亮（`pmx_materials.py`，2026-10-05）
+
+Convert to MMD 5 给每个材质都是高光 (1, 1, 1)、光泽度 11.9，皮肤、布料、金属、头发一样亮。在 MMD 里是一大片白色高光；
+Blender 的 mmd_tools 拿高光颜色当 2% 光泽反射的颜色，粗糙度 = 1 / 光泽度 = 0.08，接近镜面，皮肤像抹了油。
+
+按每个材质烘焙前的游戏材质分类（build_blend 的 `build.log` 报告里有材质类型和贴图）。衣服材质再看 ARM / ORM 贴图的
+金属度（B 通道），只统计这个材质自己的 UV 范围内金属像素占多少：
+
+| 类别 | 怎么认 | 高光 | 光泽度 |
+|---|---|---|---|
+| 皮肤 | 游戏材质类型 skin（身体、脸、手） | 0.15 | 4 |
+| 布料 | 衣服材质，金属占比 < 0.2，或没有金属度贴图 | 0.15 | 4 |
+| 混合 | 金属占比 0.2–0.5（带金边的蕾丝、鞋） | 0.5 | 8 |
+| 金属 | 金属占比 ≥ 0.5（盔甲、头饰） | 不动（1.0） | 不动（11.9） |
+| 其他 | 眼睛、头发、眉毛睫毛、牙齿 | 不动 | 不动 |
+
+- 皮肤的数值是渲染对比后用户选的（原样 / 0.35·6 / 0.15·4 三档）。
+- export_pmx 把两个网格共用的材质拆成 `<名字>_<部件>` 两份，分类时去掉后缀再找游戏材质。
+- Fiona_BaseBody 是另一套构建，没有报告，按贴图名认皮肤。
+
+已经导出的 PMX 单独改（普通 Python，只改这两个字段，加一行注释）：
+
+```powershell
+python .\pmx_materials.py <id>.pmx --blend-dir <build_blend 的 <id> 文件夹> [--dry-run]
+```
+
+2026-10-05 已对存档的 16 套主 PMX 做过（不含 PCF_005 那几个试验文件）。
+
+#### 头发和布料碰到身体（`../mmd_physics/cloth_collision_pmx.py`，2026-10-06）
+
+问题：在 MMD 里头发、围巾、披风和裙子会穿进身体，因为它们的刚体根本不和身体碰撞。
+
+原因：Convert_to_MMD5 和 mmd_cloth_physics 量身体碰撞体时，统计的是权重在这根骨上的所有顶点。穿着盔甲导出，盔甲也算进去了，
+所以上臂的胶囊有手臂两倍粗，大腿是 1.6 倍。布料和头发的刚体一开始就在碰撞体里面，mmd_cloth_physics 就把它们放进“贴身”组 10。
+这个组的掩码不含身体所在的组 0，身体碰撞体的掩码也排除了组 10，两边永远碰不到。存档的套装里，85–99 % 的动态刚体在组 10。
+
+修法用的是另一个窗口写的工具（这里只调用）。`Fiona_full` 是同一副骨架，裸身，碰撞体按皮肤量过；把它的碰撞体按骨骼复制过来。
+然后每个动态刚体（胸部除外）按碰撞体类别（头、脖子、躯干、手臂、腿）分组。开始就在某类碰撞体里的刚体先变细（盒子缩一个轴，
+胶囊缩半径，最多缩到 35 %），还不够才不和那一类碰。刚体只追加，原有的不删不改，关节不动。
+
+```bash
+# 套装（UE 骨架）：碰撞体取自 Fiona_full
+python scripts/mmd_physics/cloth_collision_pmx.py <id>.pmx <新>.pmx \
+    --colliders-from "E:\game_export\Vindictus\_爆衣插件\Fiona_full\Fiona_full.pmx"
+# Fiona_BaseBody 是旧的 Bip001 骨架，按自己的裸身量
+python scripts/mmd_physics/cloth_collision_pmx.py Fiona_BaseBody.pmx <新>.pmx --skin \
+    "4_BaseBody-MI-pc-female-body05_0.1_0_0,4_BaseBody-MI-pc-female-handfoot05_0.1_0_0,4_Face-MI-Fiona-Face01_0.1_0_0"
+```
+
+- 输出文件要和原 PMX 放在同一个文件夹。mmd_tools 的 pmx 模块保存时会按输出位置重写贴图的相对路径，放到别处贴图就断了。
+- PCF_008 胸前的衬衫布片叫 `Outfit008_upper_breast_shirt_*`。当时工具默认的胸部正则会把这 16 个刚体当成胸部跳过，
+  存档这套是加 `--bust "^breast_physics|bust|胸|乳|oppai"` 修的。工具 10-06 晚上起改了默认正则，“breast”只认名字开头
+  或第一个词后面的，这种名字不会再被当成胸，不加参数也一样。
+- PCF_010 只有两个胸部刚体是动态的，不用修。
+
+2026-10-06 已对存档的 15 套做过，PCF_010 跳过。原文件备份在 `E:\game_export\Vindictus\_meta\backup_碰撞修复前_20261006\`，
+里面还有每套的工具日志和 md5 清单 `manifest.json`。效果怎么量：`scripts/mmd_physics/clip_test_blender.py`，
+用 MMD 式的物理播手势舞，统计每帧有多少物理顶点在身体里 5 mm 以上。修前修后都用修好的 PMX 的碰撞体当“身体”，
+同一把尺子量。PCF_067：每帧 51.6 → 12.9 个，最深 7.4 → 2.8 cm；PCF_009：10.0 → 0.9 个，4.8 → 2.9 cm。
+
+### 用游戏关卡做背景（北方遗迹，`levels/`）
+
+关卡 `S1_Northruin_01` 按关卡数据还原成 Blender 场景，包括地形、岩石、遗迹、树、草和游戏自己的天空，再裁成渲染视频用的轻量版。
+变身视频的北方遗迹背景就是这个场景。步骤、命令、原理和坑见 [`levels/README.md`](levels/README.md)。
+
 ### 用 iPhone Face Cap 驱动表情（Faceit）
 
 `python .\extract_face_data.py --face Fiona` 把脸的 DNA 和原始网格包取到 `E:\game_export\Vindictus\_meta\face\`，
 然后在 Blender 里用 `scripts\blender_addons\faceit_arkit` 插件：补全蒙皮权重 → 生成 52 个 ARKit 形态键 → 注册到 Faceit。
 步骤见 [`docs/faceit-arkit-guide.md`](../../docs/faceit-arkit-guide.md)。
 
-注意：UE Viewer 导出的脸每顶点只留 **4** 个骨骼权重，游戏里最多 **12** 个；`export_pmx.py` 做的 PMX 骨骼表情
-也建在截断的权重上，张嘴、单侧微笑、鼓腮时脸颊会起包。插件的「恢复完整权重」（`faceit_arkit/ue_weights.py`）能补回来。
+注意：UE Viewer 导出的脸每顶点只留 **4** 个骨骼权重，游戏里最多 **12** 个；插件的「恢复完整权重」
+（`faceit_arkit/ue_weights.py`）能补回来。`export_pmx.py` 2026-10-04 起默认做顶点表情，烘焙时同样先补回完整权重；
+`--morphs bone` 的骨骼表情建在截断的权重上，张嘴、单侧微笑、鼓腮时脸颊会起包。
 
 `.dna` 是什么、里面各段存了什么、RigLogic 每帧怎么由它算出表情（PMX 表情和 Faceit 插件共用这套原理），
 见 [`docs/metahuman-dna.md`](../../docs/metahuman-dna.md)。
@@ -348,7 +601,7 @@ python .\make_gallery.py         # 缩略图写到导出根下，页面 -> html\
 
 - 静态网格贴图是 virtual texture，UE Viewer 导不出（角色不受影响）；Nanite 只有基础几何；
   umodel 不导 morph target（脸包里的 MetaHuman `DNAAsset` 也不导），面部没有形态键。
-  表情可以从 DNA 算出来做成 PMX 骨骼表情，见上面「导出 PMX」。
+  表情可以从 DNA 算出来做成 PMX 表情（默认顶点表情，也可以出骨骼表情），见上面「导出 PMX」。
 - 服装的 `Head` 部件五花八门：项链/颈圈（001、007、009）、耳机（002、004）、帽子（003、012）、发带（006）、
   发冠 + 头皮片（005，头发照常显示）、自带发型（001_Temp、008、010 里打包了 Fiona 的头发）、全盔（067、Lethita）。
   规则：Head 部件里有头发材质，或 `list_models.py` 的 `HEAD_REPLACES_HAIR`（067）标了的，才隐藏默认
