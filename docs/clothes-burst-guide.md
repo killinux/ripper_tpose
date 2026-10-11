@@ -600,6 +600,10 @@ Fiona 的手腕、脚踝有一圈色差：Fiona_BaseBody 的手脚是单独一�
     - 命令：`tune_bust_pmx.py --sag 1 --twist-sag 0.5 --pitch-limit 4 --yaw-limit 4 --twist-limit 2 --lin-damp 0.5
       --ang-damp 0.5 --hanging-scale 1`。
     - 上一级那个旧的网格对比视频 `Fiona_胸部_MMD普通方式_六种对比.mp4`（碰撞修复前的版本）已删。
+  - 别的模型一条命令做这六种：`scripts/mmd_physics/bust_variants.py <in.pmx> <输出文件夹> [--video]`。
+    - 每种出一个 PMX，和一个打开按空格就能播的 `.blend`（舞蹈、仿 MMD 的关节、物理已烘焙、视图对着胸部特写）；
+    - 说明见 `scripts/mmd_physics/README.md` 第 6 节；
+    - 10-11 先给 Vindictus PCF_005 做了：`E:\game_export\Vindictus\_胸部六种对比\PCF_005\`。
 
   下表是胸部偏离「跟着身体走」的角度，左胸 / 右胸：
 
