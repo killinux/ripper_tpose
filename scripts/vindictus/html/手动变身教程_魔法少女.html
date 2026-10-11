@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>手动变身教程</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1f1d1a; --muted: #6b665e; --line: #e2ddd5; --card: #ffffff;
+    --accent: #b0447a; --code-bg: #f1eee9; --warn-bg: #fff4e5; --warn-line: #f0c27a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17161a; --fg: #ebe8e3; --muted: #a39d94; --line: #34323a; --card: #1f1e23;
+      --accent: #e58bb8; --code-bg: #2a2830; --warn-bg: #33291c; --warn-line: #8a6a35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.75 "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 6px; }
+  .meta { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 {
+    font-size: 21px; margin: 44px 0 12px; padding-top: 14px; border-top: 1px solid var(--line);
+  }
+  h2 .no { color: var(--accent); margin-right: 8px; }
+  p { margin: 10px 0; }
+  ol, ul { padding-left: 1.6em; margin: 10px 0; }
+  li { margin: 6px 0; }
+  li ul { margin: 4px 0; }
+  code {
+    font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.9em; background: var(--code-bg);
+    padding: 1px 6px; border-radius: 4px; word-break: break-all;
+  }
+  kbd {
+    font-family: Consolas, monospace; font-size: 0.85em; border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 5px; background: var(--card);
+  }
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; background: var(--card); font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; white-space: nowrap; }
+  .ok {
+    border-left: 4px solid var(--accent); background: var(--card); padding: 8px 14px; margin: 14px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .warn {
+    border-left: 4px solid var(--warn-line); background: var(--warn-bg); padding: 8px 14px; margin: 14px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  figure { margin: 16px 0; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; display: block; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; }
+  nav.toc ol { margin: 4px 0; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Blender 手动做 Fiona 魔法少女变身</h1>
+<div class="meta">2026-10-06 · 用你电脑上装好的 Blender 3.6 + mmd_tools + MMD Disperse，按步骤点就能做出第 1 个视频里的变身</div>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#prep">准备</a></li>
+    <li><a href="#s1">第一步：导入两个模型</a></li>
+    <li><a href="#s2">第二步：给两个模型都加上舞蹈</a></li>
+    <li><a href="#s3">第三步：设置变身并生成</a></li>
+    <li><a href="#s4">第四步：预览</a></li>
+    <li><a href="#s5">第五步：灯光、相机和出视频</a></li>
+    <li><a href="#faq">注意事项和常见问题</a></li>
+    <li><a href="#more">继续试：换衣服、换效果</a></li>
+  </ol>
+</nav>
+
+<h2 id="prep">准备</h2>
+<p>用 Blender 3.6（<code>D:\Program Files\blender-3.6.15-windows-x64\blender.exe</code>），两个插件已经装在里面。做完的效果：Fiona 跳手势舞，第 2 秒从手脚开始变身，第 7 秒换成 PCF_005 的魔法少女装。</p>
+<div class="table-wrap"><table>
+  <tr><th>插件</th><th>版本</th><th>用来做什么</th><th>界面语言</th></tr>
+  <tr><td>mmd_tools</td><td>1.0.2</td><td>导入 PMX 模型和 VMD 舞蹈</td><td>英文（这一版没有中文翻译）</td></tr>
+  <tr><td>MMD Disperse</td><td>1.8</td><td>做变身效果，侧边栏标签叫「MMD 变身」</td><td>中文</td></tr>
+</table></div>
+<div class="table-wrap"><table>
+  <tr><th>文件</th><th>路径</th></tr>
+  <tr><td>旧服装（变身前）</td><td><code>E:\game_export\Vindictus\Fiona\pmx\Fiona\Fiona.pmx</code></td></tr>
+  <tr><td>新服装（变身后）</td><td><code>E:\game_export\Vindictus\Fiona\pmx\PCF_005\PCF_005.pmx</code></td></tr>
+  <tr><td>舞蹈</td><td><code>E:\Downloads\mmd\0.meeynara手势舞2025.2.14by小王动画\适配瓦雷莎.vmd</code></td></tr>
+  <tr><td>音乐（可选）</td><td>同一文件夹里的 <code>meeynara手势舞2026.2.14.WAV</code></td></tr>
+</table></div>
+
+<h2 id="s1"><span class="no">1</span>第一步：导入两个模型</h2>
+<p>两个模型都用 <b>Scale 0.08</b> 导入，导入后它们叠在原点，这是对的。</p>
+<ol>
+  <li>文件 → 新建 → 常规。当前文件里有要留的东西先保存。</li>
+  <li>左键点中间的立方体，按 <kbd>X</kbd> → 删除。</li>
+  <li>文件 → 导入 → <b>MikuMikuDance Model (.pmd, .pmx)</b>。</li>
+  <li>文件窗口右侧是导入选项（看不到就点右上角齿轮），把 <b>Scale</b> 改成 <b>0.08</b>，其他不动。</li>
+  <li>地址栏粘贴 <code>E:\game_export\Vindictus\Fiona\pmx\Fiona\</code> 回车，选中 <b>Fiona.pmx</b>，点右下角 <b>Import Model File (.pmd, .pmx)</b>。等十几秒，原点会站着穿盔甲的 Fiona。</li>
+  <li>再导入 <code>E:\game_export\Vindictus\Fiona\pmx\PCF_005\PCF_005.pmx</code>，Scale 同样是 <b>0.08</b>。</li>
+</ol>
+<div class="ok">做对的样子：右上角大纲视图最上层多了 <b>Fiona</b> 和 <b>PCF 005</b> 两个物体（模型的根物体，后面选模型就点它们）；两套衣服叠在一起，人高约 1.8 米。人大得出屏幕（约 22 米高）就是 Scale 还是 1.0，删掉重新导入。</div>
+
+<h2 id="s2"><span class="no">2</span>第二步：给两个模型都加上舞蹈</h2>
+<p>同一个 VMD 给 Fiona 和 PCF 005 <b>各导入一次</b>，参数完全一样，两套衣服就同步跳舞（原因见<a href="#faq">注意事项</a>）。</p>
+<ol>
+  <li>大纲视图里点 <b>Fiona</b>（最上层那个）。</li>
+  <li>文件 → 导入 → <b>MikuMikuDance Motion (.vmd)</b>，地址栏粘贴 <code>E:\Downloads\mmd\0.meeynara手势舞2025.2.14by小王动画\</code>，选 <b>适配瓦雷莎.vmd</b>。</li>
+  <li>右侧选项改三处：
+    <ul>
+      <li><b>Scale</b> = <b>0.08</b>（和模型一致）</li>
+      <li><b>Margin</b> = <b>30</b>：开头留 30 帧从站姿过渡进舞蹈，和视频一致</li>
+      <li><b>Update scene settings</b> 保持勾选：自动把帧率设成 30、帧范围设成 1–334</li>
+    </ul>
+  </li>
+  <li>点右下角 <b>Import VMD File (.vmd)</b>。</li>
+  <li>大纲视图里点 <b>PCF 005</b>，重复第 2–4 步，参数一样。</li>
+</ol>
+<div class="ok">做对的样子：时间轴变成 1–334 帧，按空格两套衣服一起跳，完全重合。只有一套在动就是第 5 步漏了；人飞出画面就是 Scale 没填 0.08。按 <kbd>Esc</kbd> 停止播放，把时间轴拖回第 1 帧再做下一步。</div>
+
+<h2 id="s3"><span class="no">3</span>第三步：设置变身并生成</h2>
+<p>按顺序点，<b>预设一定先选</b>：它会改掉一批参数，后选会把前面改的盖掉。</p>
+<ol>
+  <li>鼠标放在 3D 视图里按 <kbd>N</kbd> 打开侧边栏，切到「<b>MMD 变身</b>」标签。</li>
+  <li>点最上面的「<b>预设</b>」→「<b>魔法少女</b>」。</li>
+  <li>大纲视图里点 <b>Fiona</b>，再点「旧服装（变身前）」这一行右边的<b>吸管</b>。</li>
+  <li>大纲视图里点 <b>PCF 005</b>，再点「新服装（变身后）」右边的<b>吸管</b>。</li>
+  <li><b>取消勾选</b>「跟随旧模型骨架」。</li>
+  <li>「开始帧」填 <b>60</b>，「结束帧」填 <b>210</b>：第 2 秒开始变，第 7 秒换完。</li>
+  <li>「方向」保持「穿上（旧→新）」，勾选「<b>留在原地</b>」：碎片留在空中，不跟着她的动作甩。</li>
+  <li>往下展开「<b>旧服装处理</b>」，勾选「<b>保留共用部分</b>」，材质栏填 <code>*face01*;*hair*</code>：脸和头发始终用 Fiona 的，不会出现两张脸。</li>
+  <li>回到面板上方，点「<b>生成变身效果</b>」。</li>
+</ol>
+<div class="ok">生成时插件把舞蹈从头播一遍，记下每个点被变身扫到时的位置，界面会卡一两分钟（测试里 83 秒），等它跑完。做完场景里会多一个叫 <b>MMD Disperse Mask</b> 的空物体，它的大小就是变身进度，关键帧已经打好。</div>
+
+<h2 id="s4"><span class="no">4</span>第四步：预览</h2>
+<p>切到材质预览就能看到变身；光晕要等第五步开了「辉光」，在「渲染」着色里才看得到。</p>
+<ol>
+  <li>鼠标放在 3D 视图里按 <kbd>Z</kbd> →「<b>材质预览</b>」（或点视图右上角第三个小球）。</li>
+  <li>拖动时间轴看。两个高模加几何节点，按空格播放会掉帧，拖着看更准。</li>
+</ol>
+<div class="table-wrap"><table>
+  <tr><th>帧</th><th>应该看到</th></tr>
+  <tr><td>1–30</td><td>从站姿过渡进舞蹈</td></tr>
+  <tr><td>30–60</td><td>穿盔甲的 Fiona 跳舞</td></tr>
+  <tr><td>60–210</td><td>先从手脚亮起粉色光剪影，光带绕着手脚转，盔甲碎成发光的碎片飘走，白裙子逐渐长出来</td></tr>
+  <tr><td>约 210</td><td>新衣服完整的一刻整身闪光，迸出星星</td></tr>
+  <tr><td>210–334</td><td>穿 PCF_005 继续跳舞，头冠、耳环、手臂饰品跟着动</td></tr>
+</table></div>
+<figure>
+  <img src="file:///E:/game_export/Vindictus/_disperse/%E5%9C%BA%E6%99%AF%E5%92%8C%E6%9D%90%E8%B4%A8/%E6%89%8B%E5%8A%A8%E6%AD%A5%E9%AA%A4%E9%AA%8C%E8%AF%81_%E9%AD%94%E6%B3%95%E5%B0%91%E5%A5%B3.jpg" alt="按本教程步骤做出的第 45、120、200、300 帧">
+  <figcaption>按本教程步骤在你装的插件版本上跑出的第 45 / 120 / 200 / 300 帧（背景浅灰是因为世界设成了白色 0.75）。图片文件：<code>E:\game_export\Vindictus\_disperse\场景和材质\手动步骤验证_魔法少女.jpg</code></figcaption>
+</figure>
+<p>想改效果就改完参数再点一次「生成变身效果」，不用重新导入。</p>
+
+<h2 id="s5"><span class="no">5</span>第五步：灯光、相机和出视频</h2>
+<p>照视频的 MMD 观感设：EEVEE + 辉光 + 「标准」色彩，白色环境光加一盏日光，竖屏 720 × 1280。属性面板在屏幕右下方，左边一列小图标是各个页签。</p>
+<ol>
+  <li><b>渲染属性</b>（相机背面图标）：
+    <ul>
+      <li>渲染引擎 = <b>EEVEE</b></li>
+      <li>勾选「<b>辉光</b>」，魔法少女的光晕靠它</li>
+      <li>「色彩管理」→「查看变换」= <b>标准</b>：贴图颜色原样显示，默认的 Filmic 会发灰</li>
+    </ul>
+  </li>
+  <li><b>世界属性</b>（红色地球图标）：「颜色」改成白色，「强度」填 <b>0.75</b>。</li>
+  <li>大纲视图里选中新文件自带的点光（名字是 Light 或「灯光」），按 <kbd>X</kbd> 删掉；再 添加 → 灯光 → <b>日光</b>，在灯泡图标页把「强度」改成 <b>0.8</b>，在物体页（橙色方块图标）把旋转设成 X 50°、Y 0°、Z -30°。</li>
+  <li><b>输出属性</b>（打印机图标）：分辨率 X <b>720</b>、Y <b>1280</b>、100%；帧范围 1–334、帧率 30 在第二步已经自动设好。</li>
+  <li>相机：按小键盘 <kbd>1</kbd> 切到前视图，用滚轮和 <kbd>Shift</kbd>+中键把人放在画面中间；选中相机，按 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+小键盘 <kbd>0</kbd> 把相机对到当前视图，再按小键盘 <kbd>0</kbd> 看相机画面。她抬腿、举手时会变宽变高，上下左右留点空。</li>
+  <li>输出属性里的「输出」：选保存的文件夹；文件格式选 <b>FFmpeg 视频</b>，编码 → 容器 <b>MPEG-4</b>、视频编解码器 <b>H.264</b>；要音乐的话音频编解码器选 <b>AAC</b>。</li>
+  <li>音乐（可选）：把任意一个编辑器切成「视频序列编辑器」，添加 → 声音，选 <code>meeynara手势舞2026.2.14.WAV</code>，把它的起始帧拖到 <b>31</b>（第 1 秒，舞蹈从这里开始）。</li>
+  <li>菜单 渲染 → <b>渲染动画</b>（<kbd>Ctrl</kbd>+<kbd>F12</kbd>）。纯色背景大约每帧 4–5 秒，334 帧约 25 分钟，进度看弹出的渲染窗口。</li>
+</ol>
+
+<h2 id="faq">注意事项和常见问题</h2>
+<p>最容易出错的是缩放和「跟随旧模型骨架」这两处，先对照下表。</p>
+<div class="table-wrap"><table>
+  <tr><th>现象</th><th>原因</th><th>怎么办</th></tr>
+  <tr><td>人约 22 米高，或跳舞时飞出画面</td><td>模型或 VMD 的 Scale 不是 0.08（这版 mmd_tools 默认 1.0，对话框会记住上次的值）</td><td>删掉重新导入，模型和舞蹈都填 0.08</td></tr>
+  <tr><td>头冠、耳环、手臂羽饰拉出横穿画面的长条</td><td>「跟随旧模型骨架」开着</td><td>取消勾选，确认两个模型都导了舞蹈，再点生成</td></tr>
+  <tr><td>只有一套衣服在动</td><td>第二步只给一个模型导了舞蹈</td><td>选中另一个模型再导一次同一个 VMD</td></tr>
+  <tr><td>面前两张脸叠在一起</td><td>没勾「保留共用部分」，或勾完没重新生成</td><td>填 <code>*face01*;*hair*</code> 后再点一次生成</td></tr>
+  <tr><td>头发、裙子乱飞或炸开</td><td>开了物理：两套模型叠在一起，各自的刚体互相碰撞</td><td>不要点侧边栏 MMD 标签里的 Physics: Build；已经点了就点 Clean</td></tr>
+  <tr><td>看不到发光</td><td>视图不是材质预览 / 渲染着色，或没开「辉光」</td><td>按 <kbd>Z</kbd> 切着色模式，渲染属性里勾「辉光」</td></tr>
+  <tr><td>点生成后界面卡住</td><td>插件在把舞蹈播一遍记位置</td><td>正常，等 1–2 分钟</td></tr>
+</table></div>
+<ul>
+  <li><b>为什么要关「跟随旧模型骨架」</b>：勾着时，插件把新服装直接绑到旧模型的骨架上。PCF_005 的头冠、耳环和手臂羽饰用的骨骼 Fiona 没有，这些点就停在原地。两个模型各跳一遍同一个舞蹈，动作完全一致，就绕开了这个问题。</li>
+  <li><b>物理</b>：不开物理只是头发和裙子不飘，变身效果不受影响。视频里的胸部晃动是另外用弹簧骨骼烘焙的，手动实验不需要。</li>
+  <li><b>肘部更圆滑</b>（可选）：选中模型 → 侧边栏 MMD 标签 → MMD SDEF Driver → <b>Bind</b>，两个模型各点一次。它靠 Python 驱动器，要在 编辑 → 偏好设置 → 保存&amp;加载 里勾「自动运行 Python 脚本」。</li>
+  <li><b>深色背景</b>：世界颜色保持白色照亮人物，在 渲染属性 → 胶片 里勾「透明」，输出 PNG（RGBA），之后在剪辑软件里垫任意背景。</li>
+  <li><b>改参数</b>：边缘、线框、粒子、发光这些面板改了立即生效；路径、起点、帧范围、方向、保留共用部分改了要再点一次「生成变身效果」。</li>
+</ul>
+
+<h2 id="more">继续试：换衣服、换效果</h2>
+<p>换一对衣服只要改第一步的两个文件和第三步的预设、锁定材质，其余步骤不变。视频计划里的七对如下，文件都在 <code>E:\game_export\Vindictus\Fiona\pmx\&lt;名称&gt;\&lt;名称&gt;.pmx</code>。</p>
+<div class="table-wrap"><table>
+  <tr><th>#</th><th>旧服装 → 新服装</th><th>预设</th><th>保留共用部分</th></tr>
+  <tr><td>1</td><td>Fiona → PCF_005</td><td>魔法少女</td><td><code>*face01*;*hair*</code></td></tr>
+  <tr><td>2</td><td>PCF_067 → PCF_009</td><td>装甲换装</td><td><code>*face01*</code></td></tr>
+  <tr><td>3</td><td>PCF_001_Temp → PCF_010</td><td>冰封碎裂</td><td><code>*face01*</code></td></tr>
+  <tr><td>4</td><td>PCF_007 → PCF_003</td><td>燃烧成灰</td><td><code>*face01*</code></td></tr>
+  <tr><td>5</td><td>PCF_001 → PCF_008</td><td>故障风</td><td><code>*face01*</code></td></tr>
+  <tr><td>6</td><td>PCF_012 → PCF_006</td><td>纳米流动</td><td><code>*face01*;*hair*</code></td></tr>
+  <tr><td>7</td><td>PCF_004 → PCF_002</td><td>残影汇聚</td><td><code>*face01*;*hair*</code></td></tr>
+</table></div>
+<p>只锁 <code>*face01*</code> 的配对，头发会跟着衣服一起换。预设菜单里一共 33 种（纳米战衣、灰飞烟灭、毒液共生体、液态金属、金币迸发、魔法阵穿身、水墨晕染、钢铁侠 Mark 50 等），换一个再点一次「生成变身效果」就能看。</p>
+<p>每个参数的中文说明在 <code>E:\code\othercode\mmd_disperse\docs\tutorial.md</code>。你装的是 1.8，仓库里已经到 1.10（多了跟着舞蹈动作变身、卡通火焰等），安装包是 <code>E:\code\othercode\mmd_disperse\dist\mmd_disperse-1.10.0-legacy.zip</code>。</p>
+
+</main>
+</body>
+</html>
