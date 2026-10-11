@@ -32,7 +32,9 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `export_character_model_blender.py` | 被上一脚本调用（Blender 无头） | 穿衣角色材质重建、贴图打包、三视图预览合成 | 内部 worker |
 | `html/make_gallery.py` | 任意 Python 3 | 按 manifest 生成可浏览的模型总览网页 | 本页 §5 |
 | `prune_exports.py` | 任意 Python 3 | 清理导出目录里的重复贴图副本与 Blender 备份 | 本页 §5 |
-| `pmx_copy_face_morphs.py` | 任意 Python 3（numpy + mmd_tools 的 pmx 模块） | 给没有脸部骨骼的 PMX 从同家族的 PMX 搬表情（Inase 泳装） | 本页 §5「节日服装」 |
+| `pmx_copy_face_morphs.py` | 任意 Python 3（numpy + mmd_tools 的 pmx 模块） | 给没有脸部骨骼的 PMX 从同家族的 PMX 搬表情（Inase 泳装、a03–a06） | 本页 §5「节日服装」 |
+| `pmx_body_follows_cups.py` | 任意 Python 3（numpy + mmd_tools 的 pmx 模块） | 补全的带衣服版：衣服下那份身体的胸在晃动骨上的权重跟罩杯一样，胸一晃不穿出来 | [roe-complete-nude.md](../../docs/roe-complete-nude.md) 第 19 节 |
+| `pmx_breast_anchor_swing.py` | 任意 Python 3（numpy + mmd_tools 的 pmx 模块） | 只有一根骨、上面已有静止刚体的胸（c06 右胸）：把那个刚体改成会晃的球 | [roe-complete-nude.md](../../docs/roe-complete-nude.md) 第 19 节 |
 | `roe_xps_addon.py` | Blender 3.6 插件 | HD 角色一步步转带材质的 XPS（**主推**） | [xps-addon.md](../../docs/xps-addon.md) |
 | `../blender_addons/roe_pmx_tools` | Blender 3.6 插件 | 在 Blender 里手动四步转 PMX（与批处理同一套函数） | [roe-pmx-manual-guide.md](../../docs/roe-pmx-manual-guide.md) |
 | `blender_face_materials.py` | Blender 脚本 | 挂材质（插件第 2 步的独立脚本版） | [face-eye-materials.md](../../docs/face-eye-materials.md) |
@@ -536,11 +538,23 @@ python complete_nude.py a_swimsuit01                                      # _nud
 ```powershell
 python html\make_gallery.py          # 产出 html\index.html，浏览器直接打开
 python html\make_gallery.py --force  # 预览图变了但时间戳没变时强制重建缩略图
+python html\make_gallery.py --only "a_swimsuit01*,h_xmas01*"   # 只重做这几张卡片
 ```
+
+**默认是合并**（2026-10-11 起）：
+- D 盘上有的模型做成卡片，换掉页面里同名的卡片，其余卡片原样留着；
+- 为什么：D 盘的导出归档到 E 盘后会清掉（10-06 清过一次），这时只按 D 盘重建，页面就只剩 D 盘上那几个模型；
+- `--fresh` 才是只按 D 盘整页重建，只在 D 盘还是全的时候用；
+- `--only` 写卡片上的名字（`a08`、`a08_hd_nude`、`b01_jeans`、`a01_nk_bs`），可以用通配符；
+- 新卡片的 D 盘链接由归档改到 E 盘：`archive_exports.py roe` 时自动改，也可以单独跑 `--relink roe`；
+- 缩略图可以用 `--thumb-dir E:\game_export\RiseOfEros\_meta\gallery\thumbs` 直接写到 E 盘；
+- `--recount a0[3-6],b01`：PMX 在 E 盘上就地改过（补了胸部物理、表情）而 D 盘上没有整套文件时，不重做卡片，只按卡片
+  链接的那个 PMX 重数刚体、关节、表情。
 
 每张卡片给出模型名、源 FBX、blend 完整路径（带复制按钮）、网格/材质槽/贴图数与体积，
 缺贴图和被二次解析补挂的槽各有一个角标；有 XPS/PMX 的多一行路径，PMX 那行还带
-骨数/刚体/关节/表情数。**有跳舞预览的直接内嵌一个播放器**（`preload="none"`，不点不加载），
+骨数/刚体/关节/表情数（刚体、关节、表情按 PMX 文件现在的样子数：补胸部物理、搬表情这些导出后的步骤会改它们，
+导出报告不会跟着变；骨数是导出报告里的）。**有跳舞预览的直接内嵌一个播放器**（`preload="none"`，不点不加载），
 「跳舞」那一行链的是 mp4 本身而不是所在目录；预览比 PMX 旧会标「已过期」。
 附录是导出脚本用法；末尾列出 17 个 NOMESH 的 ID。页面用 `file://` 链接本机文件，**缩略图写到
 `D:\roe_exports\_gallery\thumbs\` 而不是仓库**——仓库不收任何游戏素材。换机器或换
@@ -1091,6 +1105,12 @@ python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs --dry-run   # 指定裸模
   骨头自己的位置判（`export_character_model_blender.py` 的 `plan_joint_helper_moves`）。
 - 日志在 `D:\roe_exports\_hq_runs\<stem>_nude\`；画廊「裸模」分类里是标「补全裸模」的卡片，「带衣服」几行是 `_full` 的
   blend / XPS / PMX。原理、数字和踩过的坑见 [roe-complete-nude.md](../../docs/roe-complete-nude.md)。
+- **胸骨不是 Breast 的衣服**（Inase a03–a06 的 `Xtra01`、Kart b01–b06 / Misa c03–c06 的 `OPAI`，2026-10-11 重做）：
+  - 身体的胸按别名挂到这些骨头上；
+  - `scripts\mmd_dances\pmx_add_bust.py` 给主模型、`_nude`、`_full` 补胸部刚体和 `_bustB`；
+  - c06 的右胸只有一根骨，上面是饰品链的挂点，单独处理；
+  - `_full` 再过 `pmx_body_follows_cups.py`，衣服下那份身体跟着罩杯晃，主文件和 `_bustB` 都要过；
+  - 做法和数字见 [roe-complete-nude.md](../../docs/roe-complete-nude.md) 第 19 节。
 
 ---
 

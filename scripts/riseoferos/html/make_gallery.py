@@ -14,22 +14,42 @@ The page links to the real files with ``file://`` URLs and the thumbnails are
 written under the export root, so **no game-derived image ever enters the repo**
 — same rule as every other script here.  Re-run this after a new export batch.
 
+The cards built from the export root replace the cards of the same name on the existing page and every other
+card stays as it is: D:\\roe_exports is emptied once a batch is archived to E: (archive_exports.py, which also
+points the page's links at E:), so a page built from D: alone would lose every model no longer there.
+``--fresh`` builds the page from the export root alone; ``--only`` limits which cards are built.
+
 Usage:
   python make_gallery.py
+  python make_gallery.py --only "a_swimsuit01*,h_xmas01*"
   python make_gallery.py --source-root D:\\roe_exports --force
 """
 
 import argparse
+import collections
+import fnmatch
 import html
 import json
 import os
+import re
+import sys
+import urllib.parse
 from pathlib import Path
 
 from PIL import Image
 
+HERE = os.path.dirname(os.path.abspath(__file__))
 THUMB_WIDTH = 720
 THUMB_QUALITY = 82
 PAGE_NAME = "index.html"
+# a08 / a08_outfit1 / a08_hd_nude -> a08; the seasonal family outfits (a_swimsuit01) are an id of their own
+ID_RE = re.compile(r"[a-z]_[a-z]+\d+|[a-z]\d+")
+KIND_ORDER = {"model": 0, "suit": 1, "nude": 2}
+CARD_RE = re.compile(r'      <article class="card".*?</article>\n', re.S)
+NOMESH_RE = re.compile(r"        <li><code>(.*?)</code><span>(.*?)</span></li>\n")
+# the PMX row of a card: the file in title="", the numbers in the rigspec note (pmx_note_of)
+PMX_NOTE_RE = re.compile(r'(<dt>PMX</dt>\s*<dd><a href="[^"]*" title="([^"]*)">(?:(?!</dd>).)*?'
+                         r'<span class="rigspec">)([^<]*?) 骨 · 刚体 [^\s<]+ · 关节 [^\s<]+ · 表情 [^\s<]+', re.S)
 
 
 def parse_args():
@@ -44,7 +64,21 @@ def parse_args():
                         help="thumbnail directory (default: <source-root>\\_gallery\\thumbs)")
     parser.add_argument("--force", action="store_true",
                         help="rebuild thumbnails even when they are up to date")
+    parser.add_argument("--only", default="",
+                        help="build only these cards: comma separated keys as the page shows them, wildcards "
+                             "allowed (a08,a08_hd_nude,b01_jeans,a_swimsuit01*); the rest stay as they are")
+    parser.add_argument("--fresh", action="store_true",
+                        help="build the page from the export root alone instead of merging into the existing "
+                             "page (only right while the export root still holds every model)")
+    parser.add_argument("--recount", default="",
+                        help="cards kept from the page whose PMX changed in place (on E:): rigid bodies, joints "
+                             "and face morphs counted again in the PMX they link to; keys / wildcards like --only")
     return parser.parse_args()
+
+
+def model_id(key):
+    match = ID_RE.match(key)
+    return match.group(0) if match else key.split("_")[0]
 
 
 def human_size(num_bytes):
@@ -81,14 +115,44 @@ def build_thumb(preview_path, thumb_path, force):
     return thumb_path
 
 
-def pmx_note_of(mmd):
-    """Card note for a PMX from its conversion stats (manifest mmdConvert / <stem>.report.json)."""
+_PMX_READER = []
+
+
+def pmx_counts(path):
+    """Rigid bodies, joints and face morphs (the 眉 / 目 / 口 panels) of the PMX as it is now: scripts run after
+    the conversion (pmx_add_bust.py, pmx_copy_face_morphs.py, cloth_collision_pmx.py) change them, not the
+    report.  None when the PMX or mmd_tools' reader (clothes_burst/pmx_nude_switch.py) is not there."""
+    if not path or not os.path.isfile(path):
+        return None
+    if not _PMX_READER:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "clothes_burst"))
+        try:
+            from pmx_nude_switch import pmx_module
+            _PMX_READER.append(pmx_module())
+        except (ImportError, SystemExit):
+            _PMX_READER.append(None)
+    if not _PMX_READER[0]:
+        return None
+    try:
+        model = _PMX_READER[0].load(path)
+    except Exception as error:      # the report's numbers stand
+        print("cannot read %s: %s" % (path, error), file=sys.stderr)
+        return None
+    return {"rigid_bodies": len(model.rigids), "joints": len(model.joints),
+            "face_morphs": sum(1 for morph in model.morphs if morph.category in (1, 2, 3))}
+
+
+def pmx_note_of(mmd, pmx=""):
+    """Card note for a PMX from its conversion stats (manifest mmdConvert / <stem>.report.json), the rigid
+    bodies, joints and face morphs counted in the PMX itself when it can be read."""
     if not mmd:
         return ""
     physics = mmd.get("physics") or {}
-    note = "%s 骨 · 刚体 %s · 关节 %s · 表情 %d" % (
-        mmd.get("bones", "?"), physics.get("rigid_bodies", "?"),
-        physics.get("joints", "?"), len(mmd.get("face_morphs") or []))
+    counts = pmx_counts(pmx) or {"rigid_bodies": physics.get("rigid_bodies", "?"),
+                                 "joints": physics.get("joints", "?"),
+                                 "face_morphs": len(mmd.get("face_morphs") or [])}
+    note = "%s 骨 · 刚体 %s · 关节 %s · 表情 %s" % (
+        mmd.get("bones", "?"), counts["rigid_bodies"], counts["joints"], counts["face_morphs"])
     if mmd.get("weight_holes"):
         note += " · 权重孔洞 %s" % mmd["weight_holes"]
     if (mmd.get("distortion") or {}).get("torn"):
@@ -96,13 +160,19 @@ def pmx_note_of(mmd):
     return note
 
 
-def collect(manifest_path, thumb_dir, force):
+def everything(key):
+    return True
+
+
+def collect(manifest_path, thumb_dir, force, wanted=everything):
     with open(manifest_path, encoding="utf-8-sig") as handle:
         manifest = json.load(handle)
 
     models, nomesh = [], []
     for entry in manifest.get("results", []):
         key = entry.get("model") or ""
+        if not wanted(key):
+            continue
         if entry.get("status") != "PASS":
             nomesh.append({
                 "key": key,
@@ -119,7 +189,7 @@ def collect(manifest_path, thumb_dir, force):
         if pmx and not os.path.isfile(pmx):
             pmx = ""
         mmd = entry.get("mmdConvert") or {}
-        pmx_note = pmx_note_of(mmd) if pmx else ""
+        pmx_note = pmx_note_of(mmd, pmx) if pmx else ""
         # The dance preview is rendered in a separate pass, so one left over from
         # an earlier export shows defects the model no longer has.
         dance = ""
@@ -161,7 +231,7 @@ def collect(manifest_path, thumb_dir, force):
     return manifest, models, nomesh
 
 
-def collect_suits(source_root, thumb_dir, force):
+def collect_suits(source_root, thumb_dir, force, wanted=everything):
     """Cards for the suits export_suits.py assembled (``_suits/manifest.json``)."""
     manifest_path = os.path.join(source_root, "_suits", "manifest.json")
     if not os.path.isfile(manifest_path):
@@ -174,6 +244,8 @@ def collect_suits(source_root, thumb_dir, force):
         if entry.get("status") not in ("PASS", "WARN") or not os.path.isfile(blend):
             continue
         key = "%s_%s" % (entry.get("id", "?"), entry.get("suit", "?"))
+        if not wanted(key):
+            continue
         preview = blend[:-len(".blend")] + "_preview.png"
         if not os.path.isfile(preview):
             preview = ""
@@ -216,19 +288,19 @@ def collect_suits(source_root, thumb_dir, force):
     return suits
 
 
-def suit_formats(blend_dir, stem):
+def suit_formats(blend_dir, stem, note=True):
     """XPS / PMX of a suit or nude base: export_suit_xps_blender.py / export_suit_pmx_blender.py write
     <id>/blend/xps/<stem>/<stem>.mesh and <id>/blend/pmx/<stem>/<stem>.pmx (+ .report.json), like the batch."""
     xps = os.path.join(blend_dir, "xps", stem, stem + ".mesh")
     pmx = os.path.join(blend_dir, "pmx", stem, stem + ".pmx")
     pmx_note = ""
-    if os.path.isfile(pmx[:-4] + ".report.json"):
+    if note and os.path.isfile(pmx[:-4] + ".report.json"):
         with open(pmx[:-4] + ".report.json", encoding="utf-8") as handle:
-            pmx_note = pmx_note_of(json.load(handle))
+            pmx_note = pmx_note_of(json.load(handle), pmx)
     return (xps if os.path.isfile(xps) else ""), (pmx if os.path.isfile(pmx) else ""), pmx_note
 
 
-def collect_nudes(source_root, thumb_dir, force, main_stems):
+def collect_nudes(source_root, thumb_dir, force, main_stems, wanted=everything):
     """Cards for the nude bases (``nude_materials/pc_<id>[_fm]_nk_bs.blend``: the body the H scenes play on)."""
     folder = os.path.join(source_root, "nude_materials")
     nudes = []
@@ -239,6 +311,8 @@ def collect_nudes(source_root, thumb_dir, force, main_stems):
         blend = os.path.join(folder, name)
         cid = stem[3:6]
         key = stem[3:]
+        if not wanted(key):
+            continue
         preview = os.path.join(folder, stem + "_preview.png")
         if not os.path.isfile(preview):
             continue            # rendered by the game-material step (export_hq.py); h / i not converted yet
@@ -251,7 +325,7 @@ def collect_nudes(source_root, thumb_dir, force, main_stems):
     return nudes
 
 
-def collect_completed(source_root, thumb_dir, force):
+def collect_completed(source_root, thumb_dir, force, wanted=everything):
     """Cards for dressed models given the whole body by complete_nude.py: ``<id>/blend/<stem>_nude.blend`` (the
     skin the game deleted under the outfit filled in from the family nude base), with the dressed full-body
     ``<stem>_full`` (.blend, XPS with the outfit as optional items, PMX with the 衣服非表示 morph) as extra rows."""
@@ -264,9 +338,10 @@ def collect_completed(source_root, thumb_dir, force):
                 continue
             blend = os.path.join(folder, name)
             preview = os.path.join(folder, stem + "_preview.png")
-            if not os.path.isfile(preview):
+            key = stem[3:]
+            if not os.path.isfile(preview) or not wanted(key):
                 continue
-            cid, key = stem[3:6], stem[3:]
+            cid = model_id(key)
             run = os.path.join(source_root, "_hq_runs", stem, "result.json")
             base = "pc_%s01_nk_bs" % cid[0]
             if os.path.isfile(run):
@@ -274,7 +349,7 @@ def collect_completed(source_root, thumb_dir, force):
                     base = json.load(handle).get("nude_base") or base
             full = os.path.join(folder, stem[:-len("_nude")] + "_full.blend")
             xps, pmx, pmx_note = suit_formats(folder, stem)
-            full_xps, full_pmx, _note = suit_formats(folder, stem[:-len("_nude")] + "_full")
+            full_xps, full_pmx, _note = suit_formats(folder, stem[:-len("_nude")] + "_full", note=False)
             found.append({
                 "key": key, "family": cid[:1].upper(), "id": cid, "blend": blend, "xps": xps, "pmx": pmx,
                 "pmx_note": pmx_note, "preview": preview,
@@ -333,7 +408,7 @@ def render_card(model):
                     % (esc(thumb_uri or ""), esc(file_uri(model["dance"]))))
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["key"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
-    return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="{warn}" data-kind="model">
+    return """      <article class="card" data-size="{nbytes}" data-search="{search}" data-family="{family}" data-warn="{warn}" data-kind="model">
         <a class="shot" href="{preview}" target="_blank" rel="noopener"
            title="点击查看原图（{family} 家族）">{figure}</a>
         <div class="body">
@@ -350,7 +425,7 @@ def render_card(model):
           </dl>
         </div>
       </article>
-""".format(search=search_blob, family=esc(model["family"]),
+""".format(search=search_blob, family=esc(model["family"]), nbytes=model["blend_size"],
            warn="1" if model["warnings"] else "0",
            preview=esc(preview_uri), figure=figure, key=esc(model["key"]),
            badges=badges, fbx=esc(os.path.basename(model["source"])),
@@ -378,7 +453,7 @@ def render_suit_card(suit):
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(suit["key"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
     dressed = suit["parts"] - len(suit["excluded"])
-    return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="{warn}" data-kind="suit">
+    return """      <article class="card" data-size="{nbytes}" data-search="{search}" data-family="{family}" data-warn="{warn}" data-kind="suit">
         <a class="shot" href="{preview}" target="_blank" rel="noopener"
            title="点击查看原图（{family} 家族）">{figure}</a>
         <div class="body">
@@ -395,7 +470,7 @@ def render_suit_card(suit):
           </dl>
         </div>
       </article>
-""".format(search=search_blob, family=esc(suit["family"]),
+""".format(search=search_blob, family=esc(suit["family"]), nbytes=suit["blend_size"],
            warn="1" if suit["warnings"] else "0",
            preview=esc(preview_uri), figure=figure, key=esc(suit["key"]),
            badges=badges, base=esc(suit["base"]), id=esc(suit["id"]), suit=esc(suit["suit"]),
@@ -436,7 +511,7 @@ def render_nude_card(nude):
               if thumb_uri else '<div class="noimg">无预览图</div>')
     search_blob = esc(" ".join([nude["key"], "nude 裸模 nk_bs", "补全 complete" if completed else "", nude["blend"],
                                 nude["xps"], nude["pmx"]]).lower())
-    return """      <article class="card" data-search="{search}" data-family="{family}" data-warn="0" data-kind="nude">
+    return """      <article class="card" data-size="{nbytes}" data-search="{search}" data-family="{family}" data-warn="0" data-kind="nude">
         <a class="shot" href="{preview}" target="_blank" rel="noopener"
            title="点击查看原图（{family} 家族）">{figure}</a>
         <div class="body">
@@ -452,37 +527,76 @@ def render_nude_card(nude):
           </dl>
         </div>
       </article>
-""".format(search=search_blob, family=esc(nude["family"]), preview=esc(file_uri(nude["preview"])),
+""".format(search=search_blob, family=esc(nude["family"]), nbytes=nude["blend_size"],
+           preview=esc(file_uri(nude["preview"])),
            figure=figure, key=esc(nude["key"]), badges=badges, blend_uri=esc(file_uri(nude["blend"])),
            blend=esc(nude["blend"]), rows=rows, spec=esc(spec), size=human_size(nude["blend_size"]))
 
 
-def render(manifest, models, nomesh, source_root, suits=(), nudes=()):
+def records_of(models, suits, nudes):
+    """The cards this run builds, with what the page header counts."""
+    renderers = {"model": render_card, "suit": render_suit_card, "nude": render_nude_card}
+    return [{"kind": kind, "key": item["key"], "family": item["family"], "size": item["blend_size"],
+             "warn": bool(item.get("warnings")), "html": renderers[kind](item)}
+            for kind, items in (("model", models), ("suit", suits), ("nude", nudes)) for item in items]
+
+
+def page_records(path):
+    """The cards and NOMESH ids of the page an earlier run wrote (its links moved to E: by archive_exports.py),
+    to keep the ones this run does not build.  A card from before data-size gets the size of the .blend it
+    links to."""
+    if not os.path.isfile(path):
+        return [], []
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    records = []
+    for card in CARD_RE.findall(text):
+        attrs = dict(re.findall(r'data-(\w+)="([^"]*)"', card[:card.index(">")]))
+        if "size" not in attrs:
+            link = re.search(r'<dt>blend</dt>\s*<dd><a href="file:///([^"]*)"', card)
+            blend = urllib.parse.unquote(link.group(1)) if link else ""
+            attrs["size"] = str(os.path.getsize(blend) if blend and os.path.isfile(blend) else 0)
+            card = card.replace('<article class="card"', '<article class="card" data-size="%s"' % attrs["size"], 1)
+        key = html.unescape(re.search(r"<h3>(.*?)</h3>", card).group(1))
+        records.append({"kind": attrs.get("kind", "model"), "key": key, "family": html.unescape(attrs["family"]),
+                        "size": int(attrs["size"]), "warn": attrs.get("warn") == "1", "html": card})
+    nomesh = [{"key": html.unescape(key), "reason": html.unescape(reason)} for key, reason in NOMESH_RE.findall(text)]
+    return records, nomesh
+
+
+def recount(card):
+    """A kept card's PMX numbers counted again in the PMX its PMX row links to; the bone count stays."""
+    def repl(match):
+        counts = pmx_counts(html.unescape(match.group(2)))
+        if not counts:
+            return match.group(0)
+        return "%s%s 骨 · 刚体 %s · 关节 %s · 表情 %s" % (match.group(1), match.group(3), counts["rigid_bodies"],
+                                                    counts["joints"], counts["face_morphs"])
+    return PMX_NOTE_RE.sub(repl, card)
+
+
+def render(manifest, records, nomesh, source_root):
     esc = html.escape
-    families = sorted({model["family"] for model in models} | {suit["family"] for suit in suits}
-                      | {nude["family"] for nude in nudes})
-    total_bytes = (sum(model["blend_size"] for model in models) + sum(suit["blend_size"] for suit in suits)
-                   + sum(nude["blend_size"] for nude in nudes))
-    characters = len({model["key"].split("_")[0] for model in models})
-    warned = sum(1 for model in models if model["warnings"]) + sum(1 for suit in suits if suit["warnings"])
+    # suit and nude-base cards sit right behind their character's cards (keys sort that way)
+    records = sorted(records, key=lambda rec: (rec["key"], KIND_ORDER[rec["kind"]]))
+    kinds = collections.Counter(rec["kind"] for rec in records)
+    families = sorted({rec["family"] for rec in records})
+    total_bytes = sum(rec["size"] for rec in records)
+    characters = len({model_id(rec["key"]) for rec in records if rec["kind"] == "model"})
+    warned = sum(1 for rec in records if rec["warn"])
     generated = (manifest.get("generatedAt") or "")[:19].replace("T", " ")
 
     chips = "".join(
         '<button class="chip" data-family="%s">%s</button>' % (esc(item), esc(item))
         for item in families)
-    # suit and nude-base cards sit right behind their character's cards (keys sort that way)
-    entries = ([("model", model) for model in models] + [("suit", suit) for suit in suits]
-               + [("nude", nude) for nude in nudes])
-    entries.sort(key=lambda item: item[1]["key"])
-    renderers = {"model": render_card, "suit": render_suit_card, "nude": render_nude_card}
-    cards = "".join(renderers[kind](item) for kind, item in entries)
+    cards = "".join(rec["html"] for rec in records)
     nomesh_rows = "".join(
         "        <li><code>%s</code><span>%s</span></li>\n" % (esc(item["key"]), esc(item["reason"]))
         for item in nomesh)
 
     return PAGE_TEMPLATE.format(
         generated=esc(generated), source_root=esc(source_root),
-        total=len(models), suits=len(suits), nudes=len(nudes), characters=characters,
+        total=kinds["model"], suits=kinds["suit"], nudes=kinds["nude"], characters=characters,
         size=human_size(total_bytes), warned=warned, nomesh_count=len(nomesh), chips=chips, cards=cards,
         nomesh_rows=nomesh_rows)
 
@@ -724,10 +838,14 @@ python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs      # 裸模默认是同�
     <p>原理和坑见 <code>docs\\roe-complete-nude.md</code>，日志在 <code>D:\\roe_exports\\_hq_runs\\&lt;stem&gt;_nude\\</code>。</p>
 
     <h3>重新生成本页</h3>
-    <pre>python scripts\\riseoferos\\html\\make_gallery.py</pre>
+    <pre>python scripts\\riseoferos\\html\\make_gallery.py                        # D 盘上有的模型合并进本页
+python scripts\\riseoferos\\html\\make_gallery.py --only "a_swimsuit01*"   # 只重做这几张卡片
+python scripts\\riseoferos\\html\\make_gallery.py --fresh                # 只按 D 盘重建整页（D 盘得是全的）</pre>
     <p>读 <code>character_models_manifest.json</code>、<code>_suits\\manifest.json</code> 和
       <code>nude_materials\\*.blend</code>（有预览图的裸模），把预览图缩成
-      JPEG 缩略图放进 <code>D:\\roe_exports\\_gallery\\thumbs\\</code>，再重写本页。
+      JPEG 缩略图放进 <code>D:\\roe_exports\\_gallery\\thumbs\\</code>，做出来的卡片换掉本页同名的卡片，
+      其余卡片原样留着——D 盘的导出归档到 E 盘后会清掉，只按 D 盘重建会丢掉已经不在 D 盘的模型。
+      归档（<code>archive_exports.py roe</code>）再把新卡片的 D 盘链接改到 E 盘。
       <b>缩略图刻意不放进仓库</b>——和其它脚本一样，仓库不收任何游戏素材。</p>
 
     <h3>没有 blend 的 {nomesh_count} 个 ID</h3>
@@ -831,21 +949,39 @@ def main():
     manifest_path = args.manifest or os.path.join(
         source_root, "character_models_manifest.json")
     thumb_dir = args.thumb_dir or os.path.join(source_root, "_gallery", "thumbs")
-    out_path = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                        PAGE_NAME)
+    out_path = args.out or os.path.join(HERE, PAGE_NAME)
     if not os.path.isfile(manifest_path):
         raise SystemExit("manifest not found: %s\n先跑一次 export_character_models.ps1"
                          % manifest_path)
+    patterns = [item.strip() for item in args.only.split(",") if item.strip()]
+    recount_patterns = [item.strip() for item in args.recount.split(",") if item.strip()]
 
-    manifest, models, nomesh = collect(manifest_path, thumb_dir, args.force)
-    if not models:
+    def wanted(key):
+        return not patterns or any(fnmatch.fnmatchcase(key, pattern) for pattern in patterns)
+
+    manifest, models, nomesh = collect(manifest_path, thumb_dir, args.force, wanted)
+    if args.fresh and not models:
         raise SystemExit("manifest has no PASS entries: %s" % manifest_path)
-    suits = collect_suits(source_root, thumb_dir, args.force)
-    main_stems = {os.path.splitext(os.path.basename(model["blend"]))[0] for model in models}
-    nudes = collect_nudes(source_root, thumb_dir, args.force, main_stems)
-    nudes += collect_completed(source_root, thumb_dir, args.force)
+    suits = collect_suits(source_root, thumb_dir, args.force, wanted)
+    main_stems = {os.path.splitext(os.path.basename(entry.get("output") or ""))[0]
+                  for entry in manifest.get("results", [])}
+    nudes = collect_nudes(source_root, thumb_dir, args.force, main_stems, wanted)
+    nudes += collect_completed(source_root, thumb_dir, args.force, wanted)
 
-    page = render(manifest, models, nomesh, source_root, suits, nudes)
+    records = records_of(models, suits, nudes)
+    kept, recounted = [], 0
+    if not args.fresh:
+        old, old_nomesh = page_records(out_path)
+        built = {(rec["kind"], rec["key"]) for rec in records}
+        kept = [rec for rec in old if (rec["kind"], rec["key"]) not in built]
+        for rec in kept:
+            if any(fnmatch.fnmatchcase(rec["key"], pattern) for pattern in recount_patterns):
+                rec["html"] = recount(rec["html"])
+                recounted += 1
+        ids = {item["key"] for item in nomesh}
+        nomesh = sorted(nomesh + [item for item in old_nomesh if item["key"] not in ids],
+                        key=lambda item: item["key"])
+    page = render(manifest, records + kept, nomesh, source_root)
     with open(out_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(page)
 
@@ -853,6 +989,9 @@ def main():
     print("models      : %d" % len(models))
     print("suits       : %d" % len(suits))
     print("nude bases  : %d" % len(nudes))
+    print("kept cards  : %d%s" % (len(kept), "" if args.fresh else " (from the page as it was)"))
+    if recount_patterns:
+        print("recounted   : %d" % recounted)
     print("no preview  : %d%s" % (len(missing),
                                   (" -> " + ", ".join(missing[:10])) if missing else ""))
     print("nomesh      : %d" % len(nomesh))
