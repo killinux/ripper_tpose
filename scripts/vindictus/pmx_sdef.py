@@ -21,6 +21,10 @@ export_pmx.py runs sdef_file() on the PMX it has written (``--no-sdef`` skips it
 stays round outside and does not pinch inside.  The arm wrap's zigzag edge and the skin under it are weighted a
 little differently in the game, and SDEF, turning each by its own blend, shows that as specks where the two layers
 cross.  The user preferred SDEF anyway.
+
+Blender shows none of it without its SDEF driver bound, and that is how a PMX is usually looked at there: linear
+skinning, a V-pinched elbow.  pmx_elbow.py (2026-10-11, on trial) instead builds the game's corrective elbow out of
+two helper bones that MMD and Blender both drive the same way; it turns these SDEF vertices back into BDEF.
 """
 import argparse
 import os

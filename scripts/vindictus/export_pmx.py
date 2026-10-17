@@ -4,7 +4,7 @@
             [--name Fiona_BaseBody] [--model-name Fiona] [--no-physics] [--no-morphs]
             [--morphs vertex|bone] [--face-package <face>.uasset.bin]
             [--bust "k=v,..." | --bust-template] [--no-sdef] [--sdef-joints 左ひじ,右ひじ] [--no-pad]
-            [--no-tune-materials]
+            [--no-tune-materials] [--arm-angle 40] [--keep-fingers] [--armpit-smoothing]
     blender -b --python export_pmx.py -- --blend <build_blend.py output .blend> --dna <face.dna> --out <dir>
             [--max-texture 4096] [--ao 1.0] [--keep-xps] ...
 
@@ -22,8 +22,13 @@ import -> Convert to MMD 5 with four slots corrected -> one-click with auto-iden
 the UE body's helper bones - twist bones included - go into the limb segment they hang under first
 (merge_into_parent), its forearms, bent 36.7 deg at rest, are laid straight with each vertex turning
 about the elbow by its forearm share (limbs.straighten_forearms; the plugin's own straightening is a
-linear blend that narrows the elbow, and it skips an arm that is already straight), and weight the
-plugin still hands to non-MMD bones (feathers, sockets, cloth chains) goes to the nearest MMD bone
+linear blend that narrows the elbow, and it skips an arm that is already straight), the whole arms are
+raised the same way about the shoulder from 52.9 to 40 deg below the horizontal, the angle MMD motions are made for
+(limbs.raise_arms, ``--arm-angle``; before the plugin, so its 腕捩 / 手捩 come out on the final arm), the fingers,
+bound curled, are laid straight joint by joint (limbs.straighten_fingers, before the helper bones are folded: their
+half bones count half; ``--keep-fingers`` leaves them), the plugin's armpit smoothing - 肩's weight added to 腕 - is
+left out, the game's shoulder follows the clavicle only (skip_armpit_smoothing; ``--armpit-smoothing`` keeps it),
+and weight the plugin still hands to non-MMD bones (feathers, sockets, cloth chains) goes to the nearest MMD bone
 after it (return_conversion_gains).  Then:
 
 1. 両目 - the ROE worker's add_both_eyes_bone (grant rate 1, eyes on transform layer 1).
@@ -131,6 +136,9 @@ RIGS = {
         "body_regex": r"^(FACIAL_|breast_|[a-z]+toe_\d)",
         "into_parent": UE_HELPERS,                                       # see merge_into_parent
         "straighten": True,                                              # see limbs.py
+        "raise_arms": True,                                              # limbs.raise_arms, --arm-angle
+        "straighten_fingers": True,                                      # limbs.straighten_fingers, --keep-fingers
+        "armpit_smoothing": False,                                       # see skip_armpit_smoothing
     },
 }
 SLOT_FIX = RIGS["biped"]["slots"]
@@ -527,7 +535,32 @@ def return_conversion_gains(arm, snap):
     return {k: round(v, 1) for k, v in top}
 
 
-def import_and_convert(xps):
+def skip_armpit_smoothing(skipped):
+    """Convert to MMD 5's complete step adds 肩's weight to 腕 along 肩 -> 腕 (its armpit smoothing,
+    ``split_chain_weights(肩, 腕, ..., src_keep_floor=1.0)``): the shoulder top, upper chest and back then follow the
+    arm part of the way.  The UE body's shoulder weights are the game's, where they follow the clavicle only - on the
+    game's own upper-arm poses (pcf_upperarm_l_pose) PCF_005's shoulder came out 2-5x further off the game on average
+    with it.  Until the returned function is called that one call does nothing; the sides it skipped go to ``skipped``.
+    Returns None (and leaves the plugin as it is) if the plugin no longer has the call where it was."""
+    module = sys.modules.get("Convert_to_MMD5.convert.complete")
+    original = getattr(module, "split_chain_weights", None)
+    if original is None:
+        return None
+
+    def split(obj, src_name, dst_name, seg_from_name, seg_to_name, *args, **kwargs):
+        if src_name.endswith("肩") and dst_name.endswith("腕") and kwargs.get("src_keep_floor", 0.0) >= 1.0:
+            skipped.append(src_name)
+            return (0, 0)
+        return original(obj, src_name, dst_name, seg_from_name, seg_to_name, *args, **kwargs)
+
+    module.split_chain_weights = split
+
+    def restore():
+        module.split_chain_weights = original
+    return restore
+
+
+def import_and_convert(xps, arm_angle=None, fingers=True, armpit=None):
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
     bpy.data.orphans_purge(do_recursive=True)              # the source .blend of --blend
@@ -536,6 +569,11 @@ def import_and_convert(xps):
     kind = rig_kind(arm)
     log("body rig: %s" % kind)
     unhide_outfit_bones(arm)
+    straight_fingers = []
+    if RIGS[kind].get("straighten_fingers") and fingers:  # before the merge: the half bones' own weights count half
+        straight_fingers = limbs.straighten_fingers(arm, skinned_meshes(arm))
+        for line in straight_fingers:
+            log("finger: " + line)
     if RIGS[kind].get("into_parent"):
         merge_into_parent(arm, RIGS[kind]["into_parent"])
     straightened = []
@@ -543,6 +581,11 @@ def import_and_convert(xps):
         straightened = limbs.straighten_forearms(arm, skinned_meshes(arm))
         for line in straightened:
             log("forearm: " + line)
+    raised = []
+    if RIGS[kind].get("raise_arms") and arm_angle:
+        raised = limbs.raise_arms(arm, skinned_meshes(arm), angle=arm_angle)
+        for line in raised:
+            log("arm: " + line)
     snap = weight_snapshot(arm)
     arm.scale = (1.0, 1.0, 1.0)                            # the 214-unit trap (tutorial 6.10 step 2)
     activate(arm)
@@ -551,8 +594,23 @@ def import_and_convert(xps):
     for prop, bone in RIGS[kind]["slots"].items():
         if bone == "" or bone in arm.data.bones:
             setattr(scene, prop, bone)
-    if bpy.ops.object.one_click_convert(auto_identify=False, minimal=False) != {"FINISHED"}:
+    smoothing = "plugin"
+    skipped, restore = [], None
+    if not (RIGS[kind].get("armpit_smoothing", True) if armpit is None else armpit):
+        restore = skip_armpit_smoothing(skipped)
+        if restore is None:
+            smoothing = "plugin (its complete.split_chain_weights not found)"
+            log("armpit smoothing: Convert to MMD 5's complete.split_chain_weights not found - left to the plugin")
+    try:
+        result = bpy.ops.object.one_click_convert(auto_identify=False, minimal=False)
+    finally:
+        if restore is not None:
+            restore()
+    if result != {"FINISHED"}:
         raise RuntimeError("Convert to MMD 5 one-click conversion failed")
+    if restore is not None:
+        smoothing = "skipped: " + ", ".join(skipped) if skipped else "skipped (the plugin made no such call)"
+        log("armpit smoothing (肩 -> 腕) " + smoothing)
     arm = live_armature()
     root = arm
     while root.parent is not None:
@@ -560,7 +618,7 @@ def import_and_convert(xps):
     if getattr(root, "mmd_type", "") != "ROOT":
         raise RuntimeError("no mmd root after the conversion")
     gains = return_conversion_gains(arm, snap)
-    return root, arm, kind, gains, straightened
+    return root, arm, kind, gains, straightened, raised, straight_fingers, smoothing
 
 
 # -- 2. expressions from the DNA ---------------------------------------------------------------
@@ -1016,6 +1074,14 @@ def main():
                     help="keep the template breast joint (spring 450, +-10 deg, damping 0.5) instead of bust_physics.py")
     ap.add_argument("--bust", default="",
                     help="bust_physics.py settings other than its defaults, e.g. 'sag=10,pitch_limit=20'")
+    ap.add_argument("--arm-angle", type=float, default=40.0,
+                    help="UE body: raise the upper arms to this many deg below the horizontal before the conversion "
+                         "(limbs.raise_arms; MMD motions are made for ~37-42; 0 keeps the game's 52.9)")
+    ap.add_argument("--keep-fingers", action="store_true",
+                    help="UE body: leave the fingers curled as the game binds them (default: limbs.straighten_fingers)")
+    ap.add_argument("--armpit-smoothing", action="store_true",
+                    help="UE body: let Convert to MMD 5 add 肩's weight to 腕 (its armpit smoothing; default skipped, "
+                         "see skip_armpit_smoothing)")
     ap.add_argument("--no-sdef", action="store_true", help="leave the elbow rings BDEF2 (see pmx_sdef.py)")
     ap.add_argument("--sdef-joints", default=",".join(pmx_sdef.JOINTS),
                     help="joint bones whose two-bone ring gets SDEF, each paired with its parent (default %(default)s)")
@@ -1041,9 +1107,13 @@ def main():
         xps = os.path.join(work, name + ".xps")
         report["hd"] = xps_from_blend(os.path.abspath(args.blend), xps, args.max_texture, args.ao)
     report["xps"] = xps
-    root, arm, kind, gains, straightened = import_and_convert(xps)
+    root, arm, kind, gains, straightened, raised, fingers, smoothing = import_and_convert(
+        xps, args.arm_angle, not args.keep_fingers, True if args.armpit_smoothing else None)
     report["rig"] = kind
     report["forearms_straightened"] = straightened
+    report["arms_raised"] = raised
+    report["fingers_straightened"] = fingers
+    report["armpit_smoothing"] = smoothing
     report["conversion_gains_moved"] = gains
     meshes = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.find_armature() == arm]
     report["both_eyes_bone"] = roe.add_both_eyes_bone(arm)
