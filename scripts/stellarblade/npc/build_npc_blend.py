@@ -467,4 +467,5 @@ def main():
     print("SB_NPC_REPORT=" + json.dumps({k: report[k] for k in ("name", "vertices", "polygons", "bones", "height_cm")}))
 
 
-main()
+if __name__ == "__main__":      # Blender runs --python scripts as __main__; render_look.py imports this
+    main()

@@ -83,11 +83,36 @@ python archive_npc_looks.py                    # 3. 存进 E:，写画廊清单�
 | 用存好的 .blend 补渲全身图，只剩一只手 | 存档时相机停在头部特写，远裁剪距离只有约 4 m | 换机位时一起改 `clip_end` |
 | 预览网格（`*_Preview`）没有眼睛 | 预览网格把脸合进了头的材质，没有眼球、睫毛 | 用身体 + `_Facial` + `_Hair` 三个网格拼 |
 
+## 高清版（`hq_npc_looks.py`，2026-10-18）
+
+另一个窗口的剑星高清脚本**原样调用、不改**：`../hq_materials.py`（每个材质的贴图和参数 → `materials.json`，
+眼睛用每个角色自己的 `M_EyeRefractive` 实例）→ `../hq_materials_blender.py`（ORM：粗糙度、金属度、高光遮蔽；
+DirectX 法线；自发光；裁剪；游戏的眼睛网络）。每个造型文件夹里多出：
+
+- `<造型>_HQ.blend`（贴图拷进同一个 `textures\`，相对路径，检查过没有引用文件夹外的文件）
+- `hq_preview*.png`、`高清材质对比.jpg`（预览版和高清版并排）、`hq_materials.json`、`hq_log.txt`
+
+```powershell
+python hq_npc_looks.py                 # 18 个造型，3 路并行，约 2 分钟；最后更新画廊清单（"hq" 一栏）并重新生成画廊
+python hq_npc_looks.py --only Iberis   # 单个
+```
+
+为了让那两个脚本能用在这些角色上，准备阶段（`<root>\hq\<造型>\`）做了四件事，都不动它们的代码：
+
+| 它们的脚本 | 这些角色的情况 | 准备阶段怎么处理 |
+|---|---|---|
+| 只读文件名是 `MI_*.json` 的材质 | 拉埃尔、苏、奥利维亚的材质叫 `CH_NPC_Guard_Female_01_01` 这类 | 存成 `MI_<名字>.json`（材质名取自 JSON 内容，不受文件名影响） |
+| 只读实例自己的参数，不合并父实例 | 很多实例的贴图写在父实例里 | 顺着父实例合并（子的值优先），`Parent` 指向主材质 |
+| 实例没设的参数用 `MA_CH_Standard_Ver03` 的默认值 | 其它主材质有自己的默认值 | 从主材质的 `CachedExpressionData`（`ParameterInfos` 和数值按顺序对应）补上 |
+| 自发光取整张 `Emissive` 图 | 有 `Emissive_CH` 通道选择的主材质只点亮一个通道。伊贝丽斯的 `Emissive` 是遮罩图、选的是空的蓝通道，结果丝袜发出橙粉色的光 | 把选中的通道单独存成灰度图换上去；通道是空的就去掉 |
+
+贴图在一个扁平文件夹里找：用到的贴图从 `raw\` 硬链接到 `tex\`。
+
+头发、眉毛、睫毛（它们的脚本还不认识这些主材质）保留预览版的接法；皮肤只有颜色和法线（`MA_Skin_*` 的参数名不同，
+那两个脚本读不到），也保留预览版的接法。
+
 ## 还没做
 
-- **高清版**：要用另一个窗口的剑星高清脚本（`../hq_materials.py` → `../hq_materials_blender.py`）。
-  它们现在还会把 Eve 的眼睛参数套到所有角色上，另一个窗口正在改成读每个角色自己的眼睛参数；
-  `hq_materials.py` 也只认识 `MA_CH_Standard_Ver03` 这一种主材质，这些角色用的 `MA_CH_Standard_Cloth_Ver02`、
-  `MA_Skin_EVE`、`MA_Skin_NPC`、`MA_CH_Hair` 等还要它补上。
-- PMX / XPS。
+- PMX / XPS（`../export_pmx_blender.py --hq-materials` 已经能读每个角色自己的眼睛参数，要做时直接用）。
 - 表情：脸部网格的 morph 没导（PSK 不带 morph）。
+- 皮肤的高清接法（`MA_Skin_EVE` / `MA_Skin_NPC` 的 `ORSS Mask`）。
