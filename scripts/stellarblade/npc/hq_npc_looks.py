@@ -6,9 +6,10 @@ and values per material, eyes from each character's own M_EyeRefractive instance
 
 Per look (E:\game_export\StellarBlade\<char>\blend\<look>\):
   1. staging in <root>\hq\<look>\: hq_materials.py reads only files named MI_*.json, takes each instance's own
-     parameters (no parent instance's) and looks for maps in one flat folder - so every cloth / skin / eye instance
-     the look uses is written there as MI_<name>.json with its parents' parameters merged in (UE's rule: the child's
-     value wins; Parent = the master material), and every map they name is hard-linked into tex\;
+     parameters (no parent instance's nor the master's) and looks for maps in one flat folder - so every cloth / skin /
+     eye instance the look uses is written there as MI_<name>.json with its parents' parameters merged in (UE's rule:
+     the child's value wins; Parent = the master material) and the master's defaults for what none sets, and every
+     map they name is hard-linked into tex\;
   2. hq_materials.py --mi-json mi --textures tex --out out;
   3. hq_materials_blender.py on the archived <look>.blend -> <look>_HQ.blend, its maps copied into textures\;
   4. render_look.py: hq_preview*.png, and 高清材质对比.jpg (preview vs HQ, body and head);
@@ -24,7 +25,6 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +32,9 @@ SB = os.path.dirname(HERE)
 REPO = os.path.dirname(os.path.dirname(SB))
 BLENDER = r"D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
 KINDS = ("cloth", "body", "eye")         # hidden shells, hair, brows / lashes keep the preview wiring
-# master defaults hq_materials.describe() reads, plus the emissive channel selector
+# master defaults hq_materials.describe() reads (EmissivePower / EmissiveColor / Emissive_CH: it lights only the
+# selected channel of "Emissive", and only with power > 0 and a colour - fixed there 10-18 after Iberis' stockings
+# glowed orange-pink from her mask map, whose selected blue channel is empty)
 MASTER_DEFAULTS = {"Metallic", "Roughness Min", "Roughness Max", "ClearCoatRoughness Min", "Fuzz_01_INTENSITY",
                    "EmissivePower", "Pattern01_Tiling", "Pattern01_NormalIntensity", "Pattern01_RoughnessIntencity",
                    "EmissiveColor", "Emissive_CH"}
@@ -108,32 +110,6 @@ def flatten(name, mats):
     return [{"Type": e["Type"], "Name": e["Name"], "Properties": props}]
 
 
-def emissive_channel(flat, pngs, tex_dir):
-    """The masters with an Emissive_CH selector light only that channel of their "Emissive" map (Iberis' is her
-    mask map with Emissive_CH = blue, which is empty: no glow in the game; hq_materials.py takes the whole map, and her
-    stockings glowed orange-pink).  The selected channel becomes a grey map of its own; an empty one drops the map."""
-    props = flat[0]["Properties"]
-    vecs = {s["ParameterInfo"]["Name"]: s["ParameterValue"] for s in props["VectorParameterValues"]}
-    ch, texs = vecs.get("Emissive_CH"), props["TextureParameterValues"]
-    em = next((t for t in texs if t["ParameterInfo"]["Name"] == "Emissive"), None)
-    if em is None or not isinstance(ch, dict):
-        return None
-    tname = em["ParameterValue"]["ObjectPath"].split("/")[-1].split(".")[0]
-    picked = [i for i, k in enumerate("RGBA") if float(ch.get(k, 0)) > 0.5]
-    src = pngs.get(tname.lower())
-    if not picked or not src:
-        texs.remove(em)
-        return "%s: no channel selected, no emission" % tname
-    a = np.asarray(Image.open(src).convert("RGBA"))[..., picked[0]]
-    if int(a.max()) < 5:
-        texs.remove(em)
-        return "%s: channel %s is empty, no emission" % (tname, "RGBA"[picked[0]])
-    new = "%s_%s" % (tname, "RGBA"[picked[0]])
-    Image.fromarray(a).convert("RGB").save(os.path.join(tex_dir, new + ".png"))
-    em["ParameterValue"] = {"ObjectName": "Texture2D'%s'" % new, "ObjectPath": "/Game/_derived/%s.%s" % (new, new)}
-    return "%s: channel %s" % (tname, "RGBA"[picked[0]])
-
-
 def link(src, dst):
     if os.path.exists(dst):
         return
@@ -149,7 +125,7 @@ def stage(look, report, mats, pngs, root):
     shutil.rmtree(base, ignore_errors=True)
     os.makedirs(mi_dir)
     os.makedirs(tex_dir)
-    staged, missing, notes = [], [], []
+    staged, missing = [], []
     for m in report["materials"]:
         if m["kind"] not in KINDS:
             continue
@@ -157,9 +133,6 @@ def stage(look, report, mats, pngs, root):
         flat = flatten(name, mats)
         if flat is None:
             continue
-        note = emissive_channel(flat, pngs, tex_dir)
-        if note:
-            notes.append("%s: emissive %s" % (name, note))
         fname = name if name.startswith("MI_") else "MI_" + name     # hq_materials.py globs MI_*.json
         json.dump(flat, open(os.path.join(mi_dir, fname + ".json"), "w", encoding="utf-8"), indent=1)
         staged.append(name)
@@ -170,7 +143,7 @@ def stage(look, report, mats, pngs, root):
                 link(src, os.path.join(tex_dir, tname + ".png"))
             elif not os.path.exists(os.path.join(tex_dir, tname + ".png")):
                 missing.append(tname)
-    return base, staged, sorted(set(missing)), notes
+    return base, staged, sorted(set(missing))
 
 
 def compare_sheet(dst_dir, out):
@@ -201,7 +174,7 @@ def run(look, o, mats, pngs):
     blend = os.path.join(dst_dir, look["name"] + ".blend")
     hq_blend = os.path.join(dst_dir, look["name"] + "_HQ.blend")
     report = json.load(open(os.path.join(dst_dir, "package.json"), encoding="utf-8"))["report"]
-    base, staged, missing, notes = stage(look, report, mats, pngs, o.root)
+    base, staged, missing = stage(look, report, mats, pngs, o.root)
     out_dir = os.path.join(base, "out")
     r1 = subprocess.run([sys.executable, os.path.join(SB, "hq_materials.py"), "--mi-json", os.path.join(base, "mi"),
                          "--textures", os.path.join(base, "tex"), "--out", out_dir],
@@ -224,7 +197,7 @@ def run(look, o, mats, pngs):
     shutil.copy2(os.path.join(out_dir, "materials.json"), os.path.join(dst_dir, "hq_materials.json"))
     compare_sheet(dst_dir, os.path.join(dst_dir, "高清材质对比.jpg"))
     eye_lines = [l.strip() for l in r2.stdout.splitlines() if "game eye of" in l]
-    return look["name"], {"staged": staged, "missing_maps": missing, "notes": notes, "eyes": eye_lines, "outside": outside,
+    return look["name"], {"staged": staged, "missing_maps": missing, "eyes": eye_lines, "outside": outside,
                           "hq_blend": hq_blend if os.path.exists(hq_blend) else None}
 
 
@@ -259,7 +232,7 @@ def main():
         pkg_path = os.path.join(dst_dir, "package.json")
         pkg = json.load(open(pkg_path, encoding="utf-8"))
         pkg["hq"] = {"blend": os.path.basename(r["hq_blend"]), "materials": "hq_materials.json", "staged": r["staged"],
-                     "missing_maps": r["missing_maps"], "notes": r["notes"], "eyes": r["eyes"], "outside": r["outside"]}
+                     "missing_maps": r["missing_maps"], "eyes": r["eyes"], "outside": r["outside"]}
         json.dump(pkg, open(pkg_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         readme = os.path.join(dst_dir, "README.txt")
         text = open(readme, encoding="utf-8-sig").read()
