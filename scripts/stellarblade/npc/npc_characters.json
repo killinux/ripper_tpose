@@ -1,0 +1,188 @@
+{
+ "characters": [
+  {
+   "name": "Lily",
+   "label": "莉莉",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_01/CH_NPC_01_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_01/CH_NPC_01_Body_2",
+    "SB/Content/Art/Character/NPC/CH_NPC_01/CH_NPC_01_Face",
+    "SB/Content/Art/Character/NPC/CH_NPC_01/CH_NPC_01_Face_JALI",
+    "SB/Content/Art/Character/NPC/CH_NPC_01/CH_NPC_01_Lilly",
+    "SB/Content/Art/Character/NPC/CH_NPC_01_DX/CH_NPC_Lilly_DX",
+    "SB/Content/Art/Character/NPC/CH_NPC_Lily_02/CH_NPC_Lily_02",
+    "SB/Content/Art/Character/NPC/CH_NPC_Lily_02/CH_NPC_Lily_02_TypeB",
+    "SB/Content/Art/Character/NPC/CH_NPC_Lily_02/CH_NPC_Lily_TypeC",
+    "SB/Content/Art/Character/NPC/CH_NPC_Lily_02/Temp/CH_NPC_Lily_02_Preview",
+    "SB/Content/Art/Character/NPC/CH_NPC_Lily_03/CH_NPC_Lily_03",
+    "SB/Content/Art/Character/NPC/CH_NPC_Lily_03/CH_NPC_Lily_03_TypeB",
+    "SB/Content/DLC_1/Art/Character/NPC/CH_NPC_Lily_Nier_01/CH_NPC_Lily_Nier_01"
+   ]
+  },
+  {
+   "name": "Tachy",
+   "label": "塔琪（NPC）",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_ArmDamaged_Arm",
+    "SB/Content/Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_ArmDamaged_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_Face_Jali",
+    "SB/Content/Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_Face_Jali2",
+    "SB/Content/Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_Preview"
+   ]
+  },
+  {
+   "name": "TachyBoss",
+   "label": "塔琪（Boss）",
+   "meshes": [
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Body",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Cape",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Face",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Face_Jali",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Hair",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Helmet",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Helmet_simple",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_LeftWing",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Muffler",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Phase1_Body",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_RightWing",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/Preview/CH_M_NA_21",
+    "SB/Content/Art/Character/Monster/CH_M_NA_21/Preview/CH_M_NA_21_1"
+   ]
+  },
+  {
+   "name": "Raven",
+   "label": "渡鸦",
+   "meshes": [
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_1",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_CutArm1",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_CutArm2",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_CutSpine",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Destroyed",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Destroyed_01",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Destroyed_02",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Facial",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Hair",
+    "SB/Content/Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Preview"
+   ]
+  },
+  {
+   "name": "Scarlet",
+   "label": "红莲（NIKKE 联动）",
+   "meshes": [
+    "SB/Content/DLC_2/Art/Character/Monster/CH_M_NA_961/CH_M_NA_961",
+    "SB/Content/DLC_2/Art/Character/Monster/CH_M_NA_961/CH_M_NA_961_Facial"
+   ]
+  },
+  {
+   "name": "Enya",
+   "label": "恩雅",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/CH_NPC_Enya",
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/CH_NPC_Enya_A_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/CH_NPC_Enya_B",
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/CH_NPC_Enya_B_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/CH_NPC_Enya_C_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/CH_NPC_Enya_Facial",
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/Temp/CH_NPC_Enya_Mech",
+    "SB/Content/Art/Character/NPC/CH_NPC_Enya/Temp/Enya_05"
+   ]
+  },
+  {
+   "name": "Kaya",
+   "label": "卡雅",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Kaya/CH_NPC_Kaya",
+    "SB/Content/Art/Character/NPC/CH_NPC_Kaya/CH_NPC_Kaya_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Kaya/CH_NPC_Kaya_Facial"
+   ]
+  },
+  {
+   "name": "Roxanne",
+   "label": "罗克珊",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Roxane/CH_NPC_Roxane",
+    "SB/Content/Art/Character/NPC/CH_NPC_Roxane/CH_NPC_Roxane_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Roxane/CH_NPC_Roxane_Facial"
+   ]
+  },
+  {
+   "name": "Su",
+   "label": "苏",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_SU/CH_NPC_SU"
+   ]
+  },
+  {
+   "name": "Rael",
+   "label": "拉埃尔",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Rael/CH_NPC_Rael",
+    "SB/Content/Art/Character/NPC/CH_NPC_Rael/CH_NPC_Rael_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Rael/CH_NPC_Rael_Face",
+    "SB/Content/Art/Character/NPC/CH_NPC_Rael/CH_NPC_Rael_Preview"
+   ]
+  },
+  {
+   "name": "Iberis",
+   "label": "伊贝丽斯",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Iberis/CH_NPC_Iberis"
+   ]
+  },
+  {
+   "name": "Kara",
+   "label": "卡拉",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Kara/CH_NPC_Kara"
+   ]
+  },
+  {
+   "name": "Maid",
+   "label": "女仆",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Maid_01/CH_NPC_Maid_01",
+    "SB/Content/Art/Character/NPC/CH_NPC_Maid_01/CH_NPC_Maid_01_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Maid_01/CH_NPC_Maid_01_Facial"
+   ]
+  },
+  {
+   "name": "MotherSphere",
+   "label": "母亲领域",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_Motherspier/CH_NPC_Motherspier",
+    "SB/Content/Art/Character/NPC/CH_NPC_Motherspier/CH_NPC_Motherspier_Body",
+    "SB/Content/Art/Character/NPC/CH_NPC_Motherspier/CH_NPC_Motherspier_Facial"
+   ]
+  },
+  {
+   "name": "AirborneSquad",
+   "label": "空降部队女兵",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_AirborneSquad/CH_NPC_AirborneSquad_Body"
+   ]
+  },
+  {
+   "name": "Scavenger",
+   "label": "拾荒者奥利维亚",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_ScavengerFemale_A/CH_NPC_Olivia/CH_NPC_Olivia"
+   ]
+  },
+  {
+   "name": "Citizen",
+   "label": "西翁女市民",
+   "meshes": [
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/Body/CH_NPC_CitizenFemale_03_B",
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/Body/CH_NPC_CitizenFemale_08",
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/HEad/CH_NPC_CitizenFemale_Head_01",
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/HEad/CH_NPC_CitizenFemale_Head_02",
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/HEad/CH_NPC_CitizenFemale_Head_03",
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/HEad/CH_NPC_CitizenFemale_Head_04",
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/HEad/CH_NPC_CitizenFemale_Head_04_B",
+    "SB/Content/Art/Character/NPC/CH_NPC_CitizenFemale/HEad/CH_NPC_CitizenFemale_Head_05"
+   ]
+  }
+ ]
+}

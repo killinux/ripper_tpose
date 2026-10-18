@@ -1,0 +1,185 @@
+{
+ "_doc": "One look per character (the sexiest outfit of the variant survey), plus Raven's nude body. parts = mesh packages under SB/Content/ (body first; a separate face / hair after it). char = the gallery group, label = its Chinese name.",
+ "looks": [
+  {
+   "name": "Lily_01",
+   "char": "Lily",
+   "label": "莉莉",
+   "variant": "比基尼网衣（CH_NPC_01）",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_01/CH_NPC_01_Lilly",
+    "Art/Character/NPC/CH_NPC_01/CH_NPC_01_Face"
+   ]
+  },
+  {
+   "name": "Tachy_NPC",
+   "char": "Tachy",
+   "label": "塔琪",
+   "variant": "黑色紧身战衣（NPC）",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_Body",
+    "Art/Character/NPC/CH_NPC_TachyNPC/CH_NPC_TachyNPC_Face_Jali2"
+   ]
+  },
+  {
+   "name": "Tachy_Boss",
+   "char": "Tachy",
+   "label": "塔琪",
+   "variant": "Boss 战甲（不戴头盔）",
+   "parts": [
+    "Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Body",
+    "Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Face",
+    "Art/Character/Monster/CH_M_NA_21/CH_M_NA_21_Hair"
+   ]
+  },
+  {
+   "name": "Raven",
+   "char": "Raven",
+   "label": "渡鸦",
+   "variant": "白色紧身战衣",
+   "parts": [
+    "Art/Character/Monster/CH_M_NA_53/CH_M_NA_53",
+    "Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Facial",
+    "Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Hair"
+   ]
+  },
+  {
+   "name": "Raven_Nude",
+   "char": "Raven",
+   "label": "渡鸦",
+   "variant": "裸体（游戏自带的 CH_M_NA_53_1）",
+   "kind": "nude",
+   "parts": [
+    "Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_1",
+    "Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Facial",
+    "Art/Character/Monster/CH_M_NA_53/CH_M_NA_53_Hair"
+   ]
+  },
+  {
+   "name": "Scarlet",
+   "char": "Scarlet",
+   "label": "红莲（NIKKE 联动）",
+   "variant": "红莲：暗影",
+   "parts": [
+    "DLC_2/Art/Character/Monster/CH_M_NA_961/CH_M_NA_961",
+    "DLC_2/Art/Character/Monster/CH_M_NA_961/CH_M_NA_961_Facial"
+   ]
+  },
+  {
+   "name": "Enya",
+   "char": "Enya",
+   "label": "恩雅",
+   "variant": "仿生人外壳",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Enya/CH_NPC_Enya"
+   ]
+  },
+  {
+   "name": "Kaya",
+   "char": "Kaya",
+   "label": "卡雅",
+   "variant": "军装外套 + 短裤",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Kaya/CH_NPC_Kaya"
+   ]
+  },
+  {
+   "name": "Roxanne",
+   "char": "Roxanne",
+   "label": "罗克珊",
+   "variant": "黑色大衣",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Roxane/CH_NPC_Roxane"
+   ]
+  },
+  {
+   "name": "Su",
+   "char": "Su",
+   "label": "苏",
+   "variant": "面罩 + 皮草大衣",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_SU/CH_NPC_SU"
+   ],
+   "warnings": [
+    "全脸头盔，模型看不出性别（骨架没有胸部骨骼）"
+   ]
+  },
+  {
+   "name": "Rael",
+   "char": "Rael",
+   "label": "拉埃尔",
+   "variant": "红色紧身衣 + 披风",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Rael/CH_NPC_Rael"
+   ]
+  },
+  {
+   "name": "Iberis",
+   "char": "Iberis",
+   "label": "伊贝丽斯",
+   "variant": "",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Iberis/CH_NPC_Iberis"
+   ]
+  },
+  {
+   "name": "Kara",
+   "char": "Kara",
+   "label": "卡拉",
+   "variant": "",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Kara/CH_NPC_Kara"
+   ]
+  },
+  {
+   "name": "Maid",
+   "char": "Maid",
+   "label": "女仆",
+   "variant": "女仆裙",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Maid_01/CH_NPC_Maid_01"
+   ]
+  },
+  {
+   "name": "MotherSphere",
+   "char": "MotherSphere",
+   "label": "母亲领域",
+   "variant": "白色荷叶边裙",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_Motherspier/CH_NPC_Motherspier"
+   ]
+  },
+  {
+   "name": "AirborneSquad",
+   "char": "AirborneSquad",
+   "label": "空降部队女兵",
+   "variant": "Eve 同款白色战衣（游戏里没有头）",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_AirborneSquad/CH_NPC_AirborneSquad_Body"
+   ],
+   "warnings": [
+    "游戏里这个网格没有头（头由关卡蓝图另外挂），这里只有身体",
+    "战衣是分层材质，只取了它的底色 E7E4D6"
+   ]
+  },
+  {
+   "name": "Olivia",
+   "char": "Scavenger",
+   "label": "拾荒者奥利维亚",
+   "variant": "",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_ScavengerFemale_A/CH_NPC_Olivia/CH_NPC_Olivia"
+   ]
+  },
+  {
+   "name": "Citizen_08",
+   "char": "Citizen",
+   "label": "西翁女市民",
+   "variant": "夹克 + 牛仔裤（头 03）",
+   "parts": [
+    "Art/Character/NPC/CH_NPC_CitizenFemale/Body/CH_NPC_CitizenFemale_08",
+    "Art/Character/NPC/CH_NPC_CitizenFemale/HEad/CH_NPC_CitizenFemale_Head_03"
+   ]
+  }
+ ]
+}
