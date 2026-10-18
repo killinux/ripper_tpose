@@ -14,6 +14,48 @@
 
 ---
 
+## 2026-10-18 — Luf g05：裙子碰撞修正、眼睛按游戏公式重烘（新工具 `pmx_game_eye.py`）、full 版胸部穿模（新工具 `pmx_body_cover_cups.py`、`pmx_bust_chain_nocollide.py`、量具 `chest_clip_blender.py`）；服装移植工具 `pmx_graft.py`
+
+**新增 / 修复**
+
+- 用户：「g05是否有 full版，裙子物理碰撞修正，瞳孔修正，这些是否都可以做」→「1」（先做 g05 的四个文件）；
+  之后「pc_g05_hd_full 这里的pmx导入手势舞后，胸部似乎穿模了，是否是pmx的胸部刚体等有问题，排查一下」。
+- 新文件（原版不动），在 `E:\game_export\RiseOfEros\Luf\pmx\` 下：
+  - `pc_g05_hd\pc_g05_hd(_bustB)_裙子碰撞修正_瞳孔修正.pmx`
+  - `pc_g05_hd_full\pc_g05_hd_full(_bustB)_裙子碰撞修正_瞳孔修正.pmx`
+  - 两个文件夹的 `textures\pc_g05_hd_Head_eye_game.png`
+  - 对比视频 `pc_g05_hd_裙子碰撞_修正前后对比_手势舞.mp4`、`pc_g05_hd_full_胸部_修正前后对比_手势舞.mp4`
+  - 眼睛对比图 `pc_g05_hd_瞳孔_修正前后对比.jpg`
+- 裙子：
+  - g05 没有一圈的裙子，会穿腿的是两处：腰前垂到脚踝的长布片（`Riband_M`），和两只袖子垂下来的长披帛（`Riband_BL/BR`）。
+  - 归档里它们在什么都不碰的 10 组，头发也不碰身体。
+  - 用 a08 的做法修：`cloth_collision_pmx.py` 在 full 的裸体里量碰撞体，大腿分两半；`pmx_skirt_fix.py --bones riband` 把披帛上横着的 9–12 个盒子转回布上；再按碰撞体的类别分组。
+- 眼睛：`scripts/riseoferos/pmx_game_eye.py` 按 2.6 按钮同一个公式，从正面把游戏眼球烘成贴图（docs/pmx-game-eye.md）：瞳孔从虹膜的 11% 变为约 27%，加上角膜缘圈、眼白，虹膜换成游戏颜色。
+- 胸部：
+  - full 版衣服下的身体权重和胸带对不上，乳头从胸带里顶出来。
+  - 修法：`pmx_body_follows_cups.py` 对齐摆动比例；新的 `pmx_body_cover_cups.py` 让胸带正下方的身体照抄胸带权重；新的 `pmx_bust_chain_nocollide.py` 让胸前吊坠不碰撞（裙子修正给它开了碰撞，手一碰就拽胸）。
+  - 新量具 `chest_clip_blender.py`。详见 docs/roe-full-chest-fix.md。
+- 新工具 `scripts/mmd_physics/pmx_graft.py`：把一个 PMX 的服装接到另一个模型上（scripts/mmd_physics/README.md 第 9 节）。试验中：a08 full + g05 长前片、a05 full + a08 裙子，还没交付。
+
+**用户如何操作**：命令见 docs/pmx-game-eye.md、docs/roe-full-chest-fix.md、scripts/mmd_physics/README.md 第 9 节。都只改 PMX，用普通 Python 就行（量具要后台 Blender），不会覆盖已有文件。
+
+**原理与兼容性**：
+- 眼睛只换 `eye_portable` 的贴图。
+- 胸部只改胸带下面那部分身体的权重、胸前吊坠刚体的碰撞掩码；网格、法线、表情、骨骼不动，裸体那份不动。
+- 裙子修正和 a08 一样，只改刚体和碰撞组。
+- 逐个核对过：bustB 和普通版的差别与原版相同（胸前吊坠的质量和胸部关节）。
+
+**验证**（每帧平均；裙子按腿的皮肤量，胸部按胸带量）：
+
+| | 手势舞 腿 | 八方来才 腿 | 手势舞 胸 |
+|---|---|---|---|
+| 穿衣版 原 → 修 | 89 → 24 | 199 → 23 | 0.2 → 0 |
+| full 原 → 修 | 85 → 22 | 188 → 13 | 165 → 0 |
+| full bustB 原 → 修 | – → 21 | – → 13 | 122 → 0 |
+
+- 八方来才里穿衣版 bustB 有一个尖峰（第 203–206 帧，每帧最多 557 个顶点）：大腿高抬时，右胸的轻吊坠穿过大腿。归档原版同样有这个问题（第 201 帧 105 个顶点），不是这次带进来的。
+- `pmx_game_eye.py` 重算的贴图和交付的那张逐像素一致；在 a08 上也试过。
+
 ## 2026-10-18 — 做裙子物理的插件 mmd_cloth_physics 0.2：盒子不再横在布上，裙片按网格连，碰撞组按身体部位；全部 ROE 模型查了一遍（新工具 `cloth_check_pmx.py` / `cloth_rebuild_blender.py`）
 
 **新增 / 修复**

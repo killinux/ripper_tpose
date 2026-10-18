@@ -18,6 +18,9 @@
 | `skin_clip_blender.py` | Blender（后台） | 跳一段舞，逐帧数裙子有多少顶点陷进模型自己的腿（皮肤或护腿），比 `clip_test_blender.py` 严（第 7 节） |
 | `cloth_check_pmx.py` | 普通 Python（`pmx` 模块 + numpy） | 只读检查布料物理：盒子不贴布、横向关节连错 / 穿身体 / 连自己、挨着腿却不撞腿、链尾悬空（第 8 节） |
 | `cloth_rebuild_blender.py` | Blender（后台） | 用当前的 mmd_cloth_physics 插件重建现成 PMX 的布料物理，只换刚体和关节（第 8 节） |
+| `chest_clip_blender.py` | Blender（后台） | 跳一段舞，逐帧数 full 版里衣服下的身体有多少顶点从胸带里顶出来（第 9 节） |
+| `pmx_bust_chain_nocollide.py` | 普通 Python（`pmx` 模块） | 挂在会摆动的胸部刚体上的链（吊坠、飘带）改成不碰撞，免得手一碰就拽胸（第 9 节） |
+| `pmx_graft.py` | 普通 Python（`pmx` 模块 + numpy） | 把一个 PMX 的服装（网格、骨骼、刚体关节、材质贴图）接到另一个模型上（第 9 节） |
 | `physics_calibration_pmx.py` | 普通 Python | 生成一个标定模型：一个自由下落的方块（测重力），五个带弹簧的摆臂（测弹簧的实际强度） |
 | `calibration_blender.py` | Blender（后台） | 在 Blender 里按 60 / 120 / 300 Hz 跑标定模型，给出预测值和截图，用来和 MMD 的结果对照 |
 | `mmd_like.py` | Blender 内被导入 | 让 mmd_tools 导入的关节按 MMD 的方式工作；`scripts/riseoferos/render_pmx_dance.py` 的最后一个参数写 `mmd` 时调用它 |
@@ -518,3 +521,35 @@ python cloth_collision_pmx.py out.pmx final.pmx --colliders-from full_fit.pmx   
 **ROE 全部检查**（`cloth_check_pmx.py`，212 个主 PMX，198 个带物理）：180 个至少有一类毛病；81 个有布贴着腿，
 81 个全都一半以上贴腿的布不撞腿；盒子不贴布 1032 / 2366（108 个模型）；关节连自己 424 个（47 个模型）；穿过身体的
 横向关节 172 个（39 个模型）。归档文件都没改。
+
+## 9. full 版胸部穿模、胸前挂件、服装移植（2026-10-18）
+
+**胸部穿模**（Luf g05 full，手势舞）：衣服下那份身体用的是裸体底模的权重，乳头跟着胸摆的比例将近 0.9，胸带只有 0.44，
+胸一晃乳头就从胸带里顶出来。修法三步、量具和数字见 [docs/roe-full-chest-fix.md](../../docs/roe-full-chest-fix.md)：
+
+```powershell
+python pmx_bust_chain_nocollide.py full.pmx s1.pmx                       # 挂在会摆动的胸部刚体上的链：不碰撞
+python ..\riseoferos\pmx_body_follows_cups.py s1.pmx s2.pmx             # 身体随胸摆动的比例 = 胸带的
+python ..\riseoferos\pmx_body_cover_cups.py s2.pmx out.pmx              # 胸带正下方的身体照抄胸带的权重
+blender -b --factory-startup --python chest_clip_blender.py -- out.pmx 舞.vmd out.json   # 量：每帧顶出胸带的顶点
+```
+
+g05 full：每帧 165 → 0（最深 9.3 mm → 0.2 mm）；bustB 122 → 0。
+
+**胸前挂件**：`cloth_collision_pmx.py` 会让所有会动的刚体（胸部除外）都去碰身体，挂在胸上的吊坠也一样，手势舞里手一碰，
+吊坠就把胸拽一下。`pmx_bust_chain_nocollide.py` 把链尾挂在会摆动的胸部刚体上的链改回不碰撞（归档原版就是这样）。
+只碰腿的方案试过：大腿高抬时吊坠照样穿过去，其他布料反而变差，没采用。
+
+**服装移植**（`pmx_graft.py`，试验中）：
+
+```powershell
+python pmx_graft.py 源.pmx 目标.pmx 输出.pmx --bones "^Riband_M" --material-name g05_skirt
+```
+
+- 取源模型里挂在 `--bones` 骨骼上的整块网格（权重 ≥ 0.3 的顶点所在的连通块），每个源材质变成一个新材质；
+- 骨骼接在目标的同名骨骼下，位置按两边的 `下半身` 对齐（`--offset` 再微调）；
+- 这些骨骼上的刚体和关节一起搬，挂在别的骨骼上的关节改挂目标同名骨骼的刚体；
+- 新材质加进目标的 `衣服非表示_材質`，full 版的「衣服非表示」照样能藏；
+- 贴图（目标自己的也算）都真复制进输出文件夹的 `textures\`，不会写到别处。
+
+之后照第 5、7 节修碰撞。10-18 用它做了 a08 full + g05 的长前片、a05 full + a08 的裙子，测量中，还没交付。
