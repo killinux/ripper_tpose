@@ -14,6 +14,60 @@
 
 ---
 
+## 2026-10-18 — 做裙子物理的插件 mmd_cloth_physics 0.2：盒子不再横在布上，裙片按网格连，碰撞组按身体部位；全部 ROE 模型查了一遍（新工具 `cloth_check_pmx.py` / `cloth_rebuild_blender.py`）
+
+**新增 / 修复**
+
+- 用户：「修做裙子物理的插件 mmd_cloth_physics，再检查别的 ROE 模型的裙子」（a08 裙子穿腿修完后的遗留问题）。
+- 根源：`build.box_frame` 造的坐标架是 (x, y, y×x)，**左手系（镜像）**。`to_euler('YXZ')` 还原后盒子长轴还在骨头上，
+  但绕骨头随机转了 0–90°：ROE 44% 的盒子薄面朝侧面，像鱼鳍插在裙子上，大腿从旁边滑进布里。现在是右手系，盒子的厚度方向
+  = 这根骨头驱动的那片布的法线。
+- 同时修了：
+  - 盒子按布量（横跨布面、沿布面都取 5–95% 分位），挪到布上但不比在骨头上时更深地陷进身体；链的最后一节盖到裙摆；
+  - 横向关节按网格连：两条链在布接触的地方连（共用顶点 + 跨两根骨头的网格边）。网格上分开的布条才按「布在身体周围的位置」
+    相邻逐行连，连线不能穿过身体碰撞体。以前按链根角度排序：a08 前片隔着大腿连到后片，共用开头几节的链连到了自己
+    （ROE 47 个模型共 424 个）；
+  - 碰撞组（新模块 `collide.py`）：身体碰撞体按头 / 颈 / 躯干 / 手臂 / 腿分组；每个布刚体测出生时陷进各部位多深，先削薄，
+    不行才只关掉那个部位。以前贴身的布什么都不撞。挂在胸部物理刚体上的布一律不撞（对魔忍窗口实测：撞了反而扯胸）；
+  - 链尾在网格里缝在别的刚体上时补一个 `A.` 关节（a08 胯侧挂链）；
+  - 游戏骨骼 1–2 cm 的骨尾短桩不再当骨头长度（CCFF7R Aerith 的裙子盒子原来只有 2–3 cm 长）；
+  - 位置写在名字前面的裙子（`CB_skirtA`、`LF_skA`）不再每条链算一件衣服：同一锚骨下、网格相连的合成一件。
+- 新工具 `scripts/mmd_physics/cloth_check_pmx.py`（只读，普通 Python）：数上面这些毛病，每个模型一行，可出 JSON / CSV。
+- 新工具 `scripts/mmd_physics/cloth_rebuild_blender.py`（Blender 后台）：用插件重建现成 PMX 的布料物理，只换刚体和关节，
+  其余数据逐字节不变；`--same-bones`、`--addon-dir`（新旧对比）、`--drop-test`。
+- `skin_clip_blender.py`：`--surface "*"`、`--bones auto`。
+
+**用户如何操作**
+
+- Blender 里插件面板（N 侧栏 MMD → Cloth Physics）多了「By body part / Old: near = none」和「Boxes on the cloth」，默认就是新做法。
+  插件是目录链接装的，重启 Blender（或 Reload Scripts）就是 0.2。
+- 以后用 ROE / 剑星 / FF7 / CCFF7R / 对魔忍 / 洛奇英雄传的导出脚本导 PMX，自动用新插件。
+- 已归档的 PMX：`blender -b --factory-startup --python scripts/mmd_physics/cloth_rebuild_blender.py -- in.pmx out.pmx`，
+  有 full 版时再 `cloth_collision_pmx.py out.pmx final.pmx --colliders-from <full 版按裸体贴合的>`。
+
+**实现原理与兼容性**
+
+- `api.setup` 的参数只加不改（`collision="classes"|"near"`、`seat`、`attach_ends`）；各导出脚本对插件打的补丁
+  （Vindictus 的 `candidate_bones` / `classify`、对魔忍的 `NAME_HINTS` / `HAIR_NAME` / `setup` 包装、CCFF7R / FF7 的
+  `LIMB_HELPER`）都照常生效。`analyze.find_garments(mode="legacy")` / `collision="near"` 可回到旧做法对比。
+- 碰撞阈值 2 mm，和 ROE / 剑星导出之后跑的 `release_rest_overlaps` 一致。
+- 插件自己做不到碰撞体贴合裸体（碰撞体是 Convert_to_MMD5 按穿衣网格量的），这一步仍是 `cloth_collision_pmx.py`。
+- 没改：Convert_to_MMD5 `convert/skirt.py` 的 `_box_frame` 有同一个左手系（用户自己的插件，只在找不到本插件时用）。
+
+**已执行的验证**
+
+- 2000 个随机坐标架：旧 `box_frame` 行列式全是 −1，99% 转偏 1° 以上，最多 90°；新的 0°。
+- a08 穿衣版（手势舞，裙子顶点进腿部皮肤 / 护腿，每帧）：原版 705 / 45；旧插件重建 695（重建流程能复现原版）；
+  新插件 78 / 2.2；新插件 + full 版裸体贴合的碰撞体 20.8 / 2.1（10-18 手工修的 27 / 2.5）。
+- 别的游戏（旧 → 新，每帧进腿的布料顶点）：CCFF7R Aerith 72.9 → 53.9，对魔忍小队 Anemone 57.7 → 9.4，洛奇英雄传
+  Fiona PCF_003 239 → 38.2，FF7 Tifa 0 → 0；静置掉落测试 Tifa 2 处拉断 / Anemone 3 处 / Fiona 1 处 → 全部稳定，
+  剑星 Eve 稳 → 稳。
+- ROE 全部 212 个主 PMX 检查：198 个带物理，180 个至少有一类毛病；81 个布贴着腿的模型全部一半以上不撞腿；盒子不贴布
+  1032 / 2366；穿过身体的横向关节 172 个（39 个模型）。归档文件都没改。
+- 重建工具输出的 PMX 只有刚体和关节和原文件不同。
+
+---
+
 ## 2026-10-18 — ROE 插件 v1.1.17：新按钮「2.6 游戏原版眼睛」，眼睛换成游戏自己的眼球着色器（新模块 `roe_eye_blender.py`）
 
 **新增**

@@ -4,7 +4,8 @@
 
 1. 胸部的刚体和关节参数该设多少才自然；
 2. Blender 预览为什么和 MMD 不一样，怎样让它更接近 MMD；
-3. 衣服、头发为什么穿过身体，怎样让它们碰得到身体（第 5 节）；裙子的刚体横着、裙片连错时怎么修（第 7 节）。
+3. 衣服、头发为什么穿过身体，怎样让它们碰得到身体（第 5 节）；裙子的刚体横着、裙片连错时怎么修（第 7 节）；
+   做裙子物理的插件本身修好以后，怎样检查、重建别的模型（第 8 节）。
 
 背景调研见 `reports/胸部物理实现方式调研.md`。
 
@@ -15,6 +16,8 @@
 | `clip_test_blender.py` | Blender（后台） | 跳一段舞，逐帧数会动的顶点有多少陷进身体（第 5 节的数字就是它算的） |
 | `pmx_skirt_fix.py` | 普通 Python（`pmx` 模块 + numpy） | 横在布上的裙子盒子转回布上，裙片按网格里真正连着的地方重新连关节（第 7 节） |
 | `skin_clip_blender.py` | Blender（后台） | 跳一段舞，逐帧数裙子有多少顶点陷进模型自己的腿（皮肤或护腿），比 `clip_test_blender.py` 严（第 7 节） |
+| `cloth_check_pmx.py` | 普通 Python（`pmx` 模块 + numpy） | 只读检查布料物理：盒子不贴布、横向关节连错 / 穿身体 / 连自己、挨着腿却不撞腿、链尾悬空（第 8 节） |
+| `cloth_rebuild_blender.py` | Blender（后台） | 用当前的 mmd_cloth_physics 插件重建现成 PMX 的布料物理，只换刚体和关节（第 8 节） |
 | `physics_calibration_pmx.py` | 普通 Python | 生成一个标定模型：一个自由下落的方块（测重力），五个带弹簧的摆臂（测弹簧的实际强度） |
 | `calibration_blender.py` | Blender（后台） | 在 Blender 里按 60 / 120 / 300 Hz 跑标定模型，给出预测值和截图，用来和 MMD 的结果对照 |
 | `mmd_like.py` | Blender 内被导入 | 让 mmd_tools 导入的关节按 MMD 的方式工作；`scripts/riseoferos/render_pmx_dance.py` 的最后一个参数写 `mmd` 时调用它 |
@@ -453,5 +456,65 @@ blender -b --factory-startup --python skin_clip_blender.py -- <pmx> <vmd> <out.j
 腿一并拢就在皮肤里面，第一帧就这样，藏在褶子里看不见。这是姿势和权重决定的，物理管不了。试过把胯甲改成跟骨头走（不动），
 数字反而更差（每帧 41 比 30），没用。
 
-**mmd_cloth_physics 本身的两个毛病没改**（`analyze.classify` 按链根角度排序，盒子的朝向）。同一个插件做的别的 ROE PMX，
-裙子多半有一样的问题。
+**mmd_cloth_physics 本身的毛病**（`analyze.classify` 按链根角度排序，盒子的朝向，碰撞组）10-18 已在插件 0.2 里修好，
+别的模型怎么查、怎么按新插件重建，见第 8 节。
+
+## 8. 修插件本身，再查全部模型（`cloth_check_pmx.py` / `cloth_rebuild_blender.py`，2026-10-18）
+
+用户：「修做裙子物理的插件 mmd_cloth_physics，再检查别的 ROE 模型的裙子」。
+
+**插件的根源（细节见 `scripts/blender_addons/mmd_cloth_physics/README.md` 第 0 节）：** 第 7 节的盒子「横在布上」不是量错了，
+是 `box_frame` 造了一个**左手系**（镜像）的坐标架：`to_euler('YXZ')` 还原出来长轴还在骨头上，但盒子绕骨头转了 0–90°，
+随机。另外三件：横向关节按链根角度排序（a08 前片连到后片、关节连到自己）；碰撞组「贴身段什么都不撞」；盒子按骨头量不按布量
+（最后一节的裙摆露在盒子外面）。0.2 全改了，测试时又找到两个：游戏骨骼的骨尾只是 1–2 cm 的短桩（CCFF7R Aerith 的裙子
+每个盒子只有 2–3 cm 长，FF7 Tifa 裙摆那节盒子横着）；位置写在名字前面的裙子（`CB_skirtA`、`LF_skA`）每条链被当成一件衣服，
+链之间没有横向关节——现在同一根锚骨下、布在网格里相连的合成一件。
+
+**`cloth_check_pmx.py`（只读，普通 Python，一个模型 1–2 秒）** 数这几类毛病：盒子薄面和自己那块布的法线差 35° 以上；
+横向关节两个刚体不共用布（共用顶点、跨两根骨头的网格边都算共用）以及其中连线穿过身体碰撞体的；关节两头是同一个刚体；
+离腿碰撞体 5 cm 以内、碰撞组却永远碰不到腿的刚体；出生就陷进它会撞的碰撞体 8 mm 以上的；链尾在网格里粘在别的刚体上、
+物理上没连的。
+
+```powershell
+python cloth_check_pmx.py a.pmx b.pmx ... --json out.json --csv out.csv
+```
+
+**`cloth_rebuild_blender.py`（Blender 后台）** 用插件把一个现成 PMX 的布料物理重建一遍：删掉它的动态刚体（胸部保留）和
+挂在上面的关节，跑 `mmd_cloth_physics.api.setup`，导出一个临时 PMX，**只把刚体和关节**抄回原文件的数据里——顶点、材质、
+表情、贴图路径逐字节不变。`--same-bones` 只重建原来就有物理的那些骨头（不知道那个游戏导出时的 body 正则时用）；
+`--addon-dir` 指向别的插件副本（比如 git 里旧版的拷贝，做新旧对比）；`--drop-test 60` 顺便做插件的静置掉落测试。
+
+```powershell
+blender -b --factory-startup --python cloth_rebuild_blender.py -- in.pmx out.pmx [--same-bones] [--drop-test 60]
+python cloth_collision_pmx.py out.pmx final.pmx --colliders-from full_fit.pmx      # 有 full 版时：碰撞体按裸体贴合
+```
+
+`skin_clip_blender.py` 加了 `--surface "*"`（腿上穿的什么都算）和 `--bones auto`（所有带动态刚体的骨头，胸和头发除外），
+批量量各种模型时不用一个个找材质名和骨头名。
+
+**a08 穿衣版**（手势舞，每帧有多少裙子顶点陷进腿里，胯甲另算）：
+
+| | 腿部皮肤 | 护腿 |
+|---|---|---|
+| 归档原版 | 705 | 45 |
+| 旧插件重建（这套重建流程能复现原版） | 695 | – |
+| 新插件重建 | 78 | 2.2 |
+| 新插件 + `cloth_collision_pmx.py --colliders-from`（第 7 节 full 版裸体贴合的碰撞体） | 20.8 | 2.1 |
+| 第 7 节手工修的 | 27 | 2.5 |
+
+插件自己做不到碰撞体贴合裸体（要 full 版的裸体），这一步仍是后处理。
+
+**别的游戏**（同一个插件，旧版 / 新版各重建一次，`--same-bones`；手势舞每帧有多少布料顶点陷进腿里，腿上穿的什么都算，
+`--surface "*" --bones auto`；外加插件 60 帧静置掉落测试）：
+
+| 模型 | 旧插件 | 新插件 | 掉落测试 旧 → 新 |
+|---|---|---|---|
+| CCFF7R Aerith | 72.9 | 53.9 | 稳 → 稳 |
+| 对魔忍小队 77_anemone | 57.7 | 9.4 | 3 处拉断 → 稳 |
+| 洛奇英雄传 Fiona PCF_003 | 239 | 38.2 | 1 处拉断 → 稳 |
+| FF7 Rebirth Tifa（mod1369） | 0 | 0（短裙碰不到腿） | 2 处拉断、5 个停不下 → 稳 |
+| 剑星 Eve（Nikke_06） | – | – | 稳 → 稳（没有挨着腿的布） |
+
+**ROE 全部检查**（`cloth_check_pmx.py`，212 个主 PMX，198 个带物理）：180 个至少有一类毛病；81 个有布贴着腿，
+81 个全都一半以上贴腿的布不撞腿；盒子不贴布 1032 / 2366（108 个模型）；关节连自己 424 个（47 个模型）；穿过身体的
+横向关节 172 个（39 个模型）。归档文件都没改。

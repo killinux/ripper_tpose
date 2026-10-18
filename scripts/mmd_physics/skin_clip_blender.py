@@ -10,7 +10,9 @@ which carry half of a08's thigh skin and the greaves): inside = behind the neare
     blender -b --factory-startup --python skin_clip_blender.py -- <pmx> <vmd> <out.json>
         [--surface skin] [--bones "skirt|skir_chain"] [--frames a-b] [--leave "Skirt_L_00,Skirt_R_00"]
 
---surface: material name parts, comma separated (default "skin"; a08's greaves: body1_01).  --leave: bones whose
+--surface: material name parts, comma separated (default "skin"; a08's greaves: body1_01; "*" = every material, i.e.
+whatever the legs wear).  --bones "auto": every bone with a dynamic rigid body, breasts and hair (under 頭 / 首) left
+out - for batches over models whose cloth bones are named anything.  --leave: bones whose
 vertices are counted apart (a08's hip plates: the cloth's top corners follow them into the groin crease whenever the
 legs close - the pose and the weights, not the physics).  Prints SUMMARY: mean / 95th percentile / max per frame,
 the same without the --leave bones, the deepest point, per (skirt bone > leg bone) pair the mean count and the
@@ -34,6 +36,7 @@ sys.path.insert(0, HERE)
 from mmd_like import mmd_like_physics  # noqa: E402
 
 SCALE, MARGIN = 0.08, 30
+BUST = r"^(?:[a-z0-9]+[ _])?(?:breast|chest_[lr])|bust|胸|乳|oppai|opai_[lr]|xtra01(?:opp)?(?:02)?$"
 LEG = re.compile(r"^(?:[左右](?:足|ひざ|足首|つま先|足D|ひざD|足首D|足先EX)|ThighTwist_[LR]T|[LR]CalfTwist1?)$")
 ap = argparse.ArgumentParser()
 ap.add_argument("pmx")
@@ -76,8 +79,25 @@ with bpy.context.temp_override(scene=scene, point_cache=world.point_cache):
     bpy.ops.ptcache.bake(bake=True)
 print("baked in %.0f s" % (time.time() - t0), flush=True)
 
-pat = re.compile(args.bones, re.I)
+if args.bones == "auto":
+    bust = re.compile(BUST, re.I)
+    cloth = set()
+    for o in rig.rigidBodies():
+        pb = arm.pose.bones.get(o.mmd_rigid.bone) if o.mmd_rigid.bone else None
+        if str(o.mmd_rigid.type) == "0" or pb is None:
+            continue
+        name = pb.mmd_bone.name_j or pb.name
+        up = pb.parent
+        while up is not None and (up.mmd_bone.name_j or up.name) not in ("頭", "首"):
+            up = up.parent
+        if up is None and not bust.search(name) and not bust.search(o.mmd_rigid.name_j or ""):
+            cloth.add(name)
+    pat = re.compile("^(?:%s)$" % "|".join(re.escape(n) for n in sorted(cloth)) if cloth else r"(?!)")
+    print("cloth bones (auto): %d" % len(cloth), flush=True)
+else:
+    pat = re.compile(args.bones, re.I)
 parts = [p.strip().lower() for p in args.surface.split(",") if p.strip()]
+every_material = "*" in parts
 surface_obj, tris, tri_bone, skirt = None, [], [], []
 for o in rig.meshes():
     names = {}
@@ -93,7 +113,8 @@ for o in rig.meshes():
     mats = [s.material.name.lower() if s.material else "" for s in o.material_slots]
     mine, mine_bone = [], []
     for p in o.data.polygons:
-        if any(k in mats[p.material_index] for k in parts) and all(LEG.match(strongest[i]) for i in p.vertices):
+        if (every_material or any(k in mats[p.material_index] for k in parts)) \
+                and all(LEG.match(strongest[i]) for i in p.vertices):
             vs = list(p.vertices)
             for k in range(1, len(vs) - 1):
                 mine.append((vs[0], vs[k], vs[k + 1]))

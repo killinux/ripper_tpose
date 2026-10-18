@@ -4,28 +4,38 @@ Conventions that MMD itself cares about (all learned the hard way, see the
 README's pitfalls):
 
 * rigid body and joint empties are ``rotation_mode='YXZ'``, so every Euler
-  handed to mmd_tools is ``to_euler('YXZ')``;
-* a BOX is placed with local Y along the bone (half length), X outward
-  (half thickness), Z along the surface (half width);
+  handed to mmd_tools is ``to_euler('YXZ')`` of a proper (right-handed)
+  rotation: a mirrored frame comes back from ``to_euler`` spun about one axis;
+* a BOX is placed with local Y along the bone (half length), X across the
+  cloth (half thickness, pointing away from the body), Z along the surface
+  (half width).  X is the normal of the cloth the bone drives when the skin
+  gives one, else the horizontal direction away from the anchor;
 * a CAPSULE's long axis is local Z;
-* a cloth joint's frame is X = tangent, Y = radial, Z = along the bone.  MMD's
-  old Bullet decomposes 6DOF limits with Y as the singular axis, so the axis
-  with the small twist limit has to land on PMX Y (= Blender Z) or a fast turn
-  blows the whole skirt up.  Blender's newer Bullet tolerates anything, which
-  is why Blender never shows this failure;
+* a cloth joint's frame is X = tangent, Y = the cloth's normal (radial), Z =
+  along the bone.  MMD's old Bullet decomposes 6DOF limits with Y as the
+  singular axis, so the axis with the small twist limit has to land on PMX Y
+  (= Blender Z) or a fast turn blows the whole skirt up.  Blender's newer
+  Bullet tolerates anything, which is why Blender never shows this failure;
 * the rigid body world is switched off while objects are created: with it on,
   every new dynamic body is stepped the moment the scene evaluates and its
   bind position drifts before the PMX is written.
+
+Until 2026-10-18 ``box_frame`` built (x, y, y x x): a mirrored frame.  Its
+Euler kept the box's length on the bone but spun it about the bone by up to
+90 deg, so on 44% of the ROE models' boxes the thin side faced sideways - fins
+sticking out of the skirt that a thigh slid past into the cloth (Inase a08).
 """
 import math
 
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
-from . import analyze
+from . import analyze, collide, geom
 from .presets import PRESETS, lerp
 
 TAG = "mmd_cloth_physics"
+RIDES = TAG + "_rides"       # set on bodies whose garment hangs on a physics body (a breast): they collide with nothing
 
 MODE_STATIC, MODE_DYNAMIC, MODE_DYNAMIC_BONE = 0, 1, 2
 SHAPE_SPHERE, SHAPE_BOX, SHAPE_CAPSULE = 0, 1, 2
@@ -37,6 +47,7 @@ GROUP_CLOTH = 11         # free cloth: collides with the body only
 NOCOLLIDE_CLOTH = (1, 8, 9, 10, 11, 15)
 NOCOLLIDE_NEAR = (0, 1, 8, 9, 10, 11, 15)
 NOCOLLIDE_BODY = (GROUP_NEAR,)
+GLUED = 8                # shared vertices that make a chain's end glued to another body
 
 BODY_COLLIDERS = (
     # bone, shape, radius ratio of bone length when the skin cannot be measured
@@ -84,19 +95,28 @@ def bone_name_j(arm, bone):
 
 # ----------------------------------------------------------------- frames --
 
-def box_frame(head, vec, center):
-    """(centre, euler YXZ, axes) for a BOX: Y along, X outward, Z tangent."""
+def box_frame(head, vec, center, normal=None, inward=None):
+    """(centre, euler YXZ, axes) for a BOX: Y along, X across the cloth, Z along the surface - right-handed.
+
+    X is ``normal`` (the cloth's own normal) made square to the bone, else the horizontal direction from the anchor
+    ``center``; it points away from the body: against ``inward`` (towards the nearest body collider) when given."""
     y = vec.normalized()
     centre = head + vec * 0.5
-    radial = Vector((centre.x - center.x, centre.y - center.y, 0.0))
-    if radial.length < 1e-5:
-        radial = Vector((0.0, -1.0, 0.0))
-    x = radial.normalized()
-    z = y.cross(x)
-    if z.length < 1e-5:
-        z = Vector((1.0, 0.0, 0.0))
-    z.normalize()
-    x = z.cross(y).normalized()
+    x = None
+    if normal is not None:
+        x = normal - y * normal.dot(y)
+        if x.length < 0.3:
+            x = None                       # a normal along the bone says nothing about the thickness
+    if x is None:
+        x = Vector((centre.x - center.x, centre.y - center.y, 0.0))
+        x = x - y * x.dot(y)
+    if x.length < 1e-5:
+        x = y.orthogonal()
+    x.normalize()
+    out = -inward if inward is not None else Vector((centre.x - center.x, centre.y - center.y, 0.0))
+    if out.length > 1e-6 and x.dot(out) < 0:
+        x = -x
+    z = x.cross(y).normalized()
     return centre, Matrix((x, y, z)).transposed().to_euler("YXZ"), (x, y, z)
 
 
@@ -109,10 +129,10 @@ def capsule_frame(vec):
     return Matrix((x, y, z)).transposed().to_euler("YXZ")
 
 
-def joint_frame(vec, centre, center):
-    """Cloth joint: X tangent, Y radial, Z along the bone."""
+def joint_frame(vec, centre, center, normal=None):
+    """Cloth joint: X tangent, Y radial (the cloth's normal when given), Z along the bone."""
     z = vec.normalized()
-    radial = Vector((centre.x - center.x, centre.y - center.y, 0.0))
+    radial = normal if normal is not None else Vector((centre.x - center.x, centre.y - center.y, 0.0))
     if radial.length < 1e-5:
         radial = Vector((0.0, -1.0, 0.0))
     x = radial.cross(z)
@@ -173,7 +193,7 @@ def near_body(shapes, centre, half_diag, margin=0.03):
     return False
 
 
-def measured_radius(arm, meshes, bone, weight_min=0.3):
+def measured_radius(arm, meshes, bone, weight_min=0.3, skin=None):
     """85th percentile of the radial distance to the bone axis over the vertices
     it drives; None when there are too few."""
     mw = arm.matrix_world
@@ -182,6 +202,12 @@ def measured_radius(arm, meshes, bone, weight_min=0.3):
     if axis.length < 1e-6:
         return None
     axis.normalize()
+    if skin is not None:
+        pts = skin.points(bone.name, weight_min) - np.array(head)
+        if len(pts) < 12:
+            return None
+        a = np.array(axis)
+        return float(np.percentile(np.linalg.norm(pts - np.outer(pts @ a, a), axis=1), 85))
     distances = []
     for mesh in meshes:
         group = mesh.vertex_groups.get(bone.name)
@@ -201,13 +227,13 @@ def measured_radius(arm, meshes, bone, weight_min=0.3):
     return distances[int(len(distances) * 0.85)]
 
 
-def make_kinematic(model, arm, meshes, bone, ratio=0.3, unit=1.0):
+def make_kinematic(model, arm, meshes, bone, ratio=0.3, unit=1.0, skin=None):
     """A kinematic collider/anchor on ``bone`` (capsule along it)."""
     mw = arm.matrix_world
     head = mw @ bone.head_local
     vec = (mw @ bone.tail_local) - head
     length = vec.length or 0.05 * unit
-    radius = measured_radius(arm, meshes, bone) or length * ratio
+    radius = measured_radius(arm, meshes, bone, skin=skin) or length * ratio
     radius = max(0.015 * unit, min(radius, 0.25 * unit))
     obj = model.createRigidBody(
         shape_type=SHAPE_CAPSULE, location=head + vec * 0.5, rotation=capsule_frame(vec),
@@ -219,7 +245,7 @@ def make_kinematic(model, arm, meshes, bone, ratio=0.3, unit=1.0):
     return obj
 
 
-def ensure_body_colliders(model, arm, meshes, log=None, unit=None):
+def ensure_body_colliders(model, arm, meshes, log=None, unit=None, skin=None):
     """Kinematic capsules on the standard body bones that have none yet."""
     if unit is None:
         unit = analyze.unit_scale(meshes)
@@ -233,7 +259,7 @@ def ensure_body_colliders(model, arm, meshes, log=None, unit=None):
             mw = arm.matrix_world
             head = mw @ bone.head_local
             vec = (mw @ bone.tail_local) - head
-            radius = measured_radius(arm, meshes, bone) or vec.length * ratio
+            radius = measured_radius(arm, meshes, bone, skin=skin) or vec.length * ratio
             obj = model.createRigidBody(
                 shape_type=SHAPE_SPHERE, location=head + vec * 0.5, rotation=(0.0, 0.0, 0.0),
                 size=(max(0.03 * unit, min(radius, 0.2 * unit)), 0.0, 0.0),
@@ -243,7 +269,7 @@ def ensure_body_colliders(model, arm, meshes, log=None, unit=None):
                 mass=1.0, friction=0.5, linear_damping=0.5, angular_damping=0.5, bounce=0.0)
             obj[TAG] = "body"
         else:
-            make_kinematic(model, arm, meshes, bone, ratio, unit)
+            make_kinematic(model, arm, meshes, bone, ratio, unit, skin)
         made += 1
     if log:
         log("body colliders: %d created, %d already there" % (made, len(have)))
@@ -266,6 +292,49 @@ def rigid_size(preset, shape, half_len, extent, unit=1.0):
     return (min(half_thick, 0.04 * unit), max(0.015 * unit, half_len), half_width)
 
 
+def fit_box(points, axes, half_len, leaf, preset, unit, thickness_scale):
+    """Half sizes and offset of a box that holds the cloth its bone drives (``points``, relative to the segment's
+    middle): across the cloth (X) its spread between percentiles 5 and 95 plus the preset's thickness - never thicker
+    than wide - along the surface (Z) the same span, along the bone (Y) the segment; for a chain's last bone down to
+    the hem, which hangs below the bone's tail (up to 3x the half segment or 15 cm).  Returns ((half X, half Y,
+    half Z), (offset X, Y, Z))."""
+    dx, dy, dz = (points @ np.array(a) for a in axes)
+    x_lo, x_hi = np.percentile(dx, [5, 95])
+    z_lo, z_hi = np.percentile(dz, [5, 95])
+    half_w = max(0.015 * unit, min(0.3 * unit, (z_hi - z_lo) * 0.5))
+    half_t = max(0.008 * unit, min(0.04 * unit, half_w, (x_hi - x_lo) * 0.5 + preset["thickness"] * unit * 0.5))
+    half_t = min(0.05 * unit, half_t * thickness_scale)
+    shift_y = 0.0
+    if leaf:
+        reach = min(float(np.percentile(dy, 95)), max(3.0 * half_len, 0.15 * unit))
+        if reach > half_len:
+            shift_y = (reach - half_len) * 0.5
+            half_len = (reach + half_len) * 0.5
+    return ((float(half_t), float(max(0.015 * unit, half_len)), float(half_w)),
+            (float(x_lo + x_hi) * 0.5, shift_y, float(z_lo + z_hi) * 0.5))
+
+
+def seat_box(centre, axes, size, euler, offset, colliders, tolerance):
+    """The box moved onto its cloth by ``offset`` (X, Y, Z in its frame) - but never deeper into a body collider
+    than it would sit on the bone (or than ``tolerance``): the move across the cloth is cut back first."""
+    x, y, z = axes
+    along = centre + y * offset[1] + z * offset[2]
+    if not colliders or abs(offset[0]) < 1e-6:
+        return along + x * offset[0]
+    R = np.array(euler.to_matrix())
+
+    def deepest(c):
+        s = geom.Shape(geom.BOX, np.array(c), R, size)
+        return max(geom.depth(s, k) for k in colliders)
+
+    start = max(deepest(along), tolerance)
+    for share in (1.0, 0.75, 0.5, 0.25):
+        moved = along + x * (offset[0] * share)
+        if deepest(moved) <= start:
+            return moved
+    return along
+
+
 def build_garment(model, arm, meshes, garment, options, log=None):
     """Rigid bodies + joints for one garment.  Returns (rigids, joints, lattice)."""
     preset = PRESETS[garment.preset]
@@ -280,13 +349,19 @@ def build_garment(model, arm, meshes, garment, options, log=None):
     reverse = options.get("reverse_joints", False)
     thickness_scale = options.get("thickness_scale", 1.0)
     unit = options.get("unit", 1.0)
+    skin = options.get("skin")
+    colliders = options.get("colliders") or []
+    by_part = options.get("collision", "classes") == "classes"
+    seat = options.get("seat", True)
+    chain_joints = options.setdefault("chain_joints", {})
 
     # anchor rigid body: the garment hangs off it
     anchor_bone = bones.get(garment.anchor) or find_bone(arm, garment.anchor)
     anchor_rigid = have.get(anchor_bone.name) if anchor_bone is not None else None
     if anchor_rigid is None and anchor_bone is not None:
-        anchor_rigid = make_kinematic(model, arm, meshes, anchor_bone, unit=unit)
+        anchor_rigid = make_kinematic(model, arm, meshes, anchor_bone, unit=unit, skin=skin)
         have[anchor_bone.name] = anchor_rigid
+    rides = anchor_rigid is not None and str(anchor_rigid.mmd_rigid.type) not in ("0", "STATIC")
 
     rigids, joints, lattice = 0, 0, 0
     geometry = {}
@@ -296,18 +371,39 @@ def build_garment(model, arm, meshes, garment, options, log=None):
         head, vec = analyze.segment(arm, bone, members)
         half_len = min(vec.length * 0.5, 0.25 * unit)
         if shape == SHAPE_BOX:
-            centre, euler, axes = box_frame(head, vec, garment.center)
+            normal = analyze.panel_normal(skin.strong_points(name)) if skin is not None else None
+            inward = None
+            near, point = geom.nearest(colliders, np.array(head + vec * 0.5))
+            if near is not None:
+                inward = Vector(point.tolist()) - (head + vec * 0.5)
+                inward = inward if inward.length > 1e-6 else None
+            centre, euler, axes = box_frame(head, vec, garment.center, normal, inward)
         else:
             centre, euler, axes = head + vec * 0.5, capsule_frame(vec), None
-        extent = None
+        extent, size, offset = None, None, None
         if options.get("measure_skin", True):
             frame_axes = axes or (Vector((1, 0, 0)), vec.normalized(), Vector((0, 1, 0)))
-            extent = analyze.skin_extent(arm, meshes, name, frame_axes, head, vec)
-        size = rigid_size(preset, shape, half_len, extent, unit)
-        if shape == SHAPE_BOX:
-            size = (min(0.05 * unit, size[0] * thickness_scale), size[1], size[2])
+            pts = skin.points(name) if skin is not None else None
+            if pts is not None and shape == SHAPE_BOX and len(pts) >= 8:
+                leaf = not any(c.name in members for c in bone.children)
+                size, offset = fit_box(pts - np.array(centre), frame_axes, half_len, leaf, preset, unit,
+                                       thickness_scale)
+            elif pts is not None:
+                extent = analyze.extent_of(pts, frame_axes, centre)
+            else:
+                extent = analyze.skin_extent(arm, meshes, name, frame_axes, head, vec)
+        if size is None:
+            size = rigid_size(preset, shape, half_len, extent, unit)
+            if shape == SHAPE_BOX:
+                size = (min(0.05 * unit, size[0] * thickness_scale), size[1], size[2])
+        if offset is not None:
+            centre = seat_box(centre, axes, size, euler, offset if seat else (0.0,) + offset[1:], colliders,
+                              options.get("tolerance", 0.002) * unit)
         half_diag = math.sqrt(sum(s * s for s in size[:2]))
-        if is_hair:
+        if by_part:
+            # placeholders: collide.assign gives every body its groups once all garments exist
+            group, mask = (GROUP_HAIR if is_hair else GROUP_CLOTH), mask16(NOCOLLIDE_CLOTH)
+        elif is_hair:
             group, mask = GROUP_HAIR, mask16(NOCOLLIDE_CLOTH)
         elif row == 0 or near_body(shapes, centre, half_diag, 0.03 * unit):
             group, mask = GROUP_NEAR, mask16(NOCOLLIDE_NEAR)
@@ -324,9 +420,11 @@ def build_garment(model, arm, meshes, garment, options, log=None):
                 linear_damping=lerp(preset["lin_damp"], row, rows),
                 angular_damping=lerp(preset["ang_damp"], row, rows), bounce=0.0)
             rigid[TAG] = garment.name
+            if rides:
+                rigid[RIDES] = 1
             have[name] = rigid
             rigids += 1
-        geometry[name] = (head, vec, centre)
+        geometry[name] = (head, vec, centre, axes)
 
         parent = bone.parent
         parent_rigid = have.get(parent.name) if parent is not None and parent.name in members else anchor_rigid
@@ -339,7 +437,8 @@ def build_garment(model, arm, meshes, garment, options, log=None):
         # springs scale with segment length squared (inertia), as the reference
         # implementation found necessary for solver stability on short links
         spring *= min(1.0, max(0.02, (vec.length / (0.15 * unit)) ** 2))
-        rotation = (0.0, 0.0, 0.0) if is_hair else joint_frame(vec, centre, garment.center)
+        rotation = (0.0, 0.0, 0.0) if is_hair else joint_frame(vec, centre, garment.center,
+                                                               axes[0] if axes else None)
         joint = model.createJoint(
             location=head, rotation=rotation, rigid_a=parent_rigid, rigid_b=rigid,
             maximum_location=(0.0, 0.0, 0.0), minimum_location=(0.0, 0.0, 0.0),
@@ -347,16 +446,18 @@ def build_garment(model, arm, meshes, garment, options, log=None):
             spring_linear=(0.0, 0.0, 0.0), spring_angular=(spring, spring, spring),
             name=name)
         joint[TAG] = garment.name
+        chain_joints[name] = {"rotation": rotation, "limits": (swing, side, twist), "spring": spring,
+                              "parent": parent_rigid.name, "garment": garment.name}
         joints += 1
 
     if lattice_on:
         lin = preset["lattice_lin"] * unit
         ang = tuple(math.radians(a) for a in preset["lattice_ang"])
         for name_a, name_b in garment.pairs:
-            if name_a not in have or name_b not in have or name_a not in geometry:
+            if name_a == name_b or name_a not in have or name_b not in have or name_a not in geometry:
                 continue
-            head_a, vec_a, centre_a = geometry[name_a]
-            head_b, vec_b, centre_b = geometry[name_b]
+            head_a, vec_a, centre_a, _axes = geometry[name_a]
+            head_b, vec_b, centre_b, _axes = geometry.get(name_b, (None, vec_a, have[name_b].location, None))
             mid = (centre_a + centre_b) * 0.5
             rotation = lattice_frame(centre_a, centre_b, vec_a + vec_b)
             links = [(have[name_a], have[name_b], "H.%s-%s" % (name_a, name_b))]
@@ -376,6 +477,83 @@ def build_garment(model, arm, meshes, garment, options, log=None):
             % (garment.name, garment.kind, garment.preset, len(garment.chains), rows,
                rigids, joints, lattice))
     return rigids, joints, lattice
+
+
+def joined_pairs():
+    """Rigid body name pairs already tied by a joint."""
+    out = set()
+    for obj in bpy.data.objects:
+        if getattr(obj, "mmd_type", "") != "JOINT" or obj.rigid_body_constraint is None:
+            continue
+        a, b = obj.rigid_body_constraint.object1, obj.rigid_body_constraint.object2
+        if a is not None and b is not None:
+            out.add(frozenset((a.name, b.name)))
+    return out
+
+
+def attach_loose_ends(model, arm, garments, options, log=None):
+    """A chain whose last piece of cloth is sewn onto another body (>= GLUED vertices driven by both, at the far
+    end of the last bone or most of what it drives) hangs from that body too: Inase a08's hip chains are glued to
+    the hip plate at their back end but hung from their front end only, so the back end swung free and tore the
+    mesh.  The new joint has the chain's own last limits, at the shared vertices.  Returns the number added."""
+    skin = options.get("skin")
+    chain_joints = options.get("chain_joints", {})
+    if skin is None:
+        return 0
+    bones = arm.data.bones
+    have = existing_rigids()
+    joined = joined_pairs()
+    added = 0
+    for garment in garments:
+        if not garment.enabled:
+            continue
+        members = set(garment.bones)
+        for leaf in garment.bones:
+            if any(c.name in members for c in bones[leaf].children) or leaf not in have or leaf not in chain_joints:
+                continue
+            rigid = have[leaf]
+            info = chain_joints[leaf]
+            head, vec = analyze.segment(arm, bones[leaf], members)
+            d = np.array(vec.normalized())
+            own = (skin.strong_points(leaf) - np.array(head)) @ d
+            far = float(np.percentile(own, 70)) if len(own) >= 5 else vec.length * 0.7
+            parent_bone = bones[leaf].parent
+            counts = skin.shared_counts(leaf)
+            driven = len(skin.points(leaf, 0.05)) - (counts.get(parent_bone.name, 0) if parent_bone is not None else 0)
+            best = None
+            for other, count in sorted(counts.items(), key=lambda kv: -kv[1]):
+                body = have.get(other)
+                if count < GLUED or (best is not None and count <= best[1]):
+                    break
+                if body is None or other == leaf or body.name == info["parent"] \
+                        or frozenset((body.name, rigid.name)) in joined:
+                    continue
+                part = collide.CLASS_OF.get(collide.name_j(arm, body))
+                if str(body.mmd_rigid.type) == "0" and part not in (None, "torso"):
+                    continue                       # a hem weighted onto a leg / arm follows it by skin already
+                pts = skin.shared_points(leaf, other)
+                # glued: at the far end of the last bone (a neighbour hanging beside it shares cloth along its
+                # side), or most of what the last bone drives besides the cloth it shares with its parent (a08's
+                # hip chain: 30 vertices, 18 shared with the link above, the other 12 all with the hip plate)
+                if float((pts.mean(0) - np.array(head)) @ d) >= far or len(pts) >= 0.5 * driven:
+                    best = (body, len(pts), pts.mean(0))
+            if best is None:
+                continue
+            body, count, where = best
+            swing, side, twist = info["limits"]
+            joint = model.createJoint(
+                location=Vector(where.tolist()), rotation=info["rotation"], rigid_a=body, rigid_b=rigid,
+                maximum_location=(0.0, 0.0, 0.0), minimum_location=(0.0, 0.0, 0.0),
+                maximum_rotation=(swing, side, twist), minimum_rotation=(-swing, -side, -twist),
+                spring_linear=(0.0, 0.0, 0.0), spring_angular=(info["spring"],) * 3,
+                name="A.%s-%s" % (body.mmd_rigid.name_j or body.name, leaf))
+            joint[TAG] = garment.name
+            joined.add(frozenset((body.name, rigid.name)))
+            added += 1
+            if log:
+                log("  %s: last piece glued to %s (%d shared vertices) - joined there too"
+                    % (leaf, body.mmd_rigid.name_j or body.name, count))
+    return added
 
 
 def strip_dynamic_physics():

@@ -7,7 +7,7 @@ Blender add-on package.  The UI lives in the 3D viewport sidebar under the
 bl_info = {
     "name": "MMD Cloth Physics",
     "author": "ripper_tpose",
-    "version": (0, 1, 0),
+    "version": (0, 2, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > Cloth Physics",
     "description": "Skirt/cape/ribbon/hair rigid bodies and joints for mmd_tools models: "
@@ -53,6 +53,19 @@ class MCP_Settings(bpy.types.PropertyGroup):
     thickness_scale: bpy.props.FloatProperty(
         name="Thickness", default=1.0, min=0.3, max=4.0,
         description="Scale of the box thickness (thicker stops legs poking through)")
+    collision: bpy.props.EnumProperty(
+        name="Collision", default="classes",
+        items=[("classes", "By body part",
+                "Body colliders grouped by part (head / neck / torso / arms / legs); each cloth body collides "
+                "with every part it does not start inside"),
+               ("near", "Old: near = none",
+                "The rule before 0.2: cloth that starts near the body collides with nothing (legs go through "
+                "the upper skirt)")],
+        description="How cloth and body colliders are put in collision groups")
+    seat: bpy.props.BoolProperty(
+        name="Boxes on the cloth", default=True,
+        description="Move each box onto the cloth its bone drives (its inner face on the cloth's inner side), "
+                    "never deeper into the body than it started")
     drop_frames: bpy.props.IntProperty(name="Drop test frames", default=60, min=10, max=600)
     garments: bpy.props.CollectionProperty(type=MCP_GarmentItem)
     active: bpy.props.IntProperty()
@@ -116,7 +129,8 @@ class MCP_OT_build(bpy.types.Operator):
                                include_hair=settings.include_hair, lattice=settings.lattice,
                                reverse_joints=settings.reverse_joints,
                                measure_skin=settings.measure_skin,
-                               thickness_scale=settings.thickness_scale, log=lines.append)
+                               thickness_scale=settings.thickness_scale, log=lines.append,
+                               collision=settings.collision, seat=settings.seat)
         except Exception as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
@@ -269,6 +283,9 @@ class MCP_PT_panel(bpy.types.Panel):
         row.prop(settings, "reverse_joints")
         row.prop(settings, "measure_skin")
         col.prop(settings, "thickness_scale")
+        row = col.row(align=True)
+        row.prop(settings, "collision", text="")
+        row.prop(settings, "seat")
         row = layout.row(align=True)
         row.operator("mmd_cloth.strip", icon="X")
         row.operator("mmd_cloth.analyze", icon="VIEWZOOM")

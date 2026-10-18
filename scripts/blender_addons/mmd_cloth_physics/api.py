@@ -1,7 +1,7 @@
 """Script entry points: what the batch exporters call, what the UI wraps."""
 import bpy
 
-from . import analyze, build
+from . import analyze, build, collide
 from .presets import PRESETS
 
 
@@ -24,25 +24,32 @@ def model_of(obj):
 
 
 def analyze_model(obj, body_regex=None, prop_regex=r"\bProp\d*$", include_hair=True,
-                  min_weight=2.0):
+                  min_weight=2.0, skin=None):
     """The garments of the model that contains ``obj``."""
     model, root, arm, meshes = model_of(obj)
     with_rigid = set(build.existing_rigids().keys())
     return analyze.find_garments(arm, meshes, body_regex, prop_regex, include_hair,
-                                 min_weight, with_rigid)
+                                 min_weight, with_rigid, skin=skin)
 
 
 def setup(obj, garments=None, presets=None, body_regex=None, prop_regex=r"\bProp\d*$",
           include_hair=True, lattice=True, reverse_joints=False, measure_skin=True,
-          thickness_scale=1.0, body_colliders=True, log=print):
+          thickness_scale=1.0, body_colliders=True, log=print, collision="classes", seat=True,
+          attach_ends=True):
     """Analyse (unless ``garments`` is given), build colliders if the model has
     none, then rigid bodies and joints for every enabled garment.
 
     ``presets`` maps a garment name (or its stem) to a preset key and overrides
-    the automatic choice.  Returns a report dict for manifests."""
+    the automatic choice.  ``collision``: "classes" (default) gives the body
+    colliders a group per body part and every cloth body the parts it does not
+    start inside (collide.py); "near" is the rule before 2026-10-18 (cloth
+    starting near the body collides with nothing).  ``seat`` moves each box
+    onto its cloth; ``attach_ends`` ties a chain whose end is sewn onto another
+    body to that body too.  Returns a report dict for manifests."""
     model, root, arm, meshes = model_of(obj)
+    skin = analyze.SkinIndex(arm, meshes)
     if garments is None:
-        garments = analyze_model(obj, body_regex, prop_regex, include_hair)
+        garments = analyze_model(obj, body_regex, prop_regex, include_hair, skin=skin)
     presets = presets or {}
     for garment in garments:
         key = presets.get(garment.name) or presets.get(garment.stem)
@@ -50,13 +57,15 @@ def setup(obj, garments=None, presets=None, body_regex=None, prop_regex=r"\bProp
             garment.preset = key
     unit = analyze.unit_scale(meshes)
     options = {"lattice": lattice, "reverse_joints": reverse_joints,
-               "measure_skin": measure_skin, "thickness_scale": thickness_scale, "unit": unit}
+               "measure_skin": measure_skin, "thickness_scale": thickness_scale, "unit": unit,
+               "skin": skin, "collision": collision, "seat": seat}
     report = {"garments": [], "rigid_bodies": 0, "joints": 0, "lattice": 0, "body_colliders": 0,
               "unit": round(unit, 4)}
 
     def work():
         if body_colliders and not build.kinematic_shapes():
-            report["body_colliders"] = build.ensure_body_colliders(model, arm, meshes, log, unit)
+            report["body_colliders"] = build.ensure_body_colliders(model, arm, meshes, log, unit, skin)
+        options["colliders"] = analyze.collider_shapes(list(model.rigidBodies()))
         for garment in garments:
             if not garment.enabled:
                 continue
@@ -67,6 +76,11 @@ def setup(obj, garments=None, presets=None, body_regex=None, prop_regex=r"\bProp
             report["rigid_bodies"] += rigids
             report["joints"] += joints + lat
             report["lattice"] += lat
+        if attach_ends:
+            report["attached_ends"] = build.attach_loose_ends(model, arm, garments, options, log)
+            report["joints"] += report["attached_ends"]
+        if collision == "classes":
+            report["collision"] = collide.assign(arm, list(model.rigidBodies()), unit, log=log)
 
     build.with_world_off(work)
     bpy.context.view_layer.update()
