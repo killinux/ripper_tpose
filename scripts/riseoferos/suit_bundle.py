@@ -50,6 +50,33 @@ from UnityPy.helpers.MeshHelper import MeshHandler  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OVERRIDES_PATH = os.path.join(HERE, "suit_overrides.json")
+# the game's runtime download cache: an update's new suits (e01 sm, 2026-10-17) and newer copies of old bundles
+# arrive here, not in the install's StreamingAssets
+CACHE = os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "LocalLow", "Pinkcore", "Rise of Eros",
+                     "AssetBundles")
+
+
+def bundle_dirs(game):
+    """The AssetBundles directory given plus the runtime cache (when it exists and is another directory)."""
+    dirs = [game]
+    if os.path.isdir(CACHE) and os.path.normcase(os.path.abspath(CACHE)) != os.path.normcase(os.path.abspath(game)):
+        dirs.append(CACHE)
+    return dirs
+
+
+def bundle_names(game):
+    """Every file name in the install and the cache."""
+    names = set()
+    for d in bundle_dirs(game):
+        names.update(os.listdir(d))
+    return sorted(names)
+
+
+def bundle(game, name):
+    """A bundle's newest copy among the install and the cache - extract_character.ps1 picks the same way; the
+    install's path when neither has it."""
+    found = [os.path.join(d, name) for d in bundle_dirs(game) if os.path.isfile(os.path.join(d, name))]
+    return max(found, key=os.path.getmtime) if found else os.path.join(game, name)
 
 TEX_SLOTS = {"albedo": ("_BaseMap", "_MainTex"), "normal": ("_BumpMap",),
              "mgac": ("_MetallicGlossMap",)}
@@ -165,9 +192,9 @@ def load_skeleton(game, cid):
     chara_bare_pc_a01_nk_tutorial.ab) the _tutorial / _prelude variants - without a skeleton no piece
     rigged to its own bones gets an attach placement (a01 marry's veil lay on the floor)."""
     out = {}
-    first = os.path.join(game, "chara_bare_pc_%s_nk.ab" % cid)
-    variants = sorted(f for f in os.listdir(game) if re.match(r"chara_bare_pc_%s_nk_[a-z]+\.ab$" % cid, f))
-    for path in [first] + [os.path.join(game, f) for f in variants]:
+    first = bundle(game, "chara_bare_pc_%s_nk.ab" % cid)
+    variants = [f for f in bundle_names(game) if re.match(r"chara_bare_pc_%s_nk_[a-z]+\.ab$" % cid, f)]
+    for path in [first] + [bundle(game, f) for f in variants]:
         if os.path.isfile(path):
             out = _skeleton_from(path)
             if out:
@@ -280,17 +307,17 @@ def stub_files(env, stub_path):
 
 
 def bundle_paths(game, cid, suit):
-    stub = os.path.join(game, "accessory_components_pc_%s_suit_%s.ab" % (cid, suit))
-    extra = [os.path.join(game, "chara_components_pc_%s.ab" % cid),
-             os.path.join(game, "chara_components_common.ab"),
-             os.path.join(game, "chara_tex_components_pc_%s_suit_%s.ab" % (cid, suit))]
+    stub = bundle(game, "accessory_components_pc_%s_suit_%s.ab" % (cid, suit))
+    extra = [bundle(game, "chara_components_pc_%s.ab" % cid),
+             bundle(game, "chara_components_common.ab"),
+             bundle(game, "chara_tex_components_pc_%s_suit_%s.ab" % (cid, suit))]
     if suit == "fm":
         # the demon-form ("fm") props come from the shared accessory pool: their
         # materials sit in one tiny accessory_components_common_common_<x>.ab each,
         # the textures in chara_tex_components_common_common_<x>.ab
         # (older props use the per-accessory scheme instead: accessory_<hash>_common_<x>.ab
         # for the material, chara_tex_<hash>_common_<x>.ab for the textures)
-        extra += [os.path.join(game, f) for f in sorted(os.listdir(game))
+        extra += [bundle(game, f) for f in bundle_names(game)
                   if re.match(r"(chara_tex_components_common|accessory_components_common_common_"
                               r"|accessory_[0-9a-f]{8}_common_fm|chara_tex_[0-9a-f]{8}_common_fm)", f.lower())]
     return stub, [p for p in extra if os.path.isfile(p)]

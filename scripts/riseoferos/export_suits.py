@@ -47,8 +47,9 @@ def log(msg):
 
 
 def list_suits(game):
+    """Every suit stub in the install AND the runtime cache (an update's new suit is only in the cache)."""
     out = []
-    for name in sorted(os.listdir(game)):
+    for name in suit_bundle.bundle_names(game):
         m = re.match(r"accessory_components_pc_([a-z]\d+)_suit_(.+)\.ab$", name.lower())
         if m and m.group(2) not in SKIP_SUITS:
             out.append((m.group(1), m.group(2)))

@@ -62,8 +62,12 @@ import bpy
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:                   # run as `blender --python hq_materials_blender.py` too
+    sys.path.insert(0, HERE)
+import hq_cache  # noqa: E402  (where the game-material data lives: ROE_HQ_CACHE / E: archive / D:)
+
 DATA_SCRIPT = os.path.join(HERE, "hq_material_data.py")
-DEFAULT_EXPORT_ROOT = r"D:\roe_exports"
+DEFAULT_EXPORT_ROOT = hq_cache.DEFAULT_EXPORT_ROOT
 DEFAULT_PARAMS = {
     "normal": 1.0,           # x the game's _BumpScale
     "detail": 1.0,           # x the game's _DetailBumpScale (skin pores)
@@ -900,8 +904,7 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
     cid = cid or infer_cid(stem, albedos)
     if not cid:
         raise RuntimeError("cannot tell the character id (pc_<letter><digits>) from %r or the textures" % stem)
-    cache = cache or os.environ.get("ROE_HQ_CACHE") or os.path.join(export_root or DEFAULT_EXPORT_ROOT,
-                                                                     "_hq_materials")
+    cache = cache or hq_cache.default_cache(export_root)
     names = sorted({s[4] for s in slots if s[4]})
     plain = [a for a in albedos if not a.lower().endswith(EXPORT_SUFFIXES)]
     data, summary = load_data(cid, cache, names, plain, python, log, game)

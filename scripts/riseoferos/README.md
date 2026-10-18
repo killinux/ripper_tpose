@@ -607,7 +607,10 @@ python prune_exports.py --apply    # 真删
 脸、眼睛、眉毛 / 睫毛这些头部槽不按这条换。
 
 材质数据由 worker 自动调用 `hq_material_data.py`（系统 Python + UnityPy），直接从游戏包里读取，缓存在
-`D:\roe_exports\_hq_materials\`（`<id>.json` + 共享的 `textures\` + 各格式用的 `export\`），同一家族的头部贴图只解码一次。
+`E:\game_export\RiseOfEros\_meta\_hq_materials\`（`<id>.json` + 共享的 `textures\` + 各格式用的 `export\`），同一家族的头部贴图只解码一次。
+缓存位置由 `hq_cache.py` 统一决定：`ROE_HQ_CACHE` → E 盘存档里的这个文件夹（有的话）→ `<导出根目录>\_hq_materials`。
+批量导出、两个 Blender 插件（「ROE 游戏材质」、插件的 2.5 按钮）和几个辅助脚本都用它。2026-10-17 以前缓存在
+`D:\roe_exports\_hq_materials\`，每次清 D 盘就丢一次，现在搬到了 E 盘。`python hq_cache.py` 打印当前用的位置。
 选包时还会读游戏的包清单 `Manifest.ab`，把材质依赖的别的角色的贴图包一起加载（2026-10-04 起：k06 的头发用 k04 的贴图，
 游戏里是银白发，原来读不到、导出成了粉色）。
 
@@ -631,7 +634,7 @@ XPS 和 PMX 跑不了 Blender 节点，各带上格式本身能装的部分：
 | 环境变量 | 作用 |
 |---|---|
 | `ROE_HQ_MATERIALS=0` | 关掉，恢复只有颜色贴图的旧材质 |
-| `ROE_HQ_CACHE` | 材质数据缓存目录（缺省 `<导出根目录>\_hq_materials`） |
+| `ROE_HQ_CACHE` | 材质数据缓存目录（缺省 `E:\game_export\RiseOfEros\_meta\_hq_materials`，没有这个文件夹时 `<导出根目录>\_hq_materials`） |
 | `ROE_PYTHON` | 装了 UnityPy 的 Python（缺省 PATH 里的 `python`） |
 
 已经导出的 `.blend` 也可以单独升级，不用重跑整条流水线：
@@ -809,6 +812,20 @@ python scripts\riseoferos\render_roe_eros_videos.py a08        # H 场景的两�
 v1.1.14 只认 FBX 导入的网格名，导入 PMX 后点会报「认不出角色代号」。
 详见 [roe-hq-materials.md](../../docs/roe-hq-materials.md)。
 
+**2.6 游戏原版眼睛（v1.1.17，2026-10-18 起）**：眼睛换成游戏自己的眼球着色器（`Pinkcore/Heros/Eye`）。PMX / XPS 的眼睛
+只是一张烘好的图（纯色眼白 + 原尺寸虹膜），瞳孔只有虹膜的 11%，没有角膜缘颜色、眼白贴图、眼睑阴影和景深；这个按钮按游戏
+每帧做的那样，用 5 张游戏贴图现场合成：虹膜、眼白、虹膜遮罩（R 虹膜范围、G 角膜高度）、眼睑遮蔽（白色 = 被眼睑挡住）、
+眼白凹凸；瞳孔缩放、角膜视差、角膜缘颜色、金属度 / 光滑度都用游戏材质的数值，算法照着游戏编译后的着色器
+（`roe_fighter_unity` 里还原的 `RoeEye.shader`）。代码在 `roe_eye_blender.py`，插件从仓库读它（和 2.5 的
+`hq_materials_blender.py` 一样）。
+- 旁边的「瞳孔」滑条：0 = 游戏展示视频里的大小（默认）。材质里存的是 0.56（a08）/ 0.76（g04），游戏运行时会改它。
+- PMX 和 FBX 模型都能点，2.5 点没点都行；节点加在原来的眼睛材质里，「ROE 游戏材质」面板的 MMD / 游戏切换和移除
+  对眼睛一样管用，再导出 PMX 不变。
+- 第一次点某个家族时，缺的游戏贴图（比如 a 族的 `pc_a_nk_eye_iris`）由 2.5 用的同一个后台脚本从游戏包读出来。
+- 光照是 Blender 的：Principled BSDF 用游戏的粗糙度（1 − 光滑度，同一种感知粗糙度）、金属度和 4% 的反射率。游戏把高光
+  重塑成边缘清楚的圆斑，用小角度的日光灯照时很接近，但不完全一样；Unity 的光照探针、色调映射也和 Blender 不同。
+- 核对过（a08，侧 40°）：视差让瞳孔朝镜头一侧偏移约虹膜半径的三分之一，左右眼方向都对（镜像的那只眼也对）。
+
 **手动存 `.blend`**：先「文件 → 清理 → 清理未使用的数据（递归）」，再「文件 → 外部数据 → 打包资源」，最后另存为。
 不先清理的话，打包会对 FBX 导入器留下的、没有任何材质在用的图片报「找不到文件」（它们在
 `FBX_GameObjects` 里的副本被 `prune_exports.py` 删了），虽然不影响结果，但错误一大串。
@@ -899,12 +916,17 @@ blender --background --factory-startup --python assemble_suit_blender.py -- \
 放置和材质贴图，`export_suits.py` 把 13 个角色的全部 suit（`common` 配件池除外）各拼成一个 `.blend`：
 
 ```bash
-python export_suits.py --list                      # 80 个存根里 67 套是 suit，哪些已拼
+python export_suits.py --list                      # 全部 suit（2026-10-17：68 套），哪些已拼
 python export_suits.py --lanes 4                   # 全部没拼的（每套 7–17 秒）
 python export_suits.py --only j01:idol,b01:* --force
 python export_suits.py --exclude fm --force        # 跳过魔化（fm）套
 python export_suits.py --sheet                     # 只重拼预览总图
 ```
+
+**游戏更新新出的 suit 先在运行时缓存里**（`%USERPROFILE%\AppData\LocalLow\Pinkcore\Rise of Eros\AssetBundles`），
+安装目录里还是旧包。2026-10-17 起 `suit_bundle.py` / `export_suits.py` 把两处一起读，同名包取较新的那份，
+和 `extract_character.ps1` 一样（那次的 e01 sm 只在缓存里，原来 `--list` 看不到）。`export_hq.py` 的清单也直接读
+游戏的 suit 列表，D 盘没拼过的 suit（新出的、或者 D 盘清空以后）也能 `python export_hq.py e01:sm` 一条命令做完。
 
 产物 `D:\roe_exports\<id>\blend\pc_<id>_<suit>.blend` + `_preview.png`，中间数据 `D:\roe_exports\_suits\<id>\<suit>\`，
 清单 `_suits\manifest.json`，拼图 `_suits\_contact.png`。前提只有底模已提取（`extract_character.ps1 <id>`，

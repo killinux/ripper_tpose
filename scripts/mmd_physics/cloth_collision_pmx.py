@@ -36,6 +36,7 @@ Needs only Python + numpy and the ``pmx`` module inside mmd_tools (no Blender); 
 the search misses.  Units are PMX units (1 = 8 cm at mmd_tools' usual 0.08 import scale).
 """
 import argparse
+import copy
 import fnmatch
 import glob
 import importlib.util
@@ -682,6 +683,12 @@ def main():
                     help="a body is thinned to no less than this share of its size (default %(default)s)")
     ap.add_argument("--bust", default=DEFAULTS["bust"], help="regex: breast bodies are left alone (default %(default)s)")
     ap.add_argument("--keep-colliders", action="store_true", help="do not refit the body colliders")
+    ap.add_argument("--thigh-halves", action="store_true",
+                    help="give 足D a collider (a copy of 足's) when it has none, so the thigh is fitted in two halves: "
+                         "the upper, thicker half on 足, the lower on 足D (ROE a08: top 6.8 cm instead of 5)")
+    ap.add_argument("--shins-from", help="material(s) of the greaves / boots the shins wear: the shin collider is "
+                                         "sized to them in two halves - the upper on ひざ, the lower on ひざD (a new "
+                                         "collider) - never thinner than before (ROE a08: 0.40 -> 0.52 below the knee)")
     ap.add_argument("--pmx-module", help="path of mmd_tools/core/pmx/__init__.py")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -693,6 +700,17 @@ def main():
     bust = re.compile(args.bust, re.IGNORECASE)
     if not (args.skin or args.colliders_from or args.keep_colliders):
         raise SystemExit("give --skin (fit the colliders to it), --colliders-from or --keep-colliders")
+    if args.thigh_halves:
+        index = {b.name: i for i, b in enumerate(bones)}
+        for side in SIDES:
+            thigh = next((r for r in rigids if r.mode == 0 and bname(r) == side + "足"), None)
+            if thigh is None or side + "足D" not in index or any(bname(r) == side + "足D" for r in rigids):
+                continue
+            twin = copy.deepcopy(thigh)
+            twin.name = twin.name_e = side + "足D"
+            twin.bone = index[side + "足D"]
+            rigids.append(twin)
+            print("%s足D: a collider added (the thigh is fitted in two halves)" % side)
     skin = None
     if args.skin and not args.colliders_from:
         skin = Skin(pmx, model, [p.strip() for p in args.skin.split(",") if p.strip()], args.bust)
@@ -756,6 +774,45 @@ def main():
         for n, _bone, s, note in new_bodies:
             print("  %-6s new: r %.2f h %.2f c %-20s %s  %s" % (n, s.size[0], s.size[1], np.round(s.c, 2).tolist(),
                                                                "inside %s" % inside(s) if skin else "", note))
+
+    # shins wearing greaves / boots: the collider follows the armour, not the skin under it
+    forced = set()
+    if args.shins_from:
+        armour = Skin(pmx, model, [p.strip() for p in args.shins_from.split(",") if p.strip()], args.bust)
+        on_bone = {bname(rigids[i]): i for i in colliders}
+        bone_names = {b.name for b in bones}
+        print("\nshins sized to %s:" % ", ".join(armour.materials))
+        for side in SIDES:
+            i = on_bone.get(side + "ひざ")
+            if i is None or side + "ひざD" not in bone_names or shapes[i].kind != 2:
+                continue
+            a, b = shapes[i].seg
+            if a[1] < b[1]:
+                a, b = b, a                               # knee end first
+            P = armour.co[armour.of(side + "shin")]
+            if len(P) < 40:
+                print("  %sひざ: only %d armour vertices on the shin - kept" % (side, len(P)))
+                continue
+            t = ((P - a) @ (b - a)) / ((b - a) @ (b - a))
+            d = point_seg(P, a, b)
+            radii = []
+            for t0, t1 in ((0.0, 0.5), (0.5, 1.0)):
+                q = d[(t >= t0) & (t < t1)]
+                fitted = float(np.percentile(q, 10)) - args.inset if len(q) >= 20 else 0.0
+                radii.append(max(float(shapes[i].size[0]), fitted))
+            mid = a + (b - a) * 0.5
+            old_r = float(shapes[i].size[0])
+            shapes[i] = capsule_between(a, mid, radii[0], 0.0)
+            forced.add(i)
+            low = capsule_between(mid, b, radii[1], 0.0)
+            j = on_bone.get(side + "ひざD")
+            if j is not None:
+                shapes[j] = low
+                forced.add(j)
+            else:
+                new_bodies.append((side + "ひざD", side + "ひざD", low, "lower shin, sized to the armour - new"))
+            print("  %sひざ: upper half r %.2f (was %.2f), lower half r %.2f on %sひざD, from %d armour vertices" % (
+                side, radii[0], old_r, radii[1], side, len(P)))
 
     # collider shapes per class
     cls_cols = defaultdict(list)
@@ -856,7 +913,7 @@ def main():
     dyn_groups = set(combo_group.values())
     for i in colliders:
         r = rigids[i]
-        if not args.keep_colliders:
+        if not args.keep_colliders or i in forced:
             write_shape(r, shapes[i])
         c = CLASS_OF[bname(r)]
         r.collision_group_number = class_group[c]
@@ -881,7 +938,10 @@ def main():
     # keep texture paths relative to the new file when the textures were copied next to it
     src_dir, out_dir = os.path.dirname(os.path.abspath(args.input)), os.path.dirname(os.path.abspath(args.output))
     for texture in model.textures:
-        local = os.path.join(out_dir, os.path.relpath(texture.path, src_dir))
+        try:
+            local = os.path.join(out_dir, os.path.relpath(texture.path, src_dir))
+        except ValueError:                    # a texture on another drive than the input: leave its path alone
+            continue
         if os.path.exists(local):
             texture.path = local
     pmx.save(args.output, model, add_uv_count=model.header.additional_uvs)

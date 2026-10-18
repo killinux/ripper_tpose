@@ -96,6 +96,8 @@ def catalogue(exports):
     for path in glob.glob(os.path.join(exports, "_suits", "*", "*", "suit.json")):   # the parts dump of every suit
         cid, suit = os.path.normpath(path).split(os.sep)[-3:-1]
         suits.add((cid, suit))
+    import export_suits             # the game's own suit list: a suit an update added was never assembled on D:
+    suits.update(export_suits.list_suits(export_suits.GAME))
     for cid, suit in sorted(suits):
         stem = "pc_%s_%s" % (cid, suit)
         out.setdefault(stem, ("suit", {"cid": cid, "suit": suit,

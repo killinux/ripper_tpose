@@ -13,8 +13,8 @@ material would change (CHG: another game material, NEW: a slot the add-on kept g
 (pbr / skin / hair / glass / flat, "XPS alpha" = alpha render group) and, separately, how many head slots still miss the
 10-02 lashes / brows / iris conversion.  Changes that are only a name (<material>@<suit>, __UVMap copies) and picks
 whose role is None (the slot keeps the add-on material anyway) are left out.  The material caches must be current
-(run hq_material_data.py <id> --out D:\\roe_exports\\_hq_materials first after a data-script change; the exports do it
-themselves).
+(run hq_material_data.py <id> --out <the cache: python hq_cache.py prints it> first after a data-script change; the
+exports do it themselves).
 """
 import argparse
 import json
@@ -24,7 +24,10 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE = r"D:\roe_exports\_hq_materials"
+sys.path.insert(0, HERE)
+import hq_cache  # noqa: E402
+
+CACHE = hq_cache.default_cache()
 
 
 def worker(out_path, blends):

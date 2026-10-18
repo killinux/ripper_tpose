@@ -111,7 +111,8 @@ class ROEGM_Settings(bpy.types.PropertyGroup):
                                  items=(("game", "游戏材质", "游戏原始的完整材质"),
                                         ("mmd", "MMD 着色", "mmd_tools 原来的 MMD 着色")))
     cache: bpy.props.StringProperty(name="数据缓存", subtype="DIR_PATH",
-                                    description=r"游戏材质数据的缓存目录；留空 = D:\roe_exports\_hq_materials")
+                                    description=r"游戏材质数据的缓存目录；留空 = 自动：E:\game_export\RiseOfEros\_meta"
+                                                r"\_hq_materials（有的话），否则 D:\roe_exports\_hq_materials")
     python: bpy.props.StringProperty(name="Python", subtype="FILE_PATH",
                                      description="装了 UnityPy 的 Python；留空 = PATH 里的 python")
     game_dir: bpy.props.StringProperty(name="游戏资源目录", subtype="DIR_PATH",

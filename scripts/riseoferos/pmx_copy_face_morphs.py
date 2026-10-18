@@ -41,12 +41,14 @@ UV_TOL = 0.001          # same texture coordinate ...
 UV_GAP = 0.06           # ... and within 4.8 mm: the same vertex, moved (Inase's seasonal teeth: 2.6 mm)
 
 
-FACE = re.compile(r"(?:face|pc_[a-z]\d*(?:_fm)?_nk_face)(?:_nude)?")
+FACE = re.compile(r"(?:face|pc_[a-z0-9_]*?_face)(?:_nude)?")
 
 
 def part_key(name):
     """The face part a material is: the main export calls the head 'face', complete_nude.py's versions
-    'pc_a_nk_face' (and the full version's second copy 'pc_a_nk_face_nude')."""
+    'pc_a_nk_face' (and the full version's second copy 'pc_a_nk_face_nude'), or the outfit's own head material
+    when the version keeps the outfit's head (2026-10-17: e11 'pc_e11_hd_face', c09_outfit1
+    'pc_c09_hd_outfit1_face')."""
     n = name.lower()
     if FACE.fullmatch(n):
         return "face"

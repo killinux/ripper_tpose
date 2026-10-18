@@ -238,7 +238,7 @@ cd E:\code\othercode\ripper_tpose\scripts\riseoferos
 & $blender -b --factory-startup <旧.blend> --python hq_materials_blender.py -- <新.blend>
 
 # 只看材质数据
-python hq_material_data.py g05 --out D:\roe_exports\_hq_materials --all
+python hq_material_data.py g05 --out E:\game_export\RiseOfEros\_meta\_hq_materials --all
 
 # 改了规则或数据以后：哪些模型的哪些槽重出会换材质（只读，不导出；2026-10-04）
 python hq_slot_survey.py                      # 全部主模型 / 套装 / 裸模（h、i 的套装裸模除外）
@@ -293,7 +293,9 @@ python export_hq.py --list                 # 每个模型在 E 盘缺什么；--
 
 环境变量：
 - `ROE_HQ_MATERIALS=0`：关掉；
-- `ROE_HQ_CACHE`：缓存目录；
+- `ROE_HQ_CACHE`：缓存目录。不设时由 `scripts/riseoferos/hq_cache.py` 决定：E 盘存档的
+  `E:\game_export\RiseOfEros\_meta\_hq_materials`（有的话），否则 `<导出根目录>\_hq_materials`。
+  2026-10-17 起缓存放在 E 盘，清 D 盘不再丢；批量导出和两个 Blender 插件都自动找到它；
 - `ROE_PYTHON`：装了 UnityPy 的 Python。
 
 游戏更新后，删掉对应的 `<id>.json` 和用到的贴图，下次导出时会重新读取。
@@ -376,7 +378,9 @@ python export_hq.py --list                 # 每个模型在 E 盘缺什么；--
 - 预乘玻璃在 XPS / PMX 里留 0.25 的透明度（`ROE_GLASS_ALPHA`）是折中：两种格式都没有反光，按游戏的 0 就看不见了。
   d04 球的自发光在 Blender 里用的是游戏的 HDR 颜色，预览（Standard 显示）里看着是饱和的青色，游戏里是带泛光的白芯青绿。
 - 没有逐项复刻的部分：
-  - 眼睛着色器的其余部分：虹膜视差、角膜缘颜色 `_LimbusColor`、瞳孔大小、虹膜遮罩（只做了 `_IrisColor` 染色）；
+  - 眼睛着色器的其余部分：虹膜视差、角膜缘颜色 `_LimbusColor`、瞳孔大小、虹膜遮罩（只做了 `_IrisColor` 染色）。
+    2026-10-18 起在 Blender 里有了：插件的「2.6 游戏原版眼睛」（`roe_eye_blender.py`），见 `scripts/riseoferos/README.md`；
+    导出的 PMX / XPS 仍然是烘好的那张眼睛贴图；
   - 头发的各向异性双高光（`_PrimaryShift` / `_SecondaryShift`）；
   - 皮肤 LUT；
   - AO 乘在底色上，游戏只压间接光，所以凹处会比游戏里略暗。

@@ -29,7 +29,9 @@ from mathutils import Matrix, Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-CACHE = os.environ.get("ROE_HQ_CACHE") or r"D:\roe_exports\_hq_materials"
+import hq_cache  # noqa: E402
+
+CACHE = hq_cache.default_cache()
 
 
 def armature_of(obj):

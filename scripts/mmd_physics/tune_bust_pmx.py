@@ -29,6 +29,22 @@ physics_calibration_pmx.py checks it in MMD itself.
 
 Axes are the joint's own: X = pitch (up/down), Y = yaw (sideways), Z = twist
 about the forward axis, the way MMD reads them for a joint with rotation 0.
+``--pitch-down`` / ``--pitch-up`` give the pitch limit per side: gravity parks a
+breast without a spring on its DOWN limit, so a small down limit with a bigger
+up limit swings further without sagging further.  Which sign is down is read
+per joint from the gravity torque: the down limit goes on the PMX side
+OPPOSITE to the sign of the torque computed here.  Measured in Blender on
+10-17 (mmd_tools import, a breast body in front of / outside its joint):
+the other way round the breast parked on the bigger limit.  The likely reason:
+Bullet's 6DOF joint reads its angles as the first body (the PMX source, the
+anchor) relative to the second, i.e. the breast's own turn with the sign
+flipped; MMD runs the same Bullet joint.  MMD models tuned by their makers
+agree: in 4 models on this machine (two makers) all 104 asymmetric skirt /
+hair limits give the outward side - away from the legs or face - the big
+limit on the side against the right-hand formula.
+``--twist-down`` / ``--twist-up`` do the same about Z: a breast body that sits
+outside its joint (Vindictus: 0.36 out, 0.47 forward) also rolls OUT under
+gravity, onto that side's twist limit.
 Needs only Python and the ``pmx`` module that ships inside mmd_tools (no
 Blender); ``--pmx-module`` points at it when the search below misses.
 """
@@ -165,10 +181,16 @@ def main():
     ap.add_argument("--spring-twist", type=float, help="explicit twist spring (overrides --twist-sag)")
     ap.add_argument("--pitch-limit", type=float, default=DEFAULTS["pitch_limit"],
                     help="+- degrees (default %(default)s)")
+    ap.add_argument("--pitch-down", type=float, help="degrees it may swing down, the side gravity pulls it to "
+                                                     "(default: --pitch-limit)")
+    ap.add_argument("--pitch-up", type=float, help="degrees it may swing up (default: --pitch-limit)")
     ap.add_argument("--yaw-limit", type=float, default=DEFAULTS["yaw_limit"],
                     help="+- degrees (default %(default)s)")
     ap.add_argument("--twist-limit", type=float, default=DEFAULTS["twist_limit"],
                     help="+- degrees (default %(default)s)")
+    ap.add_argument("--twist-down", type=float, help="degrees it may roll to the side gravity rolls it to "
+                                                     "(default: --twist-limit)")
+    ap.add_argument("--twist-up", type=float, help="degrees it may roll the other way (default: --twist-limit)")
     ap.add_argument("--lin-damp", type=float, default=DEFAULTS["lin_damp"],
                     help="移動減衰 of the breast body (default %(default)s)")
     ap.add_argument("--ang-damp", type=float, default=DEFAULTS["ang_damp"],
@@ -189,7 +211,11 @@ def main():
     if not indices:
         raise SystemExit("no joint hangs a dynamic body on a breast bone (--bones %r)" % args.bones)
 
-    limits = [math.radians(v) for v in (args.pitch_limit, args.yaw_limit, args.twist_limit)]
+    sides = [(args.pitch_limit if args.pitch_down is None else args.pitch_down,
+              args.pitch_limit if args.pitch_up is None else args.pitch_up),
+             (args.yaw_limit, args.yaw_limit),
+             (args.twist_limit if args.twist_down is None else args.twist_down,
+              args.twist_limit if args.twist_up is None else args.twist_up)]
     scaled_bodies, scaled_joints = set(), set()
     for index in indices:
         joint = model.joints[index]
@@ -235,7 +261,8 @@ def main():
             max(pitch, abs(torque[2]) / math.radians(args.twist_sag))
         springs = [pitch, yaw, twist]
         freq = [math.sqrt(k / i) / (2 * math.pi) if k > 0 and i > 0 else 0.0 for k, i in zip(springs, moment)]
-        rest = [math.degrees(abs(t) / k) if k > 0 else float("inf") for t, k in zip(torque, springs)]
+        rest = [math.degrees(abs(t) / k) if k > 0 else (0.0 if abs(t) < 1e-6 else float("inf"))
+                for t, k in zip(torque, springs)]
         print("%s: body %s, mass %.2f, %d bodies hung on it (x%.2f); gravity torque pitch %.1f "
               "(its own %.1f), twist %.1f" % (joint.name, model.bones[body.bone].name, body.mass, len(extra),
                                              args.hanging_scale, abs(torque[0]), abs(own_torque[0]),
@@ -243,16 +270,26 @@ def main():
         print("   springs pitch/yaw/twist %.0f / %.0f / %.0f -> rest droop %.1f deg, roll %.1f deg;"
               " swing >= %.1f / %.1f / %.1f Hz" % (springs[0], springs[1], springs[2], rest[0], rest[2],
                                                     freq[0], freq[1], freq[2]))
-        print("   limits +-%.0f / +-%.0f / +-%.0f deg, damping %.3f / %.3f (was %.3f / %.3f, limits %s deg,"
-              " springs %s)" % (args.pitch_limit, args.yaw_limit, args.twist_limit, args.lin_damp,
-                                args.ang_damp, body.velocity_attenuation, body.rotation_attenuation,
-                                tuple(round(math.degrees(v), 1) for v in joint.maximum_rotation),
-                                tuple(round(v, 1) for v in joint.spring_rotation_constant)))
-        for axis, limit in enumerate(limits):
-            if rest[axis] > math.degrees(limit):
+        # the down limit goes on the side AGAINST the torque's sign (see the module docstring)
+        lows, highs = [], []
+        for axis, (down_deg, up_deg) in enumerate(sides):
+            side = 1.0 if torque[axis] < 0 else -1.0
+            low, high = sorted((side * math.radians(down_deg), -side * math.radians(up_deg)))
+            lows.append(low)
+            highs.append(high)
+        print("   limits pitch down %.0f / up %.0f, yaw +-%.0f, twist down %.0f / up %.0f deg (min %s max %s), "
+              "damping %.3f / %.3f (was %.3f / %.3f, limits %s..%s deg, springs %s)" % (
+                  sides[0][0], sides[0][1], args.yaw_limit, sides[2][0], sides[2][1],
+                  tuple(round(math.degrees(v), 1) for v in lows), tuple(round(math.degrees(v), 1) for v in highs),
+                  args.lin_damp, args.ang_damp, body.velocity_attenuation,
+                  body.rotation_attenuation, tuple(round(math.degrees(v), 1) for v in joint.minimum_rotation),
+                  tuple(round(math.degrees(v), 1) for v in joint.maximum_rotation),
+                  tuple(round(v, 1) for v in joint.spring_rotation_constant)))
+        for axis, (down_deg, _) in enumerate(sides):
+            if rest[axis] > down_deg:
                 print("   ! the %s spring cannot hold the body inside its limit" % AXES[axis])
-        joint.maximum_rotation = list(limits)
-        joint.minimum_rotation = [-v for v in limits]
+        joint.maximum_rotation = highs
+        joint.minimum_rotation = lows
         joint.spring_rotation_constant = springs
         body.velocity_attenuation = args.lin_damp
         body.rotation_attenuation = args.ang_damp

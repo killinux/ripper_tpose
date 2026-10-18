@@ -26,7 +26,8 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 需要：
 - mmd_tools，用来导入 PMX；
 - 某个角色**第一次**使用时，要从游戏包读材质数据，这需要装了 UnityPy 的系统 Python 和 Rise of Eros 的游戏文件，本机都有。
-  读出来的数据缓存在 `D:\roe_exports\_hq_materials\`，之后再用就不读游戏了。
+  读出来的数据缓存在 `E:\game_export\RiseOfEros\_meta\_hq_materials\`（没有这个文件夹时在 `D:\roe_exports\_hq_materials\`，
+  2026-10-17 起，见 `scripts/riseoferos/hq_cache.py`），之后再用就不读游戏了。
 
 ## 用法
 

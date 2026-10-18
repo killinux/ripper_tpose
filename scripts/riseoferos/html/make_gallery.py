@@ -981,6 +981,9 @@ def main():
         ids = {item["key"] for item in nomesh}
         nomesh = sorted(nomesh + [item for item in old_nomesh if item["key"] not in ids],
                         key=lambda item: item["key"])
+    # an id a game update gave its mesh (e11, 2026-10-17: rig-only before) has a model card now, not a no-mesh line
+    modelled = {rec["key"] for rec in records + kept if rec["kind"] == "model"}
+    nomesh = [item for item in nomesh if item["key"] not in modelled]
     page = render(manifest, records + kept, nomesh, source_root)
     with open(out_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(page)

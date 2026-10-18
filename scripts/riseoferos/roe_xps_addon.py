@@ -24,7 +24,7 @@ from bpy.types import Operator, Panel, PropertyGroup
 bl_info = {
     "name": "ROE XPS Tools",
     "author": "ripper_tpose",
-    "version": (1, 1, 16),
+    "version": (1, 1, 17),
     "blender": (3, 6, 0),
     "location": "3D View > Sidebar > ROE",
     "description": "Rise of Eros 角色: 导入 FBX / 修脸材质 / 导出 XPS",
@@ -1294,6 +1294,11 @@ class ROE_Props(PropertyGroup):
         name="虹膜内半径", default=IRIS_R_IN, min=0.01, max=0.5)
     iris_radius_outer: FloatProperty(
         name="虹膜外半径", default=IRIS_R_OUT, min=0.01, max=0.5)
+    game_eye_pupil: FloatProperty(
+        name="游戏眼睛：瞳孔大小",
+        description=("2.6 游戏原版眼睛的瞳孔：0 = 游戏展示视频里的大小（默认）；材质里存的值 a08 是 0.56、g04 是 0.76，"
+                     "游戏运行时会改它；1 = 最大"),
+        default=0.0, min=0.0, max=1.0)
     slot_role: EnumProperty(
         name="当前槽用途",
         items=(
@@ -2322,6 +2327,20 @@ class ROE_OT_export_xps(Operator):
         return {'FINISHED'}
 
 
+def _load_eye_module():
+    """roe_eye_blender.py (the game's eyeball shader as nodes): found like hq_materials_blender.py."""
+    import importlib
+    import sys
+    for folder in (os.path.dirname(os.path.abspath(__file__)), os.environ.get('ROE_SCRIPTS', ''),
+                   r'E:\code\othercode\ripper_tpose\scripts\riseoferos'):
+        if folder and os.path.isfile(os.path.join(folder, 'roe_eye_blender.py')):
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            import roe_eye_blender
+            return importlib.reload(roe_eye_blender)
+    raise RuntimeError("找不到 roe_eye_blender.py：放在插件旁边，或设置环境变量 ROE_SCRIPTS")
+
+
 def _load_hq_module():
     """hq_materials_blender.py: beside this add-on, in ROE_SCRIPTS, or in the repo."""
     import importlib
@@ -2341,7 +2360,8 @@ class ROE_OT_hq_materials(Operator):
     bl_label = "2.5 游戏原始材质（高精度）"
     bl_description = ("挂完材质后再点：身体 / 皮肤 / 脸 / 头发换成游戏自己的完整材质（法线、金属度 / 光滑度 / AO、"
                       "皮肤透光和毛孔、发色）；眼睛、睫毛、眉毛不变。材质数据用系统 Python + UnityPy 从游戏包读取，"
-                      "缓存在 D:\\roe_exports\\_hq_materials。之后导出 XPS 会带上法线 / AO / 高光贴图")
+                      "缓存在 E:\\game_export\\RiseOfEros\\_meta\\_hq_materials（没有这个文件夹时在 "
+                      "D:\\roe_exports\\_hq_materials）。之后导出 XPS 会带上法线 / AO / 高光贴图")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2381,6 +2401,52 @@ class ROE_OT_hq_materials(Operator):
         p.diagnostic_report = "游戏原始材质（%s%s）：换了 %d 个槽；保留 %d；错误 %d" % (
             report['character'], "，PMX 原地加，MMD 着色可在「ROE 游戏材质」面板切回" if pmx else "",
             len(report['upgraded']), len(report['kept']), len(report['errors']))
+        self.report({'INFO'} if not report['errors'] else {'WARNING'}, p.diagnostic_report)
+        return {'FINISHED'}
+
+
+class ROE_OT_game_eyes(Operator):
+    bl_idname = "roe.game_eyes"
+    bl_label = "2.6 游戏原版眼睛"
+    bl_description = ("眼睛换成游戏自己的眼球着色器（Pinkcore/Heros/Eye）：虹膜、眼白、虹膜遮罩、眼睑遮蔽、眼白凹凸 5 张"
+                      "游戏贴图，瞳孔缩放、角膜视差、角膜缘颜色、金属度 / 光滑度都按游戏材质的数值和游戏着色器的算法。"
+                      "PMX 和 FBX 模型都行；节点加在原材质里，「ROE 游戏材质」面板能切回 MMD 着色，导出 PMX 不受影响")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        p = context.scene.roe
+        meshes = [o for o in scene_meshes() if o.type == 'MESH' and getattr(o, 'mmd_type', 'NONE') == 'NONE']
+        if not meshes:
+            self.report({'ERROR'}, "没有模型：先导入 FBX 并挂材质（或导入 PMX）")
+            return {'CANCELLED'}
+        try:
+            hq = _load_hq_module()
+            eye = _load_eye_module()
+        except Exception as exc:
+            self.report({'ERROR'}, "游戏原版眼睛失败: %s" % exc)
+            return {'CANCELLED'}
+        names = []
+        for obj in meshes:
+            node = obj
+            while node is not None:
+                names.append(node.name)
+                node = node.parent
+        names += [os.path.basename(bpy.path.abspath(p.fbx_path)) if p.fbx_path else '',
+                  bpy.path.basename(bpy.data.filepath)]
+        stem = next((n for n in names if hq.infer_cid(n)), '')
+        try:
+            report = eye.apply(meshes, stem, pupil=p.game_eye_pupil)
+        except Exception as exc:
+            msg = str(exc)
+            if msg.startswith('cannot tell the character id'):
+                msg = "认不出角色代号：模型名、文件名、贴图名里都没有 pc_<字母><数字>（比如 pc_a08_hd）"
+            self.report({'ERROR'}, "游戏原版眼睛失败: %s" % msg)
+            return {'CANCELLED'}
+        if not report['eyes']:
+            self.report({'WARNING'}, "没找到眼睛的材质槽（%s）" % report['character'])
+            return {'CANCELLED'}
+        p.diagnostic_report = "游戏原版眼睛（%s，%s）：%d 个槽；瞳孔 %.2f；错误 %d" % (
+            report['character'], report['game'], len(report['eyes']), report['pupil'], len(report['errors']))
         self.report({'INFO'} if not report['errors'] else {'WARNING'}, p.diagnostic_report)
         return {'FINISHED'}
 
@@ -2461,6 +2527,9 @@ class ROE_PT_panel(Panel):
         layout.operator('roe.repair_eyes', icon='HIDE_OFF')
         if p.workflow_mode != 'GENERIC':
             layout.operator('roe.hq_materials', icon='SHADING_TEXTURE')
+            row = layout.row(align=True)
+            row.operator('roe.game_eyes', icon='HIDE_OFF')
+            row.prop(p, 'game_eye_pupil', text="瞳孔")
         report = layout.box()
         report.label(text="最近检查")
         for line in p.diagnostic_report.split('；')[:4]:
@@ -2508,7 +2577,7 @@ classes = (ROE_Props, ROE_OT_import_fbx, ROE_OT_apply_materials,
            ROE_OT_repair_eyes,
            ROE_OT_adopt_selection, ROE_OT_diagnose_model,
            ROE_OT_set_slot_override, ROE_OT_clear_slot_override,
-           ROE_OT_set_head_region, ROE_OT_hq_materials,
+           ROE_OT_set_head_region, ROE_OT_hq_materials, ROE_OT_game_eyes,
            ROE_OT_export_xps, ROE_OT_fix_xps_armature, ROE_PT_panel)
 
 

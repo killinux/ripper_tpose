@@ -44,8 +44,9 @@ sys.path.insert(0, HERE)
 import decode_roe_clip as dec  # noqa: E402
 import pmx_add_scale_morph as psm  # noqa: E402
 from roe_motion_common import ARCHIVE, ROE_EXPORTS, bundles, find_pmx, pmx_copies  # noqa: E402
+import hq_cache  # noqa: E402
 
-HQ_CACHE = os.path.join(ROE_EXPORTS, "_hq_materials")
+HQ_CACHE = hq_cache.default_cache(ROE_EXPORTS)
 MORPH = "武器非表示"
 MORPH_TAG = "hide weapon: "
 FRAME, FRAME_E = "武器", "Weapon"
