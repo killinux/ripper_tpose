@@ -14,9 +14,12 @@ Over the dynamic bodies of each model (breasts left out, cloth_collision_pmx.py'
 - cloth and the legs: dynamic bodies within 5 cm of a leg collider at rest that can never collide with it (group /
   mask: mmd_cloth_physics' "near" group 10 collides with nothing), and cloth starting more than 8 mm inside a
   collider it does collide with (pushed out at the first frame);
-- loose ends: a chain's last body whose cloth is glued (>= 8 shared vertices, at the far end of its bone or most of
-  what it drives besides what it shares with its parent) to a body other than its parent that it has no joint to
-  (a08's hip chains: back end glued to the hip plate, hanging from the front only).
+- loose ends: a chain's last body whose cloth is glued to another body it has no joint to - >= 8 vertices driven by
+  both and NOT by the bone above the last one (that much is the chain's own smooth skinning), at the far end of its
+  bone or most of what it drives besides; a body two joints away does not count (a joint to it would close a
+  triangle and lock the last link).  a08's hip chains: back end glued to the hip plate, hanging from the front only.
+  Until 2026-10-24 the shared vertices of the bone above were counted too, which made a link two up the chain or the
+  neighbouring chain's link above look glued (ROE scan: 817 loose ends in 166 models, 235 in 70 with the fix).
 One line per model and a total; --json keeps the bones of every fault, --csv one row per model.  Units: PMX units
 (1 = 8 cm at mmd_tools' usual 0.08 import); the printed lengths are cm.  Needs numpy and mmd_tools' pmx module, as
 cloth_collision_pmx.py.
@@ -181,32 +184,43 @@ def check(pmx, path, max_angle, bust_re):
     out["near_legs_bones"] = sorted({bname(rigids[i]) for i in near})
     out["ignoring_legs"] = [bname(rigids[i]) for i in ignoring]
     out["start_inside"] = deep
-    # loose ends: the shared vertices sit at the far end of the chain's last bone (a neighbour hanging beside it
-    # shares them along its side instead) or are most of what that bone drives
+    # loose ends, as mmd_cloth_physics' attach_loose_ends finds them: the vertices the chain's last bone shares with
+    # another body but NOT with the bone above it (that much is the chain's own smooth skinning) sit at the far end of
+    # the last bone (P70 of its own vertices along it; a neighbour hanging beside it shares cloth along its side) or
+    # are most of what it drives besides; a body two joints away is no loose end (a joint would weld the last link)
     children = Counter(parent[i] for i in dyn if parent[i] is not None)
     loose = []
     for i in dyn:
         if children.get(i):
             continue
         a = rigids[i].bone
-        up = rigids[parent[i]].bone if parent.get(i) is not None else None
-        own = driven[a] - (shared.get((min(a, up), max(a, up)), 0) if up is not None and up >= 0 else 0)
-        head, tail = bone_ends(bones, a)
-        seg = tail - head
+        up = bones[a].parent if bones[a].parent is not None and 0 <= bones[a].parent < len(bones) else None
+        above = set(where[(min(a, up), max(a, up))]) if up is not None else set()
+        own = driven[a] - len(above)
+        head = bone_ends(bones, a)[0]
+        seg = bone_direction(bones, a, dset_bones)
         if seg @ seg < 1e-8:
             continue
+        d = seg / np.linalg.norm(seg)
+        mine = (co[strongest == a] - head) @ d
+        far = float(np.percentile(mine, 70)) if len(mine) >= 5 else 0.7 * float(np.linalg.norm(seg))
+        close = set(joined[i])
+        for k in list(close):
+            close |= joined[k]
         best = None
         for k, r in enumerate(rigids):
-            if k == i or k == parent.get(i) or k in joined[i] or r.bone is None or r.bone < 0 or r.bone == a:
+            if k == i or k == parent.get(i) or k in close or r.bone is None or r.bone < 0 or r.bone == a:
                 continue
             if k not in dset and (k not in colliders or cc.CLASS_OF[bname(r)] != "torso"):
                 continue                                   # a hem weighted onto a limb / the head follows it by skin
             key = (min(a, r.bone), max(a, r.bone))
-            n = shared.get(key, 0)
+            if shared.get(key, 0) < GLUED:
+                continue
+            pts = [v for v in where[key] if v not in above]
+            n = len(pts)
             if n < GLUED or (best is not None and n <= best[1]):
                 continue
-            t = float((co[where[key]].mean(0) - head) @ seg / (seg @ seg))
-            if t > 0.8 or n >= 0.5 * own:
+            if float((co[pts].mean(0) - head) @ d) >= far or n >= 0.5 * own:
                 best = (r.name, n)
         if best:
             loose.append((bname(rigids[i]),) + best)

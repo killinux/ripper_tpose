@@ -176,22 +176,32 @@ class SkinIndex:
         b = self.bone_ids.get(name)
         return self.co[self.strongest == b] if b is not None else np.zeros((0, 3))
 
-    def shared_points(self, a, b, weight_min=0.05):
-        """World positions of the vertices both bones drive."""
-        ia, ib = self.bone_ids.get(a), self.bone_ids.get(b)
-        if ia is None or ib is None:
-            return np.zeros((0, 3))
-        va = self.vv[(self.vb == ia) & (self.vw > weight_min)]
-        vb = self.vv[(self.vb == ib) & (self.vw > weight_min)]
-        return self.co[np.intersect1d(va, vb)]
+    def driven(self, name, weight_min=0.05, without=None):
+        """Indices of the vertices ``name`` drives (> ``weight_min``), less those bone ``without`` drives too."""
+        b = self.bone_ids.get(name)
+        if b is None:
+            return np.zeros(0, dtype=np.int64)
+        m = self.vw > weight_min
+        mine = np.unique(self.vv[m & (self.vb == b)])
+        w = self.bone_ids.get(without) if without is not None else None
+        return mine if w is None else np.setdiff1d(mine, self.vv[m & (self.vb == w)])
 
-    def shared_counts(self, name, weight_min=0.05):
-        """Bone name -> how many vertices it drives (> ``weight_min``) that ``name`` drives too - one pass."""
+    def shared_points(self, a, b, weight_min=0.05, without=None):
+        """World positions of the vertices both bones drive (less those bone ``without`` drives too)."""
+        ib = self.bone_ids.get(b)
+        if ib is None or a not in self.bone_ids:
+            return np.zeros((0, 3))
+        vb = self.vv[(self.vb == ib) & (self.vw > weight_min)]
+        return self.co[np.intersect1d(self.driven(a, weight_min, without), vb)]
+
+    def shared_counts(self, name, weight_min=0.05, without=None):
+        """Bone name -> how many vertices it drives (> ``weight_min``) that ``name`` drives too - one pass; ``without``:
+        not counting the vertices that bone drives as well."""
         b = self.bone_ids.get(name)
         if b is None:
             return {}
         m = self.vw > weight_min
-        mine = np.unique(self.vv[m & (self.vb == b)])
+        mine = self.driven(name, weight_min, without)
         hit = m & np.isin(self.vv, mine) & (self.vb != b)
         ids, counts = np.unique(self.vb[hit], return_counts=True)
         return {self.bone_names[i]: int(c) for i, c in zip(ids.tolist(), counts.tolist())}

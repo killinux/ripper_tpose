@@ -492,10 +492,14 @@ def joined_pairs():
 
 
 def attach_loose_ends(model, arm, garments, options, log=None):
-    """A chain whose last piece of cloth is sewn onto another body (>= GLUED vertices driven by both, at the far
-    end of the last bone or most of what it drives) hangs from that body too: Inase a08's hip chains are glued to
-    the hip plate at their back end but hung from their front end only, so the back end swung free and tore the
-    mesh.  The new joint has the chain's own last limits, at the shared vertices.  Returns the number added."""
+    """A chain whose last piece of cloth is sewn onto another body (>= GLUED vertices driven by both and NOT by the
+    bone above the last one, at the far end of the last bone or most of what it drives besides) hangs from that body
+    too: Inase a08's hip chains are glued to the hip plate at their back end but hung from their front end only, so
+    the back end swung free and tore the mesh.  What the last bone shares with the bone above is left out because
+    that is the chain's own smooth skinning: counted, it made a link two up the chain or the neighbouring chain's
+    link above look "glued" in nine chains out of ten (0.2.0).  Nor is a body two joints away ever tied on: the new
+    joint would close a triangle and weld the last link.  The new joint has the chain's own last limits, at the
+    shared vertices.  Returns the number added."""
     skin = options.get("skin")
     chain_joints = options.get("chain_joints", {})
     if skin is None:
@@ -503,6 +507,12 @@ def attach_loose_ends(model, arm, garments, options, log=None):
     bones = arm.data.bones
     have = existing_rigids()
     joined = joined_pairs()
+    near = {}                                              # rigid body -> the bodies one joint away
+    for pair in joined:
+        if len(pair) == 2:
+            a, b = pair
+            near.setdefault(a, set()).add(b)
+            near.setdefault(b, set()).add(a)
     added = 0
     for garment in garments:
         if not garment.enabled:
@@ -517,24 +527,26 @@ def attach_loose_ends(model, arm, garments, options, log=None):
             d = np.array(vec.normalized())
             own = (skin.strong_points(leaf) - np.array(head)) @ d
             far = float(np.percentile(own, 70)) if len(own) >= 5 else vec.length * 0.7
-            parent_bone = bones[leaf].parent
-            counts = skin.shared_counts(leaf)
-            driven = len(skin.points(leaf, 0.05)) - (counts.get(parent_bone.name, 0) if parent_bone is not None else 0)
+            up = bones[leaf].parent.name if bones[leaf].parent is not None else None
+            counts = skin.shared_counts(leaf, without=up)
+            driven = len(skin.driven(leaf, without=up))
+            close = set(near.get(rigid.name, ()))
+            for n in list(close):
+                close |= near.get(n, set())
             best = None
             for other, count in sorted(counts.items(), key=lambda kv: -kv[1]):
                 body = have.get(other)
                 if count < GLUED or (best is not None and count <= best[1]):
                     break
-                if body is None or other == leaf or body.name == info["parent"] \
-                        or frozenset((body.name, rigid.name)) in joined:
+                if body is None or other == leaf or body.name == info["parent"] or body.name in close:
                     continue
                 part = collide.CLASS_OF.get(collide.name_j(arm, body))
                 if str(body.mmd_rigid.type) == "0" and part not in (None, "torso"):
                     continue                       # a hem weighted onto a leg / arm follows it by skin already
-                pts = skin.shared_points(leaf, other)
+                pts = skin.shared_points(leaf, other, without=up)
                 # glued: at the far end of the last bone (a neighbour hanging beside it shares cloth along its
-                # side), or most of what the last bone drives besides the cloth it shares with its parent (a08's
-                # hip chain: 30 vertices, 18 shared with the link above, the other 12 all with the hip plate)
+                # side), or most of what the last bone drives besides the cloth it shares with the bone above
+                # (a08's hip chain: 30 vertices, 18 shared with the link above, the other 12 all with the hip plate)
                 if float((pts.mean(0) - np.array(head)) @ d) >= far or len(pts) >= 0.5 * driven:
                     best = (body, len(pts), pts.mean(0))
             if best is None:
@@ -548,7 +560,8 @@ def attach_loose_ends(model, arm, garments, options, log=None):
                 spring_linear=(0.0, 0.0, 0.0), spring_angular=(info["spring"],) * 3,
                 name="A.%s-%s" % (body.mmd_rigid.name_j or body.name, leaf))
             joint[TAG] = garment.name
-            joined.add(frozenset((body.name, rigid.name)))
+            near.setdefault(body.name, set()).add(rigid.name)
+            near.setdefault(rigid.name, set()).add(body.name)
             added += 1
             if log:
                 log("  %s: last piece glued to %s (%d shared vertices) - joined there too"
