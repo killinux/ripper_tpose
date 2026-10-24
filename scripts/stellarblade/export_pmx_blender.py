@@ -47,13 +47,26 @@ What is Eve-specific, done here before / after that sequence:
     For MMD's renderer the eyeball stops receiving/casting self-shadow (the lids darkened
     it), gets an additive sphere map for a catch-light (the UE eye relied on specular and
     a normal map, neither of which MMD has), and a baked texture that is fully transparent
-    (EyeLight_Inst) becomes alpha 0 instead of an invisible card over the eyes;
+    (EyeLight_Inst) becomes alpha 0 instead of an invisible card over the eyes.  The iris is
+    rebuilt from the game's material values before the bake (rewire_eyes, eye_material.py):
+    the archived .blend files drew it at 40% of the game's width.  The values are Eve's
+    MI_EyeRefractive1 unless the character's own eye instance is given - --hq-materials'
+    "eyes" / "eye" (hq_materials.py) or --eye-mi <its CUE4Parse JSON>; a material named like
+    such an instance counts as an eyeball too (eye bones, catch-light), whatever its name says;
+    --keep-eye leaves the .blend's eye network as it is;
   * the face is a MetaHuman-style head with the 52 ARKit blendshapes and no face bones,
     so expressions are real VERTEX morphs: the standard MMD set (まばたき, あいうえお,
     笑い, ウィンク, 眉 ...) is mixed from ARKit shapes (RECIPES below), and the ARKit
-    shapes themselves are exported too, under 'other'.
+    shapes themselves are exported too, under 'other';
+  * some outfits hang a cord or a tab off a UE arm helper (Ab-L-Deltoid, Ab-L-UpperArm-Tw0)
+    and mmd_cloth_physics made the helper itself the first swinging link - with the
+    sleeve on it; anchor_skin_helpers() makes such a root follow its bone;
+  * --hq-materials <materials.json> (hq_materials.py): the game's colour x AO (+ emissive)
+    at full size replaces each listed base colour, and a material with a clear-coat mask
+    is split after the write into a matte part and a glossy ``_gloss`` part (split_gloss).
 
 blender -b <Eve_*.blend> --python export_pmx_blender.py -- --out <dir> [--name <stem>]
+    [--hq-materials <materials.json>] [--eye-mi <MI_*Eye*.json> ...] [--keep-eye]
 Prints SB_PMX_REPORT={json}.
 """
 import argparse
@@ -76,6 +89,8 @@ sys.path.insert(0, os.path.join(REPO, "scripts", "blender_addons"))     # mmd_cl
 # translucent helper shell" - the same answers the XPS export uses, so reuse them
 B2X = os.environ.get("BLENDER2XPS", os.path.join(os.path.dirname(os.path.dirname(REPO)), "blender2xps"))
 sys.path.insert(0, B2X)
+sys.path.insert(0, HERE)                                                 # eye_material
+import eye_material  # noqa: E402
 
 # MMD morph = mix of ARKit shapes.  Categories: EYE / EYEBROW / MOUTH (PMX panel groups).
 RECIPES = [
@@ -174,6 +189,11 @@ def prepare_eve(arm, meshes):
 
 
 EYE_MAT_RE = re.compile(r"eye.*refract|eyeball", re.IGNORECASE)
+EYE_NAMES = set()           # the character's M_EyeRefractive instances (--hq-materials "eyes", --eye-mi)
+
+
+def is_eye_material(name):
+    return bool(EYE_MAT_RE.search(name)) or eye_material.base_name(name) in EYE_NAMES
 
 
 def add_eye_bones(arm, meshes):
@@ -190,7 +210,7 @@ def add_eye_bones(arm, meshes):
     made = []
     for mesh in meshes:
         slots = [i for i, sl in enumerate(mesh.material_slots)
-                 if sl.material and EYE_MAT_RE.search(sl.material.name)]
+                 if sl.material and is_eye_material(sl.material.name)]
         if not slots:
             continue
         verts = set()
@@ -364,6 +384,27 @@ def _principled_color(mat):
     return (c[0], c[1], c[2])
 
 
+def rewire_eyes(meshes, eyes=None, default=None, roots=()):
+    """An archived .blend carries the eye network of its export day (before 2026-10-17: iris radius 0.07, 40% of
+    the game's width; before 10-18: no IrisHueTint); rebuild the eye colour from the game's values
+    (eye_material.py) before the bake, so every PMX gets the game's iris without re-exporting the .blend.
+    eyes = {instance name: eye record}: a material of that name gets its values and textures (loaded from the
+    record / found under roots when the material lacks them); another eye material gets default (None = Eve's)."""
+    done, seen = [], set()
+    for obj in meshes:
+        for slot in obj.material_slots:
+            mat = slot.material
+            if mat is None or mat.name in seen or not is_eye_material(mat.name):
+                continue
+            seen.add(mat.name)
+            own = (eyes or {}).get(eye_material.base_name(mat.name))
+            load = (lambda path: bpy.data.images.load(path, check_existing=True)) if own else None
+            what = eye_material.rewire_eye(mat, own or default, roots, load)
+            if what:
+                done.append("%s: %s" % (mat.name, what))
+    return done
+
+
 def bake_node_colours(meshes, tex_dir):
     """Bake every material whose colour is computed by nodes (hair root/tip mixes over a
     strand mask, the procedural iris ...) to a plain RGBA texture.
@@ -397,6 +438,157 @@ def bake_node_colours(meshes, tex_dir):
             if b2m.save_rgba_png(path, tex.width, tex.height, tex.rgba):
                 out[mat.name] = (path, float((tex.rgba[:, 3] < 0.5).mean()), tex.width)
     return out
+
+
+def apply_hq_colours(meshes, hq):
+    """--hq-materials: each listed material's base-colour image becomes its ``_pmx`` colour from
+    hq_materials.py (the game's base colour x AO + emissive, full size), so mmd_tools writes
+    that one texture.  Returns the material names."""
+    done = set()
+    for obj in meshes:
+        for slot in obj.material_slots:
+            mat = slot.material
+            if mat is None or mat.name not in hq or not (hq[mat.name].get("pmx") or {}).get("file"):
+                continue
+            p = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None) if mat.use_nodes else None
+            link = next((l for l in p.inputs["Base Color"].links if l.from_node.type == "TEX_IMAGE"), None) \
+                if p is not None else None
+            if link is None:
+                continue
+            link.from_node.image = bpy.data.images.load(hq[mat.name]["pmx"]["file"], check_existing=True)
+            done.add(mat.name)
+    return sorted(done)
+
+
+# MMD values of the glossy part (the game's clear-coat mask): latex-like - a crisp Phong highlight and an
+# additive sphere map for the sheen the clear coat gives in the engine
+GLOSS = {"specular": (0.55, 0.55, 0.55), "shininess": 60.0, "threshold": 0.5}
+
+
+def gloss_sphere(tex_dir, size=256):
+    """An additive MMD sphere map for a coated surface: a broad soft sheen from up-left plus a
+    tighter spot inside it (sphere maps are indexed by the view-space normal)."""
+    import numpy as np
+
+    path = os.path.join(tex_dir, "gloss_sph.png")
+    if os.path.isfile(path):
+        return path
+    os.makedirs(tex_dir, exist_ok=True)
+    v, u = np.mgrid[0:size, 0:size].astype(np.float32) / (size - 1)
+    img = np.zeros((size, size), np.float32)
+    for cu, cv, sigma, peak in ((0.40, 0.34, 0.16, 0.22), (0.40, 0.34, 0.05, 0.30)):
+        img += peak * np.exp(-((u - cu) ** 2 + (v - cv) ** 2) / (2 * sigma * sigma))
+    rgba = np.ones((size, size, 4), np.float32)
+    rgba[..., 0] = rgba[..., 1] = rgba[..., 2] = np.clip(img, 0.0, 1.0)
+    image = bpy.data.images.new("gloss_sph", size, size, alpha=False)
+    image.pixels.foreach_set(np.ascontiguousarray(rgba[::-1]).ravel())   # rows run bottom-up
+    image.filepath_raw = path
+    image.file_format = "PNG"
+    image.save()
+    return path
+
+
+def _mask_channel(path, channel):
+    """(H, W) float array of one channel of a mask PNG, row 0 = the top (PMX v = 0)"""
+    import numpy as np
+
+    img = bpy.data.images.load(path, check_existing=True)
+    img.colorspace_settings.name = "Non-Color"
+    w, h = img.size
+    px = np.empty(w * h * 4, np.float32)
+    img.pixels.foreach_get(px)
+    return px.reshape(h, w, 4)[::-1, :, "RGBA".index(channel)]
+
+
+def _box_blur(a, r):
+    """mean over a (2r+1)^2 window (edges repeated), same shape"""
+    import numpy as np
+
+    k = 2 * r + 1
+    p = np.pad(np.pad(a.astype(np.float64), r, mode="edge"), ((1, 0), (1, 0)))
+    c = p.cumsum(0).cumsum(1)
+    return ((c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]) / (k * k)).astype(np.float32)
+
+
+def split_gloss(pmx_path, hq, tex_dir):
+    """--hq-materials, after the PMX is written: a material with a clear-coat mask (the game's
+    ``Shading_ClearCoat_CH`` channel of its ``MaterialLayerMask``) is split in two - the faces
+    whose UV centre lies in the coated part go to ``<name>_gloss`` right after it (before any
+    decal drawn over it) with GLOSS values and an additive sphere map, the rest stay matte.
+    Returns 'name: gloss / matte faces' lines."""
+    import numpy as np
+    from mmd_tools.core import pmx as pmxmod
+
+    model = pmxmod.load(pmx_path)
+    uv = np.array([v.uv for v in model.vertices], dtype=np.float64)
+    faces = list(model.faces)
+    out, report, start = [], [], 0
+    new_faces = []
+    sphere_index = None
+    for mat in model.materials:
+        n = mat.vertex_count // 3
+        block = faces[start:start + n]
+        start += n
+        d = hq.get(mat.name) or {}
+        mask_path = (d.get("textures") or {}).get("layer_mask")
+        if "clearcoat" not in d or not mask_path or str(mask_path).startswith("MISSING"):
+            out.append(mat)
+            new_faces += block
+            continue
+        mask = _mask_channel(mask_path, d["clearcoat"]["channel"])
+        # the mask draws the seams as thin grey lines: faces centred on one went matte and speckled the
+        # coated suit; blurred over 1/256 of the map they vanish while socks / shoes stay matte (Cooling
+        # Suit: the suit block 2.75 % -> 0.86 % below one half, the whole map 24.6 -> 23.3 %)
+        mask = _box_blur(mask, max(2, mask.shape[0] // 256))
+        h, w = mask.shape
+        tri = np.array(block, dtype=np.int64)
+        c = uv[tri].mean(axis=1)
+        col = np.clip((c[:, 0] % 1.0) * w, 0, w - 1).astype(np.int64)
+        row = np.clip((c[:, 1] % 1.0) * h, 0, h - 1).astype(np.int64)
+        gloss = mask[row, col] > GLOSS["threshold"]
+        matte_faces = [f for f, g in zip(block, gloss) if not g]
+        gloss_faces = [f for f, g in zip(block, gloss) if g]
+        if not gloss_faces:
+            out.append(mat)
+            new_faces += block
+            continue
+        if sphere_index is None:
+            tex = pmxmod.Texture()
+            tex.path = gloss_sphere(tex_dir)
+            model.textures.append(tex)
+            sphere_index = len(model.textures) - 1
+        g = pmxmod.Material()
+        for attr in ("diffuse", "ambient", "is_double_sided", "enabled_drop_shadow", "enabled_self_shadow_map",
+                     "enabled_self_shadow", "enabled_toon_edge", "edge_color", "edge_size", "texture",
+                     "is_shared_toon_texture", "toon_texture", "comment"):
+            setattr(g, attr, getattr(mat, attr))
+        g.name, g.name_e = mat.name + "_gloss", (mat.name_e or mat.name) + "_gloss"
+        g.specular, g.shininess = list(GLOSS["specular"]), GLOSS["shininess"]
+        g.sphere_texture, g.sphere_texture_mode = sphere_index, 2            # add
+        mat.vertex_count, g.vertex_count = 3 * len(matte_faces), 3 * len(gloss_faces)
+        if matte_faces:
+            out.append(mat)
+        out.append(g)
+        new_faces += matte_faces + gloss_faces
+        report.append("%s: %d gloss / %d matte faces" % (mat.name, len(gloss_faces), len(matte_faces)))
+    if not report:
+        return []
+    remap = {}
+    old_names = [m.name for m in model.materials]
+    for i, m in enumerate(out):
+        if m.name in old_names:
+            remap[old_names.index(m.name)] = i
+    for morph in model.morphs:                     # material morphs name materials by index
+        for o in morph.offsets:
+            if type(o).__name__ == "MaterialMorphOffset" and o.index in remap:
+                o.index = remap[o.index]
+    model.materials, model.faces = out, new_faces
+    tmp = pmx_path + ".gloss.tmp"
+    # the header's UV count must match what every vertex writes (mmd_tools' writer gives Eve one extra UV;
+    # save() defaults to none and the vertices then run into each other)
+    pmxmod.save(tmp, model, add_uv_count=max((len(v.additional_uvs) for v in model.vertices), default=0))
+    os.replace(tmp, pmx_path)
+    return report
 
 
 def catchlight_sphere(tex_dir, size=256):
@@ -453,7 +645,7 @@ def fix_pmx_materials(meshes, baked, tex_dir):
                 mm.alpha = 0.0                        # nothing to draw (EyeLight_Inst)
                 report["shells"].append(mat.name + " (fully transparent bake)")
                 continue
-            if EYE_MAT_RE.search(mat.name):
+            if is_eye_material(mat.name):
                 # MMD: the lids would shade the eyeball, and the UE eye got its life from
                 # specular + a normal map; a sphere map is how MMD eyes get a catch-light
                 mm.enabled_self_shadow = False
@@ -467,7 +659,7 @@ def fix_pmx_materials(meshes, baked, tex_dir):
             if mat.name in baked:
                 path, cut, size = baked[mat.name]
                 FnMaterial(mat).create_texture(path)
-                if cut > 0.02 and not EYE_MAT_RE.search(mat.name):   # strand cards: both sides
+                if cut > 0.02 and not is_eye_material(mat.name):     # strand cards: both sides
                     mm.is_double_sided = True
                 if "hair" in mat.name.lower():
                     mm.specular_color = (0.3, 0.3, 0.3)
@@ -606,6 +798,46 @@ def anchor_hub_roots(arm):
     return fixed
 
 
+SKIN_HELPER_RE = re.compile(r"^Ab-[LR]-")
+
+
+def anchor_skin_helpers(arm, meshes, ratio=3.0, min_weight=100.0):
+    """A chain whose root is a UE skin helper must hang from it, not swing it.
+
+    Some outfits hang small pieces off the arm helpers - the Cooling Suit (CH_P_EVE_Nikke_06)
+    has a cord under ``Ab-L-Deltoid`` (``Ab-L-Deltoid-Fr-String01/02``) and a tab under
+    ``Ab-L-UpperArm-Tw0`` (``Ab-AxupL01 / 02K``).  mmd_cloth_physics took each as a three-link
+    strand starting AT the helper, so the helper - carrying the jacket's shoulder (629) and
+    upper sleeve (885) against 98 / 110 for the pieces - swung loose and the sleeve with it.
+    Rule: a dynamic chain root (parent static or body-less) on an ``Ab-L-`` / ``Ab-R-`` bone
+    whose skin outweighs everything below it ``ratio`` times becomes mode 0 (bone follow).
+    Returns 'bone (own / below)' lines."""
+    weight = {}
+    for ob in meshes:
+        names = {g.index: g.name for g in ob.vertex_groups}
+        for v in ob.data.vertices:
+            for g in v.groups:
+                if g.weight > 0:
+                    weight[names[g.group]] = weight.get(names[g.group], 0.0) + g.weight
+    bodies = [o for o in bpy.context.scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
+    by_bone = {o.mmd_rigid.bone: o for o in bodies if o.mmd_rigid.bone}
+    fixed = []
+    for o in bodies:
+        rb = o.mmd_rigid
+        bone = arm.data.bones.get(rb.bone or "")
+        if rb.type == "0" or bone is None or not SKIN_HELPER_RE.match(bone.name):
+            continue
+        parent_body = by_bone.get(bone.parent.name) if bone.parent else None
+        if parent_body is not None and parent_body.mmd_rigid.type != "0":
+            continue
+        own = weight.get(bone.name, 0.0)
+        below = sum(weight.get(c.name, 0.0) for c in bone.children_recursive)
+        if own >= min_weight and own >= ratio * below:
+            rb.type = "0"
+            fixed.append("%s (%.0f / %.0f)" % (bone.name, own, below))
+    return fixed
+
+
 def _body_core(obj):
     """(segment start, segment end, radius) of a rigid body in world space.  mmd_tools
     builds capsules along local Z with size = (radius, cylinder height); a box counts as
@@ -667,7 +899,25 @@ def main():
     ap.add_argument("--name", default="")
     ap.add_argument("--model-name", default="", help="name shown in MMD (default: --name)")
     ap.add_argument("--comment", default="", help="model comment (credits / source)")
+    ap.add_argument("--hq-materials", default="",
+                    help="materials.json from hq_materials.py: game colours (x AO, + emissive), the glossy split and "
+                         "the character's eye")
+    ap.add_argument("--eye-mi", action="append", default=[],
+                    help="CUE4Parse JSON of the character's M_EyeRefractive instance (the first one is also the "
+                         "default for an eye material of another name); default: --hq-materials' eye, else Eve's")
+    ap.add_argument("--keep-eye", action="store_true", help="leave the .blend's eye network as it is")
     args = ap.parse_args(argv)
+    doc = json.load(open(args.hq_materials, encoding="utf-8")) if args.hq_materials else {}
+    hq = doc.get("materials") or {}
+    eyes, default_eye = dict(doc.get("eyes") or {}), doc.get("eye")
+    for i, mi_path in enumerate(args.eye_mi):
+        eye = eye_material.eye_from_mi_json(mi_path)
+        eyes[eye["material"]] = eye
+        if i == 0:
+            default_eye = eye
+    EYE_NAMES.update(eyes)
+    eye_roots = [os.path.dirname(os.path.abspath(p)) for p in [args.hq_materials] + args.eye_mi if p]
+    eye_roots += [os.path.dirname(bpy.data.filepath), eye_material.SHARED_TEXTURES]
 
     roe = load_worker()
     scene = bpy.context.scene
@@ -685,6 +935,10 @@ def main():
     report = {"name": name, "pmx": path}
     if os.path.isdir(out_dir):                      # a generated folder: start clean, no stale textures
         shutil.rmtree(out_dir)
+    if hq:
+        report["hq_colours"] = apply_hq_colours(meshes, hq)
+    report["eyes_rewired"] = ("kept (--keep-eye)" if args.keep_eye else
+                              rewire_eyes(meshes, eyes, default_eye, eye_roots))
     baked = bake_node_colours(meshes, os.path.join(out_dir, "textures"))
     report.update(prepare_eve(arm, meshes))
 
@@ -722,6 +976,7 @@ def main():
     report["retired_helpers"] = sorted(weighted_before - weighted_bones(meshes) - slot_names)
     report["dropped_marker_physics"] = drop_marker_physics()
     report["anchored_hub_roots"] = anchor_hub_roots(arm)
+    report["anchored_skin_helpers"] = anchor_skin_helpers(arm, meshes)
     report["released_rest_overlaps"] = release_rest_overlaps()
     report["bust_physics"] = add_breast_physics(root, arm, meshes)
     report["rigid_bodies"] = sum(1 for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY")
@@ -755,6 +1010,8 @@ def main():
     bpy.ops.mmd_tools.export_pmx(filepath=path, scale=12.5, copy_textures=True, log_level="ERROR")
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         raise RuntimeError("PMX not written: %s" % path)
+    if hq:
+        report["gloss_split"] = split_gloss(path, hq, os.path.join(out_dir, "textures"))
     report["grant_order_violations"] = roe.verify_grant_order(path)
     report["bytes"] = os.path.getsize(path)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out_dir, name + "_converted.blend"))

@@ -264,6 +264,77 @@ python scripts\clothes_burst\pmx_place_prop.py pc_a08_hd_full_fixed.pmx out.pmx 
 - 舞蹈 VMD 不动「全ての親」，剑的骨骼挂在它下面，所以整段舞剑都插在原地。跟拍镜头会把这些骨骼算进画面宽度，剑放得越远
   镜头退得越远：放在 52 cm 处只退了 2.5%（6.05 → 6.2 m），剑整个在画面里；剑在身后 20 cm，手臂侧平举也碰不到它。
 
+## `pmx_layers.py`：几层衣服叠在一个 PMX 里（10-18）
+
+同一个角色的几套衣服叠在一个模型里，一次只显示一层，以后可以一层一层地爆：外层 → 里面那件 → …… → 裸体。
+
+```
+python pmx_layers.py <外层.pmx> --outer "<外层衣服材质>" [--outer-name A]
+                     --layer <层名> <里层.pmx> "<从它拿的材质>" [--layer ...]   # 由外到里
+                     --out <合并.pmx> [--model-name "..."] [--stow 0.1]
+```
+
+- **外层模型是底子**：骨骼、头、头发、表情、刚体和关节都用它的，一点不改。
+- **每个里层只拿列出的材质**：它的衣服、它自己露出的皮肤，或者整个裸体。拿法就是 `pmx_add_nude.add_nude()`：
+  - 骨骼按名字对；
+  - 两套骨架不一样的地方，网格摆到外层的骨架上（四肢的根挪到外层的关节上）；
+  - 保留模型自己的游戏权重：不做 SDEF，不清手指上的杂权重；
+  - 骨架完全一样时连法线也原样保留。按表面重算会把退化顶点翻过去（Reika B 的肚脐，90°）。
+- **材质顺序**：里层排在外层衣服后面，由外到里。
+- **重名**：和已有材质重名的加 `_<层名>`。材质备注里写着 `layer=<层>`，改过名的再加 `; source=<原名>`。
+- **开关**：一次只显示一层，里层不会从外层底下穿出来，也不会闪面。
+  - 里层的材质在文件里透明度 0（边缘线透明度也是 0），所以一打开穿的是外层。
+  - 表情面板里只有「步骤」滑块：`1_<外层>脱ぎ`、`2_<第一个里层>脱ぎ` ……
+    - 按顺序拉到 1，拉上去的不用放回；全部拉到 1 = 最里面那层；
+    - 第 k 步脱掉第 k 层、穿上第 k+1 层。
+  - 每一步由三个零件组成。零件不在显示框里，VMD 照样能用：
+    - `<外层>非表示`（材质表情，外层）：透明度 × 0；
+    - `<层>消去`（材质表情，里层）：把它上一步加上的透明度再减掉，1 − 1 = 0。
+      MMD 算材质表情是「底色 × 乘算 + 加算」，加上去的透明度没法用乘算抹掉；
+    - `<层>収納`（顶点表情）：这层往它跟随的标准骨骼（腿、臂、脊椎、手指、胸）的中轴收到 10%，收进身体里面；
+    - `<下一层>表示`（材质表情）：把下一层的透明度加回来。
+- **为什么要收进身体**：第一版用的是「每层一个状态滑块」，用户把 B 和裸体两个状态同时开着，B 的袖子、长筒袜就盖住了裸体的胳膊和腿。
+  - 改成步骤以后不用把滑块放回去；
+  - 收进身体还让 Blender 里藏起来的层不再贴着皮肤画细线；
+  - 顺序拉反了，那层也是在身体里面，而不是以负的透明度留在皮肤上。
+  - 第一次试着往辅助骨的线段上收，结果靴子、长筒袜有几块露在小腿上（辅助骨有的就贴着皮肤）。现在只往标准骨骼的中轴收，辅助骨用它上面的标准骨骼。
+- **一层一层爆衣**（10-24 做好了，爆衣插件 2.1）：每一段打这一个步骤滑块，这一层的碎片飞出去、下一层出现。
+  见下面「然后：爆衣」。
+- **表情名会写进 VMD**（Shift-JIS，最多 15 字节），层名要短，而且是 Shift-JIS 里有的字（A、B、裸体）。
+
+**Gantz Reika（2026-10-18）**：`E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_Layers\`
+
+```
+python pmx_layers.py E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_A\Eve_Mod_GantzReika_A.pmx --outer "SuitA_Body,SuitA_Mesh" ^
+    --layer B E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_B\Eve_Mod_GantzReika_B.pmx "EveSKin,SuitB,SuitA_Body" ^
+    --layer 裸体 E:\game_export\StellarBlade\Eve\pmx\Nude_Barefoot\Eve_Nude_Barefoot.pmx "SkinEve" ^
+    --out E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_Layers\Eve_Mod_GantzReika_Layers.pmx --model-name "Eve Gantz Reika A+B+裸体"
+```
+
+- 面板里的滑块：`1_A脱ぎ`（A → B）、`2_B脱ぎ`（B → 裸体）。
+  - 零件：`A非表示`、`A収納`、`B表示`、`B消去`、`B収納`、`裸体表示`。
+  - 收进身体的距离：A 中位 4.8 cm，B 5.9 cm。
+- 规模：167029 个顶点，19 个材质，288 根骨骼，87 个表情，56 个刚体，17.4 MB。
+- 核对：
+  - A 的部分（顶点、材质、骨骼、刚体、关节、原来的 79 个表情）和原版一样；
+  - B 那层逐顶点等于原版 B；
+  - 贴图都在。
+- 三种状态都渲染看过：正面、背面、手脚，以及深蹲、劈腿、抬手。裸体身上没有 B 的东西露出来。
+- 裸体（EveOriginalProportions 赤足 mod）的胯和腿，比 Reika 的骨架高 1.1 cm。在 UE 里就是这样：mod 网格的绑定姿势不同。
+  - 摆到 A 的骨架上以后，腿挪了约 1.1 cm，腰以上最多 2.4 mm；
+  - 深蹲、劈腿、抬手时和原版裸体 PMX 一样。
+- **Blender 里（mmd_tools 导入）有一个显示问题，MMD 没有**：
+  - mmd_tools 给所有材质用 Alpha Hashed。被藏的层贴着正在显示的层，交界处 EEVEE 会画出细黑线。
+    - 现在只剩 B 状态的肚子、大腿：藏起来的裸体就贴在 B 的皮肤下面；
+    - 脱下的层已经收进身体，裸体状态手腕上的黑圈没了。
+  - 只有被藏的那层改成 Alpha Blend 才消失。改成 Alpha Clip，或者换成全透明材质，都还在。
+  - 所有层统一改成 Blend 加「不显示背面」不行：藏起来的 A 的深度预渲染会把 B 和裸体遮掉。
+  - **10-24 修了，在剑星游戏材质插件里**（0.2）：插件按表情滑块算出每个层材质现在的透明度，藏起来的层换成 Blend、
+    显示背面（不做深度预渲染）、不投影、不做次表面散射，显示出来再换回原来的设置——游戏材质和 MMD 着色两种显示都管。
+    只用 mmd_tools、不装这个插件时细线还在。
+- **剑星游戏材质插件**（10-24 起适配）：每层从自己的高清 .blend 拿材质（A、B 的、裸体的 `Eve_Nude_Barefoot_HQ.blend`），
+  头、头发、眼睛跟外层；游戏材质的透明度乘上 MMD 的透明度，步骤滑块照样藏层、换层。见那个插件的 README。
+
 ## 然后：爆衣
 
 ```
@@ -271,6 +342,20 @@ blender -b --factory-startup --python scripts\riseoferos\burst_pmx_blender.py --
 ```
 
 衣服按 `衣服非表示_材質` 认。也可以在 Blender 里用插件面板，见 `docs/clothes-burst-tutorial.md` 例 5。
+
+**分层模型一层一层爆**（10-24，爆衣插件 2.1）：插件认得 `pmx_layers.py` 的步骤滑块，每层的衣服各切一份碎片
+（`k_爆衣` / `k_爆衣落下` / `k_爆衣碎片_材質`），皮肤（名字带 skin）不碎、跟着步骤滑块直接换；第 k 层在
+「第一层爆开帧 + (k-1) × 每层间隔」爆开，碎片先出现、下一帧才换层（不然里面那层从还在原位的碎片里穿出来）。
+命令行不用 `--outfit`：
+
+```
+blender -b --factory-startup --python scripts\riseoferos\burst_pmx_blender.py -- ^
+  E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_Layers\Eve_Mod_GantzReika_Layers.pmx ^
+  E:\game_export\StellarBlade\_爆衣插件\Eve_Mod_GantzReika_Layers_burst\Eve_Mod_GantzReika_Layers_burst.pmx ^
+  --vmd E:\game_export\StellarBlade\_爆衣插件\Eve_Mod_GantzReika_Layers_burst\爆衣_第120帧开始_每层隔90帧.vmd --start 120 --interval 90
+```
+
+Reika：A 159 块、B 108 块碎片。原理见 `docs/clothes-burst-guide.md` 8.12，插件用法见它的 README「一层一层爆」。
 
 ## 2026-10-05 的三个试做
 

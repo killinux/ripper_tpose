@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stellar Blade 模型导出总览</title>
+<title>剑星角色导出总览</title>
 <style>
 :root {
   color-scheme: light dark;
@@ -94,24 +94,25 @@ td code, li code, p code { font-family: Consolas, monospace; }
 </head>
 <body>
 <header>
-  <h1>Stellar Blade · Eve 服装导出总览</h1>
-  <div class="sub">生成于 2026-09-25 17:40 · 导出根目录 <code>D:\stellarblade_exports</code> ·
+  <h1>剑星角色导出总览</h1>
+  <div class="sub">生成于 2026-10-18 13:37 · 导出根目录 <code>E:\game_export\StellarBlade</code> ·
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
-    <div class="stat"><b>152</b><span>已转模型</span></div>
-    <div class="stat"><b>72</b><span>服装编号</span></div>
-    <div class="stat"><b>16</b><span>DLC / Mod / 裸模</span></div>
-    <div class="stat"><b>3</b><span>有 XPS / PMX</span></div>
-    <div class="stat"><b>6.5 GB</b><span>blend 总体积</span></div>
-    <div class="stat"><b>0</b><span>有告警</span></div>
+    <div class="stat"><b>170</b><span>已转模型</span></div>
+    <div class="stat"><b>88</b><span>服装编号 / 角色</span></div>
+    <div class="stat"><b>17</b><span>DLC / Mod / 裸模</span></div>
+    <div class="stat"><b>17</b><span>其他角色</span></div>
+    <div class="stat"><b>4</b><span>有 XPS / PMX</span></div>
+    <div class="stat"><b>7.3 GB</b><span>blend 总体积</span></div>
+    <div class="stat"><b>2</b><span>有告警</span></div>
   </div>
 </header>
 
 <div class="toolbar">
   <input id="q" type="search" placeholder="搜索服装名（Pink Bear）、包名（45_TypeB）或路径…（按 / 聚焦）">
-  <select id="chr"><option value="">全部编号</option><option value="01">01 (3)</option><option value="02">02 (2)</option><option value="03">03 (1)</option><option value="04">04 (2)</option><option value="05">05 (4)</option><option value="06">06 (4)</option><option value="07">07 (2)</option><option value="08">08 (3)</option><option value="09">09 (5)</option><option value="10">10 (1)</option><option value="11">11 (2)</option><option value="14">14 (4)</option><option value="15">15 (3)</option><option value="16">16 (2)</option><option value="17">17 (4)</option><option value="18">18 (2)</option><option value="19">19 (2)</option><option value="20">20 (3)</option><option value="21">21 (2)</option><option value="22">22 (1)</option><option value="23">23 (1)</option><option value="24">24 (2)</option><option value="25">25 (2)</option><option value="26">26 (2)</option><option value="27">27 (2)</option><option value="28">28 (4)</option><option value="29">29 (3)</option><option value="30">30 (2)</option><option value="31">31 (2)</option><option value="32">32 (2)</option><option value="33">33 (2)</option><option value="34">34 (2)</option><option value="35">35 (2)</option><option value="36">36 (2)</option><option value="37">37 (2)</option><option value="39">39 (2)</option><option value="40">40 (3)</option><option value="41">41 (4)</option><option value="42">42 (2)</option><option value="43">43 (2)</option><option value="45">45 (2)</option><option value="46">46 (2)</option><option value="47">47 (1)</option><option value="48">48 (1)</option><option value="49">49 (2)</option><option value="50">50 (2)</option><option value="51">51 (1)</option><option value="52">52 (2)</option><option value="53">53 (2)</option><option value="54">54 (1)</option><option value="55">55 (2)</option><option value="56">56 (1)</option><option value="57">57 (2)</option><option value="58">58 (1)</option><option value="59">59 (2)</option><option value="60">60 (2)</option><option value="61">61 (1)</option><option value="62">62 (1)</option><option value="63">63 (1)</option><option value="Christmas">Christmas (1)</option><option value="DX">DX (1)</option><option value="DX_">DX_ (1)</option><option value="Eve">Eve (3)</option><option value="Fusion">Fusion (2)</option><option value="IberisCos">IberisCos (1)</option><option value="InnerSuit">InnerSuit (1)</option><option value="InnerSuit1">InnerSuit1 (1)</option><option value="Mod">Mod (3)</option><option value="Nier">Nier (4)</option><option value="Nikke">Nikke (6)</option><option value="OneMillion">OneMillion (1)</option><option value="RoyalGuard">RoyalGuard (1)</option></select>
+  <select id="chr"><option value="">全部编号 / 角色</option><option value="01">01 (3)</option><option value="02">02 (2)</option><option value="03">03 (1)</option><option value="04">04 (2)</option><option value="05">05 (4)</option><option value="06">06 (4)</option><option value="07">07 (2)</option><option value="08">08 (3)</option><option value="09">09 (5)</option><option value="10">10 (1)</option><option value="11">11 (2)</option><option value="14">14 (4)</option><option value="15">15 (3)</option><option value="16">16 (2)</option><option value="17">17 (4)</option><option value="18">18 (2)</option><option value="19">19 (2)</option><option value="20">20 (3)</option><option value="21">21 (2)</option><option value="22">22 (1)</option><option value="23">23 (1)</option><option value="24">24 (2)</option><option value="25">25 (2)</option><option value="26">26 (2)</option><option value="27">27 (2)</option><option value="28">28 (4)</option><option value="29">29 (3)</option><option value="30">30 (2)</option><option value="31">31 (2)</option><option value="32">32 (2)</option><option value="33">33 (2)</option><option value="34">34 (2)</option><option value="35">35 (2)</option><option value="36">36 (2)</option><option value="37">37 (2)</option><option value="39">39 (2)</option><option value="40">40 (3)</option><option value="41">41 (4)</option><option value="42">42 (2)</option><option value="43">43 (2)</option><option value="45">45 (2)</option><option value="46">46 (2)</option><option value="47">47 (1)</option><option value="48">48 (1)</option><option value="49">49 (2)</option><option value="50">50 (2)</option><option value="51">51 (1)</option><option value="52">52 (2)</option><option value="53">53 (2)</option><option value="54">54 (1)</option><option value="55">55 (2)</option><option value="56">56 (1)</option><option value="57">57 (2)</option><option value="58">58 (1)</option><option value="59">59 (2)</option><option value="60">60 (2)</option><option value="61">61 (1)</option><option value="62">62 (1)</option><option value="63">63 (1)</option><option value="AirborneSquad">AirborneSquad (1)</option><option value="Christmas">Christmas (1)</option><option value="Citizen">Citizen (1)</option><option value="DX">DX (1)</option><option value="DX_">DX_ (1)</option><option value="Enya">Enya (1)</option><option value="Eve">Eve (3)</option><option value="Fusion">Fusion (2)</option><option value="Iberis">Iberis (1)</option><option value="IberisCos">IberisCos (1)</option><option value="InnerSuit">InnerSuit (1)</option><option value="InnerSuit1">InnerSuit1 (1)</option><option value="Kara">Kara (1)</option><option value="Kaya">Kaya (1)</option><option value="Lily">Lily (1)</option><option value="Maid">Maid (1)</option><option value="Mod">Mod (3)</option><option value="MotherSphere">MotherSphere (1)</option><option value="Nier">Nier (4)</option><option value="Nikke">Nikke (6)</option><option value="OneMillion">OneMillion (1)</option><option value="Rael">Rael (1)</option><option value="Raven">Raven (2)</option><option value="Roxanne">Roxanne (1)</option><option value="RoyalGuard">RoyalGuard (1)</option><option value="Scarlet">Scarlet (1)</option><option value="Scavenger">Scavenger (1)</option><option value="Su">Su (1)</option><option value="Tachy">Tachy (2)</option></select>
   <button class="chip on" data-kind="">全部</button>
-  <button class="chip" data-kind="official">本体服装</button><button class="chip" data-kind="dlc">联动 DLC</button><button class="chip" data-kind="mod">Nexus 服装 mod</button><button class="chip" data-kind="nude">裸模（mod）</button><button class="chip" data-kind="other">其它</button>
+  <button class="chip" data-kind="official">本体服装</button><button class="chip" data-kind="dlc">联动 DLC</button><button class="chip" data-kind="mod">Nexus 服装 mod</button><button class="chip" data-kind="nude">裸模（mod）</button><button class="chip" data-kind="npc">其他角色</button><button class="chip" data-kind="other">其它</button>
   <button class="toggle" id="warnOnly">只看告警</button>
   <span class="count" id="count"></span>
 </div>
@@ -2978,12 +2979,12 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </dl>
         </div>
       </article>
-      <article class="card" data-search="eve_ch_p_eve_nikke_06 nikke cooling suit (alice) ch_p_eve_nikke_06 e:\game_export\stellarblade\eve\blend\ch_p_eve_nikke_06\eve_ch_p_eve_nikke_06.blend" data-kind="dlc" data-chr="Nikke" data-warn="0">
+      <article class="card" data-search="eve_ch_p_eve_nikke_06 nikke cooling suit (alice) ch_p_eve_nikke_06 e:\game_export\stellarblade\eve\blend\ch_p_eve_nikke_06\eve_ch_p_eve_nikke_06.blend pmx mmd hq 高清材质" data-kind="dlc" data-chr="Nikke" data-warn="0">
         <a class="shot" href="file:///E:/game_export/StellarBlade/_meta/gallery_previews/Eve_CH_P_EVE_Nikke_06_gallery.png" target="_blank" rel="noopener"
            title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/Eve_CH_P_EVE_Nikke_06.jpg" alt="Eve_CH_P_EVE_Nikke_06"></a>
         <div class="body">
           <div class="titlerow">
-            <h3>Eve_CH_P_EVE_Nikke_06</h3><span class="badge badge-mod">联动 DLC</span><span class="badge badge-code">Nikke_06</span>
+            <h3>Eve_CH_P_EVE_Nikke_06</h3><span class="badge badge-mod">联动 DLC</span><span class="badge badge-code">Nikke_06</span><span class="badge badge-fmt">PMX</span><span class="badge badge-fmt">高清材质</span>
           </div>
           <dl>
             <dt>服装</dt><dd>Cooling Suit (Alice)</dd>
@@ -2995,6 +2996,11 @@ td code, li code, p code { font-family: Consolas, monospace; }
             <dt>独立包</dt>
             <dd><a href="file:///E:/game_export/StellarBlade/Eve/blend/CH_P_EVE_Nikke_06" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Eve\blend\CH_P_EVE_Nikke_06</a>
                 <button class="copy" data-copy="E:\game_export\StellarBlade\Eve\blend\CH_P_EVE_Nikke_06">复制</button></dd>
+            <dt>PMX</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/Eve_CH_P_EVE_Nikke_06.pmx" title="MMD 模型，textures\ 在同一文件夹">E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06.pmx</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06.pmx">复制</button><br><span class="shots">回读预览：<a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/preview.png" target="_blank" rel="noopener">正面</a> · <a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/preview_morphs.png" target="_blank" rel="noopener">表情</a> · <a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/preview_gaze.png" target="_blank" rel="noopener">视线</a> · <a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/preview_dance.png" target="_blank" rel="noopener">跳舞</a></span></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Eve/blend/CH_P_EVE_Nikke_06/Eve_CH_P_EVE_Nikke_06_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Eve\blend\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\高清材质对比.jpg">高清材质对比</a> · <a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/%E6%8F%92%E4%BB%B6%E6%95%88%E6%9E%9C_%E6%B8%B8%E6%88%8F%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\插件效果_游戏材质对比.jpg">插件效果</a> · <a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/%E7%9C%BC%E7%9D%9B%E4%BF%AE%E5%A4%8D%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\眼睛修复对比.jpg">眼睛修复对比</a> · <a href="file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06/%E7%9C%BC%E7%9D%9B%E8%89%B2%E8%B0%83%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\眼睛色调对比.jpg">眼睛色调对比</a></dd>
           </dl>
         </div>
       </article>
@@ -3173,6 +3179,402 @@ td code, li code, p code { font-family: Consolas, monospace; }
           </dl>
         </div>
       </article>
+      <article class="card" data-search="npc_airbornesquad airbornesquad 空降部队女兵 eve 同款白色战衣（游戏里没有头） ch_npc_airbornesquad_body e:\game_export\stellarblade\airbornesquad\blend\airbornesquad\airbornesquad.blend hq 高清材质" data-kind="npc" data-chr="AirborneSquad" data-warn="1">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/AirborneSquad/blend/AirborneSquad/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_AirborneSquad.jpg" alt="NPC_AirborneSquad"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_AirborneSquad</h3><span class="badge badge-warn" title="游戏里这个网格没有头（头由关卡蓝图另外挂），这里只有身体; 战衣是分层材质，只取了它的底色 E7E4D6">告警 2</span><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_AirborneSquad_Body</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>空降部队女兵 Eve 同款白色战衣（游戏里没有头）</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 35773 顶点 · 299 骨骼 · 0 表情 · 15.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/AirborneSquad/blend/AirborneSquad/AirborneSquad.blend" title="E:\game_export\StellarBlade\AirborneSquad\blend\AirborneSquad\AirborneSquad.blend">E:\game_export\StellarBlade\AirborneSquad\blend\AirborneSquad\AirborneSquad.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\AirborneSquad\blend\AirborneSquad\AirborneSquad.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/AirborneSquad/blend/AirborneSquad" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\AirborneSquad\blend\AirborneSquad</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\AirborneSquad\blend\AirborneSquad">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/AirborneSquad/blend/AirborneSquad/AirborneSquad_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\AirborneSquad\blend\AirborneSquad\AirborneSquad_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/AirborneSquad/blend/AirborneSquad/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\AirborneSquad\blend\AirborneSquad\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_citizen_08 citizen 西翁女市民 夹克 + 牛仔裤（头 03） ch_npc_citizenfemale_08 e:\game_export\stellarblade\citizen\blend\citizen_08\citizen_08.blend hq 高清材质" data-kind="npc" data-chr="Citizen" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Citizen/blend/Citizen_08/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Citizen_08.jpg" alt="NPC_Citizen_08"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Citizen_08</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_CitizenFemale_08</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>西翁女市民 夹克 + 牛仔裤（头 03）</dd>
+            <dt>规格</dt>
+            <dd>2 网格 · 39875 顶点 · 114 骨骼 · 0 表情 · 9.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Citizen/blend/Citizen_08/Citizen_08.blend" title="E:\game_export\StellarBlade\Citizen\blend\Citizen_08\Citizen_08.blend">E:\game_export\StellarBlade\Citizen\blend\Citizen_08\Citizen_08.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Citizen\blend\Citizen_08\Citizen_08.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Citizen/blend/Citizen_08" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Citizen\blend\Citizen_08</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Citizen\blend\Citizen_08">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Citizen/blend/Citizen_08/Citizen_08_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Citizen\blend\Citizen_08\Citizen_08_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Citizen/blend/Citizen_08/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Citizen\blend\Citizen_08\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_enya enya 恩雅 仿生人外壳 ch_npc_enya e:\game_export\stellarblade\enya\blend\enya\enya.blend hq 高清材质" data-kind="npc" data-chr="Enya" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Enya/blend/Enya/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Enya.jpg" alt="NPC_Enya"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Enya</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Enya</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>恩雅 仿生人外壳</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 108415 顶点 · 193 骨骼 · 0 表情 · 25.2 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Enya/blend/Enya/Enya.blend" title="E:\game_export\StellarBlade\Enya\blend\Enya\Enya.blend">E:\game_export\StellarBlade\Enya\blend\Enya\Enya.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Enya\blend\Enya\Enya.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Enya/blend/Enya" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Enya\blend\Enya</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Enya\blend\Enya">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Enya/blend/Enya/Enya_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Enya\blend\Enya\Enya_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Enya/blend/Enya/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Enya\blend\Enya\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_iberis iberis 伊贝丽斯  ch_npc_iberis e:\game_export\stellarblade\iberis\blend\iberis\iberis.blend hq 高清材质" data-kind="npc" data-chr="Iberis" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Iberis/blend/Iberis/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Iberis.jpg" alt="NPC_Iberis"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Iberis</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Iberis</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>伊贝丽斯 </dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 109533 顶点 · 241 骨骼 · 0 表情 · 42.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Iberis/blend/Iberis/Iberis.blend" title="E:\game_export\StellarBlade\Iberis\blend\Iberis\Iberis.blend">E:\game_export\StellarBlade\Iberis\blend\Iberis\Iberis.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Iberis\blend\Iberis\Iberis.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Iberis/blend/Iberis" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Iberis\blend\Iberis</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Iberis\blend\Iberis">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Iberis/blend/Iberis/Iberis_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Iberis\blend\Iberis\Iberis_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Iberis/blend/Iberis/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Iberis\blend\Iberis\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_kara kara 卡拉  ch_npc_kara e:\game_export\stellarblade\kara\blend\kara\kara.blend hq 高清材质" data-kind="npc" data-chr="Kara" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Kara/blend/Kara/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Kara.jpg" alt="NPC_Kara"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Kara</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Kara</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>卡拉 </dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 30595 顶点 · 126 骨骼 · 0 表情 · 11.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Kara/blend/Kara/Kara.blend" title="E:\game_export\StellarBlade\Kara\blend\Kara\Kara.blend">E:\game_export\StellarBlade\Kara\blend\Kara\Kara.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Kara\blend\Kara\Kara.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Kara/blend/Kara" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Kara\blend\Kara</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Kara\blend\Kara">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Kara/blend/Kara/Kara_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Kara\blend\Kara\Kara_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Kara/blend/Kara/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Kara\blend\Kara\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_kaya kaya 卡雅 军装外套 + 短裤 ch_npc_kaya e:\game_export\stellarblade\kaya\blend\kaya\kaya.blend hq 高清材质" data-kind="npc" data-chr="Kaya" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Kaya/blend/Kaya/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Kaya.jpg" alt="NPC_Kaya"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Kaya</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Kaya</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>卡雅 军装外套 + 短裤</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 85475 顶点 · 170 骨骼 · 0 表情 · 32.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Kaya/blend/Kaya/Kaya.blend" title="E:\game_export\StellarBlade\Kaya\blend\Kaya\Kaya.blend">E:\game_export\StellarBlade\Kaya\blend\Kaya\Kaya.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Kaya\blend\Kaya\Kaya.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Kaya/blend/Kaya" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Kaya\blend\Kaya</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Kaya\blend\Kaya">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Kaya/blend/Kaya/Kaya_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Kaya\blend\Kaya\Kaya_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Kaya/blend/Kaya/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Kaya\blend\Kaya\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_lily_01 lily 莉莉 比基尼网衣（ch_npc_01） ch_npc_01_lilly e:\game_export\stellarblade\lily\blend\lily_01\lily_01.blend hq 高清材质" data-kind="npc" data-chr="Lily" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Lily/blend/Lily_01/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Lily_01.jpg" alt="NPC_Lily_01"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Lily_01</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_01_Lilly</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>莉莉 比基尼网衣（CH_NPC_01）</dd>
+            <dt>规格</dt>
+            <dd>2 网格 · 121067 顶点 · 176 骨骼 · 0 表情 · 117.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Lily/blend/Lily_01/Lily_01.blend" title="E:\game_export\StellarBlade\Lily\blend\Lily_01\Lily_01.blend">E:\game_export\StellarBlade\Lily\blend\Lily_01\Lily_01.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Lily\blend\Lily_01\Lily_01.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Lily/blend/Lily_01" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Lily\blend\Lily_01</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Lily\blend\Lily_01">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Lily/blend/Lily_01/Lily_01_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Lily\blend\Lily_01\Lily_01_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Lily/blend/Lily_01/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Lily\blend\Lily_01\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_maid maid 女仆 女仆裙 ch_npc_maid_01 e:\game_export\stellarblade\maid\blend\maid\maid.blend hq 高清材质" data-kind="npc" data-chr="Maid" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Maid/blend/Maid/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Maid.jpg" alt="NPC_Maid"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Maid</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Maid_01</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>女仆 女仆裙</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 90192 顶点 · 211 骨骼 · 0 表情 · 92.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Maid/blend/Maid/Maid.blend" title="E:\game_export\StellarBlade\Maid\blend\Maid\Maid.blend">E:\game_export\StellarBlade\Maid\blend\Maid\Maid.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Maid\blend\Maid\Maid.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Maid/blend/Maid" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Maid\blend\Maid</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Maid\blend\Maid">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Maid/blend/Maid/Maid_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Maid\blend\Maid\Maid_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Maid/blend/Maid/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Maid\blend\Maid\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_mothersphere mothersphere 母亲领域 白色荷叶边裙 ch_npc_motherspier e:\game_export\stellarblade\mothersphere\blend\mothersphere\mothersphere.blend hq 高清材质" data-kind="npc" data-chr="MotherSphere" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/MotherSphere/blend/MotherSphere/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_MotherSphere.jpg" alt="NPC_MotherSphere"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_MotherSphere</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Motherspier</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>母亲领域 白色荷叶边裙</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 85598 顶点 · 186 骨骼 · 0 表情 · 34.1 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/MotherSphere/blend/MotherSphere/MotherSphere.blend" title="E:\game_export\StellarBlade\MotherSphere\blend\MotherSphere\MotherSphere.blend">E:\game_export\StellarBlade\MotherSphere\blend\MotherSphere\MotherSphere.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\MotherSphere\blend\MotherSphere\MotherSphere.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/MotherSphere/blend/MotherSphere" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\MotherSphere\blend\MotherSphere</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\MotherSphere\blend\MotherSphere">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/MotherSphere/blend/MotherSphere/MotherSphere_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\MotherSphere\blend\MotherSphere\MotherSphere_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/MotherSphere/blend/MotherSphere/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\MotherSphere\blend\MotherSphere\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_olivia scavenger 拾荒者奥利维亚  ch_npc_olivia e:\game_export\stellarblade\scavenger\blend\olivia\olivia.blend hq 高清材质" data-kind="npc" data-chr="Scavenger" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Scavenger/blend/Olivia/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Olivia.jpg" alt="NPC_Olivia"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Olivia</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Olivia</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>拾荒者奥利维亚 </dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 45013 顶点 · 153 骨骼 · 0 表情 · 11.6 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Scavenger/blend/Olivia/Olivia.blend" title="E:\game_export\StellarBlade\Scavenger\blend\Olivia\Olivia.blend">E:\game_export\StellarBlade\Scavenger\blend\Olivia\Olivia.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Scavenger\blend\Olivia\Olivia.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Scavenger/blend/Olivia" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Scavenger\blend\Olivia</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Scavenger\blend\Olivia">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Scavenger/blend/Olivia/Olivia_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Scavenger\blend\Olivia\Olivia_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Scavenger/blend/Olivia/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Scavenger\blend\Olivia\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_rael rael 拉埃尔 红色紧身衣 + 披风 ch_npc_rael e:\game_export\stellarblade\rael\blend\rael\rael.blend hq 高清材质" data-kind="npc" data-chr="Rael" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Rael/blend/Rael/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Rael.jpg" alt="NPC_Rael"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Rael</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Rael</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>拉埃尔 红色紧身衣 + 披风</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 143858 顶点 · 182 骨骼 · 0 表情 · 30.4 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Rael/blend/Rael/Rael.blend" title="E:\game_export\StellarBlade\Rael\blend\Rael\Rael.blend">E:\game_export\StellarBlade\Rael\blend\Rael\Rael.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Rael\blend\Rael\Rael.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Rael/blend/Rael" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Rael\blend\Rael</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Rael\blend\Rael">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Rael/blend/Rael/Rael_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Rael\blend\Rael\Rael_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Rael/blend/Rael/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Rael\blend\Rael\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_raven raven 渡鸦 白色紧身战衣 ch_m_na_53 e:\game_export\stellarblade\raven\blend\raven\raven.blend hq 高清材质" data-kind="npc" data-chr="Raven" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Raven/blend/Raven/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Raven.jpg" alt="NPC_Raven"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Raven</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_M_NA_53</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>渡鸦 白色紧身战衣</dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 120257 顶点 · 363 骨骼 · 0 表情 · 77.8 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven/Raven.blend" title="E:\game_export\StellarBlade\Raven\blend\Raven\Raven.blend">E:\game_export\StellarBlade\Raven\blend\Raven\Raven.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Raven\blend\Raven\Raven.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Raven\blend\Raven</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Raven\blend\Raven">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven/Raven_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Raven\blend\Raven\Raven_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Raven\blend\Raven\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_raven_nude raven 渡鸦 裸体（游戏自带的 ch_m_na_53_1） ch_m_na_53_1 e:\game_export\stellarblade\raven\blend\raven_nude\raven_nude.blend hq 高清材质" data-kind="nude" data-chr="Raven" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Raven/blend/Raven_Nude/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Raven_Nude.jpg" alt="NPC_Raven_Nude"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Raven_Nude</h3><span class="badge badge-mod">裸模（mod）</span><span class="badge badge-code">CH_M_NA_53_1</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>渡鸦 裸体（游戏自带的 CH_M_NA_53_1）</dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 81683 顶点 · 354 骨骼 · 0 表情 · 67.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven_Nude/Raven_Nude.blend" title="E:\game_export\StellarBlade\Raven\blend\Raven_Nude\Raven_Nude.blend">E:\game_export\StellarBlade\Raven\blend\Raven_Nude\Raven_Nude.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Raven\blend\Raven_Nude\Raven_Nude.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven_Nude" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Raven\blend\Raven_Nude</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Raven\blend\Raven_Nude">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven_Nude/Raven_Nude_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Raven\blend\Raven_Nude\Raven_Nude_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Raven/blend/Raven_Nude/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Raven\blend\Raven_Nude\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_roxanne roxanne 罗克珊 黑色大衣 ch_npc_roxane e:\game_export\stellarblade\roxanne\blend\roxanne\roxanne.blend hq 高清材质" data-kind="npc" data-chr="Roxanne" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Roxanne/blend/Roxanne/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Roxanne.jpg" alt="NPC_Roxanne"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Roxanne</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_Roxane</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>罗克珊 黑色大衣</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 109864 顶点 · 127 骨骼 · 0 表情 · 40.3 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Roxanne/blend/Roxanne/Roxanne.blend" title="E:\game_export\StellarBlade\Roxanne\blend\Roxanne\Roxanne.blend">E:\game_export\StellarBlade\Roxanne\blend\Roxanne\Roxanne.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Roxanne\blend\Roxanne\Roxanne.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Roxanne/blend/Roxanne" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Roxanne\blend\Roxanne</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Roxanne\blend\Roxanne">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Roxanne/blend/Roxanne/Roxanne_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Roxanne\blend\Roxanne\Roxanne_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Roxanne/blend/Roxanne/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Roxanne\blend\Roxanne\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_scarlet scarlet 红莲（nikke 联动） 红莲：暗影 ch_m_na_961 e:\game_export\stellarblade\scarlet\blend\scarlet\scarlet.blend hq 高清材质" data-kind="npc" data-chr="Scarlet" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Scarlet/blend/Scarlet/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Scarlet.jpg" alt="NPC_Scarlet"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Scarlet</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_M_NA_961</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>红莲（NIKKE 联动） 红莲：暗影</dd>
+            <dt>规格</dt>
+            <dd>2 网格 · 166630 顶点 · 515 骨骼 · 0 表情 · 88.9 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Scarlet/blend/Scarlet/Scarlet.blend" title="E:\game_export\StellarBlade\Scarlet\blend\Scarlet\Scarlet.blend">E:\game_export\StellarBlade\Scarlet\blend\Scarlet\Scarlet.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Scarlet\blend\Scarlet\Scarlet.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Scarlet/blend/Scarlet" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Scarlet\blend\Scarlet</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Scarlet\blend\Scarlet">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Scarlet/blend/Scarlet/Scarlet_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Scarlet\blend\Scarlet\Scarlet_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Scarlet/blend/Scarlet/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Scarlet\blend\Scarlet\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_su su 苏 面罩 + 皮草大衣 ch_npc_su e:\game_export\stellarblade\su\blend\su\su.blend hq 高清材质" data-kind="npc" data-chr="Su" data-warn="1">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Su/blend/Su/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Su.jpg" alt="NPC_Su"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Su</h3><span class="badge badge-warn" title="全脸头盔，模型看不出性别（骨架没有胸部骨骼）">告警 1</span><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_SU</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>苏 面罩 + 皮草大衣</dd>
+            <dt>规格</dt>
+            <dd>1 网格 · 89128 顶点 · 129 骨骼 · 0 表情 · 20.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Su/blend/Su/Su.blend" title="E:\game_export\StellarBlade\Su\blend\Su\Su.blend">E:\game_export\StellarBlade\Su\blend\Su\Su.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Su\blend\Su\Su.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Su/blend/Su" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Su\blend\Su</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Su\blend\Su">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Su/blend/Su/Su_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Su\blend\Su\Su_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Su/blend/Su/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Su\blend\Su\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_tachy_boss tachy 塔琪 boss 战甲（不戴头盔） ch_m_na_21_body e:\game_export\stellarblade\tachy\blend\tachy_boss\tachy_boss.blend hq 高清材质" data-kind="npc" data-chr="Tachy" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_Boss/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Tachy_Boss.jpg" alt="NPC_Tachy_Boss"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Tachy_Boss</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_M_NA_21_Body</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>塔琪 Boss 战甲（不戴头盔）</dd>
+            <dt>规格</dt>
+            <dd>3 网格 · 144111 顶点 · 407 骨骼 · 0 表情 · 51.7 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_Boss/Tachy_Boss.blend" title="E:\game_export\StellarBlade\Tachy\blend\Tachy_Boss\Tachy_Boss.blend">E:\game_export\StellarBlade\Tachy\blend\Tachy_Boss\Tachy_Boss.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Tachy\blend\Tachy_Boss\Tachy_Boss.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_Boss" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Tachy\blend\Tachy_Boss</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Tachy\blend\Tachy_Boss">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_Boss/Tachy_Boss_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Tachy\blend\Tachy_Boss\Tachy_Boss_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_Boss/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Tachy\blend\Tachy_Boss\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
+      <article class="card" data-search="npc_tachy_npc tachy 塔琪 黑色紧身战衣（npc） ch_npc_tachynpc_body e:\game_export\stellarblade\tachy\blend\tachy_npc\tachy_npc.blend hq 高清材质" data-kind="npc" data-chr="Tachy" data-warn="0">
+        <a class="shot" href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_NPC/preview.png" target="_blank" rel="noopener"
+           title="点击查看原图"><img loading="lazy" src="file:///E:/game_export/StellarBlade/_meta/gallery/thumbs/NPC_Tachy_NPC.jpg" alt="NPC_Tachy_NPC"></a>
+        <div class="body">
+          <div class="titlerow">
+            <h3>NPC_Tachy_NPC</h3><span class="badge badge-mod">其他角色</span><span class="badge badge-code">CH_NPC_TachyNPC_Body</span><span class="badge badge-fmt">高清材质</span>
+          </div>
+          <dl>
+            <dt>服装</dt><dd>塔琪 黑色紧身战衣（NPC）</dd>
+            <dt>规格</dt>
+            <dd>2 网格 · 117147 顶点 · 305 骨骼 · 0 表情 · 71.5 MB</dd>
+            <dt>blend</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_NPC/Tachy_NPC.blend" title="E:\game_export\StellarBlade\Tachy\blend\Tachy_NPC\Tachy_NPC.blend">E:\game_export\StellarBlade\Tachy\blend\Tachy_NPC\Tachy_NPC.blend</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Tachy\blend\Tachy_NPC\Tachy_NPC.blend">复制</button></dd>
+            <dt>独立包</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_NPC" title="整个文件夹可拷给别人：blend + textures\ + README">E:\game_export\StellarBlade\Tachy\blend\Tachy_NPC</a>
+                <button class="copy" data-copy="E:\game_export\StellarBlade\Tachy\blend\Tachy_NPC">复制</button></dd>
+            <dt>高清版</dt>
+            <dd><a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_NPC/Tachy_NPC_HQ.blend" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Tachy\blend\Tachy_NPC\Tachy_NPC_HQ.blend">高清 .blend（游戏完整材质）</a> · <a href="file:///E:/game_export/StellarBlade/Tachy/blend/Tachy_NPC/%E9%AB%98%E6%B8%85%E6%9D%90%E8%B4%A8%E5%AF%B9%E6%AF%94.jpg" target="_blank" rel="noopener" title="E:\game_export\StellarBlade\Tachy\blend\Tachy_NPC\高清材质对比.jpg">高清材质对比</a></dd>
+          </dl>
+        </div>
+      </article>
   </div>
   <div class="empty" id="empty" hidden>没有匹配的模型</div>
 
@@ -3270,7 +3672,7 @@ for ($i = $lane; $i -lt $pkgs.Count; $i += $lanes) { .\export_outfit.ps1 $pkgs[$
         <code>python .\list_models.py --paks &lt;游戏目录&gt;\SB\Content\Paks --glob '&lt;包名&gt;.uasset' --all-files</code> 查到完整路径，照 <code>docs\stellar-blade-extraction.md</code> §4 的 UE Viewer 命令按该路径导出（<code>-out</code> 指到 <code>&lt;导出根&gt;\umodel_outfit_exports</code>），再跑 <code>.\export_outfit.ps1 &lt;包名&gt;</code>——PSK 已在就直接复用</td></tr>
     </table>
 
-    <h3>产物目录（默认 E:\game_export\StellarBlade）</h3>
+    <h3>产物目录（默认 D:\stellarblade_exports）</h3>
     <pre>fmodel_exports\SB\Content\Art\Character\PC\     FModel 手导的身体 PSK / Face_003.uemodel / 身体 _D.png
 umodel_exports\ · umodel_face_exports\            发型 / 马尾 / 短发束 PSK 与 PonyTail_Alpha · Face_003 贴图集
 umodel_outfit_exports\Art\Character\PC\CH_P_EVE_NN\  每套本体服装的 .psk/.pskx + .mat + Textures\
@@ -3306,13 +3708,19 @@ stellarblade_models_manifest.json · _gallery\thumbs\ · packages\   本页的�
 python .\html\make_gallery.py         # --source-root / --manifest / --out / --thumb-dir / --force</pre>
     <p><code>collect_manifest.py</code> 不开 Blender，汇总 <code>validation\*.json</code> 写 <code>D:\stellarblade_exports\stellarblade_models_manifest.json</code>，预览优先 <code>_gallery.png</code>，有 <code>packages\&lt;label&gt;\package.json</code> 时卡片多一行「独立包」（<b>要先跑完下一节的打包</b>，再回来重跑这两条命令，卡片上才会有这一行）；
       <code>make_gallery.py</code> 把预览缩成 JPEG 放 <code>D:\stellarblade_exports\_gallery\thumbs\</code>，重写 <code>scripts\stellarblade\html\index.html</code>（<b>整页覆盖</b>：index.html 由 <code>make_gallery.py</code> 的页面模板生成，直接在 index.html 上手改的内容——包括本附录——重跑就没了，要留就改进 <code>make_gallery.py</code> 的模板）。<b>缩略图和 manifest 都留在导出根，刻意不进仓库</b>。</p>
+    <p class="note">2026-09-26 起，所有产物归档到 <code>E:\game_export\StellarBlade\&lt;角色&gt;\&lt;格式&gt;\&lt;模型&gt;\</code>（<code>scripts\archive</code>），D: 的导出根已经删了。
+      这时直接跑 <code>python .\html\make_gallery.py</code>：D: 上没有 manifest，就自动改读存档的 <code>_meta\stellarblade_models_manifest.json</code>（2026-10-17 已把里面的路径换成 E:）和 <code>_meta\gallery\thumbs\</code>。
+      新导出的东西照旧先落 D:，再跑 <code>python scripts\archive\archive_exports.py stellarblade</code> 归档（先加 <code>--dry-run</code> 看一遍）。</p>
 
     <h3>例外与已知局限</h3>
     <ul>
       <li><code>CH_P_EVE_39_TYPE-A</code> / <code>39_TYPE-A1</code>：材质槽全是 <code>MI_CH_Delete</code> 占位的废弃开发网格，不导。</li>
       <li><code>CH_P_EVE_11_1</code>（Raven 变体）自带发型，管线又装了默认发型，头上两套，自行删一套。</li>
       <li><code>Eve_Face003_UEFormat36_test.blend</code> 是作者机器上 <code>import_uemodel36.py</code> 留下的 UEFormat 导入探针，没贴图，打包默认跳过，按本页跑不会产生。</li>
-      <li>眼睛：Eevee 不做 UE 的角膜折射，虹膜是 <code>validate_eve.py</code> 校准过的预览混合（虹膜贴图后插 HSV 提亮、眼影 / 眼罩壳层减淡），与游戏内不完全一致。</li>
+      <li>眼睛：2026-10-17 起按游戏眼睛材质 <code>MI_EyeRefractive1</code> 的参数生成（<code>eye_material.py</code>：虹膜半径 0.145 × 0.85），大小和游戏一致；
+        2026-10-18 起颜色也严格按游戏材质的算法（反汇编游戏着色器确认）：虹膜 × 色调 <code>IrisHueTint</code> × 亮度 5。其他角色用她们自己的眼睛材质实例。
+        不做 UE 的角膜折射，瞳孔比游戏里略小。
+        <b>这之前导出的 .blend（146 套服装都是）虹膜只有游戏的四成大</b>；从它们导 PMX 时 <code>export_pmx_blender.py</code> 会自动换成新眼睛，.blend 本身没改。</li>
     </ul>
 
     <h3>打包给别人（package_outfits.py）</h3>
@@ -3355,7 +3763,25 @@ blender -b D:\stellarblade_exports\packages\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;�
 blender -b --python .\preview_pmx_blender.py -- --pmx D:\stellarblade_exports\pmx\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.pmx</pre>
     <p>PMX 报告要看的：<code>torn</code> 0、<code>grant_order_violations</code> 空、<code>weight_holes</code> 0、<code>stray_recipients</code> 空；回读的 <code>rest_drop_test</code> 里没有超过 3 cm 的链根。
       2026-09-25 修过两处头发物理（三个模型都已按新脚本重导）：头皮头发的根骨 <code>Hair_Root</code> 原来是纯物理刚体，一开物理整片头发往下掉、跳舞时像光头 → 改成跟随骨骼；
-      马尾上段 <code>HairTail_Root</code> 静止时嵌在头部碰撞球里 9.4 cm → 取消这对碰撞。预览里的舞蹈按 30 帧 <code>margin</code> 导入，从静止姿势过渡——不加的话第一帧会把头发链拽乱，看起来像模型坏了，其实 MMD 里没事。</p>
+      马尾上段 <code>HairTail_Root</code> 静止时嵌在头部碰撞球里 9.4 cm → 取消这对碰撞。预览里的舞蹈按 30 帧 <code>margin</code> 导入，从静止姿势过渡——不加的话第一帧会把头发链拽乱，看起来像模型坏了，其实 MMD 里没事。
+      2026-10-17 三个 mod 的 PMX 和 XPS 按游戏的眼睛参数重导（虹膜原来只有游戏的四成大），其余不变；2026-10-18 再按游戏材质的色调重导一次，只有眼睛贴图变了。</p>
+
+    <h3>高清材质：带游戏完整材质的 PMX 和 Blender 插件（2026-10-17：Cooling Suit）</h3>
+    <p>存档的服装 .blend 只接了底色。这条线从游戏里读服装的材质实例，接回法线、粗糙度 / 金属度、清漆、绒毛光泽、自发光、针织花纹和贴花的透明裁切。
+      卡片上带 <span class="badge badge-fmt">高清材质</span> 徽章的有一行「高清版」：高清 .blend 和对比图。现在只有 <b>Cooling Suit（Alice，<code>CH_P_EVE_Nikke_06</code>）</b>。
+      详细见 <code>scripts\stellarblade\README.md</code>「高清材质」，命令（<code>&lt;包名&gt;</code> 如 <code>CH_P_EVE_Nikke_06</code>，DLC 在 <code>SB/Content/DLC_2/...</code>）：</p>
+    <pre># 1 读服装的材质实例（不要密钥）
+cue4parse.exe -i "&lt;StellarBlade&gt;\SB\Content\Paks" -g GAME_UE4_26 -m E:\game_export\StellarBlade\_meta\mappings\StellarBlade_1.1.0.usmap -f json -y -o &lt;dir&gt; -p "SB/Content/DLC_2/Art/Character/PC/&lt;包名&gt;/Mat/*"
+# 2 整理参数，生成 PMX 用的 4K 颜色贴图（底色 × AO + 自发光）
+python .\hq_materials.py --mi-json &lt;dir&gt; --textures &lt;服装文件夹&gt;\textures --out &lt;dir2&gt; [--pattern Knitted_N=&lt;png&gt;]
+# 3 高清 .blend（原 .blend 不动）
+blender -b &lt;服装.blend&gt; --python .\hq_materials_blender.py -- --materials &lt;dir2&gt;\materials.json --save &lt;服装文件夹&gt;\&lt;名&gt;_HQ.blend
+# 4 PMX（亮面拆成 _gloss 材质）+ 回读预览
+blender -b &lt;服装.blend&gt; --python .\export_pmx_blender.py -- --out &lt;dir3&gt; --hq-materials &lt;dir2&gt;\materials.json
+blender -b --python .\preview_pmx_blender.py -- --pmx &lt;dir3&gt;\&lt;名&gt;\&lt;名&gt;.pmx</pre>
+    <p><b>Blender 插件 Stellar Blade Game Materials</b>（<code>scripts\blender_addons\stellarblade_game_materials</code>，本机已装进 Blender 3.6，在「编辑 → 偏好设置... → 插件」里勾选）：
+      用 mmd_tools 导入 PMX → 3D 视图按 N → MMD 标签页最下面「剑星游戏材质」→「换上游戏原始材质」。插件按材质名从存档的 <code>*_HQ.blend</code> 里把游戏材质搬进来，
+      「游戏材质 / MMD 着色」可来回切，六个滑块实时调，再导出 PMX 不受影响。</p>
   </section>
 
 </main>

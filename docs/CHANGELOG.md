@@ -14,6 +14,112 @@
 
 ---
 
+## 2026-10-24 — 爆衣插件 2.1：几层衣服一层一层爆（Reika A → B → 裸体）；剑星游戏材质插件 0.2：分层模型每层用自己的高清材质、跟着步骤滑块藏层（Blender 里的细黑线没了）；Eve 赤足裸体的高清 .blend
+
+**新增 / 修复**
+
+- 用户 10-18：「Mod_GantzReika_A 和 Mod_GantzReika_B 和nude的版本合并成一个pmx，后续做爆衣的时候可以一层一层的爆」（合并当晚做好，
+  见下面 10-18 那条），之前还问过 Reika 能不能在 Blender 的插件里换高清材质。10-24「继续」：把剩下的做完。
+- **爆衣插件 2.1**（`scripts/blender_addons/clothes_burst`）：导入 `pmx_layers.py` 做的分层模型，插件认出步骤滑块
+  （`1_A脱ぎ`、`2_B脱ぎ`），每层的衣服各切一份碎片，表情 `k_爆衣` / `k_爆衣落下` / `k_爆衣碎片_材質`。
+  - 第 k 层在「第一层爆开帧 + (k-1) × 每层间隔」爆开（面板新设置「每层间隔」，默认 90 帧）；
+  - 碎片在爆开那一帧出现在原位，步骤滑块下一帧才拉到 1。第一版同一帧换层，里面那层从还在原位的碎片里穿出来（B 大腿的
+    皮肤、裸体的光脚从高跟靴碎片里伸出来）；
+  - 皮肤不碎：名字带 skin / 肌 的（B 的 `EveSKin`）默认不切碎片，跟着步骤滑块直接换成裸体的皮肤。第一版它也碎了，飞出一片片
+    肉色。面板按材质可改；
+  - 碎片飞的方向只看这层里面的东西；不加 `衣服非表示_材質`、不换身体，藏层换层都用模型自己的步骤滑块；
+  - 命令行 `scripts/riseoferos/burst_pmx_blender.py` 对分层模型不用 `--outfit`，新参数 `--interval`。
+- **剑星游戏材质插件 0.2**（`scripts/blender_addons/stellarblade_game_materials` + `scripts/stellarblade/game_materials_blender.py`）：
+  - 分层模型每层从自己的高清 .blend 拿材质（按 PMX 备注 `layer=` / `source=`）：Reika 的 A、B、裸体分别从
+    `Eve_Mod_GantzReika_A_HQ`、`…_B_HQ`、`Eve_Nude_Barefoot_HQ`；头、头发、眼睛跟最外层；一个 .blend 缺的材质去别的找；
+  - 被材质表情藏起来的材质：游戏材质的透明度乘上 MMD 着色器那一刻的透明度，步骤滑块照样藏层、换层（原来一换游戏材质，
+    藏着的 B 和裸体全露出来）；
+  - 两个处理函数（场景变化、每帧开始前）按表情滑块算每个层材质的透明度：藏着时换成 Blend、显示背面、不投影、次表面 0，
+    显示时换回原设置。10-18 只用 mmd_tools 时 B 状态皮肤上的细黑线（藏着的裸体贴在 B 的皮肤下，Alpha Hashed）没了；
+    游戏材质、MMD 着色都管；
+  - 爆衣插件的碎片材质 `<材质>_burst` 也认得（先换材质还是先生成爆衣都行）。
+- **Eve 赤足裸体的高清 .blend**（`scripts/stellarblade/hq_mod_outfits.py --only Nude_Barefoot`）：EveOriginalProportions 赤足 mod
+  没装进游戏，脚本从下载的压缩包读它的 .pak / .utoc / .ucas（Windows 自带 tar 解 RAR5），旁边建目录联接指向游戏 Paks，
+  一起交给 CUE4Parse，mod 的身体实例 `SkinEve` 才找得到父实例 `MI_Basebody_V02_F2`。身体接 mod 的 ORSS（粗糙度、高光）和法线，
+  次表面和脸一样。新文件 `E:\game_export\StellarBlade\Eve\blend\Nude_Barefoot\Eve_Nude_Barefoot_HQ.blend`（原 .blend 不动）。
+- 产物：`E:\game_export\StellarBlade\_爆衣插件\Eve_Mod_GantzReika_Layers_burst\`：
+  - `Eve_Mod_GantzReika_Layers_burst.pmx` + `textures\`：三层模型加两层碎片（A 159 块、B 108 块）；
+  - `爆衣_第120帧开始_每层隔90帧.vmd`：第 120 帧 A 爆开，第 210 帧 B 爆开（36 个表情帧）；
+  - `手势舞_加一层一层爆衣_第120帧开始_每层隔90帧.vmd`：默认测试舞（适配瓦雷莎.vmd）合上这些帧，MMD 里读一个就行；
+  - 视频（Blender、游戏材质、手势舞、仿 MMD 物理）：`…_一层一层爆_手势舞.mp4`（+ 场景 `.blend`）、`…_一层一层爆_胸部特写.mp4`；
+  - `说明.txt`。
+
+**用户如何操作**
+
+- MMD：读入 `Eve_Mod_GantzReika_Layers_burst.pmx` → 舞蹈 VMD → `爆衣_第120帧开始_每层隔90帧.vmd`。
+- Blender：先重开（或在偏好设置里把「爆衣」和「Stellar Blade Game Materials」关掉再打开），导入分层 PMX →「剑星游戏材质」→
+  「换上游戏原始材质」→「爆衣」页签「MMD 表情」→「生成爆衣表情」→「在时间轴上预览」。一步步见 `docs/clothes-burst-tutorial.md` 例 6。
+- 别的分层模型：先 `pmx_layers.py` 合并（`scripts/clothes_burst/README.md`），再同样做。
+
+**原理与兼容性**
+
+- 分层模型只认表情数据：组合表情名 `数字_层名脱ぎ`，零件里 alpha 乘 0 或加负数的是这一步脱掉的层，加正数的是换上的层。
+- 一件衣服的爆衣（ROE 的 full 版、Fiona、Eve 09）流程和输出都不变；`vmd.burst_keys` 多一个不用的 `interval` 参数，
+  `vmd.merge` 也替换 keys 里新表情名的旧帧。
+- 剑星插件对没有分层、没有材质表情的模型照旧（一个家）；透明度只乘在材质表情能改透明度的材质上——PMX 里本来透明的眼睛遮挡、
+  泪膜这些，游戏材质照样画。
+- 处理函数只在有材质需要时干活，没变化时不写任何东西；渲染动画时直接读这一帧的动画曲线。
+
+**验证**
+
+- 插件流程（scratch `test_layers_burst.py`，用插件自己的按钮）25/25：两步认出、每层材质对、碎片透明度加回 1、皮肤不碎、
+  表情进显示框、VMD 帧、面板能画、撤掉后表情和显示框原样。
+- 剑星插件（`test_layers_addon.py`）：19/19 个材质、6 个跟滑块；三个状态的正面、背面、劈腿胯部特写，游戏材质和 MMD 着色
+  都没有细线；滑块打关键帧渲染动画，每帧都是这一帧的状态。单独的 A、B、Cooling Suit、裸体 PMX 照旧全部换上（15 / 16 / 17 / 14）。
+- 爆衣 PMX 和原分层 PMX 比：多 6 个表情、4 个碎片材质，步骤滑块和它们的零件原样，新表情名都在 15 字节以内。
+- 视频逐帧看过爆开前后：爆开那一帧和前一帧一样，下一帧才露出里面那层，没有穿模。
+- 另外几条路（`test_layers_extra.py`）12/12：剑星插件面板、「去掉游戏材质」后节点清零且 MMD 设置还原、皮肤点选后也碎、
+  分层模型「直接消失」只拉步骤滑块、合进舞蹈的 VMD 保留舞蹈的骨骼帧和表情帧。
+- 一件衣服的爆衣没变：Eve 09（`Eve_CH_P_EVE_09_full_bustB.pmx`）重做，1053 块碎片，顶点 / 面 / 材质 / 骨骼 / 表情 / 刚体 / 关节数和
+  10-05 归档的爆衣 PMX 一样，VMD 的表情帧逐字节一样。
+
+## 2026-10-18 — MMD 物理：一整片头发拆成多股（新工具 `scripts/mmd_physics/pmx_hair_strands.py`）；Tifa AC 18 的长发和刘海
+
+**新增**
+
+- 用户：「E:\Downloads\tifa_good\Tifa Lockhart FFVII Advent Children 18 的pmx的模型，头发加更细的物理效果」。
+- 原来三个 PMX（V1 / V2 / None，头发共用）背后齐腰的长发整片挂在一条 6 节的骨链 `hair back a-f` 上，配 6 个又宽又扁的刚体，
+  跳舞时整片像一块板子甩；刘海 `hair front A-C` 也是一条 3 节的链。
+- `pmx_hair_strands.py`（后台 Blender 跑，用 mmd_tools 的 PMX 读写）：按正则选一条头发骨链，拆成 N 股 × M 节：
+  - 每个顶点在原链上的长度位置和左右位置算出来，宽度按每一高度左右各自归一，股沿着头发自己的轮廓分；
+  - 新骨链放在每股每节头发的重心上，沿链平滑，父骨骼接原链的父骨骼（頭）；
+  - 原链上的权重分给最近的两股 × 两节；顶点挂在别的骨骼（頭……）上的权重一点不动，头皮不跟着飘；
+  - 每节一个胶囊刚体，组、碰撞掩码、质量、阻尼、模式照原链同一层抄；关节和原来一样（世界坐标轴，±限位，无弹簧）；
+    原链的刚体、关节删掉，骨骼留着（不再有权重）。
+- Tifa：长发 1 × 6 → 7 股 × 8 节，刘海 1 × 3 → 3 × 3；两侧的鬓发链本来就是左右各一条，没动。
+- 产物：`E:\game_export\_downloaded\Tifa Lockhart FFVII Advent Children 18 头发细分物理\`（三个 `… 头发细分.pmx` + 贴图 + README.txt +
+  对比视频 `Tifa_AC18_V1_头发物理_原版vs细分.mp4`）；按用户的话又全部复制到 `E:\Downloads\tifa_good\Tifa Lockhart FFVII Advent Children 18-2\`。
+  下载的原文件没动。
+
+**用户如何操作**
+
+```
+blender -b --factory-startup --python scripts\mmd_physics\pmx_hair_strands.py -- 原.pmx 新.pmx ^
+    --chain "^hair back [a-f]$=7x8:後髪" --chain "^hair front [A-C]$=3x3:前髪" [--limit 10]
+```
+
+`--chain` = 骨骼名的正则 = 股数 x 节数 : 新骨骼的名字前缀，可以写几个。
+
+**原理与兼容性**
+
+- PMX 一个顶点最多 4 根骨骼：顶点原来的别的权重原样保留，新骨骼只占空出来的位置，按大小取，再按原链的份额放大。
+  第一版把 816 个顶点上很小的 頭 权重挤掉了，已改。
+- mmd_tools 写 PMX 的两个坑：`pmx.save` 不给 `add_uv_count` 会丢掉附加 UV（照文件头第 10 字节给）；读的时候贴图路径变成绝对路径、
+  写的时候按输出文件夹算相对路径，所以先把路径换回「输出文件夹 + 原来的相对路径」。两样都处理后，什么都不改的模型写回去逐字节一样
+  （三个 Tifa PMX 都试过）。
+- PMX 刚体的旋转 = Blender 刚体矩阵的 YXZ 欧拉角取负、换轴（Blender 坐标 = PMX 的 xzy）；胶囊的轴是 Blender 的局部 Z。
+
+**验证**
+
+- 除了这两条链，别的全一样；别的骨骼上的权重变动 0；65 个胶囊的朝向和骨骼差不到 0.02°。
+- 视频（手势舞，背面 / 正面 × 原版 / 细分）：原版整片甩成一块板，细分后沿着背垂下来，发梢分股；抖动的 95 分位相同（1.02 / 0.99）。
+- 用户还没在 MMD 里试。
+
 ## 2026-10-18 — Luf g05：裙子碰撞修正、眼睛按游戏公式重烘（新工具 `pmx_game_eye.py`）、full 版胸部穿模（新工具 `pmx_body_cover_cups.py`、`pmx_bust_chain_nocollide.py`、量具 `chest_clip_blender.py`）；服装移植工具 `pmx_graft.py`
 
 **新增 / 修复**
@@ -55,6 +161,59 @@
 
 - 八方来才里穿衣版 bustB 有一个尖峰（第 203–206 帧，每帧最多 557 个顶点）：大腿高抬时，右胸的轻吊坠穿过大腿。归档原版同样有这个问题（第 201 帧 105 个顶点），不是这次带进来的。
 - `pmx_game_eye.py` 重算的贴图和交付的那张逐像素一致；在 a08 上也试过。
+
+## 2026-10-18 — 爆衣：几层衣服叠在一个 PMX 里，一次显示一层（新工具 `scripts/clothes_burst/pmx_layers.py`）；Gantz Reika A + B + 裸体合成一个
+
+**新增**
+
+- 用户：「Mod_GantzReika_A 和 Mod_GantzReika_B 和nude的版本合并成一个pmx，后续做爆衣的时候可以一层一层的爆」。
+- `pmx_layers.py`：以外层 PMX 为底子，骨骼、头、头发、表情、物理都用它的，里层只拿列出的材质。
+  - 拿法用的是 `pmx_add_nude.add_nude()`：按骨骼名对上，骨架不同的地方摆到外层的骨架上；
+  - 权重保留模型自己的；
+  - 骨架完全一样时法线也原样保留。
+- 里层在文件里透明度为 0。表情面板里只有「步骤」滑块，按顺序拉到 1，拉上去的不用放回：
+  - `1_A脱ぎ`：A → B；
+  - `2_B脱ぎ`：B → 裸体。
+- 每一步由几个零件组成，零件不在面板里，VMD 照样能用：
+  - 上一层隐藏：外层用 `A非表示`（乘算透明度 0），里层用 `B消去`（把加上的透明度再减掉）；
+  - `<层>収納`：顶点表情，把这一层收到它跟随的标准骨骼中轴的 10%，在身体里面；
+  - `<下一层>表示`：把下一层的透明度加回来。
+- 以后一层一层爆衣时，每一段就打一个步骤滑块。
+- 第一版用的是「每层一个状态滑块」（`B状態` / `裸体状態`），当晚就改了：用户把两个同时开着，B 的袖子和长筒袜盖住了裸体的胳膊和腿，以为裸体不完整。
+- 产物：`E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_Layers\`，包括
+  - `Eve_Mod_GantzReika_Layers.pmx`：外层 Reika A，中层 Reika B 的衣服和皮肤，里层完整的赤足裸体；
+  - `textures\`、`三层切换预览.jpg`、`说明.txt`。
+
+**用户如何操作**：在 MMD 或 Blender 里打开，默认穿 Reika A。
+- `1_A脱ぎ` 拉到 1：换成 B；
+- 再把 `2_B脱ぎ` 也拉到 1：换成裸体。
+
+其他像 Reika 这样的分层模型，照 `scripts/clothes_burst/README.md`「`pmx_layers.py`」那节的命令做。
+
+**原理与兼容性**
+
+- MMD 算材质表情是「底色 × 乘算 + 加算」。所以里层靠加算显示，脱下时用一个负的加算把它减回 0（1 − 1），而不是用乘算去抹。
+- 收进身体：
+  - 只往标准骨骼的中轴收，辅助骨用它上面的标准骨骼。第一次往辅助骨的线段上收，靴子、长筒袜有几块露在裸体小腿上；
+  - 收进去后，顺序拉反了，那层也在身体里，不会以负透明度留在皮肤上；
+  - Blender 里藏起来的 A 也不再在裸体手腕上画出黑圈。
+- 表情名按 Shift-JIS 15 字节检查过，写得进 VMD。
+- 赤足裸体的胯和腿比 Reika 的骨架高 1.1 cm，UE 里就是这样（mod 网格的绑定姿势）。按 A 的骨架摆正后，腿挪了约 1.1 cm，形状不变。
+- 已知（10-24 两个都解决了，见上面 10-24 那条）：
+  - Blender（mmd_tools 默认 Alpha Hashed）里，被藏的层贴着显示的层，交界处 EEVEE 会画出细黑线；MMD 里不画透明度为 0 的材质，没有这个问题；
+  - 剑星游戏材质插件还没适配这个模型。
+
+**验证**：
+
+- 和三个原版逐项比对：
+  - A 的顶点、材质、骨骼、刚体、关节、79 个表情都没变；
+  - B 那层的 30827 个顶点和原版 B 一样（位置差 9e-6、法线差 0.03°，权重只有一处第 7 位小数的舍入）；
+  - 裸体的权重和原版一样；
+  - 14 张贴图都在。
+- Blender 里用两个步骤滑块切换三种状态，正面、背面、手脚都完整。
+- 站立、深蹲、劈腿、抬手（关掉 IK、正向摆姿势）时：
+  - 合并版的裸体和原版裸体 PMX 看不出差别，身上没有 B 的东西露出来；
+  - B 状态也正常。
 
 ## 2026-10-18 — 做裙子物理的插件 mmd_cloth_physics 0.2：盒子不再横在布上，裙片按网格连，碰撞组按身体部位；全部 ROE 模型查了一遍（新工具 `cloth_check_pmx.py` / `cloth_rebuild_blender.py`）
 
@@ -109,6 +268,60 @@
 - 重建工具输出的 PMX 只有刚体和关节和原文件不同。
 
 ---
+
+## 2026-10-18 — 剑星：Gantz Reika A / B 有了高清 .blend，插件能把它们的全部材质换成游戏材质（新工具 `hq_mod_outfits.py`）；插件按模型大小换算次表面散射半径，脸不再糊
+
+**新增 / 修复**
+
+- 用户：「E:\game_export\StellarBlade\Reika\pmx 这个现在有高清材质么，能在blender里的mmd插件里添加高清材质么」。
+  - Reika 的 PMX 只有 MMD 材质，每个材质一张颜色图。
+  - 剑星游戏材质插件只换得上头、头发、眼睛 13 个，借的是 Cooling Suit 的高清 .blend。
+  - mod 的衣服（A：`SuitA_Body`、`SuitA_Mesh`；B：`SuitB`、`SuitA_Body`）和 B 的皮肤 `EveSKin` 保持 MMD 着色。
+- 新工具 `scripts/stellarblade/hq_mod_outfits.py`：
+  - 用 CUE4Parse 从装好的 mod 读材质实例，顺着 `Parent` 读到游戏的父实例和母材质，按 UE 的规则合并（子实例优先，母材质的默认值兜底）；
+  - 交给 `hq_materials.py` / `hq_materials_blender.py`，这两个脚本都不改；
+  - 在存档文件夹里生成 `Eve_Mod_GantzReika_A_HQ.blend` / `_B_HQ.blend`，原来的 .blend 不动。
+- 两套衣服：
+  - 都继承 Planet Diving Suit 的 `MI_P_EVE_09_Metal02_Layered`（母材质 `MA_CH_P_EVE_09`），接 ORM、DirectX 法线、发光。
+  - 这个母材质的发光走 GlowEmissive 层（静态开关 `UseGlowEmissive`）：发光贴图的红通道 × `ML_GlowEm_EyeCoreHDRTint`。
+    mod 把这个颜色从游戏的黄绿 (117, 271, 2.36) 改成了蓝色 HDR (0, 0.56, 271)，原样保留。
+- B 的皮肤：
+  - 继承 Eve 身体的 `MI_Basebody_V02_F2`（`MA_Skin_EVE`），`hq_materials.py` 不认它的参数名，由本工具在 Blender 里自己接；
+  - `ORSS Mask` 的 G 映射到 0.229–1.108 当粗糙度，B 当高光；DirectX 法线；
+  - 次表面照抄脸，和脸的接缝对得上。
+- 存档 .blend 原来按文件名猜着接的 ORM / 法线 / 发光节点被新接线顶掉后，删掉。
+- 插件 `stellarblade_game_materials`（`scripts/stellarblade/game_materials_blender.py`）：
+  - 搬过来的次表面散射半径乘「导入模型的高度 ÷ 172」。存档 .blend 是厘米单位，PMX 按 0.08 导入后差不多是米。
+  - 之前脸的 1 cm 散射变成 1 m，游戏材质下整张脸糊成一片蜡色，Cooling Suit 也一样。
+
+**用户如何操作**
+
+- Blender 里用 mmd_tools 导入 `E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_A|B\*.pmx`。
+- 在 N 侧栏 MMD 页「剑星游戏材质」点「换上游戏原始材质」。面板显示「Eve_Mod_GantzReika_A_HQ：换了 15 个材质，没找到 0 个，错误 0」（B 是 16 个）。
+- 已经开着的 Blender：
+  - 新的高清 .blend 直接找得到；
+  - 次表面的修正要在偏好设置里把插件关掉再打开，或者重开 Blender。
+- 重做高清 .blend：`python scripts\stellarblade\hq_mod_outfits.py [--only Mod_GantzReika_B]`。
+
+**原理与兼容性**
+
+- 插件按「含这个 PMX 的材质最多的高清 .blend」选来源：
+  - Reika 现在从自己的高清 .blend 搬全部材质，头、头发、眼睛的网络和 Cooling Suit 那份一样，眼睛按游戏参数；
+  - Cooling Suit、Fiona 等其他 PMX 的来源不变。
+- PMX 没有重导：mod 的 ORM 红通道（AO）全是 1，`--hq-materials` 的「底色 × AO」等于原图。
+- 没照做：发光层的菲涅耳 / Boost 项；皮肤的 `MicroNormal`（毛孔）和 `NC_E Mask`，记在 `skin.json` 里。
+- 数据：`E:\game_export\StellarBlade\_meta\hq_materials\Mod_GantzReika_A|B\`（原始 JSON、合并后的实例、`materials.json`、`skin.json`、日志）。
+  两个存档文件夹的 `README.txt` 各加了「高清版 / HQ」一节。
+
+**验证**
+
+- 用插件自己的按钮（后台 Blender 3.6）测：
+  - A 换上 15/15、B 16/16，贴图不缺，没留下库条目；
+  - 两种着色状态下各导出一次 PMX：A 逐字节一致；B 差 12 个字节，是肚脐上一个退化顶点的法线。不装插件连着导出，这个法线也在两个值之间随机变，是 mmd_tools 的问题；
+  - 「去掉游戏材质」后插件节点为 0；
+  - Cooling Suit 复测 17/17，导出一致。
+- 对比图（全身 / 胸 / 腿 / 脸，MMD 着色和游戏材质并排）：`E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_A|B\插件效果_游戏材质对比.jpg`。
+- 脸放大比：修之前糊成蜡色，修之后皮肤和法线细节都在，和 MMD 着色的色调接近。
 
 ## 2026-10-18 — ROE 插件 v1.1.17：新按钮「2.6 游戏原版眼睛」，眼睛换成游戏自己的眼球着色器（新模块 `roe_eye_blender.py`）
 
@@ -179,6 +392,188 @@ mmd_cloth_physics 插件本身的排序和盒子朝向没改，它做的别的 R
 
 两个修正版的 PMX 在 Blender 里导入，贴图都在（相对路径）；`--skin` 和 `--colliders-from` 两种用法对 HEAD 版逐字节回归通过；
 用仓库里的工具重做和 scratch 里逐步做的结果一致（数值差 < 1e-6）。
+
+## 2026-10-18 — 剑星：眼睛按角色读游戏参数（色调、色相、母材质默认值、角色自己的贴图），高清材质脚本和 PMX 导出都认；Eve 的存档按游戏材质重导；自发光按 `Emissive_CH` 取通道；画廊加「其他角色」
+
+1. **起因**：ROE_pmx 窗口要用这套高清脚本导剑星另外 17 个女角色，可 10-17 的脚本给所有眼睛都套 Eve 的参数。
+2. **做了什么**（`scripts/stellarblade/`）：
+   - **`eye_material.py`**：
+     - 参数补全：
+       - `IrisHueShift`：UE 的 HueShift，绕灰轴旋转，Blender 里用 Vector Rotate 节点；
+       - `IrisHueTint`、`ScleraTint`。
+     - 实例没写的参数取母材质 `M_EyeRefractive` 自己的值（`M_EYE_REFRACTIVE`），不再取 Eve 的。
+     - 新函数：
+       - `eye_from_mi_json()`：一个眼睛实例 → `{material, params, textures}`；
+       - `rewire_eye(mat, eye, roots, load)`：按记录换眼睛，材质里缺贴图可从文件加载。
+     - Eve 的默认值也乘上她自己的色调 (0.656, 0.598, 1)。
+   - **`hq_materials.py`**：
+     - 眼睛实例写进 `materials.json` 的 `eyes`（按实例名）和 `eye`（游戏里用的那个），带贴图路径；
+     - 找不到的贴图到 `E:\game_export\StellarBlade\_meta\hq_materials\_eye_textures\` 去找。那里是母材质的两张默认贴图和 Eve 的虹膜，CUE4Parse 导出。
+   - **`hq_materials_blender.py`**：按 `eyes` / `eye` 换眼睛。
+   - **`export_pmx_blender.py`**：
+     - 读 `--hq-materials` 里的眼睛；
+     - 新参数 `--eye-mi <实例 JSON>` 和 `--keep-eye`；
+     - 名字对得上眼睛实例的材质也当眼球：加眼球骨骼，加高光球面贴图。
+   - **`html/make_gallery.py`**：
+     - 新分类「其他角色」（kind `npc`）；
+     - 标题改为「剑星角色导出总览」；
+     - 统计项改成「服装编号 / 角色」，`npc` 单独计数。
+3. **怎么用**（详见 README「眼睛」里的「其他角色」）：
+   - 把角色眼睛实例的 JSON 放进 `hq_materials.py --mi-json` 的文件夹；
+   - 或者给 `export_pmx_blender.py` 加 `--eye-mi <json>`。
+4. **原理与兼容性**：
+   - **算法来源**：反汇编游戏的着色器确认：虹膜 = HueShift(虹膜贴图) × `IrisHueTint` × `IrisBrightness`。
+     - Eve 的实例和 `MI_MetaEyes_BlueEyes` 是同一个编译好的着色器。蓝眼就是靠色调把橙棕色的共用贴图变蓝的。
+     - 工具在 `E:\tools\sb_shaders\`。
+   - **覆盖范围**：游戏里 31 个 `M_EyeRefractive` 实例全部能解析，女角色的眼睛都用这个母材质。
+   - **接口**：
+     - 旧调用 `rewire_eye(mat)` 和 `link_eye_colour(...)` 不变，默认仍是 Eve 的参数；
+     - `params_from_scalars` 改为 `params_from_values(scalars, vectors)`。
+   - **Eve 的眼睛**：乘上色调以后，贴图上的虹膜从 (133, 86, 56) 变成 (114, 68, 56)，略暗，橙色少一点。
+     - 游戏截图屏幕上的虹膜约 (91, 46, 16)：比两者都暗、偏金，差在游戏的光照、反射和色调映射上。
+     - 用户在「不乘色调、更像截图」和「严格按游戏材质」之间选了后者（对比图 `E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\眼睛色调对比.jpg`），存档已按它重导，见第 5 点。
+   - **自发光改按游戏的规则**（`hq_materials.py`、`hq_materials_blender.py`；ROE_pmx 发现）：
+     - 只取自发光贴图里 `Emissive_CH` 选的那一个通道，Ver03 默认红通道。原来取 RGB 最大值 / 整张图，Iberis 的丝袜遮罩蓝通道几乎是空的，却整片发了光。
+     - `EmissivePower` 为 0 或 `EmissiveColor` 是黑色（母材质的默认值）时不发光；原来实例没写颜色就当白色。
+     - Cooling Suit 的自发光贴图三个通道一样：`UV2` 的 PMX 颜色贴图只有暗处 475 个像素变了（最多 27/255），高清 .blend 的 `UV2` 多一个分离通道节点。
+5. **验证**：
+   - **Blender 单元测试全过**：
+     - Eve 默认；
+     - Lily 的记录从文件加载她自己的贴图；
+     - 材质里已有贴图时按名字找到；
+     - 非眼睛材质不动。
+   - **Cooling Suit 重导到草稿**：
+     - 烘出的眼睛和 numpy 按同一公式算的参考图比，虹膜平均差 0.07/255，眼白 0。
+     - PMX 其余部分（顶点、UV、面、权重、骨骼、表情、刚体、关节）和存档完全一致，只有眼睛贴图变了。
+   - **`hq_materials.py`**：加入 Eve 和 Lily 的眼睛实例后，`eyes` 列出 4 个，`eye` 选对；Eve 的贴图在服装文件夹里找到了。
+   - **画廊**：
+     - 用临时清单加一条 npc，生成到草稿。分类按钮、徽章、统计、标题都对。
+     - `index.html` 没动：它归 ROE_pmx 管，那边已经用新脚本重新生成。
+   - **存档按新眼睛重导并替换**（旧文件备份在草稿 `eye_iris\backup_1017\`）：
+     - Cooling Suit：PMX 只有眼睛贴图变了，其余（顶点、UV、面、权重、骨骼、表情、刚体、关节）不变；4 张回读预览重拍，链根漂移仍是 1.1 cm。
+       高清 .blend 只有眼睛材质变了（21 → 24 个节点）；自发光修正后 `UV2` 再多一个节点。
+     - Fiona、Reika A / B 的 PMX：只有眼睛贴图变了，权重按骨名比完全一致，预览正常。
+     - 三个 mod 的 XPS：骨骼、网格位置完全一致，只有眼睛贴图变了，法线差最后一位（浮点抖动）。
+     - `眼睛修复对比.jpg` 换成最终版，新增 `眼睛色调对比.jpg`；`_meta\pmx_logs` 换成这次的日志。
+   - **插件**：剑星材质插件从新的高清 .blend 搬材质，17 个都换上了；眼睛的色相旋转、色调、亮度节点和连线都对，`UV2` 的自发光接上了。
+
+---
+
+## 2026-10-17 — 剑星：Eve 的眼睛按游戏材质的参数重做，虹膜大小和颜色与游戏一致（新模块 `eye_material.py`；PMX 导出、高清 .blend 都用它）
+
+1. **起因**：用户：「这个eve的眼睛眼仁有点小，看看游戏里究竟是什么样子的，修复一下导出脚本」。
+2. **查到的原因**：
+   - 眼睛颜色是 `validate_eve.py` 的 `link_eye_color()` 拼出来的，虹膜半径凭目测写死成 UV 0.07，亮度提 2.6 倍。
+   - 游戏的眼睛材质实例 `MI_EyeRefractive1`（母材质 `M_EyeRefractive`）：`Iris UV Radius` 0.145、`ScaleByCenter` 0.849798、`PupilScale` 0.862、`LimbusUVWidthColor` 0.045、`IrisBrightness` 5、`ScleraBrightness` 1.6。
+   - 在眼球网格上，游戏的虹膜外缘是 UV 半径 0.145 × 0.85 = 0.123。旧的 0.07 只有它的 57%，虹膜宽度只有游戏的约 41%（眼球 UV 不是线性的），颜色也偏暗偏灰。
+3. **做了什么**（`scripts/stellarblade/`）：
+   - **新 `eye_material.py`**：
+     - 按游戏的算法用 Blender 节点算眼睛颜色：整只眼的 UV 绕中心缩到 85%；虹膜贴图铺满半径 0.145 的圆，瞳孔按 PupilScale 收小；角膜缘往里 0.045 内过渡到眼白；虹膜 ×5、眼白 ×1.6。
+     - `rewire_eye()` 把材质里旧的眼睛节点换成这一套：只删掉只给底色用的节点，法线那一路不动。
+   - `validate_eve.py` 的 `link_eye_color()` 改用它，以后导出的 .blend 直接是对的。
+   - `export_pmx_blender.py` 新增 `rewire_eyes()`，烘焙前把 .blend 里的眼睛换掉。从存档里的旧 .blend 导出的 PMX 也对，报告字段 `eyes_rewired`。
+   - `hq_materials_blender.py` 做高清 .blend 时也换，剑星材质插件拿到的就是新眼睛。
+4. **怎么用**：导出命令不变。已经导出的 PMX 重导一次就好。
+5. **原理与兼容性**：
+   - UE 的 ScaleUVsByCenter 是 `(uv - 0.5) / s + 0.5`，所以 0.85 是把内容缩小。
+   - 一开始反过来理解成 UV × 0.85，算出 0.1706，正好落在眼球网格角膜凸起的边缘那圈顶点上；但渲染出来虹膜几乎占满眼裂，和游戏对不上，排除了。
+   - 没做角膜折射（游戏里瞳孔会被放大一点）和眼角阴影。
+   - 只动眼睛的底色，其余材质、骨骼、权重、物理都不变。
+6. **验证**：
+   - **游戏参照**：游戏自带的引擎渲染图 `ClearReward_Nikke_01`（DLC_2 UI 贴图）。
+     - 尺寸：虹膜宽 ÷ 眼角到眼角宽，游戏 0.49，新 0.50，旧约 0.38。虹膜上下都碰到眼皮，和游戏一样。
+     - 颜色：虹膜中位色游戏 (98, 50, 21)，新 (105, 62, 36)，旧 (76, 46, 32)。
+   - **烘焙**：节点版烘出的贴图和 numpy 按同一公式算的参考图比，虹膜平均差 0.09/255，眼白 0。
+   - **Cooling Suit 重导**（同样的参数）：只有 `MI_EyeRefractive1_baked.png` 变了。PMX 的顶点位置、UV、面、权重、材质、骨骼、表情、刚体、关节全部一致，法线差 1.8e-7（浮点抖动，和以前一样）。
+   - **高清 .blend 重建**：只有眼睛材质变了（17 → 21 个节点），其余材质节点数一致，22 张贴图都在。
+   - **已替换的存档**：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\` 的 PMX、贴图、预览，以及 `Eve\blend\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06_HQ.blend`。对比图 `眼睛修复对比.jpg` 放在 PMX 文件夹里。
+   - **两个 mod 也重导了**（用户：「重导，画廊也更新」）：Fiona、Reika A / B 的 PMX 和 XPS 都已重导并替换存档。
+     - PMX：只有眼睛贴图变了。另外多了两根脚尖骨 `左つま先` / `右つま先`（Fiona 313 → 315，Reika 286 → 288 骨）：这是 Convert_to_MMD5 09-26 修的，09-25 那版的 `つま先ＩＫ` 导出后其实不是 IK。权重按骨名比完全一致。
+     - XPS：骨骼、网格完全一致，眼睛变了。口腔颜色从浅灰 (231, 231, 231) 变成材质本来的暗红 (97, 29, 36)。原因是 blender2xps 的 `material_base_color()` 只要 mmd_tools 加载了，就优先取 MMD 材质默认的 0.8 灰；09-25 导出时没带 `--factory-startup`，这次带了。
+     - 旧文件都有备份。
+   - **画廊**：
+     - 存档清单里的路径换成 E:（用存档工具的 `build_resolver`）；
+     - `make_gallery.py` 在 D: 没有清单时自动读存档，新增「高清材质」徽章和「高清版」一行，附录补了高清材质和插件；
+     - 页面重新生成，634 个链接只有一个已知的测试探针失效。
+   - **还是旧眼睛**：存档里 148 个 Eve 的 .blend（就地改要用户同意）。从它们导 PMX 时会自动换成新眼睛。
+
+---
+
+## 2026-10-17 — 新插件「Stellar Blade Game Materials」：导入剑星 Eve 的 PMX 后一键换成游戏原始材质（和 Vindictus、ROE 的插件一样，可切回 MMD 着色）
+
+1. **起因**：Cooling Suit 的 PMX 导出以后，用户问「blender哪个插件能导入高清材质」。当时没有：Vindictus 和 ROE 的插件只认自己游戏的存档。用户说「做」。
+2. **做了什么**：
+   - **新插件 `scripts/blender_addons/stellarblade_game_materials`**（3D 视图侧栏 → MMD → 剑星游戏材质），按钮和另外两个材质插件一样：
+     - 「换上游戏原始材质」；
+     - 「游戏材质 / MMD 着色」切换；
+     - 六个实时滑块：法线强度、粗糙度、金属度、清漆、绒毛光泽、自发光；
+     - 「参数恢复默认」「去掉游戏材质」；
+     - 「高级」里可以改存档目录、直接指定高清 .blend，还有「重新扫描存档」。
+   - **新核心 `scripts/stellarblade/game_materials_blender.py`**：
+     - 按材质名在存档所有 `*_HQ.blend` 里找同名材质。同名最多的那个 .blend 是这个模型的「家」，打平时看模型名里的服装包名。PMX 的 `<名>_gloss` 跟着 `<名>` 走。
+     - 把游戏材质追加进来，整套节点复制进 PMX 的材质（`sbhq_*`，带自己的输出节点），再删掉追加的那份和空库条目。
+     - 有贴图驱动的输入，前面插乘法节点；常数输入（头发粗糙度等）原值记在节点上直接乘。
+   - 插件按文件路径加载核心，模块名单独起（`sb_game_materials_core`），和 Vindictus 插件的 `game_materials_blender` 不冲突。
+3. **怎么用**：
+   - 本机已经用目录联接装进 Blender 3.6；在「编辑 → 偏好设置... → 插件」里搜 `Stellar Blade Game Materials` 勾选。Blender 已经开着时，先点右上角的「刷新」。
+   - 用 mmd_tools 导入 PMX，选中模型，点「换上游戏原始材质」。
+   - 详见插件的 README 和 `scripts/stellarblade/README.md`「高清材质」第 5 步。
+4. **原理与兼容性**：
+   - 材质从存档的高清 .blend 里搬（`hq_materials_blender.py` 做的），不读游戏文件；贴图引用存档里的原文件，不复制。
+   - mmd_tools 的节点一个不删，切换只改激活的输出节点和混合模式，所以再导出 PMX 和原来一样。
+   - 只在 Blender 3.6 上测过。现在存档里只有 Cooling Suit 一个 `_HQ.blend`。
+   - 其他套在 Eve 身上的 PMX（Reika、Fiona mod）只能换上和原版同名的头、头发、眼睛；mod 自己的衣服保持 MMD 着色。
+5. **验证**（Blender 3.6，无界面）：
+   - **Cooling Suit 的 PMX**：
+     - 17 个材质全部换上，0 没找到、0 错误。混合模式对：贴花是 alpha 裁切，头发是 alpha hashed，`_gloss` 不透明。
+     - EEVEE 渲染：游戏材质下连体衣有乳胶清漆，夹克有针织纹理和褶皱法线，腿上贴花是透明的白字。对比图：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\插件效果_游戏材质对比.jpg`。
+   - **滑块**：清漆调到 0、法线调到 2 都看得到变化。头发粗糙度 0.28 → ×1.5 = 0.42，「参数恢复默认」回到 0.28。
+   - **再导出**：游戏材质和 MMD 着色两种状态下各用 mmd_tools 导出一次 PMX，都和原文件一致：17 个材质的贴图、sphere、颜色、面数，以及顶点 131087、面 178364、骨骼 256、表情 79。
+   - **去掉游戏材质**：17 个材质恢复原样，`sbhq_` 节点剩 0。
+   - **库条目**：空库条目当场删掉；用户自己从高清 .blend 链接了材质时，库条目保留，链接的材质照常可用。
+   - **和另外两个插件一起用**：从 3.6 的插件目录同时启用 mmd_tools、Vindictus、ROE 和这个插件，三个面板都在 MMD 标签页，互不冲突。
+   - **Reika A**（`Mod_GantzReika_A`）：13 个换上，2 个是 mod 的衣服（`SuitA_Body`、`SuitA_Mesh`），没找到。同名贴图和原版逐像素一样（Reika A / B、Fiona 都查了）。
+
+---
+
+## 2026-10-17 — 剑星：Eve 的 Cooling Suit（Alice）导出 PMX，带游戏完整材质（新工具 `hq_materials.py` / `hq_materials_blender.py`，`export_pmx_blender.py --hq-materials`）
+
+1. **起因**：用户问「eve的Cooling Suit 之前导出过pmx么」。答案是没有，存档里只有 9-26 的 .blend。接着用户说「导出来，带高清材质的」。
+   - 存档的 .blend 只接了底色：服装自己的法线、ORM、遮罩、自发光贴图都在 `textures\extra\`，但没接上。
+2. **做了什么**（`scripts/stellarblade/`）：
+   - **新 `hq_materials.py`**（普通 Python）：读服装的材质实例（CUE4Parse 导出的 JSON），整理出每个材质用哪张贴图、哪些参数，写成 `materials.json`。同时生成 PMX 用的颜色贴图，原尺寸 4K：底色 × AO + 自发光。
+   - **新 `hq_materials_blender.py`**：按游戏的接法把 .blend 接成完整的 Principled 材质。包括 ORM（粗糙度、金属度、AO 高光遮蔽）、法线（翻绿通道）、清漆、绒毛、自发光、针织花纹法线，贴花按 1/3 透明度裁切。另存一份 `_HQ.blend`，原 .blend 不动。
+   - **`export_pmx_blender.py --hq-materials`**：
+     - 转换前，底色换成上面那几张 4K 颜色贴图；
+     - PMX 写出后，有清漆遮罩的材质拆成哑光和光泽（`_gloss`）两份，光泽那份加高光和加算球面贴图，看起来是乳胶；
+     - 判断光泽区之前先把遮罩模糊，免得缝线上的面被分成哑光、留下斑点。
+   - **`anchor_skin_helpers()`**：有的服装在手臂的 UE 辅助骨下面挂了细绳或小布片，布料物理会把辅助骨本身也做成摆动的第一节，连带整只袖子一起甩。这种链根改成跟随骨骼。
+   - **存盘修正**：用 PMX 模块改完存盘时带上附加 UV 的个数。以前按 0 写，顶点数据会错位。
+3. **怎么用**：
+   ```powershell
+   cue4parse.exe -i <Paks> -g GAME_UE4_26 -m StellarBlade_1.1.0.usmap -f json -o <dir> -p "SB/Content/DLC_2/Art/Character/PC/<包名>/Mat/*"
+   python scripts\stellarblade\hq_materials.py --mi-json <dir> --textures <服装文件夹>\textures --out <dir2> [--pattern Knitted_N=<png>]
+   blender -b <服装.blend> --python scripts\stellarblade\hq_materials_blender.py -- --materials <dir2>\materials.json --save <服装文件夹>\<名>_HQ.blend
+   blender -b <服装.blend> --python scripts\stellarblade\export_pmx_blender.py -- --out <dir3> --hq-materials <dir2>\materials.json
+   ```
+   详见 `scripts/stellarblade/README.md`「高清材质」。
+4. **原理与兼容性**：
+   - 服装材质都继承 `MA_CH_Standard_Ver03`。实例没写的参数（比如花纹平铺 8 次）取母材质的默认值，从它的 `CachedExpressionData` 读。
+   - 遮罩通道由实例里的通道向量决定，例如 `Shading_ClearCoat_CH`、`Fuzz_01_CH`。
+   - MMD 一个材质只能有一张贴图，所以 AO 和自发光烘进 PMX 的颜色贴图；清漆的光泽改用拆分材质 + 高光 + 球面贴图来表现。
+   - 不带 `--hq-materials` 时，导出和以前一样。`anchor_skin_helpers()` 只动名字是 `Ab-L-` / `Ab-R-`、蒙皮至少是下面 3 倍的链根，头发链不受影响。
+5. **验证**（Cooling Suit，`CH_P_EVE_Nikke_06`）：
+   - **文件位置**：
+     - PMX：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\`；
+     - 高清 .blend：`E:\game_export\StellarBlade\Eve\blend\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06_HQ.blend`，22 张贴图都是相对路径；
+     - 游戏数据：`E:\game_export\StellarBlade\_meta\hq_materials\CH_P_EVE_Nikke_06\`。
+   - **回读**：324 骨 / 70 刚体 / 52 关节，26 个 MMD 表情加 ARKit 表情；撕裂 0、权重空洞 0、付与顺序违规 0；15 条物理链的链根站 60 帧最多漂 1.1 cm；套「来杯好茶」跳舞正常。
+   - **光泽拆分**：连体衣 36280 个面是光泽，袜子、鞋等 23716 个面是哑光。肩部细绳和袖下小布片照常摆动，袖子本身不再甩。
+   - **贴花修正**：存档原版的贴花被画成黑色方牌（材质不透明）。游戏里是白字直接印在衣服上，高清版和 PMX 都改对了。
+   - **可复现**：用 `_meta` 里的数据重新导出，和检查过的那份比，只有法线差 2e-7 以内。重新生成的高清 .blend，材质节点和存档的完全一样。
+   - 对比图：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\高清材质对比.jpg`。
+
+---
 
 ## 2026-10-17 — Rise of Eros：10-17 游戏更新的新内容导出——e11（Miri 第 11 套，新 SSR）、c09_outfit1（Misa 9 觉醒版）、e01 新套装 sm；套装工具也读游戏的运行时缓存
 

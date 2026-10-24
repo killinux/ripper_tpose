@@ -258,6 +258,11 @@ python package_outfits.py --index                                             # 
 
 三个都是撕裂 0、付与顺序违规 0、权重空洞 0、`stray_recipients` 空。
 
+**2026-10-17 三个都重导了**，存档在 `E:\game_export\StellarBlade\{Fiona,Reika}\pmx\`，日志在 `_meta\pmx_logs\`：
+- 眼睛按游戏参数重做（见下文「眼睛」）；
+- 骨骼多了 2 根脚尖骨 `左つま先` / `右つま先`（Fiona 313 → 315，Reika A / B 286 → 288）。这是 Convert_to_MMD5 09-26 修的（`convert/ik.py`）：没有这根骨，mmd_tools 导出时找不到 `つま先ＩＫ` 的目标，09-25 那版的 `つま先ＩＫ` 导出后其实不是 IK；
+- 其余不变：顶点、UV、面、材质、表情、刚体、关节都一样，权重按骨名比完全一致。
+
 **骨架转换整条复用 Rise of Eros 的 PMX worker**（`scripts/riseoferos/export_character_model_blender.py`，
 按函数 import，不复制）：Eve 也是 3ds Max Biped，槽位解析、肢体辅助骨按比例挂回（付与）、肩部权重
 放松、37° A-pose、Convert_to_MMD5 一键转换、身体碰撞体、`mmd_cloth_physics` 头发物理、撕裂检查、
@@ -279,6 +284,8 @@ mmd_tools 以 12.5 倍导出、付与顺序回读检查，全部同一套代码�
 | 脸是 MetaHuman 式头，52 个 **ARKit** 形态键、没有脸骨 | ROE 的骨骼表情插件无从下手 | 按配方混出 26 个 MMD 标准**顶点表情**（まばたき / 笑い / ウィンク / あいうえお / にやり / 眉 …），ARKit 原始形态也一起导出；表情面板里标准表情排最前 |
 | 头皮头发的根骨 `Hair_Root`（挂在「頭」下，带着 4 条刘海 + 2 条侧发链）被 mmd_cloth_physics 当成链的一节，建成了**纯物理**刚体（2026-09-25 发现） | 一开物理整片头皮头发往下掉：不动站着 60 帧就沉 12 cm，跳舞时每一帧都是光头、头发团在脑后（Fiona 的第一版 PMX 也是这样，当时没看出来） | `anchor_hub_roots()`：父骨无刚体或是「跟随骨骼」、自己是动态、且下面有 ≥2 条动态链的「分叉根」改成模式 0（跟随骨骼），链挂在跟着头走的锚点上；报告字段 `anchored_hub_roots`（马尾第一节 `Ab-TL-HairB01` 也按这条改成跟随骨骼，从第二节开始摆） |
 | 马尾上段的 `HairTail_Root`（Gantz 上蒙着 2,046 个顶点）在静止姿势下就嵌在头部碰撞球里 9.1–9.4 cm | 一开物理就被顶开，站着不动漂 9.3 cm | `release_rest_overlaps()`：静止时就嵌进「会碰撞的跟随骨骼碰撞体」超过 2 mm 的动态刚体，把那个碰撞组加进它的不碰撞列表（MMD 作者手工也是这么处理的）；报告字段 `released_rest_overlaps` |
+| 手臂的 UE 辅助骨下面挂着小件（2026-10-17，Cooling Suit：`Ab-*-Deltoid` 下的细绳 `Deltoid-Fr-String01/02`，`Ab-*-UpperArm-Tw0` 下的小布片 `Ab-Axup*`） | mmd_cloth_physics 把整条链连同辅助骨本身建成了物理。辅助骨上挂着夹克的肩部（蒙皮 629）和上臂（885），下面的小件只有 98 / 110，一开物理整只袖子跟着甩 | `anchor_skin_helpers()`：物理链的链根是 `Ab-L-` / `Ab-R-` 辅助骨，而且它的蒙皮至少是下面所有骨的 3 倍时，改成跟随骨骼，只让下面的小件摆；报告字段 `anchored_skin_helpers`。头发链的根（`Ab-TL-*`、`Ab_SHair`）名字不匹配，不受影响 |
+| 眼睛贴图里的虹膜（2026-10-17，用户：「眼仁有点小」） | `validate_eve.py` 当初凭目测把虹膜半径定成 UV 0.07、亮度提 2.6 倍。虹膜宽度只有游戏的 41%，上下碰不到眼皮，四周一大圈眼白；颜色也偏暗偏灰 | 按游戏材质 `MI_EyeRefractive1` 的参数和 `M_EyeRefractive` 的算法重做（新模块 `eye_material.py`，见下文「眼睛」）。`rewire_eyes()` 在烘焙前把 .blend 里旧的眼睛节点换掉，存档的 .blend 不用重做；报告字段 `eyes_rewired` |
 
 **回读验证**（`preview_pmx_blender.py`）：mmd_tools 带物理导回 PMX，在 `.pmx` 旁边出
 `preview.png`（正面）、`preview_morphs.png`（中性 + 11 个表情的脸部特写）、`preview_gaze.png`（`両目` 中性 /
@@ -304,6 +311,193 @@ VMD、物理逐帧跑，取 150/400/650/900 帧），末行 `PMX_PREVIEW={json}`
 视线：`両目` 转 ±20° 左右看、±15° 上下看都正常；这个角色眼球半径 1.8 cm，比真人大，往上看 15° 虹膜就基本进了上眼皮，往下看时上眼皮不跟随（MMD 模型的常态）。`eyeLook*` 形态键仍在「其它」里。裙子没有骨骼，跟随大腿和胯部，不做物理。
 胸部实测（导回 Blender 套舞蹈 570 帧）：相对上半身偏转平均 5.6° / 3.7°，最大 19° / 12°（关节限制内），
 约 80% 的帧在动；嫌晃得少/多就调 `BUST` 的 `spring`（回弹）和 `limit_deg`（幅度），最终手感以 MMD 本体为准。
+
+### 眼睛：虹膜大小和颜色（`eye_material.py`，2026-10-17；按角色读参数、色调 2026-10-18）
+
+游戏里所有角色的眼睛都是母材质 `M_EyeRefractive` 的实例。它是 UE 的折射眼睛，Shift Up 加了色调等参数，用 CUE4Parse 读，不要密钥。
+Eve 用的实例是 `MI_EyeRefractive1`（`SB/Content/Art/Character/PC/CH_P_EVE_Head/Materials/`）。实例没写的参数取母材质自己的值：
+
+| 参数 | Eve | 母材质 | 作用 |
+|---|---|---|---|
+| `Iris UV Radius` | 0.145 | 0.15 | 虹膜贴图铺满的圆的半径（在缩放后的 UV 里） |
+| `ScaleByCenter` | 0.849798 | 1 | 整只眼睛的 UV 绕中心缩放。UE 的 ScaleUVsByCenter 是 `(uv - 0.5) / s + 0.5`，即**内容缩到 85%** |
+| `PupilScale` | 0.861905 | 0.7 | 瞳孔收小（虹膜外缘不动） |
+| `LimbusUVWidthColor` | 0.045 | 0.035 | 虹膜外缘往里这一段从虹膜过渡到眼白 |
+| `IrisHueShift` | 0 | 0 | 虹膜颜色绕灰轴旋转（UE 的 HueShift，1 = 转一整圈） |
+| `IrisHueTint` | (0.656, 0.598, 1) | 白 | 虹膜颜色逐通道乘的色调 |
+| `IrisBrightness` | 5 | 1 | 虹膜颜色的倍数（虹膜贴图本身画得很暗） |
+| `ScleraTint` / `ScleraBrightness` | 白 / 1.6 | 白 / 0.9 | 眼白的色调和倍数 |
+| `IrisColor` / `ScleraColor` | `S_EyeIrisBaseColor` / `T_EyeScleraBaseColor` | `T_EyeIrisBaseColor_Example_2` / `T_EyeScleraBaseColor` | 虹膜、眼白贴图 |
+| `DepthScale` | 0.8 | 1.2 | 角膜折射的深度（没做，见下） |
+
+- **眼球的 UV**：角膜顶点在 (0.5, 0.5)。离正前方越远 UV 半径越大，大约每度 0.005，90° 时到 0.36；后半球折回同一个圆盘。
+  所以虹膜外缘在网格上是 UV 半径 0.145 × 0.85 = **0.123**（约 22°）。旧的 0.07 只到 13°。
+- **游戏的算法**（2026-10-18 反汇编游戏的着色器确认）：
+  - 虹膜 = HueShift(虹膜贴图, `IrisHueShift`) × `IrisHueTint` × `IrisBrightness`，再乘角膜缘变暗（Eve 的 `LimbusDarkScale` 是 0）；
+  - 眼白 = 眼白贴图 × `ScleraTint` × `ScleraBrightness`；
+  - 两者在角膜缘按 smoothstep 混合，最后乘 `EyeCornerDarknessColor` 做的眼角阴影。
+  - 色调是给共用贴图上色用的。`S_EyeIrisBaseColor` 是橙棕色；游戏的 `MI_MetaEyes_BlueEyes` / `GreenEyes` / `BrownEyes` 用的是同一张贴图，
+    分别靠色调 (0.05, 0.30, 0.89) / (0.35, 0.86, 0.91) / (0.22, 0.26, 0.44) 变成蓝、绿、棕眼。蓝眼的亮度提到 14.9，补回变暗的部分。
+  - 怎么查的：材质资产文件的最后 20 字节是它的 shader map 哈希。Eve 的 `MI_EyeRefractive1` 和 `MI_MetaEyes_BlueEyes` 是同一个 shader map，
+    在游戏的 `SB/Content/ShaderArchive-SB-PCD3D_SM5.ushaderbytecode` 里排第 69。
+    它的像素着色器是 DX12 的 DXIL，用 DXC 的 `dxcompiler.dll` 反汇编，再从 GBuffer 的底色输出往回追。
+    工具在 `E:\tools\sb_shaders\`：`scan_archive.py` 读着色器库，`dxil_dis.py` 反汇编，`trace_ll.py` 追表达式。
+- **核对**：游戏自带几张引擎渲染的 Eve：`SB/Content/DLC_2/Art/UI/Texture/ClearReward_Nikke_01`（NIKKE 联动通关奖励图），
+  以及 `SB/Content/Art/UI/Texture/Boss/ClearReward_*`（Boss 通关奖励图，脸很小）。
+  - 尺寸：虹膜宽度 ÷ 眼角到眼角的宽度，游戏 0.49，按这套参数 0.50，旧的约 0.38。虹膜上下都碰到眼皮，和游戏一样。
+  - 颜色：
+    - 游戏截图屏幕上的虹膜约 (91, 46, 16)。
+    - 按游戏算法烘出的贴图上，虹膜是 (114, 68, 56)；不乘色调是 (133, 86, 56)。
+    - 截图比贴图暗、偏金，差在游戏的光照、环境反射和色调映射上。
+    - 在 Blender 里用 Filmic 渲染时，反而是不乘色调的更像截图。对比图：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\眼睛色调对比.jpg`（两张游戏截图 / 不乘色调 / 乘色调）。
+  - 走过的弯路：一开始以为 ScaleByCenter 是把 UV 乘 0.85（虹膜外缘到 0.1706，正好落在眼球网格角膜凸起的边缘那圈顶点上），渲染出来虹膜几乎占满整个眼裂。
+- **其他角色**：
+  - 每个角色有自己的眼睛实例，通常在头部文件夹，很多还用自己的虹膜贴图。
+    例如 Lily 是 `NPC/CH_NPC_01/Materials/MI_CH_NPC_Lilly_Eyes`，Raven 是 `Monster/CH_M_NA_53/Materials/MI_CH_M_NA_53_Eyes`。
+  - **高清材质的路线**：
+    - 把实例的 JSON 一起放进 `hq_materials.py --mi-json` 的文件夹。`materials.json` 里会多出两项：
+      - `eyes`：按实例名列出所有眼睛实例；
+      - `eye`：游戏里实际用的那个，跳过 `_Cin` / `_subiris` / `_Die`。
+    - 贴图先在 `--textures` 里找，再到 `E:\game_export\StellarBlade\_meta\hq_materials\_eye_textures\` 找。
+      那里放着母材质的两张默认贴图和 Eve 的虹膜，都是 CUE4Parse 导出的。
+  - **`hq_materials_blender.py` / `export_pmx_blender.py --hq-materials` 怎么选参数**：
+    - 名字和 `eyes` 里某个实例相同的材质（忽略 `.001`），用那个实例的参数和贴图；材质里缺贴图就从文件加载。
+    - 名字里有 `eye…refract` / `eyeball` 的其他眼睛材质，用 `eye`。
+    - 都没有时用 Eve 的。
+  - `export_pmx_blender.py` 也把名字对得上实例的材质当成眼球：加眼球骨骼 左目 / 右目，加高光球面贴图。名字里没有 refract 也算。
+  - **没有 materials.json 时**：
+    - `--eye-mi <实例的 JSON>`：可以写多个，第一个也当默认；
+    - `--keep-eye`：保留 .blend 里原来的眼睛不动。
+- **没做**：角膜折射（游戏里瞳孔会被放大一点）、角膜缘变暗（`LimbusDarkScale`）和眼角阴影（`ShadowRadius`、`EyeCornerDarknessColor`）。
+- **哪里生效**：
+  - `validate_eve.py` 的 `link_eye_color()` 直接用它，以后新导出的 .blend 就是对的；
+  - `export_pmx_blender.py` 的 `rewire_eyes()` 烘焙前把 .blend 里的眼睛节点换成这一套，从旧 .blend 导出的 PMX 也是对的；
+  - `hq_materials_blender.py` 做高清 .blend 时也换，剑星材质插件拿到的也就是对的。
+- **已有成品**：
+  - 存档里 148 个 Eve 的 .blend 还是 10-17 之前的旧眼睛（就地改要用户同意）。
+  - Cooling Suit 的 PMX 和高清 .blend、Fiona / Reika A / B 的 PMX 和 XPS：2026-10-18 按游戏材质的算法（乘色调）重导，替换了存档。
+    这是用户在「不乘色调、更像截图」和「严格按游戏材质」之间选的后者。
+- 对比图：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\眼睛修复对比.jpg`（游戏渲染 / 修复前 / 修复后，加两张脸部近景）。
+
+## 高清材质（`hq_materials.py` → `hq_materials_blender.py` / `export_pmx_blender.py --hq-materials`，2026-10-17：Cooling Suit）
+
+存档里每套服装的 .blend 只接了底色。服装自己的法线 / ORM / 遮罩 / 自发光贴图在 `textures\extra\`，打包时不知道哪张该接哪里，就没接。这条线从游戏里读服装的材质实例，按游戏的接法接回去。
+
+1. **读游戏的材质实例**（CUE4Parse，不要密钥）：
+   ```powershell
+   cue4parse.exe -i "<StellarBlade>\SB\Content\Paks" -g GAME_UE4_26 `
+     -m E:\game_export\StellarBlade\_meta\mappings\StellarBlade_1.1.0.usmap -f json -y -o <dir> `
+     -p "SB/Content/DLC_2/Art/Character/PC/CH_P_EVE_Nikke_06/Mat/*"
+   ```
+   - 服装的材质实例都继承 `MA_CH_Standard_Ver03`。实例没写的参数取母材质的默认值（它的 `CachedExpressionData`），例如 `Pattern01_Tiling` = 8。
+   - 共享的花纹法线（如 `Art/Character/Generic/MF/Fabric/Knitted_N`）用 `-f png` 单独导出。
+2. **整理参数、生成 PMX 贴图**：
+   `python hq_materials.py --mi-json <dir> --textures <服装文件夹>\textures --pattern Knitted_N=<png> --out <dir>`，输出：
+   - `materials.json`：每个材质的底色、ORM、法线、遮罩、自发光、花纹法线，以及游戏外用得上的参数；
+   - 每个材质一张 `<底色>_pmx.png`：底色 × AO（ORM 的红通道，在线性空间乘）+ 自发光遮罩（`Emissive_CH` 那个通道）处的自发光颜色，原尺寸（4K）。
+3. **Blender 高清版**：
+   `blender -b <服装.blend> --python hq_materials_blender.py -- --materials materials.json --save <服装文件夹>\<名>_HQ.blend`
+   接成 Principled：
+   - ORM：G → 粗糙度（落在实例的最小–最大值之间）；B → 金属度 × `Metallic`；R（AO）→ 高光遮蔽，高光 = 0.5 × AO。
+   - 法线：UE 是 DirectX，翻绿通道。
+   - `MaterialLayerMask` 的清漆通道 → Clearcoat（粗糙度用 `ClearCoatRoughness Min`）。
+   - `FuzzMask` 的绒毛通道 × `Fuzz_01_INTENSITY` → Sheen。
+   - 自发光：自发光贴图里 `Emissive_CH` 选的那一个通道（Ver03 默认红通道）× `EmissiveColor`，强度 2。
+     `EmissivePower` 为 0 或颜色是黑色（母材质的默认值）时不接：游戏里这种不发光。2026-10-18 起才这样，之前用整张图，Iberis 的丝袜因此发了光（ROE_pmx 发现）。Cooling Suit 的贴图三个通道一样，结果几乎不变。
+   - `Pattern01_Normal`（针织等花纹）按 `Pattern01_Tiling` 平铺，只在绒毛区叠到法线上。
+   - `BLEND_Masked` 的材质（贴花）按 1/3 裁切，和游戏一样。
+   - 眼睛按游戏参数重做（`eye_material.py`，见上文「眼睛」）：materials.json 里有角色自己的眼睛实例（`eyes` / `eye`）就用它的，没有就用 Eve 的。
+
+   贴图都用相对路径；`--copy-textures` 会把文件夹外的贴图先复制进来。原来的 .blend 不动。
+4. **PMX**：`export_pmx_blender.py … --hq-materials materials.json`
+   - 转换前，每个材质的底色换成它的 `_pmx.png`（MMD 一个材质只有一张贴图）。
+   - PMX 写出后，有清漆遮罩的材质按遮罩拆成两份。判断时先把遮罩模糊 1/256 图宽，不然缝线上的细灰线会把落在上面的面分成哑光，在乳胶上留下一串斑点。
+     - UV 中心落在清漆区的面进 `<名>_gloss`：排在原材质后面、贴花前面；高光 0.55，光泽度 60，加算球面贴图 `gloss_sph.png`（左上一片柔光加一个亮点）。
+     - 其余面留在原材质里，保持哑光。
+   - 用 PMX 模块改完存盘时，要带上附加 UV 的个数：mmd_tools 给 Eve 写了 1 组附加 UV，`save()` 默认按 0 写文件头，顶点数据就错位了，回读时报 `invalid weight type`。
+5. **在 Blender 里给导入的 PMX 换回游戏材质**：插件 **Stellar Blade Game Materials**（`scripts/blender_addons/stellarblade_game_materials`，用法见它的 README）。
+   - 用 mmd_tools 导入 PMX，在侧栏 MMD 标签页「剑星游戏材质」里点「换上游戏原始材质」。插件按材质名从存档的 `*_HQ.blend` 里把第 3 步那套节点搬进来。
+   - 可以随时切回 MMD 着色。法线、粗糙度、金属度、清漆、绒毛光泽、自发光都能拖滑块调。
+   - 再导出 PMX 不受影响。
+   - 2026-10-18 起，搬过来的次表面散射半径会乘「导入模型的高度 ÷ 172」：存档是厘米，PMX 导入后约是米。
+     之前脸的 1 cm 散射变成了 1 m，游戏材质下整张脸糊成蜡色。
+
+**Cooling Suit（Alice，`CH_P_EVE_Nikke_06`）**，三个材质：
+
+| 材质 | 游戏材质实例里的内容 | PMX |
+|---|---|---|
+| UV1（乳胶连体衣、袜子、鞋、手套） | 底色、ORM、法线、`UV1_M`（R = 清漆，G = 绒毛 0.17）、`Metallic` 1 | 底色 × AO；清漆区拆出 `_gloss`：36280 个面，其余 23716 个面哑光 |
+| UV2（泡泡袖夹克、扣带） | 底色、ORM、法线、`UV2_M`（R = 绒毛 0.7，粉色）、`UV2_E` 自发光（红，`EmissivePower` 10）、`Knitted_N` 针织花纹（×8，强度 5） | 底色 × AO（平均 0.65，绗缝的鼓包很明显）+ 自发光 |
+| 贴花「SUPER」 | 底色带透明通道、`BLEND_Masked`，最大粗糙度 0.53 | 透明通道照用 |
+
+- **存档原版的贴花错了**：贴花材质不透明，透明部分画成了一块黑色方牌。游戏里是白字直接印在衣服上（贴图里黑色部分的透明度只有 0.05）；高清版和 PMX 都改对了。
+- **物理**：这件衣服的手臂辅助骨下面挂着小件，处理办法见上面「导出 MMD」表格的最后一行（`anchor_skin_helpers()`）。
+- **回读**：
+  - 324 骨 / 70 刚体 / 52 关节，26 个 MMD 表情加上 ARKit 表情；
+  - 撕裂 0、权重空洞 0、付与顺序违规 0；
+  - 不加动作站 60 帧，15 条链的链根最多漂 1.1 cm；
+  - 套「来杯好茶」跳舞正常。
+- **已知**：Eevee 预览里，夹克袖子上有几粒高光白点，是铆钉、缝线这类小结构反光，不是贴图问题。
+- **文件**：
+  - PMX：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\`（PMX + `textures\` + `_converted.blend` + 四张预览 + `高清材质对比.jpg` + `插件效果_游戏材质对比.jpg`）；
+  - 高清 .blend：`E:\game_export\StellarBlade\Eve\blend\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06_HQ.blend`（`Knitted_N.png` 已复制进 `textures\extra\`）；
+  - 游戏数据：材质实例 JSON 和 `materials.json` 在 `E:\game_export\StellarBlade\_meta\hq_materials\CH_P_EVE_Nikke_06\`。
+
+**Nexus mod 服装：Gantz Reika A / B（2026-10-18，`hq_mod_outfits.py`）**
+
+用户问 Reika 的 PMX 能不能在 Blender 里用插件换上高清材质。之前只换得上头、头发、眼睛（13 个，借 Cooling Suit 的高清 .blend）。
+mod 自己的衣服和 B 的皮肤没有高清 .blend，保持 MMD 着色。
+
+- mod 装在 `~mods\Hawkins_GantzReika\`，CUE4Parse 读得到。材质实例在 `SB/Content/OutfitMods/GantzReika/`。
+  它们都继承游戏自己的材质：
+  - 衣服 `SuitA_Body` / `SuitA_Mesh` / `SuitB` → `MI_P_EVE_09_Metal02_Layered`（Planet Diving Suit 的金属件）→ 母材质 `MA_CH_P_EVE_09`。
+    mod 只换了底色、ORM、法线、发光四张图，以及发光色 `ML_GlowEm_EyeCoreHDRTint`：游戏是黄绿 (117, 271, 2.36)，mod 改成蓝 (0, 0.56, 271)。
+  - B 的皮肤 `EveSKin` → `MI_Basebody_V02_F2`（Eve 身体）→ `MA_Skin_EVE`。
+    mod 换了底色、法线和 `ORSS Mask`（R 遮蔽、G 粗糙度、B 高光、A 次表面），粗糙度范围 0.229–1.108 来自父实例。
+- `python hq_mod_outfits.py [--only Mod_GantzReika_B]`，每套衣服做五步：
+  1. 读游戏：CUE4Parse 导出 mod 文件夹的 JSON，再顺着 `Parent` 一层层导出父实例和母材质，放进 `_meta\hq_materials\<包名>\mi_json\`。
+  2. 合并：只取这套衣服的骨骼网格实际用到的实例，按 UE 的规则合并。子实例的值优先；谁都没设的取母材质的默认值（`CachedExpressionData`）。
+     结果写成 `staged\MI_<名>.json`。另做一处 `hq_materials.py` 没有的翻译：
+     - `MA_CH_P_EVE_09` 的发光不走 `EmissivePower` / `EmissiveColor`（父实例设成 0 和黑色），走的是 GlowEmissive 层，静态开关 `UseGlowEmissive`。
+     - 写法：`ML_GlowEmissive_CH` 选的那个通道（红）→ `Emissive_CH`，HDR 颜色原样 → `EmissiveColor`，`EmissivePower` 写 1，只用来打开接线。
+     - 发光层的菲涅耳、Boost 这些项不照做。
+  3. `hq_materials.py`（不改）→ `materials.json`。
+  4. `hq_materials_blender.py`（不改），作用在存档的 .blend 上，生成同一文件夹里的 `<名>_HQ.blend`。眼睛顺带按游戏参数重做。
+  5. 再开一次 Blender（`--post`）：
+     - 皮肤实例由本脚本自己接：粗糙度 = G 映射到 MinRoughness–MaxRoughness，高光 = B × `BaseSpecularValue`，DirectX 法线 × `NormalStrength`。
+       次表面照抄脸（`MI_EVE_Head_V02`）的设置：脸用的是存档原来的网络，抄过来接缝处才对得上。
+       `MicroNormal`（毛孔，平铺 40 次）、`NC_E Mask` 没接，记在 `skin.json` 里。
+     - 存档原来按文件名猜着接的 ORM、法线、发光节点，被新接线顶掉以后没人用了，删掉（每个材质 7–8 个）。
+- 结果（插件实测，`Reika\pmx\Mod_GantzReika_*\插件效果_游戏材质对比.jpg`）：
+  - A 15/15、B 16/16 个材质换上，贴图不缺，没有留下库条目。
+  - 两种状态再导出：A 逐字节一致。B 肚脐处一个退化顶点的法线，mmd_tools 每次导出都在两个值之间随机变，不装插件也一样。
+  - 「去掉游戏材质」后插件节点清零。
+  - Cooling Suit 复测 17/17，导出一致。
+- 存档原来的 Reika .blend 衣服其实已经接了 ORM / 法线 / 发光，是按文件名猜的。发光用的是贴图本身的青色（最亮处 R 0.22、G 0.69、B 1.0）×2。
+  游戏只取红通道，乘蓝色 HDR，所以高清版的发光是纯蓝的。
+- PMX 不用重导：mod 的 ORM 红通道（AO）全是 1，「底色 × AO」等于原图，只多几个发光点，所以 PMX 里的颜色基本不变。
+- **文件**：
+  - 高清 .blend：`E:\game_export\StellarBlade\Reika\blend\Mod_GantzReika_A\Eve_Mod_GantzReika_A_HQ.blend`、`…_B\…_B_HQ.blend`（贴图就是旁边 `textures\` 里的）；
+  - 数据：`E:\game_export\StellarBlade\_meta\hq_materials\Mod_GantzReika_A|B\`，包括 `mi_json\`、`staged\`、`materials.json`、`skin.json`、`chains.json`、`hq_log.txt`、`*_pmx.png`；
+  - 各自 `README.txt` 加了「高清版 / HQ」一节。
+
+**裸体：EveOriginalProportions 赤足（2026-10-24，`hq_mod_outfits.py --only Nude_Barefoot`）**
+
+Reika 的三层模型（A + B + 裸体，`scripts/clothes_burst/pmx_layers.py`）里，裸体那层也要高清材质。
+- 这个 mod 替换的是 Eve 的内衣身体（`CH_P_EVE_InnerSuit`），没装进游戏。脚本直接从下载的压缩包
+  `E:\tools\setup\mods\EveOriginalProportions-30-2-1-1750283806.rar` 读 `Barefoot\` 那一份（.pak / .utoc / .ucas，用 Windows
+  自带的 `tar` 解，它认得 RAR5），解到临时文件夹。旁边建一个目录联接指向游戏的 `Paks`，CUE4Parse 一起读，
+  mod 的材质实例才找得到游戏里的父实例。读完删掉临时文件夹，联接只删联接本身。
+- mod 自己的身体实例 `SkinEve` → `MI_Basebody_V02_F2`（和 Reika B 的 `EveSKin` 同一个父实例）→ `MA_Skin_EVE`。
+  它换了底色 `custombody_A`、法线 `custombody_N`、`ORSS Mask` `custombody_ORSS`、`NC_E Mask` `custombody_DMSE`。粗糙度范围、
+  高光 1.0、`BaseSSS` 都和 B 的皮肤一样；只有 `Detail Strength` 是 0（B 是 1，毛孔细节，本来就没接）。
+- 骨骼网格还留着鞋（`Heels`）和阴毛（`MI_Pubic`）的材质槽，赤足这一份里没有面，`slots` 只取 `SkinEve`。
+- 只读两个包：`SkinEve.uasset` 和 `CH_P_EVE_InnerSuit.uasset`。用 `.*` 通配时，游戏自己那份网格的 `.ubulk` 也匹配，
+  CUE4Parse 并行写同一个 JSON 会崩。
+- 结果：`E:\game_export\StellarBlade\Eve\blend\Nude_Barefoot\Eve_Nude_Barefoot_HQ.blend`，身体接了 ORSS（粗糙度 0.229–1.108、
+  高光 ×1）、法线，次表面和脸一样（0.055）。数据在 `_meta\hq_materials\Nude_Barefoot\`。
+  插件：单独的裸体 PMX 14/14；三层模型 19/19（每层从自己的高清 .blend 拿，见插件 README「分层模型」）。
+- 没照做：mod 设的 `BaseTint`（F6D7D9，偏粉）。B 的皮肤从父实例继承同一个值，两边都没乘，保持一致；母材质里它乘在哪儿还没查。
 
 ## `validate_eve.py`
 

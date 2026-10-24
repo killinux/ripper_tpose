@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reika 换装教程</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1f1d1a; --muted: #6b665e; --line: #e2ddd5; --card: #ffffff;
+    --accent: #3b6fb6; --code-bg: #f1eee9; --warn-bg: #fff4e5; --warn-line: #f0c27a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17161a; --fg: #ebe8e3; --muted: #a39d94; --line: #34323a; --card: #1f1e23;
+      --accent: #8fb4ec; --code-bg: #2a2830; --warn-bg: #33291c; --warn-line: #8a6a35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.75 "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 6px; }
+  .meta { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { font-size: 21px; margin: 44px 0 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h2 .no { color: var(--accent); margin-right: 8px; }
+  h3 { font-size: 17px; margin: 22px 0 8px; }
+  p { margin: 10px 0; }
+  ol, ul { padding-left: 1.6em; margin: 10px 0; }
+  li { margin: 6px 0; }
+  li ul { margin: 4px 0; }
+  code {
+    font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.9em; background: var(--code-bg);
+    padding: 1px 6px; border-radius: 4px; word-break: break-all;
+  }
+  pre {
+    font-family: Consolas, "Cascadia Mono", monospace; font-size: 14px; background: var(--code-bg);
+    padding: 10px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.55; margin: 12px 0;
+  }
+  kbd {
+    font-family: Consolas, monospace; font-size: 0.85em; border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 5px; background: var(--card);
+  }
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; background: var(--card); font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; white-space: nowrap; }
+  .ok { border-left: 4px solid var(--accent); background: var(--card); padding: 8px 14px; margin: 14px 0; border-radius: 0 6px 6px 0; }
+  .warn { border-left: 4px solid var(--warn-line); background: var(--warn-bg); padding: 8px 14px; margin: 14px 0; border-radius: 0 6px 6px 0; }
+  figure { margin: 16px 0; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; display: block; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; }
+  nav.toc ol { margin: 4px 0; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Reika 换装：A → B → 裸体，一层一层脱（MMD 和 Blender）</h1>
+<div class="meta">2026-10-24 · 一个 PMX 里叠了三套：外面 Reika A（全身紧身衣），中间 Reika B（开胸那件），里面完整的裸体。
+两个滑块按顺序拉，一层一层换；也可以一层一层爆开。Blender 部分用你电脑上的 Blender 3.6 + mmd_tools + 剑星游戏材质插件 + 爆衣插件。</div>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#files">要用的文件</a></li>
+    <li><a href="#how">两个滑块怎么用</a></li>
+    <li><a href="#mmd">MMD：手动换装</a></li>
+    <li><a href="#mmd-burst">MMD：一层一层爆开</a></li>
+    <li><a href="#blender">Blender：换装（游戏材质）</a></li>
+    <li><a href="#blender-burst">Blender：一层一层爆开</a></li>
+    <li><a href="#other">给别的衣服做换装模型</a></li>
+    <li><a href="#faq">常见问题</a></li>
+  </ol>
+</nav>
+
+<h2 id="files"><span class="no">1</span>要用的文件</h2>
+<div class="table-wrap"><table>
+  <tr><th>用途</th><th>文件</th></tr>
+  <tr><td>手动换装（自己拉滑块）</td><td><code>E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_Layers\Eve_Mod_GantzReika_Layers.pmx</code></td></tr>
+  <tr><td>爆开换装（带碎片）</td><td><code>E:\game_export\StellarBlade\_爆衣插件\Eve_Mod_GantzReika_Layers_burst\Eve_Mod_GantzReika_Layers_burst.pmx</code></td></tr>
+  <tr><td>爆开的时间（只有表情帧）</td><td>同一文件夹的 <code>爆衣_第120帧开始_每层隔90帧.vmd</code></td></tr>
+  <tr><td>手势舞 + 爆开（一个文件）</td><td>同一文件夹的 <code>手势舞_加一层一层爆衣_第120帧开始_每层隔90帧.vmd</code></td></tr>
+  <tr><td>舞蹈和音乐</td><td><code>E:\Downloads\mmd\0.meeynara手势舞2025.2.14by小王动画\</code> 的 <code>适配瓦雷莎.vmd</code>、<code>meeynara手势舞2026.2.14.WAV</code></td></tr>
+  <tr><td>做好的视频</td><td><a href="file:///E:/game_export/StellarBlade/_%E7%88%86%E8%A1%A3%E6%8F%92%E4%BB%B6/Eve_Mod_GantzReika_Layers_burst/Eve_Mod_GantzReika_Layers_burst_%E4%B8%80%E5%B1%82%E4%B8%80%E5%B1%82%E7%88%86_%E6%89%8B%E5%8A%BF%E8%88%9E.mp4">全身</a>、
+    <a href="file:///E:/game_export/StellarBlade/_%E7%88%86%E8%A1%A3%E6%8F%92%E4%BB%B6/Eve_Mod_GantzReika_Layers_burst/Eve_Mod_GantzReika_Layers_burst_%E4%B8%80%E5%B1%82%E4%B8%80%E5%B1%82%E7%88%86_%E8%83%B8%E9%83%A8%E7%89%B9%E5%86%99.mp4">胸部特写</a>（在
+    <a href="file:///E:/game_export/StellarBlade/_%E7%88%86%E8%A1%A3%E6%8F%92%E4%BB%B6/Eve_Mod_GantzReika_Layers_burst/">爆衣文件夹</a> 里）</td></tr>
+</table></div>
+<p>两个 PMX 都带贴图（旁边的 <code>textures</code> 文件夹），头、头发、眼睛、表情、骨骼和物理只有一份，用的都是 Reika A 的。</p>
+
+<h2 id="how"><span class="no">2</span>两个滑块怎么用</h2>
+<p>表情里只有两个换装滑块，<b>按顺序拉到 1，拉上去的不用放回</b>：</p>
+<div class="table-wrap"><table>
+  <tr><th><code>1_A脱ぎ</code></th><th><code>2_B脱ぎ</code></th><th>穿着</th></tr>
+  <tr><td>0</td><td>0</td><td>Reika A（打开时就是这样）</td></tr>
+  <tr><td>1</td><td>0</td><td>Reika B</td></tr>
+  <tr><td>1</td><td>1</td><td>裸体</td></tr>
+</table></div>
+<figure>
+  <img src="file:///E:/game_export/StellarBlade/Reika/pmx/Mod_GantzReika_Layers/%E4%B8%89%E5%B1%82%E5%88%87%E6%8D%A2%E9%A2%84%E8%A7%88.jpg" alt="三种状态的正面、背面，裸体的手和脚">
+  <figcaption>三种状态：两个都是 0 / 只拉第 1 个 / 两个都拉到 1（下排是裸体的手和脚）。</figcaption>
+</figure>
+<div class="warn">顺序不要反过来：只拉 <code>2_B脱ぎ</code> 会在 A 底下看到裸体。脱下的那层会收进身体里面（往骨头中心收），所以拉反了也不会从皮肤里穿出来，只是样子不对。</div>
+<p>每个滑块里面是几个零件表情（<code>A非表示</code>、<code>A収納</code>、<code>B表示</code>、<code>B消去</code>、<code>B収納</code>、<code>裸体表示</code>），面板里看不到，不用管。</p>
+
+<h2 id="mmd"><span class="no">3</span>MMD：手动换装</h2>
+<ol>
+  <li>把 <code>Eve_Mod_GantzReika_Layers.pmx</code> 拖进 MMD 窗口（或「モデル操作」→「読込」）。</li>
+  <li>读入舞蹈：右上角模型下拉框选中这个模型，把 <code>适配瓦雷莎.vmd</code> 拖进窗口（或「ファイル」→「モーションデータ読込」）。</li>
+  <li>右下角「表情操作」的四个下拉框里，换装滑块在「<b>その他</b>」（其他）。下拉选 <code>1_A脱ぎ</code>，拖滑块就能看到 A 换成 B。</li>
+</ol>
+<h3>在第 N 帧一下子换掉</h3>
+<p>MMD 的表情在两个关键帧之间是直线渐变的，只在第 N 帧打一个 1，会从第 0 帧开始慢慢变。要「一下子换」，前后各打一帧：</p>
+<ol>
+  <li>时间轴跳到第 N−1 帧，「その他」选 <code>1_A脱ぎ</code>，滑块 0，点「<b>登録</b>」（注册）。</li>
+  <li>跳到第 N 帧，滑块 1，点「登録」。</li>
+  <li>换成裸体：在后面的第 M−1 帧给 <code>2_B脱ぎ</code> 打 0、第 M 帧打 1。<code>1_A脱ぎ</code> 不用动，一直是 1。</li>
+</ol>
+<div class="ok">做对的样子：播放到第 N 帧，A 一下子变成 B；到第 M 帧 B 变成裸体。想慢慢淡出就把 0 和 1 两帧拉开几帧。</div>
+
+<h2 id="mmd-burst"><span class="no">4</span>MMD：一层一层爆开</h2>
+<ol>
+  <li>拖进 <code>Eve_Mod_GantzReika_Layers_burst.pmx</code>（带碎片的版本）。</li>
+  <li>拖进 <code>手势舞_加一层一层爆衣_第120帧开始_每层隔90帧.vmd</code>：舞蹈和爆开在一个文件里。
+    <ul><li>跳别的舞：先读那个舞蹈，再读 <code>爆衣_第120帧开始_每层隔90帧.vmd</code>（只有爆开的表情帧，叠在舞蹈上）。</li></ul></li>
+  <li>播放：第 120 帧 A 碎开、露出 B；第 210 帧 B 碎开、露出裸体。碎片飞出去、落到地上，40 帧内淡出。</li>
+</ol>
+<figure>
+  <img src="file:///E:/game_export/StellarBlade/_%E7%88%86%E8%A1%A3%E6%8F%92%E4%BB%B6/Eve_Mod_GantzReika_Layers_burst/%E4%B8%80%E5%B1%82%E4%B8%80%E5%B1%82%E7%88%86_%E8%BF%87%E7%A8%8B.jpg" alt="一层一层爆的过程">
+  <figcaption>做好的视频里的几帧（Blender 渲染，游戏材质）。视频前面多 30 帧准备，所以这里是第 151、241 帧爆开。</figcaption>
+</figure>
+<p>爆开那一帧碎片先出现在原位，看着和衣服一样；下一帧换层，碎片飞开。B 露出来的皮肤不碎，换层时直接换成裸体的皮肤。
+换别的时间：在 MMD 里把 <code>1_A脱ぎ</code> 那组表情帧整体拖到别处就行（<code>1_爆衣</code>、<code>1_爆衣落下</code>、<code>1_爆衣碎片_材質</code>、<code>1_A脱ぎ</code> 一起拖；第二层是 <code>2_</code> 开头的那几个）。
+或者在 Blender 的爆衣插件里改好时间再导出，见第 6 节。</p>
+
+<h2 id="blender"><span class="no">5</span>Blender：换装（游戏材质）</h2>
+<div class="warn">插件 10-24 更新过，<b>先重开一次 Blender</b>，新代码才会用上。「剑星游戏材质」和「爆衣」两个插件在你的偏好设置里已经启用了。</div>
+<ol>
+  <li>文件 → 新建 → 常规，删掉立方体（选中后按 <kbd>X</kbd>）。</li>
+  <li>文件 → 导入 → <b>MikuMikuDance Model (.pmd, .pmx)</b>，选 <code>Eve_Mod_GantzReika_Layers.pmx</code>。右侧选项里 <b>Scale</b>（缩放） 填 <b>0.08</b>（人约 1.7 米），点 <b>Import Model File</b>。</li>
+  <li>鼠标放在 3D 视图里按 <kbd>N</kbd>，侧栏切到 <b>MMD</b> 标签。</li>
+  <li>「<b>剑星游戏材质</b>」面板：点「<b>换上游戏原始材质</b>」。面板上写「分层模型：A → B → 裸体」，下面显示
+    「Eve_Mod_GantzReika_A_HQ + Eve_Mod_GantzReika_B_HQ + Eve_Nude_Barefoot_HQ：换了 19 个材质，没找到 0 个，错误 0；6 个跟着滑块显示 / 隐藏」。</li>
+  <li>按 <kbd>Z</kbd> →「<b>材质预览</b>」。「实体」视图里换装滑块没反应。</li>
+  <li>同一个 MMD 标签里展开「<b>Morph Tools</b>」面板：
+    <ul>
+      <li>列表右边点 <b>▼</b> →「<b>绑定</b>」（Bind）。<b>只做一次</b>，之后表情才有滑块；</li>
+      <li>列表上面一排按钮点「<b>群组</b>」（Group），列表里只有 <code>1_A脱ぎ</code>、<code>2_B脱ぎ</code>；</li>
+      <li>点中 <code>1_A脱ぎ</code>，列表下面出现一个滑块，拖到 1：A 换成 B。再点 <code>2_B脱ぎ</code> 拖到 1：换成裸体。</li>
+    </ul></li>
+  <li>做成动画：鼠标放在滑块上按 <kbd>I</kbd> 打关键帧。和 MMD 一样，要「一下子换」就在第 N−1 帧打 0、第 N 帧打 1。</li>
+</ol>
+<div class="ok">做对的样子：只看到一层衣服，换层时没有闪面；B 的肚子、大腿上没有细黑线（插件管着藏起来的层）。「游戏材质 / MMD 着色」两个按钮可以来回切着比较。</div>
+<p>要跳舞：选中模型，文件 → 导入 → <b>MikuMikuDance Motion (.vmd)</b>，<b>Scale</b>（缩放） 也填 0.08。一定在「绑定」之后导入，VMD 里的表情帧才会落到滑块上。</p>
+
+<h2 id="blender-burst"><span class="no">6</span>Blender：一层一层爆开</h2>
+<h3>用做好的爆衣 PMX（最快）</h3>
+<ol>
+  <li>按第 5 节导入 <code>Eve_Mod_GantzReika_Layers_burst.pmx</code>（Scale / 缩放 0.08），换上游戏材质，Morph Tools ▼ →「绑定」。</li>
+  <li>选中模型，导入舞蹈 VMD，再导入 <code>爆衣_第120帧开始_每层隔90帧.vmd</code>（两次的 Scale / 缩放 都是 0.08，其他选项不动）。</li>
+  <li>空格播放。VMD 导入默认在前面留 5 帧，所以 A 在第 126 帧左右爆开、B 在第 216 帧左右。</li>
+</ol>
+<p>或者直接打开做视频用的场景 <code>Eve_Mod_GantzReika_Layers_burst_一层一层爆_手势舞.blend</code>（爆衣文件夹里，物理已经烘焙好），按空格播放。</p>
+<h3>自己生成（能改时间、碎片大小）</h3>
+<ol>
+  <li>按第 5 节导入 <b>没有碎片的</b> <code>Eve_Mod_GantzReika_Layers.pmx</code>，换上游戏材质（可选）。</li>
+  <li>侧栏切到「<b>爆衣</b>」标签，最上面点「<b>MMD 表情</b>」。第 1 栏写「分层模型：一层一层爆」，按步骤列出两层的材质：
+    按下的碎成碎片；<code>EveSKin</code>（B 露出来的皮肤）默认没按下，换层时直接换成裸体的皮肤。</li>
+  <li>点「<b>生成爆衣表情</b>」。状态栏：「爆衣表情做好了：一层一层爆：A 159 块碎片、B 108 块碎片，不碎、直接换掉：EveSKin」。</li>
+  <li>第 4 栏「<b>第一层爆开帧</b>」（默认 120）、「<b>每层间隔</b>」（默认 90 帧 = 3 秒）按需要改，点「<b>在时间轴上预览</b>」，空格。</li>
+  <li>给 MMD 用：PMX 用 mmd_tools 导出（Scale / 缩放 和导入时一样）；「<b>导出爆衣 VMD</b>」导出时间，填了「合进动作」就是舞蹈加爆开一个文件。</li>
+</ol>
+<p>更细的设置（碎片大小、飞多远、淡出）见仓库 <code>docs/clothes-burst-tutorial.md</code> 例 5、例 6。</p>
+
+<h2 id="other"><span class="no">7</span>给别的衣服做换装模型</h2>
+<p>同一个角色的几套衣服都能这样叠：最外面那套当底子，里面的每层只拿它自己的材质。命令（仓库 <code>scripts\clothes_burst</code> 里，普通 Python 就行）：</p>
+<pre>python pmx_layers.py &lt;外层.pmx&gt; --outer "&lt;外层衣服的材质&gt;" --outer-name A ^
+    --layer B &lt;里层.pmx&gt; "&lt;从它拿的材质&gt;" ^
+    --layer 裸体 &lt;裸体.pmx&gt; "&lt;身体材质&gt;" ^
+    --out &lt;合并.pmx&gt;</pre>
+<p>Reika 用的就是这条（材质名在 PMX 编辑器或 Blender 的材质列表里看）：</p>
+<pre>python pmx_layers.py E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_A\Eve_Mod_GantzReika_A.pmx --outer "SuitA_Body,SuitA_Mesh" ^
+    --layer B E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_B\Eve_Mod_GantzReika_B.pmx "EveSKin,SuitB,SuitA_Body" ^
+    --layer 裸体 E:\game_export\StellarBlade\Eve\pmx\Nude_Barefoot\Eve_Nude_Barefoot.pmx "SkinEve" ^
+    --out E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_Layers\Eve_Mod_GantzReika_Layers.pmx</pre>
+<ul>
+  <li>由外到里写；层名要短，用 A、B、裸体 这种（表情名进 VMD 最多 15 字节）。</li>
+  <li>各层要是同一个角色、同一套骨架（骨骼按名字对上）。</li>
+  <li>做好以后的爆衣 PMX：<code>scripts\riseoferos\burst_pmx_blender.py</code>，或者第 6 节的插件。命令见 <code>scripts/clothes_burst/README.md</code>「然后：爆衣」。</li>
+</ul>
+
+<h2 id="faq"><span class="no">8</span>常见问题</h2>
+<div class="table-wrap"><table>
+  <tr><th>现象</th><th>原因</th><th>怎么办</th></tr>
+  <tr><td>拉了 <code>2_B脱ぎ</code>，A 还在，底下露出裸体</td><td>顺序反了</td><td>先把 <code>1_A脱ぎ</code> 拉到 1</td></tr>
+  <tr><td>MMD 里衣服是慢慢变过去的</td><td>只打了一个关键帧，MMD 从上一个关键帧直线渐变</td><td>换装的前一帧打 0</td></tr>
+  <tr><td>MMD 里读了爆衣 VMD，没碎</td><td>读进的是没有碎片的 <code>Eve_Mod_GantzReika_Layers.pmx</code></td><td>换 <code>…_burst.pmx</code>；VMD 要对着这个模型读</td></tr>
+  <tr><td>Blender 的 Morph Tools 里点了表情，没有滑块</td><td>还没「绑定」</td><td>列表右边 ▼ →「绑定」</td></tr>
+  <tr><td>Blender 里拉滑块，衣服不换</td><td>视图是「实体」</td><td>按 <kbd>Z</kbd> →「材质预览」</td></tr>
+  <tr><td>Blender 导入 VMD 后表情不动、衣服不换</td><td>导入 VMD 时还没绑定，表情帧没落到滑块上</td><td>删掉动作（或重新导入模型），先「绑定」再导入 VMD</td></tr>
+  <tr><td>B 的肚子、大腿上有几条细黑线</td><td>没换游戏材质，或 Blender 还在用旧插件</td><td>重开 Blender，点「换上游戏原始材质」（插件管着藏起来的层；只用 mmd_tools 时会有）</td></tr>
+  <tr><td>换上游戏材质后三层都露出来了</td><td>旧版插件不认表情的透明度</td><td>重开 Blender 用 10-24 的插件，「去掉游戏材质」后再换一次</td></tr>
+  <tr><td>碎片停在半空，到淡出才消失</td><td>碎片跟着它挂的骨头走，手臂抬着时爆开，手臂上的碎片也跟着</td><td>换个爆开帧（手放下的时候）</td></tr>
+  <tr><td>人有 20 多米高，或者跳舞飞出画面</td><td>模型和 VMD 的 Scale 不一样</td><td>Scale / 缩放 都填 0.08，删掉重新导入</td></tr>
+</table></div>
+<p>原理和检查记录：仓库 <code>scripts/clothes_burst/README.md</code>（<code>pmx_layers.py</code>）、<code>docs/clothes-burst-guide.md</code> 8.12（一层一层爆）、
+<code>scripts/blender_addons/stellarblade_game_materials/README.md</code>（分层模型的游戏材质）。</p>
+
+</main>
+</body>
+</html>

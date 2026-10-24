@@ -11,6 +11,9 @@ from the nude version's PMX (--nude-pmx; by default <...>_nude/<...>_nude.pmx be
 else from Blender's turned custom normals (a08: 94 vertices at the nails more than 5 degrees off).
 A full version that has the two bodies already (the archived ones since 10-05, pmx_two_bodies.py) only gets the burst:
 its 裸体形状 (a material morph) and nude copy stay as they are.
+A model of several outfits in layers (scripts/clothes_burst/pmx_layers.py: step sliders 1_A脱ぎ, 2_B脱ぎ ...) bursts
+layer by layer: each layer's own fragments (1_爆衣 / 1_爆衣落下 / 1_爆衣碎片_材質 ...), no --outfit needed; the VMD
+raises the step sliders --interval frames apart.
 
   --only-bodies: no burst - only the body put in twice (the plain full version, complete_nude.py's last PMX step):
 the dressed body and the nude copy swapped by 裸体形状 (now a material morph), 衣服非表示 still hides the outfit and
@@ -19,7 +22,8 @@ already).  pmx_two_bodies.py does the same in the PMX file without the mmd_tools
 
   blender -b --factory-startup --python burst_pmx_blender.py -- <in.pmx> <out.pmx>
       [--style SHARDS|VANISH | --only-bodies] [--no-swap] [--nude-pmx <pmx>|none] [--outfit mat1,mat2] [--size 0.1]
-      [--seed 1] [--vmd <out.vmd> [--start 120] [--slow 1.0] [--vanish-frames 1] [--merge <motion.vmd>]]
+      [--seed 1] [--vmd <out.vmd> [--start 120] [--slow 1.0] [--vanish-frames 1] [--interval 90]
+      [--merge <motion.vmd>]]
 Prints ROE_BURST_PMX=<json>.
 """
 import argparse
@@ -52,6 +56,8 @@ def args():
     ap.add_argument("--start", type=int, default=cb_vmd.DEFAULTS["start"])
     ap.add_argument("--slow", type=float, default=cb_vmd.DEFAULTS["slow"])
     ap.add_argument("--vanish-frames", type=int, default=cb_vmd.DEFAULTS["vanish_frames"])
+    ap.add_argument("--interval", type=int, default=cb_vmd.DEFAULTS["interval"],
+                    help="layered model: frames from one layer's burst to the next")
     ap.add_argument("--merge", default="")
     return ap.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 
@@ -65,8 +71,9 @@ def main():
                                    types={"MESH", "ARMATURE", "PHYSICS", "DISPLAY", "MORPHS"},
                                    clean_model=False, rename_bones=False, log_level="ERROR")
     root = next(o for o in bpy.data.objects if o.mmd_type == "ROOT")
+    layered = bool(cb_mmd.layer_steps(root))
     outfit = [n for n in a.outfit.split(",") if n] or cb_mmd.outfit_from_morph(root)
-    if not outfit:
+    if not outfit and not layered:
         raise SystemExit("no outfit: the PMX has no 衣服非表示_材質 morph - name the materials with --outfit")
     cb_mmd.set_outfit(root, outfit)
     nude = a.nude_pmx
@@ -96,8 +103,9 @@ def main():
     bpy.ops.mmd_tools.export_pmx(filepath=out, scale=1.0 / SCALE, copy_textures=True, log_level="ERROR")
     report.update(pmx=out, outfit=outfit, opts=opts)
     if a.vmd:
-        timing = dict(start=a.start, slow=a.slow, style=a.style, vanish_frames=a.vanish_frames)
-        report["vmd"] = cb_mmd.export_vmd(os.path.abspath(a.vmd), timing, a.merge, os.path.basename(out)[:-4])
+        timing = dict(start=a.start, slow=a.slow, style=a.style, vanish_frames=a.vanish_frames, interval=a.interval)
+        report["vmd"] = cb_mmd.export_vmd(os.path.abspath(a.vmd), timing, a.merge, os.path.basename(out)[:-4],
+                                          root=root)
     print("ROE_BURST_PMX=" + json.dumps(report, ensure_ascii=True, default=str))
 
 

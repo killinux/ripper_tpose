@@ -8,7 +8,8 @@
 | **MMD 表情**：碎片飞散 | MMD | 衣服复制一份切成碎片，飞出去、落地都预先算成表情；MMD 里不用物理，哪个版本都能放 |
 | **MMD 表情**：直接消失 | MMD | 衣服一下子（或几帧内淡出）没了，没有碎片 |
 
-MMD 的两种做法在 [下面「给 MMD 用（2.0）」](#给-mmd-用20) 一节；下面先说布料撕裂。
+MMD 的两种做法在 [下面「给 MMD 用（2.0）」](#给-mmd-用20) 一节；几层衣服叠在一个模型里时一层一层爆，见
+[「一层一层爆（2.1）」](#一层一层爆21几层衣服叠在一个模型里)。下面先说布料撕裂。
 
 **布料撕裂**：选中衣服（可以多件），或者在编辑模式里选中衣服的一部分，点一下「一键爆衣」，再点「烘焙」：
 到了指定的帧，衣服炸成碎片往外飞，再落到地上。没选中的部分留在身上。设置都有默认值，也都能改。
@@ -247,3 +248,45 @@ MMD 和 Blender 里都对。
 **命令行**（同一套代码）：`scripts/riseoferos/burst_pmx_blender.py`（PMX → 爆衣 PMX，后台 Blender）、
 `scripts/riseoferos/burst_vmd.py`（VMD，纯 Python）。原理和测试见 [docs/clothes-burst-guide.md](../../../docs/clothes-burst-guide.md) 第 8 节，
 一步步的例子见 [docs/clothes-burst-tutorial.md](../../../docs/clothes-burst-tutorial.md) 例 5。
+
+## 一层一层爆（2.1，几层衣服叠在一个模型里）
+
+`scripts/clothes_burst/pmx_layers.py` 能把同一个角色的几套衣服叠进一个 PMX（例：Reika A 套在 B 外面、B 套在裸体外面），
+表情面板里有按顺序拉的**步骤滑块** `1_A脱ぎ`、`2_B脱ぎ`……（每拉一个脱掉一层、换上里面那层）。导入这样的模型，插件认得出来，
+自动一层一层爆：
+
+1. 「1. 模型和衣服」写 **「分层模型：一层一层爆」**，按步骤列出每层的材质，不用再选衣服。按下的材质碎成碎片；
+   名字带 `skin` / `肌` 的（皮肤，Reika B 的 `EveSKin`）默认不按下——皮肤碎开像身体炸了，它跟着步骤滑块直接换成里面那层的皮肤。
+   点材质按钮可以改；
+2. 「3. 生成」：**「生成爆衣表情」**，每层的衣服各切一份碎片；
+3. 「4. 时间、预览、导出」：**「第一层爆开帧」** 和 **「每层间隔」**（默认 90 帧 = 3 秒）——第 k 层在
+   第一层爆开帧 + (k-1) × 间隔 爆开。预览、导出 VMD 和一件衣服时一样。
+
+**加了什么**：每层一份碎片物体 `<网格>_burst_<k>`（材质 `<材质>_burst`），顶点表情 `k_爆衣` / `k_爆衣落下`，材质表情
+`k_爆衣碎片_材質`（k = 步骤滑块的编号，名字都在 VMD 的 15 字节以内）。**不加** `衣服非表示_材質`、不换身体：隐藏这层、
+换上里面那层用模型自己的步骤滑块。碎片飞出去的方向取这层**里面**的东西（外面已经脱掉的层不算）。
+
+**VMD 的时间**（每层，F = 这层爆开的帧）：
+
+| | 帧 |
+|---|---|
+| 这层的碎片出现在原位（和这层重合，看起来一样） | F |
+| 步骤滑块拉到 1：这层隐藏、收进身体，里面那层出现 | F+1 |
+| 碎片飞出 / 落地 / 淡出 | 和一件衣服时一样，从 F 算 |
+
+步骤滑块晚一帧：如果和碎片同一帧换层，里面那层会从还在原位的碎片里穿出来（Reika 的大腿皮肤贴着紧身衣，裸体光脚、
+B 穿高跟靴，脚从靴子碎片里露出来）；F+1 帧碎片已经飞开。没有碎片的层（只有皮肤）在 F 帧直接换。
+「直接消失」只拉步骤滑块。
+
+**命令行**：`burst_pmx_blender.py` 对分层模型不用 `--outfit`，`--interval` 给每层间隔：
+
+```
+blender -b --factory-startup --python scripts/riseoferos/burst_pmx_blender.py -- ^
+  E:\game_export\StellarBlade\Reika\pmx\Mod_GantzReika_Layers\Eve_Mod_GantzReika_Layers.pmx ^
+  E:\game_export\StellarBlade\_爆衣插件\Eve_Mod_GantzReika_Layers_burst\Eve_Mod_GantzReika_Layers_burst.pmx ^
+  --vmd E:\game_export\StellarBlade\_爆衣插件\Eve_Mod_GantzReika_Layers_burst\爆衣_第120帧开始_每层隔90帧.vmd ^
+  --start 120 --interval 90
+```
+
+剑星的分层模型还可以先用 **剑星游戏材质** 插件换上游戏材质（每层从自己的高清 .blend 取），先换材质还是先生成爆衣都行：
+碎片的材质 `<材质>_burst` 也认得。

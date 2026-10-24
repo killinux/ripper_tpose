@@ -6,13 +6,14 @@
       淡出 / 溶解（burst.py、look.py）。真的物理，带不进 MMD
   碎片飞散 / 直接消失（给 MMD 用）  做在 mmd_tools 导入的模型上：衣服复制一份切成碎片，飞出去、落地都预先算成
       顶点表情，碎片的显示 / 衣服的隐藏是材质表情，VMD 只打表情帧——MMD 里不用物理，哪个版本都能放；身体有形状键
-      「裸体形状」时可以换成完整身体（两份身体）（shards.py、mmd.py、vmd.py）
+      「裸体形状」时可以换成完整身体（两份身体）；几层衣服叠在一个模型里（pmx_layers.py）时一层一层爆
+      （shards.py、mmd.py、vmd.py）
 界面：3D 视图侧栏（N）> 爆衣。原理见各模块开头和 docs/clothes-burst-guide.md。
 """
 bl_info = {
     "name": "爆衣 Clothes Burst",
     "author": "ripper_tpose",
-    "version": (2, 0, 0),
+    "version": (2, 1, 0),
     "blender": (3, 6, 0),
     "location": "3D 视图 > 侧栏 > 爆衣",
     "description": "选中衣服，在指定的帧爆开：布料撕裂（Blender 渲染，要同时装 cloth_tear），"
@@ -371,6 +372,8 @@ class CB_MMDSettings(bpy.types.PropertyGroup):
     fade: BoolProperty(name="碎片淡出", default=True, description="碎片落地后淡出消失；关掉就留在地上")
     fade_start: IntProperty(name="爆开后第几帧开始", default=T["fade_start"], min=1, max=10000)
     fade_end: IntProperty(name="第几帧没了", default=T["fade_end"], min=2, max=10000)
+    interval: IntProperty(name="每层间隔", default=T["interval"], min=2, max=100000,
+                          description="几层衣服叠在一个模型里时：一层爆开到下一层爆开隔几帧（30 fps）")
     merge_with: StringProperty(name="合进动作", subtype="FILE_PATH", default="",
                                description="可选：导出 VMD 时把爆衣的表情帧合进这段动作的 VMD（骨骼、别的表情原样）")
     show_more: BoolProperty(name="更多设置", default=False)
@@ -385,7 +388,7 @@ class CB_MMDSettings(bpy.types.PropertyGroup):
     def timing(self):
         fade_end = self.fade_end if self.fade else self.fade_start
         return {"style": self.style, "start": self.start, "slow": self.slow, "vanish_frames": self.vanish_frames,
-                "fade_start": self.fade_start, "fade_end": fade_end}
+                "fade_start": self.fade_start, "fade_end": fade_end, "interval": self.interval}
 
 
 def mmd_tools_ready():
@@ -412,6 +415,9 @@ class CB_OT_mmd_outfit_toggle(_NeedsModel, bpy.types.Operator):
     def execute(self, context):
         root = active_root(context)
         names = set(mmd.outfit_names(root))
+        steps = mmd.layer_steps(root)
+        if steps and not names & {m for st in steps for m in st["materials"]}:
+            names |= mmd.layer_burst(root, steps)          # 分层模型第一次点：从默认的选法（除了皮肤）开始改
         names ^= {self.material}
         mmd.set_outfit(root, names)
         return {"FINISHED"}
@@ -484,6 +490,15 @@ class CB_OT_mmd_make(_NeedsModel, bpy.types.Operator):
         except ValueError as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
+        if rep.get("layers"):
+            per = rep.get("per_layer", {})
+            parts = (["一层一层爆：" + "、".join("%s %d 块碎片" % (n, per.get(n, 0)) for n in rep["layers"])]
+                     if s.style == "SHARDS" else ["一层一层直接消失（拉步骤滑块）：" + " → ".join(rep["layers"])])
+            if s.style == "SHARDS" and rep.get("kept_whole"):
+                parts.append("不碎、直接换掉：" + "、".join(rep["kept_whole"]))
+            print(TAG, rep)
+            self.report({"INFO"}, "爆衣表情做好了：%s。点「在时间轴上预览」看效果" % "，".join(parts))
+            return {"FINISHED"}
         parts = ["%d 块碎片" % rep["fragments"]] if s.style == "SHARDS" else ["衣服可以直接消失"]
         if rep.get("swapped_bodies"):
             parts.append("身体换成完整的（两份身体）")
@@ -532,7 +547,7 @@ class CB_OT_mmd_preview(_NeedsModel, bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         root = active_root(context)
-        return root is not None and (mmd.has_burst(root) or mmd.burst_morphs(root)["VANISH"])
+        return root is not None and (mmd.has_burst(root) or mmd.burst_morphs(root)["VANISH"])   # 分层模型：随时
 
     def execute(self, context):
         root = active_root(context)
@@ -571,7 +586,11 @@ class CB_OT_mmd_export_vmd(_NeedsModel, bpy.types.Operator, ExportHelper):
 
     def invoke(self, context, event):
         s = context.scene.clothes_burst_mmd
-        self.filepath = "爆衣_第%d帧开始.vmd" % s.start
+        root = active_root(context)
+        if root is not None and mmd.layer_steps(root):
+            self.filepath = "爆衣_第%d帧开始_每层隔%d帧.vmd" % (s.start, s.interval)
+        else:
+            self.filepath = "爆衣_第%d帧开始.vmd" % s.start
         return ExportHelper.invoke(self, context, event)
 
     def execute(self, context):
@@ -582,7 +601,7 @@ class CB_OT_mmd_export_vmd(_NeedsModel, bpy.types.Operator, ExportHelper):
             self.report({"ERROR"}, "找不到要合进去的动作：" + merge)
             return {"CANCELLED"}
         try:
-            msg = mmd.export_vmd(self.filepath, s.timing(), merge, root.mmd_root.name or root.name)
+            msg = mmd.export_vmd(self.filepath, s.timing(), merge, root.mmd_root.name or root.name, root=root)
         except ValueError as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
@@ -630,7 +649,23 @@ def draw_mmd(layout, context):
     name = root.mmd_root.name
     box.label(text="模型：%s" % (root.name if name in ("", "New MMD Model") else name))
     imported = mmd.imported_burst(root)
-    if not imported:
+    steps = mmd.layer_steps(root)
+    if steps and not imported:
+        # pmx_layers.py: the layers are the garments, taken off in the order of the model's step sliders
+        col = box.column(align=True)
+        col.label(text="分层模型：一层一层爆", icon="RENDERLAYERS")
+        col.label(text="按下 = 碎成碎片；没按下的（皮肤）")
+        col.label(text="跟着步骤滑块直接换成里面那层")
+        burst_mats = mmd.layer_burst(root, steps)
+        for st in steps:
+            col = box.column(align=True)
+            col.label(text="%s：%s 层" % (st["step"], st["layer"]))
+            wide = max((len(n) for n in st["materials"]), default=0) > 12
+            grid = col.grid_flow(columns=1 if wide else 2, align=True)
+            for name in st["materials"]:
+                op = grid.operator("clothes_burst.mmd_outfit_toggle", text=name, depress=name in burst_mats)
+                op.material = name
+    elif not imported:
         outfit = set(mmd.outfit_names(root))
         mats = mmd.model_materials(root)
         col = box.column(align=True)
@@ -651,7 +686,11 @@ def draw_mmd(layout, context):
         # the file has the two bodies already (ROE full versions since 10-05): nothing to swap
         given = mmd.two_bodies(root) and not mmd._record(root).get("swapped")
         has_body = any(mmd.body_key(m) is not None for m in mmd.parts(root)[1]) or mmd.has_burst(root)
-        if given:
+        if steps:
+            col = box.column(align=True)
+            col.label(text="每层下面就是下一层", icon="CHECKMARK")
+            col.label(text="（步骤滑块换层，不用换身体）")
+        elif given:
             col = box.column(align=True)
             col.label(text="身体已经有两份", icon="CHECKMARK")
             col.label(text="（「裸体形状」换身体，不用再换）")
@@ -700,6 +739,8 @@ def draw_mmd(layout, context):
         rec = mmd._record(root)
         col = box.column(align=True)
         col.label(text="已生成：" + ("碎片飞散" if rec.get("style") == "SHARDS" else "直接消失"), icon="CHECKMARK")
+        if rec.get("layers"):
+            col.label(text="一层一层：" + " → ".join(st["layer"] for st in rec["layers"]))
         if rec.get("swapped"):
             col.label(text="身体换成完整的（两份身体）")
         box.operator("clothes_burst.mmd_remove", icon="X")
@@ -707,7 +748,9 @@ def draw_mmd(layout, context):
     box = layout.box()
     box.label(text="4. 时间、预览、导出", icon="TIME")
     col = box.column(align=True)
-    col.prop(s, "start")
+    col.prop(s, "start", text="第一层爆开帧" if steps else "爆开帧")
+    if steps:
+        col.prop(s, "interval")
     col.prop(s, "slow")
     if s.style == "SHARDS":
         box.prop(s, "fade", toggle=True)

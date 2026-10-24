@@ -216,11 +216,11 @@ def rigid_weights(obj, vert_label, mapping):
     return count
 
 
-def shatter(obj, body_tree, floor, height, opts, mapping=None):
+def shatter(obj, body_tree, floor, height, opts, mapping=None, names=(THROW_KEY, FALL_KEY)):
     """Cut obj (a copy of the clothes, nothing else on it) into fragments, skin each to one bone (mapping, see
-    core_map; None = leave the weights) and add the shape keys THROW_KEY / FALL_KEY.  body_tree: BVH of the body
-    in world space (the normal under each fragment); floor: world z the fragments land on; height: the model's
-    height (scales the lengths in opts).  Returns a report."""
+    core_map; None = leave the weights) and add the shape keys names = (thrown, fallen) - THROW_KEY / FALL_KEY, or a
+    layer's own (vmd.stage_names).  body_tree: BVH of the body in world space (the normal under each fragment);
+    floor: world z the fragments land on; height: the model's height (scales the lengths in opts).  Returns a report."""
     o = dict(DEFAULTS, **(opts or {}))
     k = height / REFERENCE_HEIGHT if height > 0 else 1.0
     rng = random.Random(o["seed"])
@@ -274,7 +274,7 @@ def shatter(obj, body_tree, floor, height, opts, mapping=None):
         key2[idx] = p + rel @ (r2 @ r1 - r1).T + np.array(drop)
         count += 1
     obj.shape_key_add(name="Basis", from_mix=False)
-    for name, pts in ((THROW_KEY, key1), (FALL_KEY, key2)):
+    for name, pts in ((names[0], key1), (names[1], key2)):
         kb = obj.shape_key_add(name=name, from_mix=False)
         local = pts @ inv[:3, :3].T + inv[:3, 3]
         kb.data.foreach_set("co", local.astype(np.float32).ravel())

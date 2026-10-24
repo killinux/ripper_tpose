@@ -1,4 +1,4 @@
-"""把 Stellar Blade 的 Eve 服装导出产物做成一页可浏览的 HTML 画廊。
+"""把 Stellar Blade 的导出产物（Eve 的服装，和其他角色：kind "npc"）做成一页可浏览的 HTML 画廊。
 
 读 ``stellarblade_models_manifest.json``（由 collect_manifest.py 从 validation\\*.json 报告汇总），
 把每张预览图缩成 JPEG 缩略图，输出自包含的 ``index.html`` 到本脚本旁边。
@@ -9,6 +9,10 @@
 用法：
   python make_gallery.py
   python make_gallery.py --source-root D:\\stellarblade_exports --force
+
+2026-09-26 起产物归档在 ``E:\\game_export\\StellarBlade``（scripts/archive），D: 的导出根已删；
+不给 --source-root 而 D: 上没有 manifest 时，自动改读存档的 ``_meta\\stellarblade_models_manifest.json``
+（路径已换成 E:）和 ``_meta\\gallery\\thumbs``。
 """
 
 import argparse
@@ -23,13 +27,16 @@ from PIL import Image
 THUMB_WIDTH = 720
 THUMB_QUALITY = 82
 PAGE_NAME = "index.html"
-KIND_LABELS = {"official": "本体服装", "dlc": "联动 DLC", "nude": "裸模（mod）", "mod": "Nexus 服装 mod", "other": "其它"}
+KIND_LABELS = {"official": "本体服装", "dlc": "联动 DLC", "nude": "裸模（mod）", "mod": "Nexus 服装 mod", "npc": "其他角色",
+               "other": "其它"}
+DEFAULT_ROOT = r"D:\stellarblade_exports"
+ARCHIVE_ROOT = r"E:\game_export\StellarBlade"
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--source-root", default=r"D:\stellarblade_exports",
-                   help="导出根目录（默认 %(default)s）")
+    p.add_argument("--source-root", default=None,
+                   help="导出根目录（默认 %s；那里没有 manifest 时用存档 %s）" % (DEFAULT_ROOT, ARCHIVE_ROOT))
     p.add_argument("--manifest", default=None,
                    help="manifest 路径（默认 <导出根>\\stellarblade_models_manifest.json）")
     p.add_argument("--out", default=None, help="输出 HTML（默认本脚本旁的 index.html）")
@@ -102,6 +109,7 @@ def collect(manifest_path, thumb_dir, force):
             "xps": entry.get("xps") or "",
             "pmx": entry.get("pmx") or "",
             "pmx_previews": [tuple(x) for x in (entry.get("pmxPreviews") or [])],
+            "hq": [tuple(x) for x in (entry.get("hq") or [])],
             "warnings": list(entry.get("warnings") or []),
         })
     models.sort(key=lambda m: m["label"])
@@ -122,12 +130,13 @@ def render_card(model):
         badges += '<span class="badge badge-mod">%s</span>' % esc(KIND_LABELS[model["kind"]])
     if model["code"]:
         badges += '<span class="badge badge-code">%s</span>' % esc(model["code"].replace("CH_P_EVE_", ""))
-    for key, text in (("xps", "XPS"), ("pmx", "PMX")):
+    for key, text in (("xps", "XPS"), ("pmx", "PMX"), ("hq", "高清材质")):
         if model[key]:
             badges += '<span class="badge badge-fmt">%s</span>' % text
 
     search_blob = esc(" ".join([model["label"], model["char"], model["variant"], model["code"], model["blend"]]
-                               + (["xps"] if model["xps"] else []) + (["pmx", "mmd"] if model["pmx"] else [])).lower())
+                               + (["xps"] if model["xps"] else []) + (["pmx", "mmd"] if model["pmx"] else [])
+                               + (["hq", "高清材质"] if model["hq"] else [])).lower())
     figure = ('<img loading="lazy" src="%s" alt="%s">' % (esc(thumb_uri), esc(model["label"]))
               if thumb_uri else '<div class="noimg">无预览图</div>')
     return """      <article class="card" data-search="{search}" data-kind="{kind}" data-chr="{chr}" data-warn="{warn}">
@@ -178,6 +187,11 @@ def format_rows(model):
                  '\n                <button class="copy" data-copy="%s">复制</button>%s</dd>'
                  % (esc(file_uri(model["pmx"])), esc(model["pmx"]), esc(model["pmx"]),
                     ('<br><span class="shots">回读预览：%s</span>' % shots) if shots else ""))
+    if model["hq"]:
+        # hq_materials_blender.py's .blend (the game's full materials) and its comparison sheets
+        links = " · ".join('<a href="%s" target="_blank" rel="noopener" title="%s">%s</a>'
+                           % (esc(file_uri(path)), esc(path), esc(title)) for title, path in model["hq"])
+        rows += '\n            <dt>高清版</dt>\n            <dd>%s</dd>' % links
     return rows
 
 
@@ -186,9 +200,10 @@ def render(models, source_root):
     total_bytes = sum(m["blend_size"] for m in models)
     characters = len({m["char"] for m in models})
     warned = sum(1 for m in models if m["warnings"])
-    mods = sum(1 for m in models if m["kind"] != "official")
+    mods = sum(1 for m in models if m["kind"] not in ("official", "npc"))
+    npcs = sum(1 for m in models if m["kind"] == "npc")
     mmd = sum(1 for m in models if m["xps"] or m["pmx"])
-    kinds = [k for k in ("official", "dlc", "mod", "nude", "other") if any(m["kind"] == k for m in models)]
+    kinds = [k for k in ("official", "dlc", "mod", "nude", "npc", "other") if any(m["kind"] == k for m in models)]
     per_char = {}
     for m in models:
         per_char[m["char"]] = per_char.get(m["char"], 0) + 1
@@ -203,7 +218,8 @@ def render(models, source_root):
         appendix=APPENDIX_HTML,
         generated=esc(generated), source_root=esc(source_root),
         total=len(models), characters=characters, size=human_size(total_bytes),
-        warned=warned, mods=mods, mmd=mmd, chips=chips, chr_options=chr_options, cards=cards)
+        warned=warned, mods=mods, mmd=mmd, chips=chips, chr_options=chr_options, cards=cards,
+        npc_stat=('\n    <div class="stat"><b>%d</b><span>其他角色</span></div>' % npcs) if npcs else "")
 
 
 APPENDIX_HTML = r"""
@@ -336,13 +352,19 @@ stellarblade_models_manifest.json · _gallery\thumbs\ · packages\   本页的�
 python .\html\make_gallery.py         # --source-root / --manifest / --out / --thumb-dir / --force</pre>
     <p><code>collect_manifest.py</code> 不开 Blender，汇总 <code>validation\*.json</code> 写 <code>D:\stellarblade_exports\stellarblade_models_manifest.json</code>，预览优先 <code>_gallery.png</code>，有 <code>packages\&lt;label&gt;\package.json</code> 时卡片多一行「独立包」（<b>要先跑完下一节的打包</b>，再回来重跑这两条命令，卡片上才会有这一行）；
       <code>make_gallery.py</code> 把预览缩成 JPEG 放 <code>D:\stellarblade_exports\_gallery\thumbs\</code>，重写 <code>scripts\stellarblade\html\index.html</code>（<b>整页覆盖</b>：index.html 由 <code>make_gallery.py</code> 的页面模板生成，直接在 index.html 上手改的内容——包括本附录——重跑就没了，要留就改进 <code>make_gallery.py</code> 的模板）。<b>缩略图和 manifest 都留在导出根，刻意不进仓库</b>。</p>
+    <p class="note">2026-09-26 起，所有产物归档到 <code>E:\game_export\StellarBlade\&lt;角色&gt;\&lt;格式&gt;\&lt;模型&gt;\</code>（<code>scripts\archive</code>），D: 的导出根已经删了。
+      这时直接跑 <code>python .\html\make_gallery.py</code>：D: 上没有 manifest，就自动改读存档的 <code>_meta\stellarblade_models_manifest.json</code>（2026-10-17 已把里面的路径换成 E:）和 <code>_meta\gallery\thumbs\</code>。
+      新导出的东西照旧先落 D:，再跑 <code>python scripts\archive\archive_exports.py stellarblade</code> 归档（先加 <code>--dry-run</code> 看一遍）。</p>
 
     <h3>例外与已知局限</h3>
     <ul>
       <li><code>CH_P_EVE_39_TYPE-A</code> / <code>39_TYPE-A1</code>：材质槽全是 <code>MI_CH_Delete</code> 占位的废弃开发网格，不导。</li>
       <li><code>CH_P_EVE_11_1</code>（Raven 变体）自带发型，管线又装了默认发型，头上两套，自行删一套。</li>
       <li><code>Eve_Face003_UEFormat36_test.blend</code> 是作者机器上 <code>import_uemodel36.py</code> 留下的 UEFormat 导入探针，没贴图，打包默认跳过，按本页跑不会产生。</li>
-      <li>眼睛：Eevee 不做 UE 的角膜折射，虹膜是 <code>validate_eve.py</code> 校准过的预览混合（虹膜贴图后插 HSV 提亮、眼影 / 眼罩壳层减淡），与游戏内不完全一致。</li>
+      <li>眼睛：2026-10-17 起按游戏眼睛材质 <code>MI_EyeRefractive1</code> 的参数生成（<code>eye_material.py</code>：虹膜半径 0.145 × 0.85），大小和游戏一致；
+        2026-10-18 起颜色也严格按游戏材质的算法（反汇编游戏着色器确认）：虹膜 × 色调 <code>IrisHueTint</code> × 亮度 5。其他角色用她们自己的眼睛材质实例。
+        不做 UE 的角膜折射，瞳孔比游戏里略小。
+        <b>这之前导出的 .blend（146 套服装都是）虹膜只有游戏的四成大</b>；从它们导 PMX 时 <code>export_pmx_blender.py</code> 会自动换成新眼睛，.blend 本身没改。</li>
     </ul>
 
     <h3>打包给别人（package_outfits.py）</h3>
@@ -385,7 +407,25 @@ blender -b D:\stellarblade_exports\packages\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;�
 blender -b --python .\preview_pmx_blender.py -- --pmx D:\stellarblade_exports\pmx\Eve_Mod_&lt;名字&gt;\Eve_Mod_&lt;名字&gt;.pmx</pre>
     <p>PMX 报告要看的：<code>torn</code> 0、<code>grant_order_violations</code> 空、<code>weight_holes</code> 0、<code>stray_recipients</code> 空；回读的 <code>rest_drop_test</code> 里没有超过 3 cm 的链根。
       2026-09-25 修过两处头发物理（三个模型都已按新脚本重导）：头皮头发的根骨 <code>Hair_Root</code> 原来是纯物理刚体，一开物理整片头发往下掉、跳舞时像光头 → 改成跟随骨骼；
-      马尾上段 <code>HairTail_Root</code> 静止时嵌在头部碰撞球里 9.4 cm → 取消这对碰撞。预览里的舞蹈按 30 帧 <code>margin</code> 导入，从静止姿势过渡——不加的话第一帧会把头发链拽乱，看起来像模型坏了，其实 MMD 里没事。</p>
+      马尾上段 <code>HairTail_Root</code> 静止时嵌在头部碰撞球里 9.4 cm → 取消这对碰撞。预览里的舞蹈按 30 帧 <code>margin</code> 导入，从静止姿势过渡——不加的话第一帧会把头发链拽乱，看起来像模型坏了，其实 MMD 里没事。
+      2026-10-17 三个 mod 的 PMX 和 XPS 按游戏的眼睛参数重导（虹膜原来只有游戏的四成大），其余不变；2026-10-18 再按游戏材质的色调重导一次，只有眼睛贴图变了。</p>
+
+    <h3>高清材质：带游戏完整材质的 PMX 和 Blender 插件（2026-10-17：Cooling Suit）</h3>
+    <p>存档的服装 .blend 只接了底色。这条线从游戏里读服装的材质实例，接回法线、粗糙度 / 金属度、清漆、绒毛光泽、自发光、针织花纹和贴花的透明裁切。
+      卡片上带 <span class="badge badge-fmt">高清材质</span> 徽章的有一行「高清版」：高清 .blend 和对比图。现在只有 <b>Cooling Suit（Alice，<code>CH_P_EVE_Nikke_06</code>）</b>。
+      详细见 <code>scripts\stellarblade\README.md</code>「高清材质」，命令（<code>&lt;包名&gt;</code> 如 <code>CH_P_EVE_Nikke_06</code>，DLC 在 <code>SB/Content/DLC_2/...</code>）：</p>
+    <pre># 1 读服装的材质实例（不要密钥）
+cue4parse.exe -i "&lt;StellarBlade&gt;\SB\Content\Paks" -g GAME_UE4_26 -m E:\game_export\StellarBlade\_meta\mappings\StellarBlade_1.1.0.usmap -f json -y -o &lt;dir&gt; -p "SB/Content/DLC_2/Art/Character/PC/&lt;包名&gt;/Mat/*"
+# 2 整理参数，生成 PMX 用的 4K 颜色贴图（底色 × AO + 自发光）
+python .\hq_materials.py --mi-json &lt;dir&gt; --textures &lt;服装文件夹&gt;\textures --out &lt;dir2&gt; [--pattern Knitted_N=&lt;png&gt;]
+# 3 高清 .blend（原 .blend 不动）
+blender -b &lt;服装.blend&gt; --python .\hq_materials_blender.py -- --materials &lt;dir2&gt;\materials.json --save &lt;服装文件夹&gt;\&lt;名&gt;_HQ.blend
+# 4 PMX（亮面拆成 _gloss 材质）+ 回读预览
+blender -b &lt;服装.blend&gt; --python .\export_pmx_blender.py -- --out &lt;dir3&gt; --hq-materials &lt;dir2&gt;\materials.json
+blender -b --python .\preview_pmx_blender.py -- --pmx &lt;dir3&gt;\&lt;名&gt;\&lt;名&gt;.pmx</pre>
+    <p><b>Blender 插件 Stellar Blade Game Materials</b>（<code>scripts\blender_addons\stellarblade_game_materials</code>，本机已装进 Blender 3.6，在「编辑 → 偏好设置... → 插件」里勾选）：
+      用 mmd_tools 导入 PMX → 3D 视图按 N → MMD 标签页最下面「剑星游戏材质」→「换上游戏原始材质」。插件按材质名从存档的 <code>*_HQ.blend</code> 里把游戏材质搬进来，
+      「游戏材质 / MMD 着色」可来回切，六个滑块实时调，再导出 PMX 不受影响。</p>
   </section>
 """
 
@@ -394,7 +434,7 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stellar Blade 模型导出总览</title>
+<title>剑星角色导出总览</title>
 <style>
 :root {{
   color-scheme: light dark;
@@ -485,13 +525,13 @@ td code, li code, p code {{ font-family: Consolas, monospace; }}
 </head>
 <body>
 <header>
-  <h1>Stellar Blade · Eve 服装导出总览</h1>
+  <h1>剑星角色导出总览</h1>
   <div class="sub">生成于 {generated} · 导出根目录 <code>{source_root}</code> ·
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
     <div class="stat"><b>{total}</b><span>已转模型</span></div>
-    <div class="stat"><b>{characters}</b><span>服装编号</span></div>
-    <div class="stat"><b>{mods}</b><span>DLC / Mod / 裸模</span></div>
+    <div class="stat"><b>{characters}</b><span>服装编号 / 角色</span></div>
+    <div class="stat"><b>{mods}</b><span>DLC / Mod / 裸模</span></div>{npc_stat}
     <div class="stat"><b>{mmd}</b><span>有 XPS / PMX</span></div>
     <div class="stat"><b>{size}</b><span>blend 总体积</span></div>
     <div class="stat"><b>{warned}</b><span>有告警</span></div>
@@ -500,7 +540,7 @@ td code, li code, p code {{ font-family: Consolas, monospace; }}
 
 <div class="toolbar">
   <input id="q" type="search" placeholder="搜索服装名（Pink Bear）、包名（45_TypeB）或路径…（按 / 聚焦）">
-  <select id="chr"><option value="">全部编号</option>{chr_options}</select>
+  <select id="chr"><option value="">全部编号 / 角色</option>{chr_options}</select>
   <button class="chip on" data-kind="">全部</button>
   {chips}
   <button class="toggle" id="warnOnly">只看告警</button>
@@ -596,9 +636,15 @@ td code, li code, p code {{ font-family: Consolas, monospace; }}
 
 def main():
     args = parse_args()
-    source_root = os.path.abspath(args.source_root)
+    source_root = os.path.abspath(args.source_root or DEFAULT_ROOT)
     manifest_path = args.manifest or os.path.join(source_root, "stellarblade_models_manifest.json")
     thumb_dir = args.thumb_dir or os.path.join(source_root, "_gallery", "thumbs")
+    archived = os.path.join(ARCHIVE_ROOT, "_meta", "stellarblade_models_manifest.json")
+    if args.source_root is None and not os.path.isfile(manifest_path) and os.path.isfile(archived):
+        # the D: export root is gone (archived 2026-09-26): read the archive's manifest and thumbnails
+        source_root = ARCHIVE_ROOT
+        manifest_path = args.manifest or archived
+        thumb_dir = args.thumb_dir or os.path.join(ARCHIVE_ROOT, "_meta", "gallery", "thumbs")
     out_path = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), PAGE_NAME)
     if not os.path.isfile(manifest_path):
         raise SystemExit("找不到 manifest: %s\n先跑一次 collect_manifest.py" % manifest_path)

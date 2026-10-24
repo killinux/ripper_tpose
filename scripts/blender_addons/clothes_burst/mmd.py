@@ -12,9 +12,14 @@ vmd.py 写。两种做法：
 MMD 不为顶点表情重算法线（一份身体靠形状键变回去，光照还是收在衣服里那个形状的），Blender 的自定义法线会跟着形状键转
 ——两份身体在两边都对。
 
+几层衣服叠在一个模型里（scripts/clothes_burst/pmx_layers.py 做的：步骤滑块 1_A脱ぎ、2_B脱ぎ……，每步脱掉一层、换上
+里面那层）时一层一层爆（make_layers）：每一层的衣服各复制一份切成碎片，表情带这一步的编号（1_爆衣 / 1_爆衣落下 /
+1_爆衣碎片_材質 ……），碎片的法线方向取这层里面的东西；隐藏、换层用模型自己的步骤滑块，不加 衣服非表示_材質、不换身体。
+
 加了什么都记在根物体的 cb_mmd 里，「撤掉」按它删干净（脱衣身体删掉时 裸体形状 形状键从它还原）。
 """
 import json
+import re
 
 import bmesh
 import bpy
@@ -66,9 +71,10 @@ def model_materials(root):
 
 
 def copy_materials(root):
-    """碎片和脱衣身体的材质：爆衣碎片_材質、换身体的 裸体形状 里加回 alpha 的那些。"""
+    """碎片和脱衣身体的材质：爆衣碎片_材質（一层一层爆时每层的 k_爆衣碎片_材質）、换身体的 裸体形状 里加回 alpha 的那些。"""
     out = set()
-    for name in (vmd.SHARDS, vmd.BODY):
+    names = [vmd.SHARDS, vmd.BODY] + [m.name for m in root.mmd_root.material_morphs if _stage_shards(m.name)]
+    for name in names:
         morph = root.mmd_root.material_morphs.get(name)
         for d in getattr(morph, "data", ()):
             if d.material and d.offset_type == "ADD":
@@ -76,9 +82,68 @@ def copy_materials(root):
     return out
 
 
-def burst_morphs(root):
-    """模型里已经有的爆衣表情：{"SHARDS": 碎片飞散要的都在, "VANISH": 直接消失要的在, "missing": 碎片飞散缺的}。"""
+def _stage_shards(name):
+    k, _, rest = name.partition("_")
+    return k.isdigit() and rest == vmd.SHARDS
+
+
+SKIN = re.compile(r"skin|肌", re.IGNORECASE)
+
+
+def layer_burst(root, steps=None):
+    """分层模型里碎成碎片的材质：面板上点选的（cb_outfit 里属于各层的那些），没点过时每层除了皮肤（名字带 skin / 肌，
+    Reika B 的 EveSKin）都碎——皮肤碎开像身体炸了，它跟着步骤滑块直接换成里面那层的皮肤。"""
+    steps = layer_steps(root) if steps is None else steps
+    mats = [m for s in steps for m in s["materials"]]
+    picked = set(outfit_names(root)) & set(mats)
+    return picked if picked else {m for m in mats if not SKIN.search(m)}
+
+
+def layer_steps(root):
+    """pmx_layers.py 的分层模型：[{"k", "step", "layer", "materials", "shown"}]，按步骤顺序——步骤滑块 k_X脱ぎ（组合
+    表情）脱掉的那层的材质（零件里 alpha 乘 0 或加负数的条目），和它换上的那层（alpha 加回来的条目，{材质: (alpha,
+    边线 alpha)}）。不是分层模型时 []。"""
     mm = root.mmd_root
+    out = []
+    for g in mm.group_morphs:
+        m = vmd.STEP.match(g.name)
+        if not m:
+            continue
+        taken, shown = [], {}
+        for d in g.data:
+            if d.morph_type != "material_morphs":
+                continue
+            part = mm.material_morphs.get(d.name)
+            for e in getattr(part, "data", ()):
+                if not e.material:
+                    continue
+                a = e.diffuse_color[3]
+                if (e.offset_type == "MULT" and a < 1e-6) or (e.offset_type == "ADD" and a < -1e-6):
+                    if e.material not in taken:
+                        taken.append(e.material)
+                elif e.offset_type == "ADD" and a > 1e-6:
+                    shown[e.material] = (a, e.edge_color[3])
+        if taken:
+            out.append({"k": int(m.group(1)), "step": g.name, "layer": m.group(2), "materials": taken,
+                        "shown": shown})
+    return sorted(out, key=lambda s: s["k"])
+
+
+def burst_morphs(root):
+    """模型里已经有的爆衣表情：{"SHARDS": 碎片飞散要的都在, "VANISH": 直接消失要的在, "missing": 碎片飞散缺的}。
+    分层模型：每层的 k_爆衣 / k_爆衣落下 / k_爆衣碎片_材質；直接消失只要步骤滑块（模型本来就有）。"""
+    mm = root.mmd_root
+    steps = layer_steps(root)
+    if steps:
+        missing = []
+        for s, has_shards in zip(steps, layer_flags(root, steps)):
+            if not has_shards:
+                continue
+            n = vmd.stage_names(s["k"])
+            for key, kind in (("throw", "vertex_morphs"), ("fall", "vertex_morphs"), ("shards", "material_morphs")):
+                if getattr(mm, kind).get(n[key]) is None:
+                    missing.append(n[key])
+        return {"SHARDS": not missing, "VANISH": True, "missing": missing}
     have = {vmd.THROW: mm.vertex_morphs.get(vmd.THROW) is not None,
             vmd.FALL: mm.vertex_morphs.get(vmd.FALL) is not None,
             vmd.SHARDS: mm.material_morphs.get(vmd.SHARDS) is not None,
@@ -93,7 +158,8 @@ def imported_burst(root):
     if has_burst(root):
         return False
     mm = root.mmd_root
-    return mm.vertex_morphs.get(vmd.THROW) is not None or mm.material_morphs.get(vmd.SHARDS) is not None
+    return mm.vertex_morphs.get(vmd.THROW) is not None or mm.material_morphs.get(vmd.SHARDS) is not None or \
+        any(_stage_shards(m.name) for m in mm.material_morphs)
 
 
 def two_bodies(root):
@@ -522,7 +588,11 @@ def alpha_terms(root):
             if d.morph_type == "material_morphs":
                 groups.setdefault(d.name, []).append((g.name, d.factor))
     out = {}
-    for name in (vmd.OUTFIT, vmd.SHARDS, vmd.BODY):
+    names = [vmd.OUTFIT, vmd.SHARDS, vmd.BODY] + [m.name for m in root.mmd_root.material_morphs if _stage_shards(m.name)]
+    for g in root.mmd_root.group_morphs:                  # 分层模型：步骤滑块里换层的材质表情
+        if vmd.STEP.match(g.name):
+            names += [d.name for d in g.data if d.morph_type == "material_morphs" and d.name not in names]
+    for name in names:
         morph = root.mmd_root.material_morphs.get(name)
         for d in getattr(morph, "data", ()):
             mat = bpy.data.materials.get(d.material) if d.material else None
@@ -703,12 +773,108 @@ def normals_from_pmx(obj, path, scale=None, arm=None):
     return hit, scale
 
 
+def _body_tree(meshes, skip):
+    """BVH（世界坐标）of the faces whose material is not in skip: the surface under a garment's fragments"""
+    pts, tris, offset = [], [], 0
+    for mesh in meshes:
+        mesh.data.calc_loop_triangles()
+        co = world_co(mesh)
+        sel = [t for t in mesh.data.loop_triangles
+               if mesh.material_slots[t.material_index].material is not None
+               and mesh.material_slots[t.material_index].material.name not in skip]
+        if sel:
+            pts.append(co)
+            tris += [tuple(i + offset for i in t.vertices) for t in sel]
+            offset += len(co)
+    return shards.surface(np.concatenate(pts), tris) if pts else None
+
+
+def make_layers(root, opts=None):
+    """分层模型（layer_steps）一层一层爆：每一步脱掉的那层切成碎片，表情 k_爆衣 / k_爆衣落下 / k_爆衣碎片_材質
+    （k = 步骤滑块的编号）；碎片飞出去的方向取这层里面那些层（不算外面已经脱掉的）。直接消失不用生成什么——
+    VMD 只拉步骤滑块。返回报告。"""
+    o = dict(DEFAULTS, **(opts or {}))
+    steps = layer_steps(root)
+    if not steps:
+        raise ValueError("不是分层模型（没有 1_X脱ぎ 这样的步骤滑块）")
+    remove(root)
+    rig, placeholder, bound = _sliders(root)
+    if bound:
+        rig.morph_slider.unbind()
+    arm, meshes = parts(root)
+    burst = layer_burst(root, steps)
+    with_shards = o["style"] == "SHARDS"
+    rec = {"style": o["style"], "objects": [], "materials": [], "created_morphs": [], "vertex_morphs": [],
+           "swapped": False, "layers": [{"k": s["k"], "step": s["step"], "layer": s["layer"],
+                                         "fragments": with_shards and bool(set(s["materials"]) & burst)}
+                                        for s in steps]}
+    floor, height = floor_and_height(arm, meshes)
+    report = {"floor": round(floor, 4), "height": round(height, 4), "fragments": 0, "objects": {},
+              "layers": [s["layer"] for s in steps],
+              "kept_whole": sorted(m for s in steps for m in s["materials"] if m not in burst)}
+    if with_shards:
+        mapping = shards.core_map(arm, physics_bones(root)) if arm is not None else None
+        # the alpha a layer shows with: the file's (outer layer), or what the step putting it on adds (inner ones)
+        shown = {}
+        for s in steps:
+            shown.update(s["shown"])
+        taken = set()
+        for s in steps:
+            names = vmd.stage_names(s["k"])
+            taken |= set(s["materials"])      # this layer and the ones outside it: not under its fragments
+            mats = set(s["materials"]) & burst
+            if not mats:                      # skin only: the step swaps it for the next layer's
+                report.setdefault("per_layer", {})[s["layer"]] = 0
+                continue
+            tree = _body_tree(meshes, taken)
+            entries, count = [], 0
+            for mesh in meshes:
+                slots = [i for i, sl in enumerate(mesh.material_slots) if sl.material and sl.material.name in mats]
+                if not slots:
+                    continue
+                copy = split_copy(mesh, slots, "%s%s_%d" % (mesh.name, SHARD_SUFFIX, s["k"]))
+                for slot in copy.material_slots:
+                    orig = slot.material
+                    alpha, edge = shown.get(orig.name, (0.0, 0.0))
+                    alpha += orig.mmd_material.alpha
+                    edge += orig.mmd_material.edge_color[3]
+                    slot.material = copy_material(orig, SHARD_SUFFIX, alpha=0.0)
+                    entries.append((slot.material, "ADD", copy.data.name, min(alpha, 1.0), min(edge, 1.0)))
+                    rec["materials"].append(slot.material.name)
+                copy[SHARD_TAG] = 1
+                rep = shards.shatter(copy, tree, floor, height, o, mapping, names=(names["throw"], names["fall"]))
+                report["objects"][copy.name] = rep
+                count += rep["fragments"]
+                rec["objects"].append(copy.name)
+            report["fragments"] += count
+            report.setdefault("per_layer", {})[s["layer"]] = count
+            vm = root.mmd_root.vertex_morphs
+            for name in (names["throw"], names["fall"]):
+                if vm.get(name) is None:
+                    m = vm.add()
+                    m.name = name
+                    m.category = "OTHER"
+                    rec["vertex_morphs"].append(name)
+                display(root, name, "vertex_morphs")
+            material_morph(root, names["shards"], entries)
+            rec["created_morphs"].append(["material_morphs", names["shards"]])
+            display(root, names["shards"], "material_morphs")
+    root[TAG] = json.dumps(dict(rec, opts=o), ensure_ascii=False)
+    if placeholder is not None:
+        _rebuild_sliders(rig, bound)
+    report["alpha_wrapped"] = alpha_wrap(root)
+    return report
+
+
 def make(root, outfit, opts=None):
-    """root 这个模型加上爆衣（先撤掉上一次的）。outfit：衣服的材质名。返回报告。"""
+    """root 这个模型加上爆衣（先撤掉上一次的）。outfit：衣服的材质名（分层模型不用：每层就是一件，make_layers）。
+    返回报告。"""
     o = dict(DEFAULTS, **(opts or {}))
     if imported_burst(root):
         raise ValueError("这个模型已经带着爆衣表情（导入的爆衣 PMX）：直接预览、导出 VMD 就行；"
                          "要换设置重做，请导入没做过爆衣的 PMX")
+    if layer_steps(root):
+        return make_layers(root, o)
     remove(root)
     rig, placeholder, bound = _sliders(root)
     if bound:
@@ -917,10 +1083,34 @@ def timing(opts):
     return {k: o[k] for k in vmd.DEFAULTS}
 
 
+def layer_flags(root, steps):
+    """每层有没有碎片：生成过就按生成时的，否则按现在选的（layer_burst）"""
+    made = {entry["step"]: entry.get("fragments", True) for entry in _record(root).get("layers", [])}
+    burst = layer_burst(root, steps)
+    return [made.get(s["step"], bool(set(s["materials"]) & burst)) for s in steps]
+
+
+def keys_for(root, opts):
+    """这个模型的爆衣表情帧：分层模型一层一层（vmd.layer_keys，按步骤滑块），否则一件衣服（vmd.burst_keys）。"""
+    t = timing(opts)
+    steps = layer_steps(root) if root is not None else []
+    if steps:
+        flags = layer_flags(root, steps)
+        return vmd.layer_keys([(s["k"], s["step"], f) for s, f in zip(steps, flags)], **t)
+    return vmd.burst_keys(**t)
+
+
+def burst_names(root):
+    """预览会打帧的表情名（清除预览时删它们的曲线）。"""
+    names = {vmd.OUTFIT, vmd.SHARDS, vmd.THROW, vmd.FALL, vmd.BODY}
+    for s in layer_steps(root):
+        names |= set(vmd.stage_names(s["k"]).values()) | {s["step"]}
+    return names
+
+
 def preview(root, opts):
     """在时间轴上打上爆衣的表情帧（表情滑块，直线插值），播放就能看。返回 (第一帧, 最后一帧)。"""
-    t = timing(opts)
-    keys = vmd.burst_keys(**t)
+    keys = keys_for(root, opts)
     rig = _model()(root)
     _rebuild_sliders(rig)
     clear_preview(root)
@@ -954,21 +1144,22 @@ def clear_preview(root):
     sk = placeholder.data.shape_keys
     action = getattr(sk.animation_data, "action", None)
     gone = 0
+    names = burst_names(root)
     if action is not None:
-        names = {vmd.OUTFIT, vmd.SHARDS, vmd.THROW, vmd.FALL, vmd.BODY}
         for fc in list(action.fcurves):
             if any(fc.data_path == 'key_blocks["%s"].value' % n for n in names):
                 action.fcurves.remove(fc)
                 gone += 1
-    for name in (vmd.OUTFIT, vmd.SHARDS, vmd.THROW, vmd.FALL, vmd.BODY):
+    for name in names:
         kb = sk.key_blocks.get(name)
         if kb is not None:
             kb.value = 0.0
     return gone
 
 
-def export_vmd(path, opts, merge_with="", model=""):
-    keys = vmd.burst_keys(**timing(opts))
+def export_vmd(path, opts, merge_with="", model="", root=None):
+    """爆衣的表情帧写成 VMD（或合进 merge_with 那段动作）；root 给了时按这个模型（分层模型一层一层）。"""
+    keys = keys_for(root, opts)
     if merge_with:
         replaced = vmd.merge(merge_with, path, keys)
         return "%d 个表情帧合进 %s（替换旧帧 %d 个）" % (len(keys), merge_with, replaced)

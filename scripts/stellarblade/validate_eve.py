@@ -298,59 +298,15 @@ def link_directx_normal(nodes, links, shader, path: str):
 
 
 def link_eye_color(nodes, links, shader, sclera_path: str, iris_path: str):
-    """Approximate UE's parallax eye using a Blender-visible UV iris."""
-    texcoord = nodes.new("ShaderNodeTexCoord")
-    sclera = nodes.new("ShaderNodeTexImage")
-    sclera.image = load_image(sclera_path)
-    sclera.name = os.path.basename(sclera_path)
-    links.new(texcoord.outputs["UV"], sclera.inputs["Vector"])
+    """The game's eye colour: M_EyeRefractive's iris / sclera / limbus maths with
+    MI_EyeRefractive1's values (eye_material.py).  The iris edge sits at mesh UV radius
+    0.145 x ScaleByCenter 0.85 = 0.123; until 2026-10-17 it was a guessed 0.07 with a 2.6x
+    brightness - 40% of the game's iris width."""
+    import eye_material
 
-    center = (0.5, 0.5, 0.0)
-    # UE's source value is 0.145, but it is evaluated after the game's
-    # parallax/refraction mapping.  Direct UV evaluation in Eevee needs a
-    # smaller visible radius or the pupil covers the entire eye opening;
-    # 0.07 matches the in-game apparent iris size once the shells around the
-    # eye are translucent.
-    iris_radius = 0.07
-    subtract = nodes.new("ShaderNodeVectorMath")
-    subtract.operation = "SUBTRACT"
-    subtract.inputs[1].default_value = center
-    scale = nodes.new("ShaderNodeVectorMath")
-    scale.operation = "SCALE"
-    scale.inputs["Scale"].default_value = 1.0 / (2.0 * iris_radius)
-    add = nodes.new("ShaderNodeVectorMath")
-    add.operation = "ADD"
-    add.inputs[1].default_value = center
-    links.new(texcoord.outputs["UV"], subtract.inputs[0])
-    links.new(subtract.outputs["Vector"], scale.inputs[0])
-    links.new(scale.outputs["Vector"], add.inputs[0])
-
-    iris = nodes.new("ShaderNodeTexImage")
-    iris.image = load_image(iris_path)
-    iris.name = os.path.basename(iris_path)
-    links.new(add.outputs["Vector"], iris.inputs["Vector"])
-    # The source iris texture is authored dark for UE's lit refraction stack;
-    # brighten it for the flat Eevee preview or it reads as an all-pupil hole.
-    iris_boost = nodes.new("ShaderNodeHueSaturation")
-    iris_boost.inputs["Value"].default_value = 2.6
-    iris_boost.inputs["Saturation"].default_value = 0.95
-    links.new(iris.outputs["Color"], iris_boost.inputs["Color"])
-
-    distance = nodes.new("ShaderNodeVectorMath")
-    distance.operation = "DISTANCE"
-    distance.inputs[1].default_value = center
-    links.new(texcoord.outputs["UV"], distance.inputs[0])
-    mask = nodes.new("ShaderNodeMath")
-    mask.operation = "LESS_THAN"
-    mask.inputs[1].default_value = iris_radius
-    links.new(distance.outputs["Value"], mask.inputs[0])
-
-    mix = nodes.new("ShaderNodeMixRGB")
-    mix.blend_type = "MIX"
-    links.new(mask.outputs[0], mix.inputs[0])
-    links.new(sclera.outputs["Color"], mix.inputs[1])
-    links.new(iris_boost.outputs["Color"], mix.inputs[2])
-    links.new(mix.outputs["Color"], shader.inputs["Base Color"])
+    sclera = load_image(sclera_path)
+    iris = load_image(iris_path)
+    eye_material.link_eye_colour(nodes, links, shader, sclera, iris)
 
 
 def set_principled_color(shader, color, roughness=0.48, metallic=0.0):
@@ -616,7 +572,7 @@ def prepare_head_materials(component: Component, assets_root: str) -> dict:
                 )
                 link_directx_normal(nodes, links, shader, textures["eye_normal"])
                 shader.inputs["Specular"].default_value = 0.65
-                assignment = "Eevee-calibrated iris/sclera blend + eye normal"
+                assignment = "game iris/sclera/limbus colour (eye_material.py) + eye normal"
             elif base_name == "M_MikeEyeBlend_Inst":
                 # This shell covers the whole eye opening; opaque near-black
                 # made the eyes read as heavy smoky makeup over a dark hole.
