@@ -61,6 +61,7 @@ Blender 插件也彼此独立：
   用法见插件 README，一步步的例子见 [`docs/clothes-burst-tutorial.md`](../docs/clothes-burst-tutorial.md)，
   原理和测试见 [`docs/clothes-burst-guide.md`](../docs/clothes-burst-guide.md)。
 - PMX 之间换衣服（通用）：`scriptslender_addons\pmx_outfit_transfer`，侧边栏 **MMD**「换装（服装移植）」—— 把一个 PMX 的衣服连同骨骼、刚体、关节、材质贴图搬到另一个 PMX 上，按目标的裸体形状贴身拟合，两套衣服的刚体互不碰撞，材质按挂的骨头拆开方便挑零件；也有命令行 `cli.py`。第一个用例 Luf g05 的整套衣服 → Inase a08 full（`E:\game_export\RiseOfEros\_混搭08_full_穿g05衣服`）。用法见插件 README，原理和坑见 [`docs/pmx-outfit-transfer.md`](../docs/pmx-outfit-transfer.md)。
+- PMX 换头（通用）：`scriptslender_addons\pmx_head_swap`，侧边栏 **MMD**「换头」—— 把一个 PMX 的头（脸、眼睛、睫毛、眉毛、头发、表情、头发物理）换到另一个 PMX 的身体上，脖子那一圈顶点对顶点焊接，法线、权重、肤色在接缝处连续；也有命令行 `cli.py`。第一个用例 Luf g05 换上 Inase a08 的头（`E:\game_export\RiseOfEros\_混搭\g05_full_换a08头`）。用法见插件 README，原理见 [`docs/pmx-head-swap.md`](../docs/pmx-head-swap.md)。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
   衣服底下没有身体的模型（别的游戏的成套模型）先用 `scripts\clothes_burst` 放进裸体：`pmx_nude_switch.py`（裸体已在 PMX 里，
