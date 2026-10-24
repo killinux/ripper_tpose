@@ -8,7 +8,8 @@ vertices have >= 0.3 of their weight on a breast's bones (左胸 / 右胸 and ev
 
     blender -b --factory-startup --python chest_clip_blender.py -- <pmx> <vmd> <out.json>
         [--body pc_g01_nk_body] [--outfit "pc_g05_hd_body 1,pc_g05_hd_body 2"] [--frames a-b]
-Prints SUMMARY: mean / p95 / max vertices out per frame, deepest mm, worst frames, per side.
+Prints SUMMARY: mean / p95 / max vertices out per frame, deepest mm, worst frames, per side, and the vertices (PMX
+index) that poke out in the most frames.
 """
 import argparse
 import os
@@ -33,6 +34,10 @@ ap.add_argument("--body", default="pc_g01_nk_body")
 ap.add_argument("--outfit", default="pc_g05_hd_body 1,pc_g05_hd_body 2")
 ap.add_argument("--frames", default="")
 ap.add_argument("--skip", default="riband", help="bones under the breast starting with this are not cups")
+ap.add_argument("--bones", default="", help="regex: measure the outfit on these bones instead of the cups (Inase a05's "
+                                            "trousers: 足|ひざ|Thigh|Calf|下半身)")
+ap.add_argument("--radius", type=float, default=2.0, help="cm: body vertices at most this far under the outfit at rest "
+                                                          "are paired (default 2)")
 args = ap.parse_args(sys.argv[sys.argv.index("--") + 1:])
 args.skip = args.skip.lower()
 t0 = time.time()
@@ -78,7 +83,11 @@ for pb in arm.pose.bones:
     if pb.parent is not None:
         kids.setdefault(pb.parent.name, []).append(pb.name)
 tree = {}
-for pb in arm.pose.bones:
+if args.bones:
+    import re
+    pat = re.compile(args.bones)
+    tree["cover"] = {pb.mmd_bone.name_j or pb.name for pb in arm.pose.bones if pat.search(pb.mmd_bone.name_j or pb.name)}
+for pb in (() if args.bones else arm.pose.bones):
     side = pb.mmd_bone.name_j
     if side in ("左胸", "右胸"):
         stack, names = [pb.name], set()
@@ -148,7 +157,7 @@ print("cup triangles wound against their normals (flipped): %d of %d" % (int((or
 tree_bvh = BVHTree.FromPolygons([Vector(p) for p in co], cup_tris, all_triangles=True)
 pairs = []                                   # (body vertex, tri, (u, v, w), rest gap)
 for i in body_verts:
-    hit = tree_bvh.find_nearest(Vector(co[i]), 0.02)
+    hit = tree_bvh.find_nearest(Vector(co[i]), args.radius / 100.0)
     if hit[0] is None:
         continue
     a, b, c = (co[j] for j in T[hit[2]])
@@ -183,6 +192,7 @@ a, b = scene.frame_start + MARGIN, scene.frame_end
 if args.frames:
     a, b = (int(x) + scene.frame_start + MARGIN for x in args.frames.split("-"))
 rows = []
+times_out, deepest = np.zeros(len(pairs), int), np.full(len(pairs), -1.0)
 for f in range(a, b + 1):
     scene.frame_set(f)
     co = coords(bpy.context.evaluated_depsgraph_get())
@@ -192,15 +202,22 @@ for f in range(a, b + 1):
     P = A * pw[:, :1] + B * pw[:, 1:2] + C * pw[:, 2:3]
     d = ((co[pi] - P) * n).sum(1)
     out = d > 0.0005
+    times_out += out
+    deepest = np.maximum(deepest, d)
     rows.append({"frame": f - scene.frame_start - MARGIN, "out": int(out.sum()),
                  "deepest_mm": round(float(d.max()) * 1000, 1),
                  "by_side": {s: int((out & (pside == s)).sum()) for s in tree}})
+# the vertices that poke out most often (mesh index = PMX vertex index: mmd_tools keeps the order)
+worst = [{"vertex": int(pi[k]), "frames_out": int(times_out[k]), "deepest_mm": round(float(deepest[k]) * 1000, 1),
+          "rest_gap_mm": round(-1000 * pairs[k][3], 1), "side": str(pside[k])}
+         for k in np.argsort(-times_out)[:12] if times_out[k] > 0]
 arr = np.array([r["out"] for r in rows])
 summary = {"pmx": args.pmx, "vmd": args.vmd, "pairs": len(pairs), "frames": len(rows),
            "mean": round(float(arr.mean()), 1), "p95": round(float(np.percentile(arr, 95)), 1), "max": int(arr.max()),
            "deepest_mm": max(r["deepest_mm"] for r in rows),
            "by_side_mean": {s: round(float(np.mean([r["by_side"][s] for r in rows])), 1) for s in tree},
            "worst_frames": [r["frame"] for r in sorted(rows, key=lambda r: -r["out"])[:8]],
+           "worst_vertices": worst,
            "seconds": round(time.time() - t0)}
 json.dump({"summary": summary, "rows": rows}, open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print("SUMMARY", json.dumps(summary, ensure_ascii=False), flush=True)

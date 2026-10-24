@@ -3,8 +3,8 @@ bones, their rigid bodies and joints, the material(s) and textures.  Both models
 bone names (ROE exports); weights on bones the target lacks fall back to the nearest ancestor it has.
 
     python pmx_graft.py donor.pmx target.pmx out.pmx --bones "^Riband_M" [--min-weight 0.3]
-        [--align 下半身] [--offset dx,dy,dz] [--material-name g05_skirt] [--hide-morph 衣服非表示_材質]
-        [--skip-material "pc_g01_nk_body,..."] [--dry-run]
+        [--align 下半身] [--offset dx,dy,dz] [--hang-offset dx,dy,dz] [--material-name g05_skirt]
+        [--hide-morph 衣服非表示_材質] [--skip-material "pc_g01_nk_body,..."] [--dry-run]
 
 - garment bones: every donor bone matching --bones, plus the bones between them and the first ancestor the target
   has (a Dummy root), added after the target's bones, parented to the same-named target bone;
@@ -12,6 +12,9 @@ bone names (ROE exports); weights on bones the target lacks fall back to the nea
   on garment bones; each donor material becomes one new material "<--material-name>[_n]" with its texture copied
   into the output folder's textures\\;
 - positions move by target(--align) - donor(--align) (+ --offset, PMX units); normals as they are;
+- --hang-offset moves only what hangs on the garment bones: their bones, bodies and joints by all of it, each vertex
+  by its weight on them - a piece that rides the body bones stays put (g05's front panel on Inase a08: the panel
+  hangs 1.6 cm further forward, clear of her fuller thighs, its belly part stays inside her belly);
 - rigid bodies on garment bones and the joints between them come along; a joint to a donor body on a non-garment bone
   is re-hung on the target's body on the same-named bone;
 - the new material(s) join the target's --hide-morph material morph (the full's outfit switch) like its outfit;
@@ -70,6 +73,7 @@ def main():
     ap.add_argument("--min-weight", type=float, default=0.3)
     ap.add_argument("--align", default="下半身")
     ap.add_argument("--offset", default="0,0,0")
+    ap.add_argument("--hang-offset", default="0,0,0", help="dx,dy,dz for the part hanging on the garment bones only")
     ap.add_argument("--material-name", default="graft")
     ap.add_argument("--hide-morph", default="衣服非表示_材質")
     ap.add_argument("--skip-material", default="", help="donor materials never taken (comma separated)")
@@ -104,8 +108,10 @@ def main():
 
     shift = np.array(T.bones[tn[args.align]].location) - np.array(D.bones[dn.index(args.align)].location) \
         + np.array([float(x) for x in args.offset.split(",")])
-    print("garment bones: %d (%s ...); shift %s" % (len(garment), ", ".join(dn[i] for i in garment[:6]),
-                                                    np.round(shift * 8, 2).tolist()))
+    hang = np.array([float(x) for x in args.hang_offset.split(",")])
+    print("garment bones: %d (%s ...); shift %s cm%s" % (
+        len(garment), ", ".join(dn[i] for i in garment[:6]), np.round(shift * 8, 2).tolist(),
+        "; the hanging part %s cm more" % np.round(hang * 8, 2).tolist() if hang.any() else ""))
 
     # the mesh
     gset = set(garment)
@@ -137,7 +143,7 @@ def main():
     new_bones = []
     for i in garment:
         b = copy.deepcopy(D.bones[i])
-        b.location = [float(x) for x in np.array(b.location) + shift]
+        b.location = [float(x) for x in np.array(b.location) + shift + hang]
         p = b.parent
         b.parent = bmap[p] if p in bmap else target_of(p)
         if isinstance(b.displayConnection, int):
@@ -183,7 +189,8 @@ def main():
                     continue
                 src = D.vertices[v]
                 nv = copy.deepcopy(src)
-                nv.co = [float(x) for x in np.array(src.co) + shift]
+                move = shift + hang * min(1.0, on_garment[v])
+                nv.co = [float(x) for x in np.array(src.co) + move]
                 w = nv.weight
                 if isinstance(w.bones, (list, tuple)):
                     w.bones = [map_bone(b) if b is not None and b >= 0 else b for b in w.bones]
@@ -191,7 +198,7 @@ def main():
                     for attr in ("c", "r0", "r1"):
                         val = getattr(w.weights, attr, None)
                         if val is not None:
-                            setattr(w.weights, attr, [float(x) for x in np.array(val) + shift])
+                            setattr(w.weights, attr, [float(x) for x in np.array(val) + move])
                 nv.additional_uvs = (list(nv.additional_uvs) + [[0.0, 0.0, 0.0, 0.0]] * n_uv)[:n_uv]
                 vmap[v] = len(T.vertices)
                 T.vertices.append(nv)
@@ -242,7 +249,7 @@ def main():
         if r.bone is not None and r.bone in bmap:
             nr = copy.deepcopy(r)
             nr.bone = bmap[r.bone]
-            nr.location = [float(x) for x in np.array(r.location) + shift]
+            nr.location = [float(x) for x in np.array(r.location) + shift + hang]
             rmap[i] = len(T.rigids)
             T.rigids.append(nr)
     joints = 0
@@ -263,7 +270,7 @@ def main():
             raise SystemExit("joint %s: no target body for %s" % (j.name, r.name))
         nj = copy.deepcopy(j)
         nj.src_rigid, nj.dest_rigid = end(a), end(b)
-        nj.location = [float(x) for x in np.array(j.location) + shift]
+        nj.location = [float(x) for x in np.array(j.location) + shift + hang]
         T.joints.append(nj)
         joints += 1
     print("  physics: %d rigid bodies, %d joints" % (len(rmap), joints))

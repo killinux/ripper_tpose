@@ -60,6 +60,7 @@ Blender 插件也彼此独立：
   ROE 的爆衣 PMX 用同一套代码（`riseoferos\burst_pmx_blender.py`、`riseoferos\burst_vmd.py`）。
   用法见插件 README，一步步的例子见 [`docs/clothes-burst-tutorial.md`](../docs/clothes-burst-tutorial.md)，
   原理和测试见 [`docs/clothes-burst-guide.md`](../docs/clothes-burst-guide.md)。
+- PMX 之间换衣服（通用）：`scriptslender_addons\pmx_outfit_transfer`，侧边栏 **MMD**「换装（服装移植）」—— 把一个 PMX 的衣服连同骨骼、刚体、关节、材质贴图搬到另一个 PMX 上，按目标的裸体形状贴身拟合，两套衣服的刚体互不碰撞，材质按挂的骨头拆开方便挑零件；也有命令行 `cli.py`。第一个用例 Luf g05 的整套衣服 → Inase a08 full（`E:\game_export\RiseOfEros\_混搭08_full_穿g05衣服`）。用法见插件 README，原理和坑见 [`docs/pmx-outfit-transfer.md`](../docs/pmx-outfit-transfer.md)。
 
 FFVII **Remake** INTERGRADE 走 UE Viewer（umodel）专用构建：`final\export_ff7remake_models.ps1`
   衣服底下没有身体的模型（别的游戏的成套模型）先用 `scripts\clothes_burst` 放进裸体：`pmx_nude_switch.py`（裸体已在 PMX 里，

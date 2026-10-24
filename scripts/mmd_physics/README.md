@@ -422,6 +422,11 @@ python scripts\mmd_physics\bust_variants.py <in.pmx> <输出文件夹> --only no
 
 不写这两个参数时，输出和原来逐字节相同（a08 的 `--skin` 和 `--colliders-from` 都核对过）。
 
+- `--half-overlap`（10-24，默认 1.0）：分两半的肢体（足 + 足D、腕 + 腕捩），两半都以满半径伸到中点，圆头再往外伸
+  1.0 × 半径。以前两个圆头只在中点相碰，a08 大腿中段前内侧露在碰撞体外 2.0–2.3 cm，前片从那里陷进去；1.0 时
+  0.3–0.6 cm，不戳出皮肤。`--half-overlap 0` = 以前的输出（a08 full 的拟合 md5 一致）。详见
+  [docs/pmx-garment-graft.md](../../docs/pmx-garment-graft.md)。
+
 **a08 的做法（scratch `final.sh`）：**
 
 ```powershell
@@ -601,16 +606,26 @@ g05 full：每帧 165 → 0（最深 9.3 mm → 0.2 mm）；bustB 122 → 0。
 吊坠就把胸拽一下。`pmx_bust_chain_nocollide.py` 把链尾挂在会摆动的胸部刚体上的链改回不碰撞（归档原版就是这样）。
 只碰腿的方案试过：大腿高抬时吊坠照样穿过去，其他布料反而变差，没采用。
 
-**服装移植**（`pmx_graft.py`，试验中）：
+**服装移植**（`pmx_graft.py`）：
 
 ```powershell
-python pmx_graft.py 源.pmx 目标.pmx 输出.pmx --bones "^Riband_M" --material-name g05_skirt
+python pmx_graft.py 源.pmx 目标.pmx 输出.pmx --bones "^Riband_M" --material-name g05_skirt [--hang-offset 0,0,-0.2]
 ```
 
 - 取源模型里挂在 `--bones` 骨骼上的整块网格（权重 ≥ 0.3 的顶点所在的连通块），每个源材质变成一个新材质；
 - 骨骼接在目标的同名骨骼下，位置按两边的 `下半身` 对齐（`--offset` 再微调）；
+- `--hang-offset`（10-24）只挪挂在衣服骨骼上的部分：骨骼、刚体、关节整段挪，顶点按它在这些骨骼上的权重挪，
+  贴在身体骨骼上的那部分不动（g05 前片在 a08 身上往前 1.6 cm，和它同一块网格的小腹布继续藏在 a08 小腹里）；
 - 这些骨骼上的刚体和关节一起搬，挂在别的骨骼上的关节改挂目标同名骨骼的刚体；
 - 新材质加进目标的 `衣服非表示_材質`，full 版的「衣服非表示」照样能藏；
 - 贴图（目标自己的也算）都真复制进输出文件夹的 `textures\`，不会写到别处。
 
-之后照第 5、7 节修碰撞。10-18 用它做了 a08 full + g05 的长前片、a05 full + a08 的裙子，测量中，还没交付。
+之后照第 5、7 节修碰撞。10-24 交付了 a08 full + g05 的长前片、a05 full + a08 的裙子
+（`E:\game_export\RiseOfEros\_混搭\`），做法、四个坑和数字见 [docs/pmx-garment-graft.md](../../docs/pmx-garment-graft.md)：
+两个模型身材不同只按下半身对齐不够、大腿两半碰撞体中间的缺口（`--half-overlap`）、穿长裤的模型腿要按裤子量、
+full 版长裤下的身体从裤子里顶出来（`pmx_body_cover_cups.py --garment`，a05 原档就有）。
+
+`chest_clip_blender.py` 的结果里多了 `worst_vertices`（最常顶出的顶点的 PMX 序号、顶出帧数、最深、静止时深度）；
+`pmx_body_cover_cups.py` 现在也处理胸带折角下面、投影落不进任何三角形的点（a08 左胸那个点最深 2.7 → 1.0 mm），
+`--garment 材质` 让整件衣服下面的身体照抄衣服（挂在物理骨上的部分除外；a05 长裤每帧 205 → 8.0 个顶点）；
+`chest_clip_blender.py --bones REGEX --radius 3` 量任意一块衣服下的身体。

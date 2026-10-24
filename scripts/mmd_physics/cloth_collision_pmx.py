@@ -52,6 +52,10 @@ DEFAULTS = {
     "inset": 0.02,          # colliders end this far inside the skin
     "tolerance": 0.03,      # a dynamic body may start this deep in a collider and still collide with it
     "min_shrink": 0.35,     # a body is thinned to no less than this share of its size
+    # a limb fitted in two halves (足 + 足D, 腕 + 腕捩): each half keeps its full radius up to the middle and its round
+    # end reaches this x r past it.  Until 10-24 the round ends only touched there and at mid-thigh the skin stood
+    # 2-3.5 cm out of both (Inase a08) - a front panel resting on the thighs sank in.
+    "half_overlap": 1.0,
     # breast bones / bodies, left alone: a name starting with breast, after at most one word (Breast_L02,
     # breast_physics_02_l, Bip001 Breast_L02, ROE's Point_breast_UL helpers - not Vindictus PCF_008's shirt chains
     # Outfit008_upper_breast_shirt_a_01_l, which are cloth), ROE's other spellings (g04 chest_L02, Kart / Misa
@@ -202,6 +206,18 @@ def capsule_between(a, b, r, extend=0.0):
     L = float(np.linalg.norm(v))
     h = max(L * 0.35, L - 2 * r + 2 * extend * r)
     return Shape(2, (a + b) * 0.5, frame_along(v), (r, h, 0.0))
+
+
+def capsule_span(a, b, r, extend_a=0.0, extend_b=0.0):
+    """capsule_between() with its own reach at each end: the round end reaches extend_a x r past a and extend_b x r
+    past b (never shorter than 35 % of a -> b, like capsule_between)."""
+    v = b - a
+    L = float(np.linalg.norm(v))
+    lo, hi = r - extend_a * r, L - r + extend_b * r       # where the straight part starts and ends, from a
+    if hi - lo < L * 0.35:
+        mid = (lo + hi) / 2
+        lo, hi = mid - L * 0.175, mid + L * 0.175
+    return Shape(2, a + v / L * (lo + hi) / 2, frame_along(v), (r, hi - lo, 0.0))
 
 
 # -- the skin -----------------------------------------------------------------------------------------------------
@@ -434,7 +450,7 @@ def skull_ball(P, inset, step=0.05, window=None, closed=False, frame=None):
     return Shape(0, (0.0, best[1], best[2]), np.eye(3), (best[0], 0, 0))
 
 
-def fit_colliders(model, skin, colliders, inset):
+def fit_colliders(model, skin, colliders, inset, half_overlap=DEFAULTS["half_overlap"]):
     """New shapes for the body colliders {rigid index: Shape}, notes, and spine bones that should get one."""
     bones = model.bones
     idx = {b.name: i for i, b in enumerate(bones)}
@@ -463,8 +479,12 @@ def fit_colliders(model, skin, colliders, inset):
                 if r is None:
                     continue
                 whole = t0 == 0.0 and t1 == 1.0
-                out[by_bone[name]] = capsule_between(a2 + (b2 - a2) * t0, a2 + (b2 - a2) * t1, r - inset,
-                                                     0.5 if whole else 0.0)
+                if whole:
+                    out[by_bone[name]] = capsule_between(a2, b2, r - inset, 0.5)
+                else:                         # the halves overlap at the middle; the outer ends as before
+                    out[by_bone[name]] = capsule_span(a2 + (b2 - a2) * t0, a2 + (b2 - a2) * t1, r - inset,
+                                                      half_overlap if t0 > 0.0 else 0.0,
+                                                      half_overlap if t1 < 1.0 else 0.0)
                 notes[by_bone[name]] = "%s %s-%s of the limb" % (side + part, "%.1f" % t0, "%.1f" % t1)
         # shoulder: along 肩 -> 腕, as thick as the skin above the bone
         if side + "肩" in by_bone and side + "腕" in idx:
@@ -686,6 +706,9 @@ def main():
     ap.add_argument("--thigh-halves", action="store_true",
                     help="give 足D a collider (a copy of 足's) when it has none, so the thigh is fitted in two halves: "
                          "the upper, thicker half on 足, the lower on 足D (ROE a08: top 6.8 cm instead of 5)")
+    ap.add_argument("--half-overlap", type=float, default=DEFAULTS["half_overlap"],
+                    help="a limb in two halves: each keeps its full radius up to the middle and its round end reaches "
+                         "this x r past it (default %(default)s; 0 = the round ends just touch there, as before 10-24)")
     ap.add_argument("--shins-from", help="material(s) of the greaves / boots the shins wear: the shin collider is "
                                          "sized to them in two halves - the upper on ひざ, the lower on ひざD (a new "
                                          "collider) - never thinner than before (ROE a08: 0.40 -> 0.52 below the knee)")
@@ -745,7 +768,7 @@ def main():
                     fit[i] = Shape(old.kind, old.c, old.R, small)
                     notes[i] = "no counterpart in the reference - an anchor: shrunk to %.2f" % ANCHOR_RADIUS
         else:
-            fit, notes, new_bodies = fit_colliders(model, skin, colliders, args.inset)
+            fit, notes, new_bodies = fit_colliders(model, skin, colliders, args.inset, args.half_overlap)
             print("\nbody colliders (r, h, centre; skin vertices more than 0.08 inside):")
 
         def poking(s):
