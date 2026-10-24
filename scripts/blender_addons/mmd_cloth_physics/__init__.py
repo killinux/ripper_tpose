@@ -7,7 +7,7 @@ Blender add-on package.  The UI lives in the 3D viewport sidebar under the
 bl_info = {
     "name": "MMD Cloth Physics",
     "author": "ripper_tpose",
-    "version": (0, 2, 1),
+    "version": (0, 2, 2),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > Cloth Physics",
     "description": "Skirt/cape/ribbon/hair rigid bodies and joints for mmd_tools models: "

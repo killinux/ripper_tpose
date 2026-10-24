@@ -48,6 +48,7 @@ NOCOLLIDE_CLOTH = (1, 8, 9, 10, 11, 15)
 NOCOLLIDE_NEAR = (0, 1, 8, 9, 10, 11, 15)
 NOCOLLIDE_BODY = (GROUP_NEAR,)
 GLUED = 8                # shared vertices that make a chain's end glued to another body
+GLUED_PER_END = 3        # bodies one chain end may be sewn onto (Eve's front hair: its root and the next strand)
 
 BODY_COLLIDERS = (
     # bone, shape, radius ratio of bone length when the skin cannot be measured
@@ -498,8 +499,9 @@ def attach_loose_ends(model, arm, garments, options, log=None):
     the back end swung free and tore the mesh.  What the last bone shares with the bone above is left out because
     that is the chain's own smooth skinning: counted, it made a link two up the chain or the neighbouring chain's
     link above look "glued" in nine chains out of ten (0.2.0).  Nor is a body two joints away ever tied on: the new
-    joint would close a triangle and weld the last link.  The new joint has the chain's own last limits, at the
-    shared vertices.  Returns the number added."""
+    joint would close a triangle and weld the last link.  An end sewn onto several bodies (Eve's front hair: its
+    root and the next strand) is tied to each, up to GLUED_PER_END, most shared first (0.2.2; 0.2.1 took the first
+    only).  The new joints have the chain's own last limits, at the shared vertices.  Returns the number added."""
     skin = options.get("skin")
     chain_joints = options.get("chain_joints", {})
     if skin is None:
@@ -533,11 +535,11 @@ def attach_loose_ends(model, arm, garments, options, log=None):
             close = set(near.get(rigid.name, ()))
             for n in list(close):
                 close |= near.get(n, set())
-            best = None
+            glued = []                             # every body the last piece is sewn onto, most shared first
             for other, count in sorted(counts.items(), key=lambda kv: -kv[1]):
-                body = have.get(other)
-                if count < GLUED or (best is not None and count <= best[1]):
+                if count < GLUED or len(glued) >= GLUED_PER_END:
                     break
+                body = have.get(other)
                 if body is None or other == leaf or body.name == info["parent"] or body.name in close:
                     continue
                 part = collide.CLASS_OF.get(collide.name_j(arm, body))
@@ -548,24 +550,27 @@ def attach_loose_ends(model, arm, garments, options, log=None):
                 # side), or most of what the last bone drives besides the cloth it shares with the bone above
                 # (a08's hip chain: 30 vertices, 18 shared with the link above, the other 12 all with the hip plate)
                 if float((pts.mean(0) - np.array(head)) @ d) >= far or len(pts) >= 0.5 * driven:
-                    best = (body, len(pts), pts.mean(0))
-            if best is None:
-                continue
-            body, count, where = best
-            swing, side, twist = info["limits"]
-            joint = model.createJoint(
-                location=Vector(where.tolist()), rotation=info["rotation"], rigid_a=body, rigid_b=rigid,
-                maximum_location=(0.0, 0.0, 0.0), minimum_location=(0.0, 0.0, 0.0),
-                maximum_rotation=(swing, side, twist), minimum_rotation=(-swing, -side, -twist),
-                spring_linear=(0.0, 0.0, 0.0), spring_angular=(info["spring"],) * 3,
-                name="A.%s-%s" % (body.mmd_rigid.name_j or body.name, leaf))
-            joint[TAG] = garment.name
-            near.setdefault(body.name, set()).add(rigid.name)
-            near.setdefault(rigid.name, set()).add(body.name)
-            added += 1
-            if log:
-                log("  %s: last piece glued to %s (%d shared vertices) - joined there too"
-                    % (leaf, body.mmd_rigid.name_j or body.name, count))
+                    glued.append((body, len(pts), pts.mean(0)))
+            for body, count, where in glued:
+                close = set(near.get(rigid.name, ()))
+                for n in list(close):
+                    close |= near.get(n, set())
+                if body.name in close:
+                    continue                       # this end's first joint brought it within two joints
+                swing, side, twist = info["limits"]
+                joint = model.createJoint(
+                    location=Vector(where.tolist()), rotation=info["rotation"], rigid_a=body, rigid_b=rigid,
+                    maximum_location=(0.0, 0.0, 0.0), minimum_location=(0.0, 0.0, 0.0),
+                    maximum_rotation=(swing, side, twist), minimum_rotation=(-swing, -side, -twist),
+                    spring_linear=(0.0, 0.0, 0.0), spring_angular=(info["spring"],) * 3,
+                    name="A.%s-%s" % (body.mmd_rigid.name_j or body.name, leaf))
+                joint[TAG] = garment.name
+                near.setdefault(body.name, set()).add(rigid.name)
+                near.setdefault(rigid.name, set()).add(body.name)
+                added += 1
+                if log:
+                    log("  %s: last piece glued to %s (%d shared vertices) - joined there too"
+                        % (leaf, body.mmd_rigid.name_j or body.name, count))
     return added
 
 

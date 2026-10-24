@@ -86,11 +86,13 @@ def shrink_to_clear(shape, cols, tol, min_share):
     return best
 
 
-def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=None):
+def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=None, keep_size=()):
     """Give the body colliders a group per part and every dynamic body the parts it may hit (see the module
     docstring).  ``tolerance`` (metres) is how deep a body may start in a collider and still collide with it - 2 mm,
     as the ROE / Stellar Blade exporters' release_rest_overlaps, which runs after this and so finds nothing left to
-    release.  Returns a report dict."""
+    release.  ``keep_size``: names of bodies never made thinner - one that starts inside a part leaves that part out
+    (hair: a thinned tip resting on the shoulders or the back chatters against it every frame, 2026-10-24).
+    Returns a report dict."""
     rigids = [o for o in rigid_objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
     tol = tolerance * unit
     colliders = [o for o in rigids if str(o.mmd_rigid.type) == "0" and name_j(arm, o) in CLASS_OF]
@@ -121,7 +123,7 @@ def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=No
     for o in dynamic:
         s = geom.of_object(o)
         bad = [c for c in classes if max(geom.depth(s, k) for k in cls_cols[c]) > tol]
-        if bad:
+        if bad and o.name not in keep_size:
             res = shrink_to_clear(s, every, tol, min_share)
             if res is not None:
                 thinned[o.name] = res[1]

@@ -13,6 +13,9 @@ their shapes (the add-on regroups them); breasts and their joints keep everythin
 
 --body-regex: bones of the body skeleton besides the MMD standard ones (default ROE / 3ds Max Biped's ``^Bip0\\d\\d\\b``);
 --same-bones instead rebuilds exactly the bones that had dynamic bodies (any game, whatever its exporter's regex).
+To FIX an archived file use --same-bones: which bones move stays as exported, only how they are built changes.  The
+default regex gives physics to whatever it does not know as body - ROE d05 / g04 got hair the export had left rigid
+(2026-10-24 batch).
 Give Blender absolute paths.  ROE Inase a08 (2026-10-18): see scripts/mmd_physics/README.md section 8.
 """
 import argparse

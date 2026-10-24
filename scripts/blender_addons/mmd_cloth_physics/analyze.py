@@ -41,6 +41,10 @@ from .presets import NAME_HINTS
 
 JAPANESE = re.compile(r"[぀-ヿ一-鿿]")
 LIMB_HELPER = re.compile(r"twist|elbow|knee|ankle|muscle|wrist", re.IGNORECASE)
+# never cloth, whatever the body regex says: a game rig's extra toes and fingers (ROE Amano: only the big toe has the
+# Bip001 prefix, ToeFourth_L hangs bare under 足先EX) and the breast helpers below a breast bone (Breast_L03,
+# Breast_LT_00, Nipple_L).  No dynamic bone of the 212 ROE main PMX or the other games' test models matches.
+NOT_CLOTH = re.compile(r"^(?:bip0\d\d[ _])?(?:toe|finger|thumb|nipple|breast)", re.IGNORECASE)
 HAIR_NAME = re.compile(NAME_HINTS[0][0], re.IGNORECASE)
 FACE_PARENTS = ("頭", "首")
 # strip trailing side/index tokens: Skirt_B1_01 -> Skirt, Sleeve_R1_010 -> Sleeve,
@@ -339,7 +343,7 @@ def candidate_bones(arm, meshes, body_regex=None, prop_regex=r"\bProp\d*$",
             continue
         if name.startswith(("_dummy_", "_shadow_", "unused")):
             continue
-        if LIMB_HELPER.search(name) or total.get(name, 0.0) < min_weight:
+        if LIMB_HELPER.search(name) or NOT_CLOTH.search(name) or total.get(name, 0.0) < min_weight:
             continue
         if carried(bone):
             continue

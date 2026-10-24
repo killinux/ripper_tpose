@@ -80,7 +80,9 @@ def setup(obj, garments=None, presets=None, body_regex=None, prop_regex=r"\bProp
             report["attached_ends"] = build.attach_loose_ends(model, arm, garments, options, log)
             report["joints"] += report["attached_ends"]
         if collision == "classes":
-            report["collision"] = collide.assign(arm, list(model.rigidBodies()), unit, log=log)
+            have = build.existing_rigids()
+            hair = {have[b].name for g in garments if g.enabled and g.preset == "hair" for b in g.bones if b in have}
+            report["collision"] = collide.assign(arm, list(model.rigidBodies()), unit, log=log, keep_size=hair)
 
     build.with_world_off(work)
     bpy.context.view_layer.update()
