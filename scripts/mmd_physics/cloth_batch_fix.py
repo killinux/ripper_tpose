@@ -3,7 +3,8 @@
     python cloth_batch_fix.py scan.json --work <folder> [--refit auto|always|never] [--margin 0.05] [--legs-min 5]
         [--legs-inside auto|never] [--addon-dir <frozen copy of blender_addons>] [--suffix _裙子碰撞修正]
         [--skin "*_nk_body_nude,*_nk_face"] [--vmd dance.vmd] [--blender blender.exe] [--only a,b] [--limit N]
-        [--dry-run]
+        [--dry-run] [--report out.html]
+    python cloth_batch_fix.py scan.json --work <folder> --report-only out.html
 
 scan.json: cloth_check_pmx.py --json over the main PMX; every model it flags (bodies ignoring the legs, boxes off
 their cloth, joints through the body / to themselves, loose ends) is fixed.  Variants follow the ROE archive layout:
@@ -28,7 +29,10 @@ Resumable: a model already in results.json is skipped; one whose folder already 
 write itself is skipped too (hand-made fixes stay).  A Blender run that dies (another window's jobs, memory) is tried
 once more.  Use --addon-dir with a COPY of scripts/blender_addons when the batch runs for hours: the repo copy may
 change under it.  The scratch PMX are deleted per model; logs and meters stay in <work>/<stem>/.
+--report / --report-only: a Chinese HTML table of results.json - every model's meters and choice, cloth_check_pmx
+before (the scan) and after (run here over the main side files), and the models still clipping > 100 per frame.
 """
+import html
 import argparse
 import json
 import os
@@ -46,6 +50,9 @@ ap.add_argument("--margin", type=float, default=0.05, help="auto: the refit must
 ap.add_argument("--legs-min", type=int, default=5, help="bodies by the legs that make a model worth measuring")
 ap.add_argument("--legs-inside", default="auto", choices=("auto", "never"),
                 help="auto: also try cloth that starts inside the legs colliding anyway (drop test must settle)")
+ap.add_argument("--skip-worse", action="store_true",
+                help="write no side files for a model whose chosen version clips more than the archived one "
+                     "(by --margin); by default it is written and flagged (it still fixes the other faults)")
 ap.add_argument("--addon-dir", default=os.path.join(os.path.dirname(TOOLS), "blender_addons"))
 ap.add_argument("--suffix", default="_裙子碰撞修正")
 ap.add_argument("--skin", default="*_nk_body_nude,*_nk_face", help="the _full's nude skin materials (ROE)")
@@ -54,6 +61,8 @@ ap.add_argument("--blender", default=r"D:\Program Files\blender-3.6.15-windows-x
 ap.add_argument("--only", default="")
 ap.add_argument("--limit", type=int, default=0)
 ap.add_argument("--dry-run", action="store_true")
+ap.add_argument("--report", help="write the HTML report when done")
+ap.add_argument("--report-only", help="only write the HTML report of what results.json holds")
 args = ap.parse_args()
 RESULTS = os.path.join(args.work, "results.json")
 KEYS = ("ignoring_legs", "boxes_off", "joints_through_body", "joints_self", "loose_ends")
@@ -102,8 +111,101 @@ def save(results):
         json.dump(results, fh, ensure_ascii=False, indent=1)
 
 
+CHECK = (("ignoring_legs", "不撞腿"), ("boxes_off", "盒子不贴布"), ("joints_through_body", "穿身体关节"),
+         ("joints_self", "自连"), ("loose_ends", "链尾悬空"))
+CHOICE = {"rebuilt": "重建", "refit": "贴合碰撞体", "legs_inside": "陷腿照撞"}
+
+
+def write_report(results, scan_path, out_path):
+    """The batch as a Chinese HTML table (see the module docstring)."""
+    scan = {os.path.normcase(os.path.normpath(r["pmx"])): r for r in json.load(open(scan_path, encoding="utf-8"))}
+    done = {k: v for k, v in results.items() if v.get("written")}
+    side = {k: os.path.join(os.path.dirname(v["pmx"]), k + args.suffix + ".pmx") for k, v in done.items()}
+    side = {k: p for k, p in side.items() if os.path.exists(p)}
+    check_path = os.path.join(args.work, "side_check.json")
+    if side:
+        subprocess.run([sys.executable, os.path.join(TOOLS, "cloth_check_pmx.py")] + list(side.values())
+                       + ["--json", check_path], check=True, stdout=subprocess.DEVNULL)
+        after = {os.path.basename(r["pmx"])[:-len(args.suffix + ".pmx")]: r
+                 for r in json.load(open(check_path, encoding="utf-8"))}
+    else:
+        after = {}
+    before = {k: scan.get(os.path.normcase(os.path.normpath(v["pmx"]))) for k, v in done.items()}
+    n = lambda r, k: len(r.get(k, [])) if r else 0                                           # noqa: E731
+    used = lambda v: (v.get("meter") or {}).get(v.get("choice", "rebuilt"))                   # noqa: E731
+    avg = lambda xs: sum(xs) / len(xs) if xs else 0.0                                       # noqa: E731
+    fmt = lambda x: "%.1f" % x if isinstance(x, (int, float)) else "-"                      # noqa: E731
+    metered = {k: v for k, v in done.items() if (v.get("meter") or {}).get("orig") is not None and used(v) is not None}
+    skipped = [k for k, v in results.items() if v.get("skipped")]
+    failed = [k for k, v in results.items() if v.get("error")]
+    hard = sorted((k for k, v in metered.items() if used(v) > 100), key=lambda k: -used(metered[k]))
+    css = (":root{--bg:#fff;--fg:#1d1d1f;--mute:#6e6e73;--line:#e5e5ea;--good:#2e7d32;--head:#f5f5f7}"
+           "@media (prefers-color-scheme:dark){:root{--bg:#1c1c1e;--fg:#f2f2f7;--mute:#a1a1a6;--line:#3a3a3c;"
+           "--good:#81c784;--head:#2c2c2e}}body{background:var(--bg);color:var(--fg);font:14px/1.5 'Microsoft YaHei',"
+           "system-ui,sans-serif;margin:24px 16px}h1{font-size:22px}h2{font-size:17px;margin-top:28px}p{max-width:980px}"
+           ".wrap{overflow:auto;max-height:80vh;margin:8px 0 16px;border:1px solid var(--line);width:fit-content;"
+           "max-width:100%}table{border-collapse:collapse}th,td{border-bottom:1px solid var(--line);padding:4px 10px;"
+           "text-align:right;white-space:nowrap}th{background:var(--head);position:sticky;top:0}td.l,th.l{text-align:"
+           "left}.good{color:var(--good);font-weight:600}.mute{color:var(--mute)}")
+    out = ["<!doctype html><html lang='zh'><head><meta charset='utf-8'><meta name='viewport' content='width=device-"
+           "width, initial-scale=1'><title>布料物理批量修正</title><style>%s</style></head><body>" % css,
+           "<h1>布料物理批量修正</h1>",
+           "<p class='mute'>%s，<code>scripts/mmd_physics/cloth_batch_fix.py</code>：每个有毛病的模型用做裙子物理的插件"
+           "重建（只重建原来有物理的骨头）；布挨着腿的再试按 full 版裸体贴合碰撞体、陷腿照撞，量过选穿腿最少的（贴合 / "
+           "陷腿照撞要少 %.0f%% 以上才用，陷腿照撞还要先过掉落测试）。原文件都没动，修好的另存为 "
+           "<code>…%s.pmx</code>。插件：%s。</p>" % (
+               time.strftime("%Y-%m-%d"), 100 * args.margin, html.escape(args.suffix),
+               html.escape("、".join(sorted({v.get("addon", "?") for v in done.values()})))),
+           "<p>修了 %d 个模型，写了 %d 个文件；跳过 %d 个（已经有修正版）；失败 %d 个%s。</p>" % (
+               len(done), sum(len(v["written"]) for v in done.values()), len(skipped), len(failed),
+               ("：" + "、".join(failed)) if failed else "")]
+    if metered:
+        counts = {c: sum(v.get("choice") == c for v in metered.values()) for c in CHOICE}
+        o, u = avg([v["meter"]["orig"] for v in metered.values()]), avg([used(v) for v in metered.values()])
+        out.append("<p>布挨着腿的 %d 个模型，手势舞每帧有多少布料顶点陷进腿里（腿上穿的什么都算）：原版平均 <b>%.1f</b>，"
+                   "用的那版 <b class='good'>%.1f</b>（少 %.0f%%）。用了%s。</p>" % (
+                       len(metered), o, u, 100 * (1 - u / o) if o else 0,
+                       "，".join("%s %d 个" % (CHOICE[c], counts[c]) for c in CHOICE)))
+    out.append("<p>检查工具（主文件）合计，原版 → 修正版：%s。</p>" % "，".join(
+        "%s %d → %d" % (label, sum(n(before[k], key) for k in done), sum(n(after.get(k), key) for k in done))
+        for key, label in CHECK))
+    if hard:
+        out.append("<h2>还剩很多的（每帧 &gt; 100）</h2><p>%s。多半是布一开始就裹在大腿碰撞体里（只能不撞腿），可试"
+                   "插件的 <code>legs_inside=\"collide\"</code>，或加细骨链、单独处理大腿。</p>" % "、".join(
+                       "%s %s → %s" % (html.escape(k), fmt(metered[k]["meter"]["orig"]), fmt(used(metered[k])))
+                       for k in hard))
+    worse = [k for k, v in metered.items() if used(v) > (1.0 + args.margin) * v["meter"]["orig"] + 0.5]
+    if worse:
+        out.append("<h2>修完反而更穿的</h2><p>%s。修正版还是写了（盒子、关节、碰撞组这些毛病修好了），要原版的穿腿表现就"
+                   "用原文件；<code>--skip-worse</code> 让批量不写这类。ROE b10 是腿上枪套里的手枪带物理（原版就带），"
+                   "量到的是枪身碰脚踝，不是裙子。</p>" % "、".join(
+                       "%s %s → %s" % (html.escape(k), fmt(metered[k]["meter"]["orig"]), fmt(used(metered[k])))
+                       for k in sorted(worse)))
+    out.append("<h2>每个模型</h2><div class='wrap'><table><tr><th class='l'>模型</th><th>文件</th><th>挨着腿</th>"
+               "<th>穿腿 原版</th><th>重建</th><th>贴合</th><th>陷腿照撞</th><th class='l'>用的</th>" +
+               "".join("<th>%s 前 → 后</th>" % label for _k, label in CHECK) + "</tr>")
+    for k in sorted(done, key=lambda s: -((done[s].get("meter") or {}).get("orig") or 0)):
+        v, m = done[k], done[k].get("meter") or {}
+        li = fmt(m.get("legs_inside")) if m.get("legs_inside") is not None else (
+            html.escape(m.get("legs_inside_drop", "-"))[:24] if m else "-")
+        out.append("<tr><td class='l'>%s</td><td>%d</td><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+                   "<td class='l'>%s</td>%s</tr>" % (
+                       html.escape(k), len(v["written"]), v.get("near_legs", 0), fmt(m.get("orig")),
+                       fmt(m.get("rebuilt")), fmt(m.get("refit")), li, CHOICE.get(v.get("choice"), "-"),
+                       "".join("<td>%d → <span class='%s'>%d</span></td>" % (
+                           n(before[k], kk), "good" if n(after.get(k), kk) < n(before[k], kk) else "",
+                           n(after.get(k), kk)) for kk, _l in CHECK)))
+    out.append("</table></div></body></html>")
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out))
+    log("report: %s (%d models)" % (out_path, len(done)))
+
+
 os.makedirs(args.work, exist_ok=True)
 results = json.load(open(RESULTS, encoding="utf-8")) if os.path.exists(RESULTS) else {}
+if args.report_only:
+    write_report(results, args.scan, args.report_only)
+    sys.exit(0)
 todo = [r for r in json.load(open(args.scan, encoding="utf-8")) if r.get("dynamic") and any(r.get(k) for k in KEYS)]
 only = {x for x in args.only.split(",") if x}
 done_now = 0
@@ -138,7 +240,7 @@ for r in todo:
     t0 = time.time()
     wd = os.path.join(args.work, stem)
     os.makedirs(wd, exist_ok=True)
-    entry = {"pmx": main, "variants": sorted(variants), "near_legs": r.get("near_legs", 0)}
+    entry = {"pmx": main, "variants": sorted(variants), "near_legs": r.get("near_legs", 0), "addon": args.addon_dir}
     log("%s: %d variants, %d bodies by the legs" % (stem, len(variants), entry["near_legs"]))
     rebuilt = {}
     for key, src in variants.items():
@@ -204,6 +306,15 @@ for r in todo:
         log("%s: meters orig %s / rebuilt %s / refit %s / legs-inside %s (%s) -> %s" % (
             stem, m["orig"], m["rebuilt"], m["refit"], m.get("legs_inside"), m.get("legs_inside_drop", "-"),
             entry["choice"]))
+        now = m.get(entry["choice"])
+        if m["orig"] is not None and now is not None and now > (1.0 + args.margin) * m["orig"] + 0.5:
+            entry["worse_than_archive"] = True      # ROE b10: holstered pistols with physics, 33.7 -> 41.0
+            if args.skip_worse:
+                entry["skipped"] = "clips more than the archived file (%.1f > %.1f)" % (now, m["orig"])
+                results[stem] = entry
+                save(results)
+                log("%s: chosen version clips more than the archive - nothing written (--skip-worse)" % stem)
+                continue
     written = []
     for key, path in chosen.items():
         src = variants[key]
@@ -224,3 +335,5 @@ for r in todo:
     if args.limit and done_now >= args.limit:
         break
 log("BATCH DONE (%d models this run, %d in results)" % (done_now, len(results)))
+if args.report:
+    write_report(results, args.scan, args.report)

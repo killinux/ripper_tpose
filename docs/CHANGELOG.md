@@ -481,7 +481,9 @@ python export_model.py GF_Nude --hair GF_Hair_308
   - 按检查工具的 JSON 逐个重建（ROE 归档的 `_bustB` / `_full` 布局），布挨着腿、有 full 版的再按裸体贴合碰撞体，
     量原版 / 重建 / 贴合三版，留好的那版，另存 `<名字>_裙子碰撞修正.pmx`，原文件不动；
   - 选项：`--refit auto|always|never`、`--legs-inside auto|never`（陷腿照撞的版本先做掉落测试，稳定才参选）、
-    `--margin`、`--legs-min`、`--skin`、`--suffix`、`--addon-dir`（长批量用插件拷贝）、`--dry-run`；
+    `--margin`、`--legs-min`、`--skin`、`--suffix`、`--addon-dir`（长批量用插件拷贝）、`--skip-worse`（选出的版本
+    比原版还穿就不写；默认照写并标记）、`--dry-run`、`--report` / `--report-only`（中文汇总表：每个模型的测量和选择、
+    检查工具前后对比、还剩很多的、修完反而更穿的）；
   - 可续跑；Blender 中途被结束会重试一次；已有手工修正版的目录跳过。
 - 文档：`scripts/mmd_physics/README.md` 第 8 节末一张表，列这两天的问题、原因、工具里怎么处理；插件 README 0.2.3。
 
