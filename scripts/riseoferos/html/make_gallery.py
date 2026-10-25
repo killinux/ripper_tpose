@@ -5,9 +5,10 @@ and, when present, ``_suits/manifest.json`` (written by export_suits.py — the
 outfit variants assembled from component meshes) and the nude bases in
 ``nude_materials/`` that have a preview, shrinks each composite preview
 into a JPEG thumbnail and emits a self-contained ``index.html`` next to this
-script.  Suit and nude-base cards sit next to their character's cards and can be
-filtered with the 角色模型 / 套装 / 裸模 chips; their XPS / PMX rows come from
-export_hq.py (export_suit_xps_blender.py / export_suit_pmx_blender.py).  Dressed models whose body
+script.  Nude-base cards sit next to their character's cards; the suits have a section of their own (套装)
+below them, in key order, so grouped by character (2026-10-25: they used to sit next to their character too).
+All three can be filtered with the 角色模型 / 套装 / 裸模 chips; the XPS / PMX rows of suits and nude bases come
+from export_hq.py (export_suit_xps_blender.py / export_suit_pmx_blender.py).  Dressed models whose body
 complete_nude.py filled in (``<id>/blend/<stem>_nude.blend``) get a 裸模 card too.
 
 The page links to the real files with ``file://`` URLs and the thumbnails are
@@ -17,12 +18,15 @@ written under the export root, so **no game-derived image ever enters the repo**
 The cards built from the export root replace the cards of the same name on the existing page and every other
 card stays as it is: D:\\roe_exports is emptied once a batch is archived to E: (archive_exports.py, which also
 points the page's links at E:), so a page built from D: alone would lose every model no longer there.
-``--fresh`` builds the page from the export root alone; ``--only`` limits which cards are built.
+``--fresh`` builds the page from the export root alone; ``--only`` limits which cards are built;
+``--relayout`` builds no card and lays the page out again from the cards already on it (a layout change while
+the export root is empty).
 
 Usage:
   python make_gallery.py
   python make_gallery.py --only "a_swimsuit01*,h_xmas01*"
   python make_gallery.py --source-root D:\\roe_exports --force
+  python make_gallery.py --relayout
 """
 
 import argparse
@@ -47,6 +51,7 @@ ID_RE = re.compile(r"[a-z]_[a-z]+\d+|[a-z]\d+")
 KIND_ORDER = {"model": 0, "suit": 1, "nude": 2}
 CARD_RE = re.compile(r'      <article class="card".*?</article>\n', re.S)
 NOMESH_RE = re.compile(r"        <li><code>(.*?)</code><span>(.*?)</span></li>\n")
+HEADER_RE = re.compile(r'<div class="sub">生成于 (.*?) · 导出根目录 <code>(.*?)</code>')
 # the PMX row of a card: the file in title="", the numbers in the rigspec note (pmx_note_of)
 PMX_NOTE_RE = re.compile(r'(<dt>PMX</dt>\s*<dd><a href="[^"]*" title="([^"]*)">(?:(?!</dd>).)*?'
                          r'<span class="rigspec">)([^<]*?) 骨 · 刚体 [^\s<]+ · 关节 [^\s<]+ · 表情 [^\s<]+', re.S)
@@ -73,6 +78,10 @@ def parse_args():
     parser.add_argument("--recount", default="",
                         help="cards kept from the page whose PMX changed in place (on E:): rigid bodies, joints "
                              "and face morphs counted again in the PMX they link to; keys / wildcards like --only")
+    parser.add_argument("--relayout", action="store_true",
+                        help="build no card: lay the page out again from the cards already on it, reading no "
+                             "export root (empty once a batch is archived to E:); the header's 生成于 / 导出根目录 "
+                             "stay as the page had them; --recount still applies")
     return parser.parse_args()
 
 
@@ -564,6 +573,15 @@ def page_records(path):
     return records, nomesh
 
 
+def page_header(path):
+    """生成于 / 导出根目录 of the page an earlier run wrote, as (manifest, source root), for --relayout."""
+    with open(path, encoding="utf-8") as handle:
+        match = HEADER_RE.search(handle.read())
+    if not match:
+        return {}, ""
+    return {"generatedAt": html.unescape(match.group(1))}, html.unescape(match.group(2))
+
+
 def recount(card):
     """A kept card's PMX numbers counted again in the PMX its PMX row links to; the bone count stays."""
     def repl(match):
@@ -577,7 +595,8 @@ def recount(card):
 
 def render(manifest, records, nomesh, source_root):
     esc = html.escape
-    # suit and nude-base cards sit right behind their character's cards (keys sort that way)
+    # nude-base cards sit right behind their character's cards (keys sort that way); the suits get a section of
+    # their own below the rest, in the same key order, so one character's suits stay together
     records = sorted(records, key=lambda rec: (rec["key"], KIND_ORDER[rec["kind"]]))
     kinds = collections.Counter(rec["kind"] for rec in records)
     families = sorted({rec["family"] for rec in records})
@@ -589,7 +608,9 @@ def render(manifest, records, nomesh, source_root):
     chips = "".join(
         '<button class="chip" data-family="%s">%s</button>' % (esc(item), esc(item))
         for item in families)
-    cards = "".join(rec["html"] for rec in records)
+    cards = "".join(rec["html"] for rec in records if rec["kind"] != "suit")
+    suit_cards = "".join(rec["html"] for rec in records if rec["kind"] == "suit")
+    suit_ids = len({model_id(rec["key"]) for rec in records if rec["kind"] == "suit"})
     nomesh_rows = "".join(
         "        <li><code>%s</code><span>%s</span></li>\n" % (esc(item["key"]), esc(item["reason"]))
         for item in nomesh)
@@ -598,7 +619,7 @@ def render(manifest, records, nomesh, source_root):
         generated=esc(generated), source_root=esc(source_root),
         total=kinds["model"], suits=kinds["suit"], nudes=kinds["nude"], characters=characters,
         size=human_size(total_bytes), warned=warned, nomesh_count=len(nomesh), chips=chips, cards=cards,
-        nomesh_rows=nomesh_rows)
+        suit_cards=suit_cards, suit_ids=suit_ids, nomesh_rows=nomesh_rows)
 
 
 PAGE_TEMPLATE = """<!DOCTYPE html>
@@ -634,6 +655,8 @@ h1 {{ margin: 0 0 6px; font-size: 22px; }}
 .stats {{ display: flex; flex-wrap: wrap; gap: 26px; margin-top: 16px; }}
 .stat b {{ display: block; font-size: 21px; font-weight: 600; }}
 .stat span {{ color: var(--muted); font-size: 12px; }}
+a.stat {{ color: inherit; text-decoration: none; }}
+a.stat:hover span {{ color: var(--accent); text-decoration: underline; }}
 .toolbar {{
   position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
   gap: 10px; align-items: center; padding: 12px 32px;
@@ -644,11 +667,12 @@ h1 {{ margin: 0 0 6px; font-size: 22px; }}
   color: var(--ink); background: var(--bg);
   border: 1px solid var(--line); border-radius: 7px;
 }}
-.chip, .copy, .toggle {{
+.chip, .copy, .toggle, .jump {{
   font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
   color: var(--ink); background: var(--bg);
   border: 1px solid var(--line); border-radius: 999px;
 }}
+.jump {{ text-decoration: none; color: var(--accent); border-color: var(--accent); }}
 .chip.on, .toggle.on {{ background: var(--accent); border-color: var(--accent); color: #fff; }}
 .count {{ color: var(--muted); font-size: 12px; margin-left: auto; }}
 .sep {{ width: 1px; height: 22px; background: var(--line); margin: 0 4px; }}
@@ -663,6 +687,14 @@ main {{ padding: 22px 32px 48px; }}
 }}
 /* An author `display` beats the UA rule for [hidden], so filtering needs this. */
 .card[hidden] {{ display: none !important; }}
+/* the suits' own section; the scroll margin keeps its heading clear of the sticky toolbar */
+.group {{ margin-top: 36px; scroll-margin-top: 76px; }}
+.group[hidden] {{ display: none !important; }}
+.grouphead {{
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  margin: 0 0 14px; padding-bottom: 8px; font-size: 18px; border-bottom: 1px solid var(--line);
+}}
+.grouphead span {{ color: var(--muted); font-size: 12.5px; font-weight: normal; }}
 .shot {{ display: block; background: var(--shot); line-height: 0; }}
 .shot img {{ width: 100%; height: auto; display: block; }}
 .noimg {{
@@ -722,7 +754,7 @@ td code, li code {{ font-family: Consolas, monospace; }}
     图片与 blend 均为本机文件，换机器需重新生成</div>
   <div class="stats">
     <div class="stat"><b>{total}</b><span>已转模型</span></div>
-    <div class="stat"><b>{suits}</b><span>套装</span></div>
+    <a class="stat" href="#suits" title="跳到页面下方的套装区"><b>{suits}</b><span>套装 ↓</span></a>
     <div class="stat"><b>{nudes}</b><span>裸模</span></div>
     <div class="stat"><b>{characters}</b><span>覆盖角色</span></div>
     <div class="stat"><b>{size}</b><span>blend 总体积</span></div>
@@ -741,12 +773,19 @@ td code, li code {{ font-family: Consolas, monospace; }}
   <button class="chip kind" data-kind="suit">套装</button>
   <button class="chip kind" data-kind="nude">裸模</button>
   <button class="toggle" id="warnOnly">只看告警</button>
+  <a class="jump" href="#suits" title="{suits} 个套装集中在页面下方">套装区 ↓</a>
   <span class="count" id="count"></span>
 </div>
 
 <main>
   <div class="grid" id="grid">
 {cards}  </div>
+  <section class="group" id="suits">
+    <h2 class="grouphead">套装 · {suits} 套<span>{suit_ids} 个角色，按编号排，同一角色的放在一起；
+      角色模型和裸模在上面</span></h2>
+    <div class="grid">
+{suit_cards}    </div>
+  </section>
   <div class="empty" id="empty" hidden>没有匹配的模型</div>
 
   <section class="appendix">
@@ -800,8 +839,8 @@ td code, li code {{ font-family: Consolas, monospace; }}
 
     <h3>套装（suit）· export_suits.py</h3>
     <p>角色的服装变体（游戏里叫 <em>suit</em>：教师装、猫女、婚纱…）不是一个整体 FBX，而是裸模 + 头发 +
-      一堆分开的部件网格。标着「套装」徽章的卡片就是拼出来的这些，每套一个 <code>.blend</code>，
-      直接从 AssetBundle 读（不经 AssetStudio）：</p>
+      一堆分开的部件网格。标着「套装」徽章的卡片就是拼出来的这些，都在本页下方的套装区（工具栏「套装区 ↓」），
+      每套一个 <code>.blend</code>，直接从 AssetBundle 读（不经 AssetStudio）：</p>
     <pre>python export_suits.py --list                     # 哪些套装、哪些已拼
 python export_suits.py --lanes 4                  # 全部没拼的，4 路并行
 python export_suits.py --only j01:idol,b01:* --force
@@ -840,7 +879,8 @@ python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs      # 裸模默认是同�
     <h3>重新生成本页</h3>
     <pre>python scripts\\riseoferos\\html\\make_gallery.py                        # D 盘上有的模型合并进本页
 python scripts\\riseoferos\\html\\make_gallery.py --only "a_swimsuit01*"   # 只重做这几张卡片
-python scripts\\riseoferos\\html\\make_gallery.py --fresh                # 只按 D 盘重建整页（D 盘得是全的）</pre>
+python scripts\\riseoferos\\html\\make_gallery.py --fresh                # 只按 D 盘重建整页（D 盘得是全的）
+python scripts\\riseoferos\\html\\make_gallery.py --relayout             # 不做卡片，只按本页现有卡片重排（D 盘清空后改版面用）</pre>
     <p>读 <code>character_models_manifest.json</code>、<code>_suits\\manifest.json</code> 和
       <code>nude_materials\\*.blend</code>（有预览图的裸模），把预览图缩成
       JPEG 缩略图放进 <code>D:\\roe_exports\\_gallery\\thumbs\\</code>，做出来的卡片换掉本页同名的卡片，
@@ -865,6 +905,8 @@ python scripts\\riseoferos\\html\\make_gallery.py --fresh                # 只�
   var warnOnly = document.getElementById('warnOnly');
   var chips = Array.prototype.slice.call(document.querySelectorAll('.chip:not(.kind)'));
   var kinds = Array.prototype.slice.call(document.querySelectorAll('.chip.kind'));
+  var groups = Array.prototype.slice.call(document.querySelectorAll('.group'));
+  var jumps = Array.prototype.slice.call(document.querySelectorAll('a[href="#suits"]'));
   var family = '';
   var kind = '';
 
@@ -879,6 +921,10 @@ python scripts\\riseoferos\\html\\make_gallery.py --fresh                # 只�
         && (!onlyWarn || card.dataset.warn === '1');
       card.hidden = !ok;
       if (ok) shown++;
+    }});
+    // a section whose cards the filters all hid goes too, heading and all
+    groups.forEach(function (group) {{
+      group.hidden = !group.querySelector('.card:not([hidden])');
     }});
     count.textContent = shown + ' / ' + cards.length;
     empty.hidden = shown !== 0;
@@ -903,6 +949,12 @@ python scripts\\riseoferos\\html\\make_gallery.py --fresh                # 只�
       chip.classList.add('on');
       kind = chip.dataset.kind || '';
       apply();
+    }});
+  }});
+  jumps.forEach(function (link) {{
+    link.addEventListener('click', function () {{
+      // the 角色模型 / 裸模 filter hides the whole suit section, leaving the link nowhere to go
+      if (kind && kind !== 'suit') kinds[0].click();
     }});
   }});
   document.addEventListener('keydown', function (event) {{
@@ -950,23 +1002,33 @@ def main():
         source_root, "character_models_manifest.json")
     thumb_dir = args.thumb_dir or os.path.join(source_root, "_gallery", "thumbs")
     out_path = args.out or os.path.join(HERE, PAGE_NAME)
-    if not os.path.isfile(manifest_path):
-        raise SystemExit("manifest not found: %s\n先跑一次 export_character_models.ps1"
-                         % manifest_path)
     patterns = [item.strip() for item in args.only.split(",") if item.strip()]
     recount_patterns = [item.strip() for item in args.recount.split(",") if item.strip()]
 
     def wanted(key):
         return not patterns or any(fnmatch.fnmatchcase(key, pattern) for pattern in patterns)
 
-    manifest, models, nomesh = collect(manifest_path, thumb_dir, args.force, wanted)
-    if args.fresh and not models:
-        raise SystemExit("manifest has no PASS entries: %s" % manifest_path)
-    suits = collect_suits(source_root, thumb_dir, args.force, wanted)
-    main_stems = {os.path.splitext(os.path.basename(entry.get("output") or ""))[0]
-                  for entry in manifest.get("results", [])}
-    nudes = collect_nudes(source_root, thumb_dir, args.force, main_stems, wanted)
-    nudes += collect_completed(source_root, thumb_dir, args.force, wanted)
+    if args.relayout:
+        # the export root is emptied once a batch is archived to E: (2026-10-25: D:\roe_exports is gone), so a
+        # layout change is laid over the page's own cards, header numbers recomputed, 生成于 / 导出根目录 kept
+        if args.fresh or patterns:
+            raise SystemExit("--relayout builds no card: --fresh / --only have nothing to work on")
+        if not os.path.isfile(out_path):
+            raise SystemExit("no page to lay out again: %s" % out_path)
+        manifest, source_root = page_header(out_path)
+        models, suits, nudes, nomesh = [], [], [], []
+    else:
+        if not os.path.isfile(manifest_path):
+            raise SystemExit("manifest not found: %s\n先跑一次 export_character_models.ps1；"
+                             "只改版面用 --relayout" % manifest_path)
+        manifest, models, nomesh = collect(manifest_path, thumb_dir, args.force, wanted)
+        if args.fresh and not models:
+            raise SystemExit("manifest has no PASS entries: %s" % manifest_path)
+        suits = collect_suits(source_root, thumb_dir, args.force, wanted)
+        main_stems = {os.path.splitext(os.path.basename(entry.get("output") or ""))[0]
+                      for entry in manifest.get("results", [])}
+        nudes = collect_nudes(source_root, thumb_dir, args.force, main_stems, wanted)
+        nudes += collect_completed(source_root, thumb_dir, args.force, wanted)
 
     records = records_of(models, suits, nudes)
     kept, recounted = [], 0
@@ -998,7 +1060,7 @@ def main():
     print("no preview  : %d%s" % (len(missing),
                                   (" -> " + ", ".join(missing[:10])) if missing else ""))
     print("nomesh      : %d" % len(nomesh))
-    print("thumbnails  : %s" % thumb_dir)
+    print("thumbnails  : %s" % ("- (--relayout builds none)" if args.relayout else thumb_dir))
     print("page        : %s (%s)" % (out_path, human_size(os.path.getsize(out_path))))
 
 

@@ -539,6 +539,7 @@ python complete_nude.py a_swimsuit01                                      # _nud
 python html\make_gallery.py          # 产出 html\index.html，浏览器直接打开
 python html\make_gallery.py --force  # 预览图变了但时间戳没变时强制重建缩略图
 python html\make_gallery.py --only "a_swimsuit01*,h_xmas01*"   # 只重做这几张卡片
+python html\make_gallery.py --relayout   # 不做卡片，只按页面上已有的卡片重排（D 盘清空后改版面用）
 ```
 
 **默认是合并**（2026-10-11 起）：
@@ -550,6 +551,12 @@ python html\make_gallery.py --only "a_swimsuit01*,h_xmas01*"   # 只重做这几
 - 缩略图可以用 `--thumb-dir E:\game_export\RiseOfEros\_meta\gallery\thumbs` 直接写到 E 盘；
 - `--recount a0[3-6],b01`：PMX 在 E 盘上就地改过（补了胸部物理、表情）而 D 盘上没有整套文件时，不重做卡片，只按卡片
   链接的那个 PMX 重数刚体、关节、表情。
+- `--relayout`（2026-10-25）：不做卡片、不读 D 盘，只把页面上已有的卡片按现在的版面重排，头部数字重算，
+  「生成于 / 导出根目录」保持原样；`--recount` 照样能用。为什么：D 盘清空后合并模式找不到
+  `D:\roe_exports\character_models_manifest.json` 就退出，E 盘 `_meta` 里那份是 10-01 的旧清单，拿它跑页头日期会倒退。
+
+**版面**（2026-10-25 起）：套装卡片全部在页面下方的「套装」区，按编号排，同一角色的套装挨在一起；顶部「套装 ↓」
+和工具栏「套装区 ↓」跳过去。裸模卡片仍紧跟在各自角色的卡片后面。筛选两个区一起筛，一个区筛空了连标题一起隐藏。
 
 每张卡片给出模型名、源 FBX、blend 完整路径（带复制按钮）、网格/材质槽/贴图数与体积，
 缺贴图和被二次解析补挂的槽各有一个角标；有 XPS/PMX 的多一行路径，PMX 那行还带
@@ -931,8 +938,8 @@ python export_suits.py --sheet                     # 只重拼预览总图
 产物 `D:\roe_exports\<id>\blend\pc_<id>_<suit>.blend` + `_preview.png`，中间数据 `D:\roe_exports\_suits\<id>\<suit>\`，
 清单 `_suits\manifest.json`，拼图 `_suits\_contact.png`。前提只有底模已提取（`extract_character.ps1 <id>`，
 要 `pc_<id>_nk` 的 FBX 和 `_textures\`）。规则判错的穿法在 `suit_overrides.json` 里按 `<id>:<suit>` 改，
-然后 `--only <id>:<suit> --force`。拼完 `python html\make_gallery.py` 重生成画廊，套装卡片会插在各自角色
-的卡片后面（工具栏「套装」筛选）。部件坐标系的五种情况、「穿好」规则、验证见
+然后 `--only <id>:<suit> --force`。拼完 `python html\make_gallery.py` 重生成画廊，套装卡片都在页面下方
+的「套装」区，按编号排（2026-10-25 起；工具栏「套装区 ↓」跳过去，「套装」筛选照旧）。部件坐标系的五种情况、「穿好」规则、验证见
 [ROE 套装拼装](../../docs/roe-suit-assembly.md)。
 
 **游戏原始材质（2026-10-01）**：拼出来的套装只有颜色贴图，再就地升级一遍（套装加 `--preview` 重出预览图）：
