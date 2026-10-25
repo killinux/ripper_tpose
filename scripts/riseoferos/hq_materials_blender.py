@@ -591,8 +591,23 @@ class Builder:
             n.link(packed, nmap.inputs["Color"])
             n.link(nmap.outputs["Normal"], bsdf.inputs["Normal"])
 
+        # in place on an mmd_tools material: its alpha - the PMX material's, driven by material morphs such as a full
+        # model's 衣服非表示 (the outfit x 0, the hidden nude body copy 0 -> 1) - fades the game material too.  Without
+        # it 衣服非表示 left the outfit on, and once the bodies took game materials (2026-10-25) the hidden nude copy
+        # showed through the outfit
+        alpha_out = alpha.outputs["Value"] if alpha is not None else None
+        if target is not None and "mmd_shader" in mat.node_tree.nodes:
+            gate = n.new("ShaderNodeMath", -80, -500, "alpha_mmd", operation="MULTIPLY")   # fed by sync_mmd_alpha()
+            if alpha_out is not None:
+                n.link(alpha_out, gate.inputs[0])
+            else:
+                gate.inputs[0].default_value = 1.0
+            alpha_out = gate.outputs["Value"]
+            if not premult:
+                n.link(alpha_out, bsdf.inputs["Alpha"])
+            sync_mmd_alpha(mat)
         if premult:
-            keep_reflections(n, bsdf, out, alpha.outputs["Value"], base)
+            keep_reflections(n, bsdf, out, alpha_out, base)
         mat["roe_game_material"] = game
         mat["roe_hq_role"] = role
         mat["roe_hq_base"] = json.dumps({"bump": fl.get("_BumpScale", 1.0), "detail": detail_scale,
@@ -795,6 +810,29 @@ def game_iris(material, game, mdef, cache):
 
 
 # --- live tuning / looks -------------------------------------------------------------------------------
+def sync_mmd_alpha(materials):
+    """Feed each in-place game material's hq_alpha_mmd gate from its mmd_tools shader's alpha: the PMX material's
+    alpha, and - while mmd_tools' morph sliders are bound - the material morphs (a full's 衣服非表示).  Binding or
+    unbinding the sliders replaces mmd_tools' morph nodes (mmd_bind*), so set_mode() / apply_params() call it again."""
+    count = 0
+    for mat in (materials if isinstance(materials, (list, tuple, set)) else [materials]):
+        if mat is None or not mat.use_nodes or mat.node_tree is None:
+            continue
+        nodes, links = mat.node_tree.nodes, mat.node_tree.links
+        gate, shader = nodes.get(PREFIX + "alpha_mmd"), nodes.get("mmd_shader")
+        if gate is None or shader is None or "Alpha" not in shader.inputs:
+            continue
+        for link in list(gate.inputs[1].links):
+            links.remove(link)
+        sock = shader.inputs["Alpha"]
+        base = getattr(getattr(mat, "mmd_material", None), "alpha", None)
+        gate.inputs[1].default_value = float(sock.default_value if base is None else base)
+        if sock.is_linked:
+            links.new(sock.links[0].from_socket, gate.inputs[1])
+        count += 1
+    return count
+
+
 def hq_materials_of(meshes):
     seen, out = set(), []
     for obj in meshes:
@@ -809,6 +847,7 @@ def hq_materials_of(meshes):
 def apply_params(materials, params=None):
     """Retune the hq_* nodes: every value is the game's own value x the multiplier (DEFAULT_PARAMS)."""
     p = dict(DEFAULT_PARAMS, **(params or {}))
+    sync_mmd_alpha(materials)
     for mat in (materials if isinstance(materials, (list, tuple, set)) else [materials]):
         base = json.loads(mat.get("roe_hq_base", "{}") or "{}")
         if not base or not mat.use_nodes:
@@ -855,6 +894,7 @@ def set_active_output(material, output):
 def set_mode(materials, mode):
     """'game': the hq_* network renders; 'mmd': the material's own output (mmd_tools' MMD shader) does.
     Both stay linked, so mmd_tools never re-links anything behind our back."""
+    sync_mmd_alpha(materials)
     switched = 0
     for mat in materials:
         if mat is None or not mat.use_nodes:
@@ -918,11 +958,42 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
     if wanted:                              # PMX / XPS names resolve only once the definitions are read
         data, more = load_data(cid, cache, wanted, (), python, log, game)
         summary = more or summary
+    # in place (the ROE Game Materials add-on on an imported model): a slot this character's data does not know, whose
+    # colour texture names another character, is looked up in that character's data - clothes put on by
+    # pmx_outfit_transfer (2026-10-25: Luf g05's outfit on Inase a08 full, pc_g05_hd_body_1__pmx_diffuse - the 37 g05
+    # slots stayed MMD-shaded) and a complete_nude full / nude body, the family base's (pc_a01_nk_body under a08).
+    # The batch export keeps its own rules (no lookups elsewhere)
+    datas, slot_cid, errors = {cid: data}, [cid] * len(slots), []
+    others = {}
+    for k, ((_obj, _index, _old, albedo, _source), game_mat) in enumerate(zip(slots, picks)):
+        other = infer_cid("", [albedo]) if in_place and game_mat is None and albedo else ""
+        if other and other != cid:
+            others.setdefault(other, []).append(k)
+    for other, ks in sorted(others.items()):
+        try:
+            odata, _ = load_data(other, cache, (), sorted({slots[k][3] for k in ks if not slots[k][3].lower().endswith(
+                EXPORT_SUFFIXES)}), python, log, game)
+            got = {}
+            for k in ks:
+                _obj, _index, old, albedo, source = slots[k]
+                old_name = old.name if old else ""
+                g = source_material(odata["materials"], pick_material(odata["materials"], albedo, source, old_name),
+                                    source, old_name)
+                if g:
+                    got[k] = g
+            if got:
+                odata, _ = load_data(other, cache, sorted(set(got.values())), (), python, log, game)
+                datas[other] = odata
+                for k, g in got.items():
+                    picks[k], slot_cid[k] = g, other
+        except Exception as exc:                # that character's data could not be read: its slots are kept
+            errors.append("character %s (%d slots): %s" % (other, len(ks), exc))
     # each slot samples its own mesh's first UV layer: a suit's FBX pieces call it UVMap, the body UV0
-    builder = Builder(data, cache, "UVMap", params)
-    state, upgraded, kept, errors, done = [], [], [], [], set()
+    builders = {c: Builder(d, cache, "UVMap", params) for c, d in datas.items()}
+    state, upgraded, kept, done = [], [], [], set()
     strokes, irises = [], []
-    for (obj, index, old, albedo, source), game_mat in zip(slots, picks):
+    for k, ((obj, index, old, albedo, source), game_mat) in enumerate(zip(slots, picks)):
+        data, builder = datas[slot_cid[k]], builders[slot_cid[k]]
         label = "%s[%d]" % (obj.name, index)
         # brows / lashes / iris: the add-on's own materials, converted in place (the XPS and PMX use them)
         kind = None if in_place or old is None else \
@@ -982,7 +1053,10 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
                         del mat["roe_hq_alpha"]
     report = {"cache": cache, "character": cid, "upgraded": upgraded, "kept": kept, "errors": errors,
               "strokes": strokes, "irises": irises,
-              "overrides": data.get("overrides", {}), "images": len(set(builder.images))}
+              # slots per character whose data they were looked up in (more than one: another character's clothes)
+              "characters": {c: slot_cid.count(c) for c in datas},
+              "overrides": datas[cid].get("overrides", {}),
+              "images": len({img.name for b in builders.values() for img in b.images})}
     if summary:
         report["decoded"] = summary.get("decoded")
         report["missing"] = summary.get("missing")

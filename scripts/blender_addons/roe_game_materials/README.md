@@ -40,6 +40,10 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 6. 照常做动画、渲染。要再导出 PMX，就照常用 mmd_tools 导出，PMX 里还是原来那张颜色贴图。
 7. 不想要了点「**去掉游戏材质**」，恢复原样。
 
+有材质表情的模型（full 版的「**衣服非表示**」）：换成游戏材质以后表情照样管用，拉到 1 就藏掉自己的衣服、换成裸体那份身体。
+- 「换上游戏原始材质」会顺手把 mmd_tools 的表情滑块绑定好；
+- 之后自己在 mmd_tools 里解绑、重新绑定过的话，点一下「游戏材质」按钮重新接上。
+
 | 参数 | 默认 | 作用 |
 |---|---|---|
 | 法线强度 | 1.0 | 游戏法线强度的倍数：布料纹理、缝线、褶皱的凹凸 |
@@ -61,6 +65,10 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
   - 2026-09-27 以前导出的，用的是游戏原来的颜色贴图名；
 - ROE 的 XPS（`__xps_diffuse` 贴图），用 XPS Tools 导入；
 - 用 ROE 插件导入 FBX、挂过材质的模型；
+- 一个模型上有几个角色的材质（2026-10-25 起）：每个材质按自己的贴图名认是哪个角色的，各用各的游戏材质。
+  - 换装插件做的混搭，比如 a08 full 穿 g05 的衣服：g05 的 37 个材质用 g05 的游戏材质；
+  - full / 裸体版的身体是家族底模的（a08 的身体用的是 a01 的 `pc_a01_nk_body`），以前它一直是 MMD 着色，现在也换；
+  - 面板显示「角色 a08 + a01×2 + g05×37」；
 - 只有 Rise of Eros。别的游戏没有这套材质数据。
 
 ## 原理
@@ -81,3 +89,5 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 - 只在 Blender 3.6 上测过。Blender 4.x 的 Principled BSDF 改了插口名，要另外适配。
 - 用 Eevee 渲染时，打开「屏幕空间反射」金属会更好看。
 - 这些效果只在 Blender 里有。PMX 放进 MMD 还是只显示颜色贴图，要法线效果得用 ray-mmd。
+- b08_outfit1、k03、k07 的 full / 裸体版：补全身体时把身体贴图调过色，好和脸接上。游戏材质用的是家族底模原来的贴图，
+  换上以后脖子可能又有色差；这几个用 MMD 着色，或者直接打开存档的 .blend。

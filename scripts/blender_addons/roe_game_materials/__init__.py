@@ -10,7 +10,7 @@ scripts/riseoferos/hq_materials_blender.py (the same code the batch export uses)
 bl_info = {
     "name": "ROE Game Materials",
     "author": "ripper_tpose",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > ROE 游戏材质",
     "description": "导入 Rise of Eros 的 PMX 后，换成游戏原始的完整材质（法线、金属度/光滑度/AO、皮肤透光和毛孔、"
@@ -135,6 +135,14 @@ class ROEGM_OT_apply(bpy.types.Operator):
             self.report({"ERROR"}, "先选中模型（骨架、网格或 MMD 模型的根）")
             return {"CANCELLED"}
         try:
+            # a model with material morphs (a full's 衣服非表示): bind mmd_tools' morph sliders first, so the game
+            # materials can follow them (hq_materials_blender.sync_mmd_alpha); a user binding later is caught by the
+            # 游戏材质 / MMD 着色 switch and the sliders below
+            if root is not None and getattr(root, "mmd_type", "") == "ROOT" and len(root.mmd_root.material_morphs):
+                from mmd_tools.core import model as mmd_model
+                rig = mmd_model.Model(root)
+                if rig.morph_slider.placeholder(binded=True) is None:
+                    rig.morph_slider.bind()
             _state, report = hq().apply(
                 meshes, root.name if root else "", in_place=True, params=params_of(s),
                 cid=s.cid.strip() or None, cache=bpy.path.abspath(s.cache) if s.cache else None,
@@ -145,8 +153,12 @@ class ROEGM_OT_apply(bpy.types.Operator):
             self.report({"ERROR"}, s.report)
             return {"CANCELLED"}
         s["mode"] = 0                        # the new networks are active: show 游戏材质 without re-switching
+        # slots looked up in another character's data: the family nude body (a01 under a08's full), clothes put on by
+        # the 换装 add-on (g05 on a08): "a08 + a01×2 + g05×37"
+        who = report["character"] + "".join(" + %s×%d" % (c, n) for c, n in
+                                            report.get("characters", {}).items() if c != report["character"])
         s.report = "角色 %s：换了 %d 个材质，保留 %d 个（眼睛 / 睫毛 / 眉毛等），错误 %d" % (
-            report["character"], len(report["upgraded"]), len(report["kept"]), len(report["errors"]))
+            who, len(report["upgraded"]), len(report["kept"]), len(report["errors"]))
         self.report({"WARNING"} if report["errors"] else {"INFO"}, s.report)
         for line in report["errors"][:5]:
             print("[roe_game_materials]", line)
