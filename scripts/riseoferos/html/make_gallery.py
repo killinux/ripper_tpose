@@ -22,20 +22,27 @@ points the page's links at E:), so a page built from D: alone would lose every m
 ``--relayout`` builds no card and lays the page out again from the cards already on it (a layout change while
 the export root is empty).
 
+A suit card's 缺基色贴图 badge comes from the assembler (``_suits/manifest.json``, written before export_hq.py's
+fix step): the pieces fix_suit_slots_blender.py gives a material (its BORROWED, the fm ears) are left out once the
+suit has its XPS / PMX, and ``--recheck-slots`` checks a kept card's slots in its .blend with Blender.
+
 Usage:
   python make_gallery.py
   python make_gallery.py --only "a_swimsuit01*,h_xmas01*"
   python make_gallery.py --source-root D:\\roe_exports --force
   python make_gallery.py --relayout
+  python make_gallery.py --relayout --recheck-slots "*_fm"
 """
 
 import argparse
+import ast
 import collections
 import fnmatch
 import html
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.parse
 from pathlib import Path
@@ -52,6 +59,11 @@ KIND_ORDER = {"model": 0, "suit": 1, "nude": 2}
 CARD_RE = re.compile(r'      <article class="card".*?</article>\n', re.S)
 NOMESH_RE = re.compile(r"        <li><code>(.*?)</code><span>(.*?)</span></li>\n")
 HEADER_RE = re.compile(r'<div class="sub">生成于 (.*?) · 导出根目录 <code>(.*?)</code>')
+# a suit card's warning badge, and the label its no-colour-texture slots go under (render_suit_card)
+WARN_BADGE_RE = re.compile(r'<span class="badge badge-warn" title="([^"]*)">缺图 \d+</span>')
+NO_ALBEDO = "缺基色贴图: "
+BLEND_LINK_RE = re.compile(r'<dt>blend</dt>\s*<dd><a href="file:///([^"]*)"')
+BLENDER = r"D:\Program Files\blender-3.6.15-windows-x64\blender.exe"     # export_hq.py's
 # the PMX row of a card: the file in title="", the numbers in the rigspec note (pmx_note_of)
 PMX_NOTE_RE = re.compile(r'(<dt>PMX</dt>\s*<dd><a href="[^"]*" title="([^"]*)">(?:(?!</dd>).)*?'
                          r'<span class="rigspec">)([^<]*?) 骨 · 刚体 [^\s<]+ · 关节 [^\s<]+ · 表情 [^\s<]+', re.S)
@@ -82,6 +94,11 @@ def parse_args():
                         help="build no card: lay the page out again from the cards already on it, reading no "
                              "export root (empty once a batch is archived to E:); the header's 生成于 / 导出根目录 "
                              "stay as the page had them; --recount still applies")
+    parser.add_argument("--recheck-slots", default="",
+                        help="suit cards kept from the page whose 缺基色贴图 slots are checked again in the .blend "
+                             "they link to (Blender, slot_textures_blender.py): the ones textured by now leave the "
+                             "badge; keys / wildcards like --only")
+    parser.add_argument("--blender", default=BLENDER, help="Blender for --recheck-slots (default: %(default)s)")
     return parser.parse_args()
 
 
@@ -240,6 +257,17 @@ def collect(manifest_path, thumb_dir, force, wanted=everything):
     return manifest, models, nomesh
 
 
+def fix_filled():
+    """Object-name prefixes of the suit pieces fix_suit_slots_blender.py gives a material when the assembler left
+    their slot without a colour texture (its BORROWED: the fm ears, j01 idol's buns), read from that script."""
+    with open(os.path.join(os.path.dirname(HERE), "fix_suit_slots_blender.py"), encoding="utf-8") as handle:
+        tree = ast.parse(handle.read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(getattr(target, "id", "") == "BORROWED" for target in node.targets):
+            return tuple(ast.literal_eval(node.value))
+    return ()
+
+
 def collect_suits(source_root, thumb_dir, force, wanted=everything):
     """Cards for the suits export_suits.py assembled (``_suits/manifest.json``)."""
     manifest_path = os.path.join(source_root, "_suits", "manifest.json")
@@ -247,6 +275,7 @@ def collect_suits(source_root, thumb_dir, force, wanted=everything):
         return []
     with open(manifest_path, encoding="utf-8-sig") as handle:
         manifest = json.load(handle)
+    filled = fix_filled()
     suits = []
     for entry in manifest.get("suits", []):
         blend = entry.get("blend") or ""
@@ -270,10 +299,12 @@ def collect_suits(source_root, thumb_dir, force, wanted=everything):
                 meshes = int(token[7:] or 0)
             elif token.startswith("packed="):
                 packed = int(token[7:] or 0)
-        missing = entry.get("missing") or ""
-        warnings = []
-        if missing and missing != "[]":
-            warnings.append("缺基色贴图: " + missing.strip("[]").replace("'", ""))
+        # the assembler's list ("['FMRear_L_obj001', ...]"); export_hq.py runs fix_suit_slots_blender.py, which
+        # gives the borrowed pieces a material, before it writes a suit's XPS / PMX - so with those there, the
+        # fm ears are not missing any more (2026-10-25: every fm card said so, 8 of them wrongly)
+        slots = [s.strip().strip("'\"") for s in (entry.get("missing") or "").strip("[]").split(",")]
+        slots = [s for s in slots if s and not ((xps or pmx) and s.startswith(filled))]
+        warnings = [NO_ALBEDO + ", ".join(slots)] if slots else []
         suits.append({
             "key": key,
             "family": (entry.get("id") or "?")[:1].upper(),
@@ -571,6 +602,44 @@ def page_records(path):
                         "size": int(attrs["size"]), "warn": attrs.get("warn") == "1", "html": card})
     nomesh = [{"key": html.unescape(key), "reason": html.unescape(reason)} for key, reason in NOMESH_RE.findall(text)]
     return records, nomesh
+
+
+def recheck_slots(card, blender):
+    """A kept suit card's 缺基色贴图 slots checked in the .blend the card links to (slot_textures_blender.py; the
+    blend's objects drop the parts' _obj001): the ones with a colour image in every slot by now leave the badge,
+    which goes when nothing is left.  Returns (card, the slots textured now)."""
+    badge, link = WARN_BADGE_RE.search(card), BLEND_LINK_RE.search(card)
+    if badge is None or link is None:
+        return card, []
+    warnings = html.unescape(badge.group(1)).split("; ")
+    slots = [s for w in warnings if w.startswith(NO_ALBEDO) for s in w[len(NO_ALBEDO):].split(", ") if s]
+    blend = urllib.parse.unquote(link.group(1))
+    if not slots or not os.path.isfile(blend):
+        return card, []
+    names = [re.sub(r"_obj001$", "", slot) for slot in slots]
+    run = subprocess.run([blender, "-b", "--factory-startup", blend, "--python",
+                          os.path.join(os.path.dirname(HERE), "slot_textures_blender.py"), "--"] + names,
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
+    line = next((l for l in run.stdout.splitlines() if l.startswith("ROE_SLOT_TEXTURES=")), None)
+    if line is None:
+        raise SystemExit("slot check failed on %s:\n%s" % (blend, (run.stdout + run.stderr)[-2000:]))
+    state = json.loads(line.split("=", 1)[1])
+    textured = [slot for slot, name in zip(slots, names) if (state.get(name) or {}).get("textured")]
+    if not textured:
+        return card, []
+    left = []
+    for warning in warnings:
+        if warning.startswith(NO_ALBEDO):
+            rest = [s for s in warning[len(NO_ALBEDO):].split(", ") if s and s not in textured]
+            warning = NO_ALBEDO + ", ".join(rest) if rest else ""
+        if warning:
+            left.append(warning)
+    new = ('<span class="badge badge-warn" title="%s">缺图 %d</span>' % (html.escape("; ".join(left)), len(left))
+           if left else "")
+    card = card[:badge.start()] + new + card[badge.end():]
+    if not left:
+        card = card.replace(' data-warn="1"', ' data-warn="0"', 1)
+    return card, textured
 
 
 def page_header(path):
@@ -880,7 +949,8 @@ python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs      # 裸模默认是同�
     <pre>python scripts\\riseoferos\\html\\make_gallery.py                        # D 盘上有的模型合并进本页
 python scripts\\riseoferos\\html\\make_gallery.py --only "a_swimsuit01*"   # 只重做这几张卡片
 python scripts\\riseoferos\\html\\make_gallery.py --fresh                # 只按 D 盘重建整页（D 盘得是全的）
-python scripts\\riseoferos\\html\\make_gallery.py --relayout             # 不做卡片，只按本页现有卡片重排（D 盘清空后改版面用）</pre>
+python scripts\\riseoferos\\html\\make_gallery.py --relayout             # 不做卡片，只按本页现有卡片重排（D 盘清空后改版面用）
+python scripts\\riseoferos\\html\\make_gallery.py --relayout --recheck-slots "*_fm"   # 用 Blender 重查这几张套装卡片的「缺图」</pre>
     <p>读 <code>character_models_manifest.json</code>、<code>_suits\\manifest.json</code> 和
       <code>nude_materials\\*.blend</code>（有预览图的裸模），把预览图缩成
       JPEG 缩略图放进 <code>D:\\roe_exports\\_gallery\\thumbs\\</code>，做出来的卡片换掉本页同名的卡片，
@@ -1004,6 +1074,7 @@ def main():
     out_path = args.out or os.path.join(HERE, PAGE_NAME)
     patterns = [item.strip() for item in args.only.split(",") if item.strip()]
     recount_patterns = [item.strip() for item in args.recount.split(",") if item.strip()]
+    recheck_patterns = [item.strip() for item in args.recheck_slots.split(",") if item.strip()]
 
     def wanted(key):
         return not patterns or any(fnmatch.fnmatchcase(key, pattern) for pattern in patterns)
@@ -1031,7 +1102,7 @@ def main():
         nudes += collect_completed(source_root, thumb_dir, args.force, wanted)
 
     records = records_of(models, suits, nudes)
-    kept, recounted = [], 0
+    kept, recounted, rechecked = [], 0, []
     if not args.fresh:
         old, old_nomesh = page_records(out_path)
         built = {(rec["kind"], rec["key"]) for rec in records}
@@ -1040,6 +1111,10 @@ def main():
             if any(fnmatch.fnmatchcase(rec["key"], pattern) for pattern in recount_patterns):
                 rec["html"] = recount(rec["html"])
                 recounted += 1
+            if rec["kind"] == "suit" and any(fnmatch.fnmatchcase(rec["key"], p) for p in recheck_patterns):
+                rec["html"], textured = recheck_slots(rec["html"], args.blender)
+                rec["warn"] = ' data-warn="1"' in rec["html"][:rec["html"].index(">")]
+                rechecked.append((rec["key"], textured))
         ids = {item["key"] for item in nomesh}
         nomesh = sorted(nomesh + [item for item in old_nomesh if item["key"] not in ids],
                         key=lambda item: item["key"])
@@ -1057,6 +1132,11 @@ def main():
     print("kept cards  : %d%s" % (len(kept), "" if args.fresh else " (from the page as it was)"))
     if recount_patterns:
         print("recounted   : %d" % recounted)
+    if recheck_patterns:
+        print("rechecked   : %d suit cards, %d with slots textured by now" % (
+            len(rechecked), sum(1 for _key, textured in rechecked if textured)))
+        for key, textured in rechecked:
+            print("    %-22s %s" % (key, ("textured now: " + ", ".join(textured)) if textured else "unchanged"))
     print("no preview  : %d%s" % (len(missing),
                                   (" -> " + ", ".join(missing[:10])) if missing else ""))
     print("nomesh      : %d" % len(nomesh))

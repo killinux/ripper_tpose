@@ -540,6 +540,7 @@ python html\make_gallery.py          # 产出 html\index.html，浏览器直接�
 python html\make_gallery.py --force  # 预览图变了但时间戳没变时强制重建缩略图
 python html\make_gallery.py --only "a_swimsuit01*,h_xmas01*"   # 只重做这几张卡片
 python html\make_gallery.py --relayout   # 不做卡片，只按页面上已有的卡片重排（D 盘清空后改版面用）
+python html\make_gallery.py --relayout --recheck-slots "*_fm"   # 用 Blender 重查这些套装卡片的「缺图」
 ```
 
 **默认是合并**（2026-10-11 起）：
@@ -554,6 +555,11 @@ python html\make_gallery.py --relayout   # 不做卡片，只按页面上已有�
 - `--relayout`（2026-10-25）：不做卡片、不读 D 盘，只把页面上已有的卡片按现在的版面重排，头部数字重算，
   「生成于 / 导出根目录」保持原样；`--recount` 照样能用。为什么：D 盘清空后合并模式找不到
   `D:\roe_exports\character_models_manifest.json` 就退出，E 盘 `_meta` 里那份是 10-01 的旧清单，拿它跑页头日期会倒退。
+- 套装卡片的「缺图」（缺基色贴图）来自拼装清单 `_suits\manifest.json`，是 export_hq 修槽之前写的。
+  `fix_suit_slots_blender.py` 会补上的部件（它的 `BORROWED`：魔化耳朵、偶像装双丸子）在套装有了 XPS / PMX 以后
+  不再算缺（2026-10-25 起；之前 12 张魔化卡片都标着耳朵缺图，其中 8 张其实早修好了）；
+- `--recheck-slots "*_fm"`（2026-10-25）：页面上留着的套装卡片，按卡片链接的 .blend 用 Blender 重查「缺图」里的部件
+  （`slot_textures_blender.py`，只读），已经有颜色贴图的从角标里去掉，全去掉就没有角标；`--blender` 指定 Blender。
 
 **版面**（2026-10-25 起）：套装卡片全部在页面下方的「套装」区，按编号排，同一角色的套装挨在一起；顶部「套装 ↓」
 和工具栏「套装区 ↓」跳过去。裸模卡片仍紧跟在各自角色的卡片后面。筛选两个区一起筛，一个区筛空了连标题一起隐藏。
@@ -960,7 +966,9 @@ python export_suits.py --sheet                     # 只重拼预览总图
 - 魔化身体（e01、f01、g01 的魔化套和魔化裸模用的底模）在游戏里有自己的脸和头发贴图 `pc_<id>_fm_nk_face/_hair`：
   肤色更红，身体自带的那对角在脸部贴图里画成深蓝，头发更浅。插件按家族给的却是普通的 `pc_f_nk_face/_hair`，
   f01 魔化的角成了灰米色，换上游戏材质后发黑。还挂着家族贴图的脸、头发、魔化耳朵换成魔化贴图，
-  游戏材质那一步再按贴图名选中魔化材质（g01 没有魔化脸，只换头发）；
+  游戏材质那一步再按贴图名选中魔化材质（g01 没有魔化脸，只换头发）。2026-10-25 修：原来每换一个槽就新建一个
+  同名材质，插件的 `albedo_mat()` 先删同名的，前面换好的槽跟着变空，e01、f01 魔化套的耳朵因此没有材质
+  （E 盘这两套重出之前还是旧的）；现在先收齐要换的槽，每种材质只建一次；
 - 裸模身体的六槽标记 `roe_nude_slots`（槽 0 身体、1 脸、2 眼、3 睫毛、4 眉毛）：c01 d01 f01 f01_fm g01_fm k01 l01 m01
   八个裸模存档时没带，插件导 XPS 会把身体当成脸、漏掉眉毛；眼睛在第 2 槽的身体补上标记。
 

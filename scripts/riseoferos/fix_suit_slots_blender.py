@@ -236,13 +236,17 @@ def fix_fm_body_textures(addon, meshes):
     body's own horns painted navy where they map, lighter hair), but the add-on gives every body of a family the
     family's shared head textures (pc_f_nk_face, pc_f_nk_hair): f01's fm horns came out grey-beige, black with
     the game materials.  A face / hair slot still on the family texture gets an albedo material on the fm one,
-    which the game-material step that follows upgrades to pc_<id>_fm_nk_face / _hair."""
+    which the game-material step that follows upgrades to pc_<id>_fm_nk_face / _hair.
+    The slots are gathered first and each role's material is made once: the add-on's albedo_mat() deletes a material
+    of the same name, so making one per slot emptied every slot handled before - the family "face" the body and the
+    borrowed ears shared went with the first one, and only the last slot kept its new material (e01 / f01 fm ears
+    came out with no material at all, found 2026-10-25)."""
     body = next((re.match(r"pc_([a-z])(\d+)_fm_nk_body", o.name) for o in meshes
                  if re.match(r"pc_([a-z])(\d+)_fm_nk_body", o.name)), None)
     if body is None:
         return []
     family, cid = body.group(1), body.group(1) + body.group(2)
-    done = []
+    targets = []
     for obj in meshes:          # the fm body, its hair, and the fm ears that borrowed the face material
         if not re.match(r"pc_%s_fm_nk_(body|hair)|FMRear_" % cid, obj.name):
             continue
@@ -254,9 +258,13 @@ def fix_fm_body_textures(addon, meshes):
             tex = os.path.join(EXPORT_ROOT, cid, "_textures", "pc_%s_fm_nk_%s_rgbx_Albedo.png" % (cid, role))
             if not os.path.isfile(tex):
                 continue                                   # g01's fm body has no face of its own
-            old = slot.material
-            slot.material = addon.albedo_mat(role, tex, desat=False)
-            done.append("%s[%d] %s -> %s" % (obj.name, index, old.name, os.path.basename(tex)))
+            targets.append((obj, index, slot.material.name, role, tex))
+    made, done = {}, []
+    for obj, index, old_name, role, tex in targets:
+        if role not in made:
+            made[role] = addon.albedo_mat(role, tex, desat=False)
+        obj.material_slots[index].material = made[role]
+        done.append("%s[%d] %s -> %s" % (obj.name, index, old_name, os.path.basename(tex)))
     return done
 
 
