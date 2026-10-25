@@ -14,6 +14,22 @@
 
 ---
 
+## 2026-10-25 — Rise of Eros：抽奖开场的女孩（pc_gacha01）导出 .blend + PMX
+
+**新增**
+
+- 用户：「目前ROE抽奖的动画是用的谁的身体」→ 查了游戏的抽奖场景 `scene_meta3d_gachaintro.ab`：模型 `pc_gacha01` 是拼的——
+  身体和头是 Miri（e01）的裸体网格（逐顶点一样，去掉了狐狸耳朵），皮肤、脸、眉眼是 Lynn（j）的材质，头发是 Keleira（k01）的发型，
+  泳衣是 Miri 那套泳衣的网格换了抽奖专用贴图，再加一条项链。10-17 的更新没动它。
+- 用户：「导出blend和pmx看一下」→ **`scripts/riseoferos/gacha_model/`**：`export_gacha_model.py` 一条命令出 .blend（游戏原始材质）
+  + PMX（和套装、裸模同一套转换；泳衣带「衣服非表示」）+ 可选跳舞预览；`inspect_bundle_renderers.py` 读一个场景 / 预制体里每个渲染器
+  画的网格、材质、贴图各在哪个包。成品 `E:\game_export\RiseOfEros\_抽奖模型\`。
+- 牙齿单独一个材质（`pc_common_tooth`）；之前导出的 ROE 模型都没有，牙齿和脸共用贴图（这次只改了这个模型）。
+
+**踩过的坑**（README 里有细节）：包里模型的渲染器挂的是占位材质，真材质在场景 / 预制体上；两件泳衣是单独的根、各带一小段骨架；
+ROE 插件导入时把小于 0.5 m 的零件当厘米单位放大 100 倍；上衣 FBX 的网格停在 Y 轴朝上（躺在地上），按离身体表面最近的摆法转回；
+裸模拆身体槽按网格名找身体贴图；`hq_material_data.py` 按角色编号挑包，换成固定清单；空场景存的 .blend 没有活动物体，PMX 那步报错。
+
 ## 2026-10-25 — PMX 待做清单；新插件 PMX Expression Transfer：把一个 PMX 的表情移到另一个 PMX 的脸上（FF7 系第一批）
 
 **新增 / 修复**
