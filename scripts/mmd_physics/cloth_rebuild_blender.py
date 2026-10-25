@@ -47,6 +47,8 @@ ap.add_argument("--same-bones", action="store_true", help="the default since 202
 ap.add_argument("--hair-collision", default="classes", choices=("classes", "none"))
 ap.add_argument("--loosen", type=float, default=1.0,
                 help="joint limits x this on chains that collide with the body (add-on 0.2.3; 1 = off)")
+ap.add_argument("--legs-inside", default="leave", choices=("leave", "collide"),
+                help="cloth that starts inside a leg collider: leave the legs out (default) or hit them anyway")
 ap.add_argument("--prop-regex", default=r"\bProp\d*$")
 ap.add_argument("--addon-dir", default=REPO_ADDONS)
 ap.add_argument("--report")
@@ -108,6 +110,10 @@ if "hair_collision" in names:
     kwargs.update(hair_collision=args.hair_collision, loosen=args.loosen)
 elif args.hair_collision != "classes" or args.loosen != 1.0:
     raise SystemExit("this add-on copy has no hair_collision / loosen options (0.2.3+)")
+if "legs_inside" in names:
+    kwargs.update(legs_inside=args.legs_inside)
+elif args.legs_inside != "leave":
+    raise SystemExit("this add-on copy has no legs_inside option (0.2.4+)")
 report = api.setup(root, body_regex=body_regex, prop_regex=args.prop_regex, log=print, **kwargs)
 after = sorted({o.mmd_rigid.bone for o in model.rigidBodies() if str(o.mmd_rigid.type) != "0" and o.mmd_rigid.bone
                 and not bust.search(bone_j(o)) and not bust.search(o.mmd_rigid.name_j or "")})

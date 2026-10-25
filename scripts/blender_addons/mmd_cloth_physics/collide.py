@@ -86,14 +86,19 @@ def shrink_to_clear(shape, cols, tol, min_share):
     return best
 
 
-def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=None, keep_size=(), no_collide=()):
+def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=None, keep_size=(), no_collide=(),
+           legs_inside="leave"):
     """Give the body colliders a group per part and every dynamic body the parts it may hit (see the module
     docstring).  ``tolerance`` (metres) is how deep a body may start in a collider and still collide with it - 2 mm,
     as the ROE / Stellar Blade exporters' release_rest_overlaps, which runs after this and so finds nothing left to
     release.  ``keep_size``: names of bodies never made thinner - one that starts inside a part leaves that part out
     (hair: a thinned tip resting on the shoulders or the back chatters against it every frame, 2026-10-24).
     ``no_collide``: names of bodies that collide with nothing (api.setup(hair_collision="none"): the hair as the ROE
-    exports had it, no chatter, but it can pass through the shoulders).  Returns a report dict."""
+    exports had it, no chatter, but it can pass through the shoulders).  ``legs_inside`` "collide": a body that starts
+    inside a leg collider (and could not be thinned clear) collides with the legs anyway - the physics pushes it out
+    in the first frames instead of letting the thigh pass through it all dance long (tight skirts whose panels hug the
+    thigh: ROE a09 / h05 kept 660-910 clipped vertices per frame); other parts are still left out.  Returns a report
+    dict."""
     rigids = [o for o in rigid_objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
     tol = tolerance * unit
     colliders = [o for o in rigids if str(o.mmd_rigid.type) == "0" and name_j(arm, o) in CLASS_OF]
@@ -129,6 +134,9 @@ def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=No
             if res is not None:
                 thinned[o.name] = res[1]
                 bad = []
+        if legs_inside == "collide" and "legs" in bad:
+            bad = [c for c in bad if c != "legs"]
+            stats["legs despite starting inside"] += 1
         combo[o.name] = tuple(c for c in classes if c not in bad)
         stats["all" if not bad else "some left out"] += 1
     for o in quiet:
@@ -183,6 +191,9 @@ def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=No
             log("  group %2d: %3d bodies hitting %s" % (g, n, c.replace("+", ", ")))
         log("  %d bodies hit every part, %d of them thinned for it; %d leave some part out; %d ride a physics "
             "body and hit nothing" % (stats["all"], len(thinned), stats["some left out"], len(quiet)))
+        if stats["legs despite starting inside"]:
+            log("  %d bodies start inside a leg collider and hit the legs anyway (legs_inside=collide)"
+                % stats["legs despite starting inside"])
         for g, cnt in sorted(left.items()):
             log("  %-28s leaves out %s" % (g, ", ".join("%s %d" % kv for kv in sorted(cnt.items()))))
     return report

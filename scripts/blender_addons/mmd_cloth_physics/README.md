@@ -94,7 +94,13 @@ ROE Inase a08 的裙子穿腿，查下来是插件自己的四个问题。198 �
   打颤，但头发会穿肩膀、后背。
 - `api.setup(loosen=1.5)`，面板「Loosen colliding」：所有会碰撞的链，关节转角限位 × 这个倍数（最多 90°）。被腿
   推开的裙摆不再撞上限位弹回，代价是摆得更开。
-- 只在「By body part」时有效。重建工具：`cloth_rebuild_blender.py --hair-collision none --loosen 1.5`。
+- （0.2.4，同日稍后）`api.setup(legs_inside="collide")`，面板「Inside legs: collide」：一开始就陷在腿部碰撞体里、削细也出不来的布，
+  照样和腿碰撞（默认是不撞腿）。物理会在开头几帧把它推出来，代价是开头可能弹一下，个别模型还会拉断关节，所以
+  每次都要做掉落测试。紧身裙效果明显：
+  - ROE h05：长两节的紧身裙，侧片裹着大腿。每帧穿腿 913 → 310，静置稳定；
+  - ROE a09：702 → 543，但静置时拉断 2 处，不能用。
+- 只在「By body part」时有效。重建工具：`cloth_rebuild_blender.py --hair-collision none --loosen 1.5
+  --legs-inside collide`。批量脚本 `cloth_batch_fix.py --legs-inside auto` 只在掉落测试稳定时才采用它。
 
 ROE d07 实测（手势舞，15 个链尾，`scripts/mmd_physics/chain_motion_blender.py`）：
 

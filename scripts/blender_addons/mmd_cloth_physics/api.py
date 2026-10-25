@@ -35,7 +35,7 @@ def analyze_model(obj, body_regex=None, prop_regex=r"\bProp\d*$", include_hair=T
 def setup(obj, garments=None, presets=None, body_regex=None, prop_regex=r"\bProp\d*$",
           include_hair=True, lattice=True, reverse_joints=False, measure_skin=True,
           thickness_scale=1.0, body_colliders=True, log=print, collision="classes", seat=True,
-          attach_ends=True, hair_collision="classes", loosen=1.0):
+          attach_ends=True, hair_collision="classes", loosen=1.0, legs_inside="leave"):
     """Analyse (unless ``garments`` is given), build colliders if the model has
     none, then rigid bodies and joints for every enabled garment.
 
@@ -49,8 +49,10 @@ def setup(obj, garments=None, presets=None, body_regex=None, prop_regex=r"\bProp
     hair collide with nothing (no chatter against the shoulders, as the ROE
     exports had it); ``loosen`` > 1 widens the joint limits of every colliding
     chain by that factor (less twitching where a leg pushes a hem past its
-    limit, more swing) - both measured 2026-10-24, collide.py.  Returns a report
-    dict for manifests."""
+    limit, more swing) - both measured 2026-10-24, collide.py; ``legs_inside``
+    "collide" lets cloth that starts inside a leg collider hit the legs anyway
+    (pushed out in the first frames; tight skirts).  Returns a report dict for
+    manifests."""
     model, root, arm, meshes = model_of(obj)
     skin = analyze.SkinIndex(arm, meshes)
     if garments is None:
@@ -88,7 +90,8 @@ def setup(obj, garments=None, presets=None, body_regex=None, prop_regex=r"\bProp
             have = build.existing_rigids()
             hair = {have[b].name for g in garments if g.enabled and g.preset == "hair" for b in g.bones if b in have}
             report["collision"] = collide.assign(arm, list(model.rigidBodies()), unit, log=log, keep_size=hair,
-                                                 no_collide=hair if hair_collision == "none" else ())
+                                                 no_collide=hair if hair_collision == "none" else (),
+                                                 legs_inside=legs_inside)
             if loosen != 1.0:
                 report["loosened_joints"] = collide.loosen_colliding(
                     list(model.joints()), report["collision"].get("classes", {}), loosen, log=log)

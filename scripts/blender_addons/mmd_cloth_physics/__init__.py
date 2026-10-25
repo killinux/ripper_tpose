@@ -7,7 +7,7 @@ Blender add-on package.  The UI lives in the 3D viewport sidebar under the
 bl_info = {
     "name": "MMD Cloth Physics",
     "author": "ripper_tpose",
-    "version": (0, 2, 3),
+    "version": (0, 2, 4),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > Cloth Physics",
     "description": "Skirt/cape/ribbon/hair rigid bodies and joints for mmd_tools models: "
@@ -78,6 +78,15 @@ class MCP_Settings(bpy.types.PropertyGroup):
         name="Loosen colliding", default=1.0, min=1.0, max=3.0, step=10,
         description="Joint limits x this on every chain that collides with the body: a hem a leg pushes past "
                     "its limit snaps back and twitches; 1.5-2 twitches less but swings more (1 = off)")
+    legs_inside: bpy.props.EnumProperty(
+        name="Cloth inside the legs", default="leave",
+        items=[("leave", "Inside legs: leave out",
+                "Cloth that starts inside a leg collider does not collide with the legs (no push at the start, "
+                "the thigh can pass through it)"),
+               ("collide", "Inside legs: collide",
+                "It collides with the legs anyway and is pushed out in the first frames - tight skirts clip far "
+                "less (ROE h05 913 -> 310 per frame) but some tear at the start (a09): run the drop test")],
+        description="What cloth that starts inside a leg collider does (with 'By body part' only)")
     drop_frames: bpy.props.IntProperty(name="Drop test frames", default=60, min=10, max=600)
     garments: bpy.props.CollectionProperty(type=MCP_GarmentItem)
     active: bpy.props.IntProperty()
@@ -143,7 +152,8 @@ class MCP_OT_build(bpy.types.Operator):
                                measure_skin=settings.measure_skin,
                                thickness_scale=settings.thickness_scale, log=lines.append,
                                collision=settings.collision, seat=settings.seat,
-                               hair_collision=settings.hair_collision, loosen=settings.loosen)
+                               hair_collision=settings.hair_collision, loosen=settings.loosen,
+                               legs_inside=settings.legs_inside)
         except Exception as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
@@ -303,6 +313,7 @@ class MCP_PT_panel(bpy.types.Panel):
             row = col.row(align=True)
             row.prop(settings, "hair_collision", text="")
             row.prop(settings, "loosen")
+            col.prop(settings, "legs_inside", text="")
         row = layout.row(align=True)
         row.operator("mmd_cloth.strip", icon="X")
         row.operator("mmd_cloth.analyze", icon="VIEWZOOM")

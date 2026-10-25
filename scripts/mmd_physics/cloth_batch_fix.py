@@ -1,8 +1,9 @@
 """Fix the cloth physics of many archived PMX at once, as side files - the 2026-10-24/25 ROE skirt batch.
 
     python cloth_batch_fix.py scan.json --work <folder> [--refit auto|always|never] [--margin 0.05] [--legs-min 5]
-        [--addon-dir <frozen copy of blender_addons>] [--suffix _裙子碰撞修正] [--skin "*_nk_body_nude,*_nk_face"]
-        [--vmd dance.vmd] [--blender blender.exe] [--only a,b] [--limit N] [--dry-run]
+        [--legs-inside auto|never] [--addon-dir <frozen copy of blender_addons>] [--suffix _裙子碰撞修正]
+        [--skin "*_nk_body_nude,*_nk_face"] [--vmd dance.vmd] [--blender blender.exe] [--only a,b] [--limit N]
+        [--dry-run]
 
 scan.json: cloth_check_pmx.py --json over the main PMX; every model it flags (bodies ignoring the legs, boxes off
 their cloth, joints through the body / to themselves, loose ends) is fixed.  Variants follow the ROE archive layout:
@@ -17,6 +18,10 @@ Per model, one Blender at a time:
    --margin less than the rebuild: on the 13-model sample it helped where cloth by the legs still could not collide
    (-28..-37 %) and hurt where the legs wear stockings or boots (the nude-fitted thighs are thinner than what the
    meter sees: b14 / d07 / j07 up to 2x).  always / never skip the choice;
+   --legs-inside auto (default) also tries the add-on's legs_inside="collide" there (cloth that starts inside a leg
+   collider hits the legs anyway, pushed out in the first frames): only if its drop test settles, and kept only
+   when it clips --margin less than the choice so far - tight skirts (ROE h05 913 -> 310 per frame, settled; a09
+   tore two joints at rest, so not eligible);
 3. the chosen files copied next to the originals as <name><suffix>.pmx at the end of the model (the originals are
    never written); <work>/results.json records variants, meters, choice and files.
 Resumable: a model already in results.json is skipped; one whose folder already holds a <suffix> file it did not
@@ -39,6 +44,8 @@ ap.add_argument("--work", required=True, help="folder for results.json and the p
 ap.add_argument("--refit", default="auto", choices=("auto", "always", "never"))
 ap.add_argument("--margin", type=float, default=0.05, help="auto: the refit must clip this much less (0.05 = 5 %%)")
 ap.add_argument("--legs-min", type=int, default=5, help="bodies by the legs that make a model worth measuring")
+ap.add_argument("--legs-inside", default="auto", choices=("auto", "never"),
+                help="auto: also try cloth that starts inside the legs colliding anyway (drop test must settle)")
 ap.add_argument("--addon-dir", default=os.path.join(os.path.dirname(TOOLS), "blender_addons"))
 ap.add_argument("--suffix", default="_裙子碰撞修正")
 ap.add_argument("--skin", default="*_nk_body_nude,*_nk_face", help="the _full's nude skin materials (ROE)")
@@ -121,9 +128,12 @@ for r in todo:
                       ("full_bustB", os.path.join(full_dir, stem + "_full_bustB.pmx"))):
         if os.path.exists(path):
             variants[key] = path
-    legs = r.get("near_legs", 0) >= args.legs_min and "full" in variants and args.refit != "never"
+    legs = r.get("near_legs", 0) >= args.legs_min                    # worth measuring at all
+    refit = legs and "full" in variants and args.refit != "never"
     if args.dry_run:
-        log("%s: would rebuild %s%s" % (stem, ", ".join(variants), "; measure + refit" if legs else ""))
+        log("%s: would rebuild %s%s%s%s" % (stem, ", ".join(variants), "; measure" if legs else "",
+                                           " + refit" if refit else "",
+                                           " + legs-inside" if legs and args.legs_inside == "auto" else ""))
         continue
     t0 = time.time()
     wd = os.path.join(args.work, stem)
@@ -147,8 +157,9 @@ for r in todo:
     chosen, entry["choice"] = dict(rebuilt), "rebuilt"
     if legs:
         coll, fit = {}, os.path.join(wd, "full_coll.pmx")
-        if os.path.exists(fit) or python("cloth_collision_pmx.py",
-                                         [rebuilt["full"], fit, "--skin", args.skin, "--thigh-halves"], fit[:-4] + ".log"):
+        if refit and (os.path.exists(fit) or python("cloth_collision_pmx.py",
+                                                    [rebuilt["full"], fit, "--skin", args.skin, "--thigh-halves"],
+                                                    fit[:-4] + ".log")):
             coll["full"] = fit
             for key in ("main", "bustB"):
                 out = os.path.join(wd, key + "_coll.pmx")
@@ -168,8 +179,31 @@ for r in todo:
         if complete and (args.refit == "always" or (m["rebuilt"] is not None and m["refit"] is not None
                                                     and m["refit"] < (1.0 - args.margin) * m["rebuilt"])):
             chosen, entry["choice"] = coll, "refit"
-        log("%s: meters orig %s / rebuilt %s / refit %s -> %s" % (stem, m["orig"], m["rebuilt"], m["refit"],
-                                                                  entry["choice"]))
+        if args.legs_inside == "auto":
+            li = os.path.join(wd, "main_li.pmx")
+            ok = os.path.exists(li) or blender("cloth_rebuild_blender.py",
+                                               [main, li, "--addon-dir", args.addon_dir, "--legs-inside", "collide",
+                                                "--drop-test", "60", "--report", li[:-4] + ".json"], li[:-4] + ".log")
+            try:
+                drop = json.load(open(li[:-4] + ".json", encoding="utf-8")).get("drop_test", {}).get("summary", "")
+            except (OSError, ValueError):
+                drop = ""
+            m["legs_inside_drop"] = drop or ("rebuild failed" if not ok else "no drop test")
+            m["legs_inside"] = meter(li, os.path.join(wd, "meter_li.json")) if drop.startswith("settled") else None
+            so_far = m["refit"] if entry["choice"] == "refit" else m["rebuilt"]
+            if m["legs_inside"] is not None and so_far is not None and m["legs_inside"] < (1.0 - args.margin) * so_far:
+                same = {"main": li}
+                for key, src in variants.items():
+                    out = os.path.join(wd, key + "_li.pmx")
+                    if key != "main" and (os.path.exists(out) or blender(
+                            "cloth_rebuild_blender.py", [src, out, "--addon-dir", args.addon_dir, "--legs-inside",
+                                                         "collide", "--report", out[:-4] + ".json"], out[:-4] + ".log")):
+                        same[key] = out
+                if len(same) == len(variants):
+                    chosen, entry["choice"] = same, "legs_inside"
+        log("%s: meters orig %s / rebuilt %s / refit %s / legs-inside %s (%s) -> %s" % (
+            stem, m["orig"], m["rebuilt"], m["refit"], m.get("legs_inside"), m.get("legs_inside_drop", "-"),
+            entry["choice"]))
     written = []
     for key, path in chosen.items():
         src = variants[key]

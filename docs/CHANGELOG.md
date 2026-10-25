@@ -23,33 +23,34 @@
   - `api.setup(hair_collision="none")`（面板「Hair hits nothing」）：头发什么都不撞，和 ROE 导出的原版一样。
     不再贴着肩背打颤，但会穿肩膀、后背；
   - `api.setup(loosen=1.5)`（面板「Loosen colliding」）：会碰撞的链，关节转角限位 × 倍数（最多 90°）。被腿推开的
-    裙摆不再撞上限位弹回，代价是摆得更开。
+    裙摆不再撞上限位弹回，代价是摆得更开；
+  - `api.setup(legs_inside="collide")`（面板「Inside legs: collide」，同日稍后加，版本号 0.2.4）：一开始就陷在腿部碰撞体里、削细
+    也出不来的布照样撞腿，开头几帧被推出来。紧身裙穿腿少很多，但个别模型会拉断关节，要做掉落测试。
 - `cloth_rebuild_blender.py`：
   - 默认只重建原来就有动态刚体的骨头（原来的 `--same-bones`，参数仍然接受）；`--new-bones` 才按 `--body-regex`
     重新找衣服；
   - 汇总里列出物理骨头的增减（`physics_bones_added` / `physics_bones_dropped`），有变化时打印
     `PHYSICS BONES CHANGED`；
-  - 新参数 `--hair-collision`、`--loosen`。
+  - 新参数 `--hair-collision`、`--loosen`、`--legs-inside`。
 - 新工具 `scripts/mmd_physics/chain_motion_blender.py`：跳一段舞，逐个链尾量平均偏转、摆幅、每帧变化、抖动指数，
   `--bones auto` 取全部链尾，`--series` 写逐帧转角好画曲线；角度取最短旋转。
 - 新工具 `scripts/mmd_physics/cloth_batch_fix.py`：把 10-24 起临时脚本里的批量做法收进仓库。
   - 按检查工具的 JSON 逐个重建（ROE 归档的 `_bustB` / `_full` 布局），布挨着腿、有 full 版的再按裸体贴合碰撞体，
     量原版 / 重建 / 贴合三版，留好的那版，另存 `<名字>_裙子碰撞修正.pmx`，原文件不动；
-  - 选项：`--refit auto|always|never`、`--margin`、`--legs-min`、`--skin`、`--suffix`、`--addon-dir`（长批量用插件
-    拷贝）、`--dry-run`；
+  - 选项：`--refit auto|always|never`、`--legs-inside auto|never`（陷腿照撞的版本先做掉落测试，稳定才参选）、
+    `--margin`、`--legs-min`、`--skin`、`--suffix`、`--addon-dir`（长批量用插件拷贝）、`--dry-run`；
   - 可续跑；Blender 中途被结束会重试一次；已有手工修正版的目录跳过。
-- 文档：`scripts/mmd_physics/README.md` 第 8 节末一张表，列这两天的问题、原因、工具里怎么处理（含没解决的长两节紧身裙
-  `pc_h05_hd`）；插件 README 0.2.3。
+- 文档：`scripts/mmd_physics/README.md` 第 8 节末一张表，列这两天的问题、原因、工具里怎么处理；插件 README 0.2.3。
 
 **用户如何操作**
 
-- Blender 面板（N 侧栏 MMD → Cloth Physics）在「By body part」时多两项，默认不变。重启 Blender 即 0.2.3。
+- Blender 面板（N 侧栏 MMD → Cloth Physics）在「By body part」时多三项，默认不变。重启 Blender 即 0.2.3。
 - 在 MMD 里看修正版时，如果裙摆、发梢抽得明显，用
   `cloth_rebuild_blender.py -- 原.pmx 新.pmx --loosen 1.5`（或 `--hair-collision none`）重建那个模型对比。
 
 **实现原理与兼容性**
 
-- `collide.assign` 多了关键字参数 `no_collide`；新函数 `collide.loosen_colliding`；默认都不生效。
+- `collide.assign` 多了关键字参数 `no_collide`、`legs_inside`；新函数 `collide.loosen_colliding`；默认都不生效。
 - 重建工具的默认行为变了：原来默认按身体骨正则重新找衣服，现在默认保留原来的物理骨头。这个默认对「修已归档的文件」
   才对：10-24 用旧默认重建时，Amano 的脚趾、乳头被加了物理，d05 / g04 导出时没做物理的头发也被加上了。要旧行为用
   `--new-bones`。
@@ -68,6 +69,8 @@
   | 归档原版 | 0.72 | 2 | 9.2° |
 
   新版重建没有打印「物理骨头变化」，物理骨头和原版一致。
+- `--legs-inside collide`（手势舞每帧穿腿顶点，60 帧掉落测试）：ROE h05 913 → 310，静置稳定；ROE a09 702 → 543，
+  但静置时拉断 2 处。所以只当选项，批量里要先过掉落测试。
 - 批量里改用新版重建脚本之后的模型（pc_a05_hd 等）：四个变体的物理骨头都和原版相同，`physics_bones_added` /
   `dropped` 都是空的。
 - `cloth_batch_fix.py --dry-run` 跑完整扫描：96 个待做 + 38 个已有修正版跳过，合计正好 134 个。
