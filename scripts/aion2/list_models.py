@@ -34,7 +34,7 @@ Examples:
   python list_models.py --raw --path-filter /Monster/Boss/ --class SkeletalMesh
   python list_models.py --find yustiel leda siel          # find models by name (* ? wildcards too)
   python list_models.py --women --kind npc                # NPCs judged female (see model_genders)
-  python list_models.py --catalogue                       # every model -> _metaion2_models.json (the gallery reads it)
+  python list_models.py --catalogue                       # every model -> _meta\\aion2_models.json (the gallery reads it)
 """
 from __future__ import annotations
 
