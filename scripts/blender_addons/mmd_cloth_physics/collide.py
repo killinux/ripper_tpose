@@ -86,13 +86,14 @@ def shrink_to_clear(shape, cols, tol, min_share):
     return best
 
 
-def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=None, keep_size=()):
+def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=None, keep_size=(), no_collide=()):
     """Give the body colliders a group per part and every dynamic body the parts it may hit (see the module
     docstring).  ``tolerance`` (metres) is how deep a body may start in a collider and still collide with it - 2 mm,
     as the ROE / Stellar Blade exporters' release_rest_overlaps, which runs after this and so finds nothing left to
     release.  ``keep_size``: names of bodies never made thinner - one that starts inside a part leaves that part out
     (hair: a thinned tip resting on the shoulders or the back chatters against it every frame, 2026-10-24).
-    Returns a report dict."""
+    ``no_collide``: names of bodies that collide with nothing (api.setup(hair_collision="none"): the hair as the ROE
+    exports had it, no chatter, but it can pass through the shoulders).  Returns a report dict."""
     rigids = [o for o in rigid_objects if getattr(o, "mmd_type", "") == "RIGID_BODY"]
     tol = tolerance * unit
     colliders = [o for o in rigids if str(o.mmd_rigid.type) == "0" and name_j(arm, o) in CLASS_OF]
@@ -110,7 +111,7 @@ def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=No
         ours = o.get(TAG) not in (None, "body")
         if not ours and all(blocked(o, c) for c in colliders):
             continue                               # someone else's body that never touched the body: theirs
-        (quiet if o.get(RIDES) else dynamic).append(o)
+        (quiet if o.get(RIDES) or o.name in no_collide else dynamic).append(o)
 
     cls_cols = defaultdict(list)
     shapes = {}
@@ -185,3 +186,33 @@ def assign(arm, rigid_objects, unit=1.0, tolerance=0.002, min_share=0.35, log=No
         for g, cnt in sorted(left.items()):
             log("  %-28s leaves out %s" % (g, ", ".join("%s %d" % kv for kv in sorted(cnt.items()))))
     return report
+
+
+def loosen_colliding(joints, class_groups, factor, cap_degrees=90.0, log=None):
+    """Rotation limits x ``factor`` on this add-on's joints whose second body collides with a body part.
+
+    A chain end that collides is pushed past its joint limit by a leg or the body and snaps back from it - the
+    twitching measured on 2026-10-24 (gesture dance, median frame-to-frame jitter ROE j07 0.57 -> 1.04 once the
+    cloth collided).  Twice the limits took d07's twitching ends from 11 to 2, but the hair and cloth also swing
+    twice as far, so this is an option (api.setup(loosen=...)), 1.0 = off.  Returns the number of joints changed."""
+    import math
+    if factor == 1.0 or not class_groups:
+        return 0
+    cap = math.radians(cap_degrees)
+    groups = list(class_groups.values())
+    n = 0
+    for j in joints:
+        c = getattr(j, "rigid_body_constraint", None)
+        if c is None or c.object2 is None or j.get(TAG) in (None, "body"):
+            continue
+        mask = c.object2.mmd_rigid.collision_group_mask
+        if all(mask[g] for g in groups):
+            continue                                   # hits no body part: its limits never meet a contact
+        for ax in ("x", "y", "z"):
+            lo, hi = getattr(c, "limit_ang_%s_lower" % ax), getattr(c, "limit_ang_%s_upper" % ax)
+            setattr(c, "limit_ang_%s_lower" % ax, max(-cap, lo * factor))
+            setattr(c, "limit_ang_%s_upper" % ax, min(cap, hi * factor))
+        n += 1
+    if log:
+        log("  %d joints of colliding bodies: rotation limits x%.2f (at most %.0f deg)" % (n, factor, cap_degrees))
+    return n

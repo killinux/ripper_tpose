@@ -2,8 +2,9 @@
 the current add-on would get, without exporting the model again.
 
     blender -b --factory-startup --python cloth_rebuild_blender.py -- in.pmx out.pmx
-        [--body-regex "^Bip0\\d\\d\\b"] [--addon-dir <folder holding mmd_cloth_physics>] [--report out.json]
-        [--collision classes|near] [--no-seat] [--no-attach]
+        [--new-bones [--body-regex "^Bip0\\d\\d\\b"]] [--addon-dir <folder holding mmd_cloth_physics>]
+        [--report out.json] [--collision classes|near] [--no-seat] [--no-attach]
+        [--hair-collision classes|none] [--loosen 1.5] [--drop-test 60]
 
 Imports the PMX with mmd_tools, deletes its dynamic bodies (breasts kept, cloth_collision_pmx.py's bust regex) and
 every joint on them, runs ``mmd_cloth_physics.api.setup`` (the repo copy unless --addon-dir points at another, e.g. an
@@ -11,11 +12,13 @@ older checkout to compare), exports a scratch PMX and copies ONLY its rigid bodi
 vertices, materials, morphs and texture paths of the output are the input's, byte for byte.  The body colliders keep
 their shapes (the add-on regroups them); breasts and their joints keep everything.
 
---body-regex: bones of the body skeleton besides the MMD standard ones (default ROE / 3ds Max Biped's ``^Bip0\\d\\d\\b``);
---same-bones instead rebuilds exactly the bones that had dynamic bodies (any game, whatever its exporter's regex).
-To FIX an archived file use --same-bones: which bones move stays as exported, only how they are built changes.  The
-default regex gives physics to whatever it does not know as body - ROE d05 / g04 got hair the export had left rigid
-(2026-10-24 batch).
+Which bones get physics: by default exactly the bones that had dynamic bodies in the input (since 2026-10-25; the
+old --same-bones) - fixing a file keeps what moves as exported and only changes how it is built.  --new-bones lets
+the add-on look for cloth afresh with --body-regex (bones of the body skeleton besides the MMD standard ones, default
+ROE / 3ds Max Biped's ``^Bip0\\d\\d\\b``): what a fresh export would get, but it gives physics to whatever the regex
+does not know as body - ROE Amano's bare toes and nipples (the add-on now refuses those) and hair the export had left
+rigid (ROE d05 / g04, 2026-10-24 batch).  Either way the summary lists bones whose physics came or went.
+--hair-collision / --loosen: the add-on's options against chattering hair and twitching hems (its README, 0.2.3).
 Give Blender absolute paths.  ROE Inase a08 (2026-10-18): see scripts/mmd_physics/README.md section 8.
 """
 import argparse
@@ -36,10 +39,14 @@ SCALE = 0.08
 ap = argparse.ArgumentParser()
 ap.add_argument("input")
 ap.add_argument("output")
-ap.add_argument("--body-regex", default=r"^Bip0\d\d\b")
-ap.add_argument("--same-bones", action="store_true",
-                help="rebuild exactly the bones that carried dynamic bodies in the input (every other bone counts as "
-                     "body) - for models whose exporter's body regex you do not know")
+ap.add_argument("--body-regex", default=r"^Bip0\d\d\b", help="with --new-bones: the body skeleton's bones")
+ap.add_argument("--new-bones", action="store_true",
+                help="let the add-on find the cloth bones afresh with --body-regex (the default rebuilds exactly the "
+                     "bones that carried dynamic bodies in the input)")
+ap.add_argument("--same-bones", action="store_true", help="the default since 2026-10-25 (kept for old command lines)")
+ap.add_argument("--hair-collision", default="classes", choices=("classes", "none"))
+ap.add_argument("--loosen", type=float, default=1.0,
+                help="joint limits x this on chains that collide with the body (add-on 0.2.3; 1 = off)")
 ap.add_argument("--prop-regex", default=r"\bProp\d*$")
 ap.add_argument("--addon-dir", default=REPO_ADDONS)
 ap.add_argument("--report")
@@ -76,7 +83,7 @@ doomed = {o.name for o in rigids if str(o.mmd_rigid.type) != "0"
           and not bust.search(bone_j(o)) and not bust.search(o.mmd_rigid.name_j or "")}
 cloth_bones = sorted({bpy.data.objects[n].mmd_rigid.bone for n in doomed if bpy.data.objects[n].mmd_rigid.bone})
 body_regex = args.body_regex
-if args.same_bones:
+if not args.new_bones:
     body_regex = r"^(?!(?:%s)$)" % "|".join(re.escape(n) for n in cloth_bones) if cloth_bones else r"^"
 joints = list(model.joints())
 dead_joints = [j for j in joints if j.rigid_body_constraint is None
@@ -94,9 +101,20 @@ from mmd_cloth_physics import api  # noqa: E402
 
 print("add-on:", os.path.dirname(api.__file__), flush=True)
 kwargs = {}
-if "collision" in api.setup.__code__.co_varnames:          # an older copy (for comparisons) has no such options
+names = api.setup.__code__.co_varnames                      # an older copy (for comparisons) has fewer options
+if "collision" in names:
     kwargs = {"collision": args.collision, "seat": not args.no_seat, "attach_ends": not args.no_attach}
+if "hair_collision" in names:
+    kwargs.update(hair_collision=args.hair_collision, loosen=args.loosen)
+elif args.hair_collision != "classes" or args.loosen != 1.0:
+    raise SystemExit("this add-on copy has no hair_collision / loosen options (0.2.3+)")
 report = api.setup(root, body_regex=body_regex, prop_regex=args.prop_regex, log=print, **kwargs)
+after = sorted({o.mmd_rigid.bone for o in model.rigidBodies() if str(o.mmd_rigid.type) != "0" and o.mmd_rigid.bone
+                and not bust.search(bone_j(o)) and not bust.search(o.mmd_rigid.name_j or "")})
+added, dropped = sorted(set(after) - set(cloth_bones)), sorted(set(cloth_bones) - set(after))
+if added or dropped:
+    print("PHYSICS BONES CHANGED: %d new %s, %d gone %s" % (len(added), added[:12], len(dropped), dropped[:12]),
+          flush=True)
 if args.drop_test:
     from mmd_cloth_physics import validate  # noqa: E402
 
@@ -134,7 +152,9 @@ for f in os.listdir(scratch):
     os.remove(os.path.join(scratch, f))
 os.rmdir(scratch)
 summary = {"input": args.input, "output": args.output, "rigids": len(src.rigids), "joints": len(src.joints),
-           "stripped": len(doomed), "addon": os.path.dirname(api.__file__), "seconds": round(time.time() - t0)}
+           "stripped": len(doomed), "addon": os.path.dirname(api.__file__), "seconds": round(time.time() - t0),
+           "bones": "new" if args.new_bones else "same", "physics_bones_added": added,
+           "physics_bones_dropped": dropped}
 for key, value in report.items():                          # the add-on's counts (what it built) under their own names
     if key != "garments":
         summary.setdefault(key if key not in summary else "addon_" + key, value)

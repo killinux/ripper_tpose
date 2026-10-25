@@ -17,7 +17,9 @@
 | `pmx_skirt_fix.py` | 普通 Python（`pmx` 模块 + numpy） | 横在布上的裙子盒子转回布上，裙片按网格里真正连着的地方重新连关节（第 7 节） |
 | `skin_clip_blender.py` | Blender（后台） | 跳一段舞，逐帧数裙子有多少顶点陷进模型自己的腿（皮肤或护腿），比 `clip_test_blender.py` 严（第 7 节） |
 | `cloth_check_pmx.py` | 普通 Python（`pmx` 模块 + numpy） | 只读检查布料物理：盒子不贴布、横向关节连错 / 穿身体 / 连自己、挨着腿却不撞腿、链尾悬空（第 8 节） |
-| `cloth_rebuild_blender.py` | Blender（后台） | 用当前的 mmd_cloth_physics 插件重建现成 PMX 的布料物理，只换刚体和关节（第 8 节） |
+| `cloth_rebuild_blender.py` | Blender（后台） | 用当前的 mmd_cloth_physics 插件重建现成 PMX 的布料物理，只换刚体和关节；默认只重建原来有物理的骨头（第 8 节） |
+| `cloth_batch_fix.py` | 普通 Python（调 Blender 和上面几个工具） | 批量修归档里的 PMX：重建、需要时按 full 版裸体贴合碰撞体、量过选好的那版，另存 `…_裙子碰撞修正.pmx`（第 8 节） |
+| `chain_motion_blender.py` | Blender（后台） | 跳一段舞，量每个链尾相对上一节的转角：平均偏转、摆幅、每帧变化、抖动指数（第 8 节） |
 | `chest_clip_blender.py` | Blender（后台） | 跳一段舞，逐帧数 full 版里衣服下的身体有多少顶点从胸带里顶出来（第 9 节） |
 | `pmx_bust_chain_nocollide.py` | 普通 Python（`pmx` 模块） | 挂在会摆动的胸部刚体上的链（吊坠、飘带）改成不碰撞，免得手一碰就拽胸（第 9 节） |
 | `pmx_graft.py` | 普通 Python（`pmx` 模块 + numpy） | 把一个 PMX 的服装（网格、骨骼、刚体关节、材质贴图）接到另一个模型上（第 9 节） |
@@ -587,6 +589,46 @@ ROE 抽样：13 个布挨着腿最多的模型，手势舞每帧有多少布料�
   去掉的 `A.` 关节大多不在腿边。
 
 汇总表（中文 HTML，含全部 198 个模型的检查）这次放在会话临时目录，没有写进归档。
+
+**2026-10-25 补：批量修正时遇到的问题，以及工具里怎么处理的。** 用户：「遇到不同的问题解决后都记录到文档里，并且应该在
+插件和脚本里想办法兼容或者做成选项」。
+
+| 问题 | 原因 | 处理 | 在哪 |
+|---|---|---|---|
+| 链尾被焊在上两节或旁边那条链上，摆不起来 | 把链自己的平滑蒙皮当成「缝在别的刚体上」 | 只数上一节不带的共用顶点；不连会围成三角形的刚体 | 插件 0.2.1 `attach_loose_ends` |
+| 检查工具的「链尾悬空」多算（817 → 235） | 同一条规则 | 同上 | `cloth_check_pmx.py` |
+| 链尾缝在两个刚体上，只连了一个 | 只取第一个 | 每处都连，最多 3 个 | 插件 0.2.2 |
+| 削细的发梢贴着肩背打颤 | 削到 39–58% 的胶囊一直压在碰撞体上 | 头发不削细，陷进哪个部位就不撞哪个；选项 `hair_collision="none"` 完全不撞 | 插件 0.2.2 / 0.2.3 |
+| 会碰撞的链尾抽动 | 被腿推过关节限位又被弹回 | 选项 `loosen`（碰撞链的限位 ×1.5–2），默认关 | 插件 0.2.3 |
+| Amano 的脚趾、乳头被当成衣物 | 游戏骨骼只有大脚趾带 `Bip001` 前缀 | `NOT_CLOTH`：脚趾、手指、乳头、胸部辅助骨永远不当衣物 | 插件 0.2.2 |
+| 重建给导出时没做物理的头发加了物理（d05 / g04） | 默认的身体骨正则不认识的都当衣物 | 默认只重建原来有物理的骨头；`--new-bones` 才重新找；汇总列出增减的骨头 | `cloth_rebuild_blender.py` |
+| 贴合碰撞体对有的模型有用、对有的反而更坏 | 按裸体量的大腿比穿丝袜、靴子的腿细，布陷进那一层 | 两版都量，留好的（`--refit auto --margin 0.05`），也可 `always` / `never` | `cloth_batch_fix.py` |
+| 批量要跑几个小时，仓库里的插件中途被改 | 每次重建都重新读插件 | `--addon-dir` 指向插件的拷贝 | `cloth_batch_fix.py` |
+| 别的窗口的任务把 Blender 结束了 | 同一台机器并行 | 失败重试一次；没做完的模型不写文件，续跑时重做 | `cloth_batch_fix.py` |
+| 同一个模型换个文件名，测出来差 2% | 物体排序变了，而布料物理是混沌的 | 几个百分点以内不当回事 | 测量说明 |
+| 量转角得到 357° | q 和 −q 是同一个旋转 | 取 2·acos\|w\|，即最短旋转 | `chain_motion_blender.py` |
+| 长两节的紧身裙仍穿大腿（`pc_h05_hd` 每帧 1625 → 913） | 侧片出生就裹在大腿碰撞体里，削细也出不来，只能不撞腿；按裸体贴合也一样 | **没解决**：要加细骨链，或像第 7 节 a08 那样单独处理大腿 | — |
+| Convert_to_MMD5 的布箱同样镜像 | (x, y, y × x) | 改成右手系 | 那个仓库 6caea28 |
+
+插件 0.2.3 的两个选项在 d07 上实测（手势舞，15 个链尾，`chain_motion_blender.py`）：
+
+| 版本 | 抖动中位数 | 抖动 > 1.0 的链尾 | 摆幅中位数 |
+|---|---|---|---|
+| 归档原版 | 0.72 | 2 | 9.2° |
+| 0.2.2 默认 | 1.15 | 11 | 10.5° |
+| `--hair-collision none` | 0.90 | 7 | 9.3° |
+| `--loosen 2` | 0.71 | 1 | 26.4° |
+
+放宽限位能把抽动压回原版水平，但摆幅约是原版的 3 倍，要在 MMD 里看过再决定开不开。
+
+```powershell
+# 链尾运动：平均偏转 / 摆幅 / 每帧变化 / 抖动指数，--series 把指定骨头的逐帧转角写进 JSON 好画曲线
+blender -b --factory-startup --python chain_motion_blender.py -- in.pmx dance.vmd out.json [--bones auto] [--series a,b]
+# 重建时用插件的选项
+blender -b --factory-startup --python cloth_rebuild_blender.py -- in.pmx out.pmx --hair-collision none --loosen 1.5
+# 批量修正（ROE 归档的 _bustB / _full 布局），先 --dry-run 看要做什么
+python cloth_batch_fix.py scan.json --work D:\scratch\batch --addon-dir D:\scratch\addon_copy --dry-run
+```
 
 ## 9. full 版胸部穿模、胸前挂件、服装移植（2026-10-18）
 

@@ -18,7 +18,7 @@ scripts/blender_addons/mmd_cloth_physics/
   api.py        脚本入口 setup(obj, ...)，批处理用
 ```
 
-## 0. 2026-10-18 修了什么（0.2.0；10-24 的 0.2.1 / 0.2.2 见本节「另外」之后）
+## 0. 2026-10-18 修了什么（0.2.0；10-24 的 0.2.1 / 0.2.2、10-25 的 0.2.3 见本节「另外」之后）
 
 ROE Inase a08 的裙子穿腿，查下来是插件自己的四个问题。198 个带物理的 ROE 模型全部有，
 其他游戏（对魔忍、FF7、剑星、洛奇英雄传）也有：
@@ -88,6 +88,23 @@ ROE Inase a08 的裙子穿腿，查下来是插件自己的四个问题。198 �
 所以 0.2.2 只改了头发不削细这一点。防穿腿要靠碰撞，限位放宽会改变造型，要在 MMD 里看过实际效果才定。抖动指数
 用的是 Blender 模拟（Bullet，每帧 10 个子步），和 MMD 本身可能有出入。
 
+**0.2.3（10-25）：上面两个办法做成选项，默认都关（结果和 0.2.2 相同）。**
+
+- `api.setup(hair_collision="none")`，面板「Hair hits nothing」：头发什么都不撞，和 ROE 导出的原版一样。不再
+  打颤，但头发会穿肩膀、后背。
+- `api.setup(loosen=1.5)`，面板「Loosen colliding」：所有会碰撞的链，关节转角限位 × 这个倍数（最多 90°）。被腿
+  推开的裙摆不再撞上限位弹回，代价是摆得更开。
+- 只在「By body part」时有效。重建工具：`cloth_rebuild_blender.py --hair-collision none --loosen 1.5`。
+
+ROE d07 实测（手势舞，15 个链尾，`scripts/mmd_physics/chain_motion_blender.py`）：
+
+| 版本 | 抖动中位数 | 抖动 > 1.0 的链尾 | 摆幅中位数 |
+|---|---|---|---|
+| 原版 | 0.72 | 2 | 9.2° |
+| 0.2.2 | 1.15 | 11 | 10.5° |
+| 头发不撞 | 0.90 | 7 | 9.3° |
+| 放宽 2 倍 | 0.71 | 1 | 26.4° |
+
 a08 穿衣版（手势舞，裙子顶点进腿部皮肤，每帧，不算胯部护片）：插件旧版 695 → 新版 78（护腿 45 → 2.2）；
 新版 + `cloth_collision_pmx.py --colliders-from`（按 full 版裸体贴合的大腿/小腿碰撞体）20.8，
 比 10-18 手工修的 27 还低。插件自己做不到碰撞体贴合裸体（要 full 版的裸体），这一步仍在后处理。
@@ -113,6 +130,8 @@ ROE / 剑星导出脚本之后跑的 `release_rest_overlaps` 一致，它不会�
 2. 没有身体碰撞刚体的模型先点 **Body colliders**（有就跳过）。
 3. **Build physics** —— 建刚体 + 关节。**Clear** 删掉本插件建的（身体胶囊保留）。面板上
    「By body part / Old: near = none」选碰撞组规则（默认按部位），「Boxes on the cloth」把盒子挪到布上（默认开）。
+   按部位时多两项：「Hair hits the body / nothing」（头发撞不撞身体）、「Loosen colliding」（碰撞链的限位倍数，
+   1 = 不变），见第 0 节 0.2.3。
 4. **Drop test** —— 静置 60 帧，报告每个关节拉伸了几倍（>1.5× 记拉断）、末尾还在不在动。
    先存盘：它会 `Model.build()` 再 `clean()`，位置会还原，但仍属于会动场景的操作。
 5. **Preview (build + play)** —— 相当于 mmd_tools 的 Build 再把 Scene 的 Rigid Body World
