@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>换装插件教程</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1f1d1a; --muted: #6b665e; --line: #e2ddd5; --card: #ffffff;
+    --accent: #3b6fb6; --code-bg: #f1eee9; --warn-bg: #fff4e5; --warn-line: #f0c27a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17161a; --fg: #ebe8e3; --muted: #a39d94; --line: #34323a; --card: #1f1e23;
+      --accent: #8fb4ec; --code-bg: #2a2830; --warn-bg: #33291c; --warn-line: #8a6a35;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17161a; --fg: #ebe8e3; --muted: #a39d94; --line: #34323a; --card: #1f1e23;
+    --accent: #8fb4ec; --code-bg: #2a2830; --warn-bg: #33291c; --warn-line: #8a6a35;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.75 "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 6px; }
+  .meta { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  h2 { font-size: 21px; margin: 44px 0 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h2 .no { color: var(--accent); margin-right: 8px; }
+  h3 { font-size: 17px; margin: 22px 0 8px; }
+  p { margin: 10px 0; }
+  ol, ul { padding-left: 1.6em; margin: 10px 0; }
+  li { margin: 6px 0; }
+  li ul, li ol { margin: 4px 0; }
+  code {
+    font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.9em; background: var(--code-bg);
+    padding: 1px 6px; border-radius: 4px; word-break: break-all;
+  }
+  pre {
+    font-family: Consolas, "Cascadia Mono", monospace; font-size: 14px; background: var(--code-bg);
+    padding: 10px 14px; border-radius: 6px; overflow-x: auto; line-height: 1.55; margin: 12px 0;
+  }
+  kbd {
+    font-family: Consolas, monospace; font-size: 0.85em; border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 5px; background: var(--card);
+  }
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; background: var(--card); font-size: 15px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); font-weight: 600; white-space: nowrap; }
+  .ok { border-left: 4px solid var(--accent); background: var(--card); padding: 8px 14px; margin: 14px 0; border-radius: 0 6px 6px 0; }
+  .warn { border-left: 4px solid var(--warn-line); background: var(--warn-bg); padding: 8px 14px; margin: 14px 0; border-radius: 0 6px 6px 0; }
+  figure { margin: 16px 0; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; display: block; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; }
+  nav.toc ol { margin: 4px 0; }
+  a { color: var(--accent); }
+  .path { display: block; font-family: Consolas, "Cascadia Mono", monospace; font-size: 14px; background: var(--code-bg);
+          padding: 6px 10px; border-radius: 5px; margin: 4px 0 8px; word-break: break-all; user-select: all; }
+  .flow { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13.5px; white-space: pre; overflow-x: auto;
+          background: var(--code-bg); padding: 10px 14px; border-radius: 6px; line-height: 1.5; }
+  /* Blender sidebar panel, drawn with the add-on's own labels */
+  .bpanel { background: #303030; color: #e6e6e6; border-radius: 6px; padding: 8px 10px 10px; max-width: 520px;
+            font: 13px/1.5 "Microsoft YaHei", system-ui, sans-serif; margin: 14px 0; border: 1px solid #1e1e1e; }
+  .bp-head { font-weight: 600; padding: 2px 2px 8px; color: #fff; }
+  .bp-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .bp-row .lbl { flex: 0 0 104px; text-align: right; color: #cfcfcf; }
+  .bp-row .field { flex: 1; background: #1d1d1d; border-radius: 4px; padding: 1px 8px; color: #e6e6e6;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .bp-row .num { flex: 1; background: #545454; border-radius: 4px; padding: 1px 8px; text-align: center; }
+  .bp-btn { background: #545454; border-radius: 4px; text-align: center; padding: 3px 8px; margin: 6px 0; color: #fff; }
+  .bp-btn.go { background: #4772b3; }
+  .bp-list { background: #1d1d1d; border-radius: 4px; padding: 3px 6px; margin: 6px 0; }
+  .bp-list .it { display: flex; align-items: center; gap: 6px; color: #bdbdbd; }
+  .bp-list .it.on { color: #fff; }
+  .cb { display: inline-flex; width: 14px; height: 14px; border-radius: 3px; background: #545454; font-size: 11px;
+        align-items: center; justify-content: center; color: #fff; flex: 0 0 14px; }
+  .on .cb, .bp-chk.on .cb { background: #4772b3; }
+  .bp-box { border: 1px solid #262626; background: #2b2b2b; border-radius: 4px; padding: 6px 8px; margin: 6px 0; }
+  .bp-chk { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .bp-pair { display: flex; gap: 6px; margin: 3px 0 3px 20px; }
+  .bp-pair span { flex: 1; background: #545454; border-radius: 4px; padding: 1px 6px; text-align: center; font-size: 12.5px; }
+  .bp-report { color: #e6e6e6; margin-top: 6px; }
+  .mark { outline: 2px solid #f0b429; outline-offset: 1px; border-radius: 4px; }
+  .step-note { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+<h1>换装插件教程：把 g05 的衣服穿到 a08 full 的裸体上</h1>
+<div class="meta">2026-10-25 · Rise of Eros · Blender 3.6 + 换装插件 PMX Outfit Transfer 0.2 · 按你本机中文界面写的</div>
+
+<p>这一篇用你刚拿到的那个模型当例子，从头在 Blender 里自己做一遍：
+<b>Luf g05（女神装）的整套衣服</b> → <b>Inase a08 full</b>，衣服贴在 a08 full 里<b>裸体那份身体</b>上，成品里完整的 a08 full 都保留。
+照着做出来的模型，和 <a href="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/a08_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2/"><code>_混搭\a08_full_穿g05衣服_v2\</code></a> 里那个内容一模一样，只是文件名不同。</p>
+
+<figure>
+  <img src="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/a08_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2/%E9%9D%99%E6%AD%A2_%E4%B8%A4%E5%A5%97%E8%A1%A3%E6%9C%8D.jpg" alt="默认状态：a08 full 的衣服和 g05 的衣服都在">
+  <figcaption>做完的样子（默认状态）：a08 自己的衣服和 g05 的衣服都在，你之后挑要哪些零件。</figcaption>
+</figure>
+<figure>
+  <img src="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/a08_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2/%E9%9D%99%E6%AD%A2_%E5%8F%AA%E7%A9%BFg05%E8%A1%A3%E6%9C%8D.jpg" alt="衣服非表示=1：a08 的衣服藏起来，g05 的衣服穿在裸体上">
+  <figcaption>同一个模型拉表情「衣服非表示」= 1：a08 的衣服藏起来、换成裸体那份身体，g05 的衣服穿在裸体上。</figcaption>
+</figure>
+
+<nav class="toc">
+<b>目录</b>
+<ol>
+  <li><a href="#s1">先弄懂它在做什么（一分钟）</a></li>
+  <li><a href="#s2">准备：两个文件、插件勾上</a></li>
+  <li><a href="#s3">打开换装面板</a></li>
+  <li><a href="#s4">填三个路径</a></li>
+  <li><a href="#s5">读取源模型的材质</a></li>
+  <li><a href="#s6">选项：这次全用默认</a></li>
+  <li><a href="#s7">点「换装」</a></li>
+  <li><a href="#s8">检查：拉「衣服非表示」</a></li>
+  <li><a href="#s9">换成游戏材质（可选）</a></li>
+  <li><a href="#s10">跳个舞看看（可选）</a></li>
+  <li><a href="#s11">挑零件、导出 PMX</a></li>
+  <li><a href="#s12">出问题时</a></li>
+  <li><a href="#s13">命令行做法（同样的结果）</a></li>
+</ol>
+</nav>
+
+<h2 id="s1"><span class="no">1</span>先弄懂它在做什么（一分钟）</h2>
+<p>衣服本来是「长在」g05 身上的：挂在 g05 的骨头上（权重），贴着 g05 的身体（形状）。插件把这两层关系换成 a08 的：</p>
+<div class="flow">g05 的衣服 ─┬─ 挂在哪些骨头上 ──① 换骨架 ───────────▶ 套到 a08 的骨架上
+             └─ 贴着 g05 的身体 ──②③ 换身材、贴合 ───▶ 贴到 a08 的裸体上
+                                   ④ 换权重 ─────────▶ 跟着 a08 的皮肤一起动
+g05 飘带、前片的物理 ───⑤ 搬刚体关节、隔开碰撞组 ──▶ 只碰 a08 的身体，不碰 a08 的衣服</div>
+<ul>
+  <li>① 骨头按名字对上（对不上的按位置配，比如胸骨），a08 没有的骨头（飘带、前片、光环）连父骨一起搬过去；</li>
+  <li>② 把 g05「衣服底下那份身体」变成 a08 的身材，得到一张位移图；</li>
+  <li>③ 每个衣服顶点按它在 g05 皮肤上的位置（沿皮肤偏多少、离皮肤多高）放到 a08 的皮肤上；离身体远的光环、法杖只按骨骼放；</li>
+  <li>④ 贴在皮肤上的部分改用 a08 皮肤的权重，跳舞时胸带不会被皮肤顶穿；</li>
+  <li>⑤ g05 的刚体、关节一起搬，放进 a08 没用过的碰撞组。</li>
+</ul>
+<p class="step-note">下面每一步后面标的 ①–⑤ 就是对应这里。原理细节见仓库 <code>docs/pmx-outfit-transfer.md</code>。</p>
+
+<h2 id="s2"><span class="no">2</span>准备：两个文件、插件勾上</h2>
+<h3>两个文件（不用动，路径照抄）</h3>
+<div class="table-wrap"><table>
+  <tr><th>作用</th><th>文件</th><th>为什么用它</th></tr>
+  <tr><td>衣服来自（源）</td><td><code>E:\game_export\RiseOfEros\Luf\pmx\pc_g05_hd_full\pc_g05_hd_full_裙子碰撞修正_瞳孔修正.pmx</code></td><td>g05 的 <b>full 版</b>：里面有「衣服底下那份身体」，第 ② 步要用；用修正版，裙子碰撞和眼睛是修过的</td></tr>
+  <tr><td>穿到（目标）</td><td><code>E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_full\pc_a08_hd_full_裙子碰撞修正.pmx</code></td><td>a08 的 <b>full 版</b>：里面有裸体那份身体 <code>pc_a01_nk_body_nude</code>，衣服就贴在它上面；成品保留完整的 a08 full</td></tr>
+</table></div>
+
+<h3>插件</h3>
+<p>需要三个插件。你的 Blender 3.6 里，<b>mmd_tools 和 ROE Game Materials 已经勾上了，换装插件还没勾</b>：</p>
+<ol>
+  <li>打开 Blender 3.6（<code>D:\Program Files\blender-3.6.15-windows-x64\blender.exe</code>）。</li>
+  <li>菜单 <b>编辑 → 偏好设置…</b> → 左边点 <b>插件</b>。</li>
+  <li>右上角搜索框输入 <kbd>Outfit</kbd>，找到「<b>导入-导出: PMX Outfit Transfer</b>」（英文界面叫 Import-Export），<b>勾上</b>前面的方框。</li>
+  <li>展开它能看到版本 <b>0.2.0</b>。关掉偏好设置窗口（会自动保存）。</li>
+</ol>
+<div class="ok">插件文件已经用目录联接装在 Blender 里了（指向仓库 <code>scripts\blender_addons\pmx_outfit_transfer</code>），只差勾选这一步。</div>
+
+<h2 id="s3"><span class="no">3</span>打开换装面板</h2>
+<ol>
+  <li>建议先开个干净的场景：<b>文件 → 新建 → 常规</b>，再把默认的立方体删掉（选中按 <kbd>X</kbd> → 删除）。场景里已有别的模型也行，只是新模型会叠在原点。</li>
+  <li>鼠标放在 3D 视图里，按 <kbd>N</kbd> 拉出右边的侧栏。</li>
+  <li>侧栏右边竖着的标签里点 <b>MMD</b>。</li>
+  <li>往下滚，找到面板「<b>换装（服装移植）</b>」。MMD 页签里面板很多，可以点其他面板的标题把它们折叠起来。</li>
+</ol>
+
+<h2 id="s4"><span class="no">4</span>填三个路径</h2>
+<p>每个框都可以点文件夹图标去选，也可以直接点进框里粘贴（下面灰色的路径点一下就全选了，<kbd>Ctrl</kbd>+<kbd>C</kbd> 复制）。</p>
+<ol>
+  <li><b>衣服来自</b>：<span class="path">E:\game_export\RiseOfEros\Luf\pmx\pc_g05_hd_full\pc_g05_hd_full_裙子碰撞修正_瞳孔修正.pmx</span></li>
+  <li><b>穿到</b>：<span class="path">E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_full\pc_a08_hd_full_裙子碰撞修正.pmx</span></li>
+  <li><b>输出 PMX</b>：<span class="path">E:\game_export\RiseOfEros\_混搭\练习_a08穿g05\pc_a08_hd_full_穿g05衣服.pmx</span>
+    <ul>
+      <li>文件夹 <code>练习_a08穿g05</code> 现在还没有，插件会自己建，PMX 和 <code>textures\</code> 都放里面。</li>
+      <li>这一栏如果留空，会在目标旁边建文件夹，也就是 a08 的存档文件夹 <code>Inase\pmx\pc_a08_hd_full\</code> 里面，所以这次填上。</li>
+      <li>已经有同名文件时插件不会覆盖，会报错。第二次练习换个文件夹名就行。</li>
+    </ul>
+  </li>
+</ol>
+
+<h2 id="s5"><span class="no">5</span>读取源模型的材质 <span class="step-note">（第 ① 步之前：选要搬哪些衣服）</span></h2>
+<p>点「<b>读取源模型的材质</b>」。面板最下面会显示 <b>「12 个材质，默认勾了 3 个」</b>，列表里是 g05 的全部材质：</p>
+<div class="bpanel">
+  <div class="bp-head">▾ 换装（服装移植）</div>
+  <div class="bp-row"><span class="lbl">衣服来自</span><span class="field">E:\…\pc_g05_hd_full_裙子碰撞修正_瞳孔修正.pmx</span></div>
+  <div class="bp-row"><span class="lbl">穿到</span><span class="field">E:\…\pc_a08_hd_full_裙子碰撞修正.pmx</span></div>
+  <div class="bp-row"><span class="lbl">输出 PMX</span><span class="field">E:\…\练习_a08穿g05\pc_a08_hd_full_穿g05衣服.pmx</span></div>
+  <div class="bp-btn mark">🔍 读取源模型的材质</div>
+  <div class="bp-list">
+      <div class="it"><span class="cb"></span>pc_g_nk_face&nbsp;&nbsp;(14535 面)</div>
+      <div class="it"><span class="cb"></span>pc_g_nk_face_nude&nbsp;&nbsp;(14535 面)</div>
+      <div class="it"><span class="cb"></span>eye_portable&nbsp;&nbsp;(864 面)</div>
+      <div class="it"><span class="cb"></span>lash&nbsp;&nbsp;(660 面)</div>
+      <div class="it"><span class="cb"></span>brow&nbsp;&nbsp;(228 面)</div>
+      <div class="it"><span class="cb"></span>eye_overlay&nbsp;&nbsp;(548 面)</div>
+      <div class="it"><span class="cb"></span>pc_g01_nk_body&nbsp;&nbsp;(35912 面)</div>
+      <div class="it"><span class="cb"></span>pc_g01_nk_body_nude&nbsp;&nbsp;(35912 面)</div>
+      <div class="it on"><span class="cb">✓</span>pc_g05_hd_body 1&nbsp;&nbsp;(11082 面)</div>
+      <div class="it on"><span class="cb">✓</span>pc_g05_hd_body 2&nbsp;&nbsp;(12124 面)</div>
+      <div class="it on"><span class="cb">✓</span>pc_g05_hd_skin&nbsp;&nbsp;(118 面)</div>
+      <div class="it"><span class="cb"></span>pc_g_nk_hair&nbsp;&nbsp;(14532 面)</div>
+  </div>
+  <div class="bp-row"><span class="lbl">源的身体材质</span><span class="field">pc_g01_nk_body</span></div>
+  <div class="bp-row"><span class="lbl">目标的裸体材质</span><span class="field">pc_a01_nk_body_nude</span></div>
+  <div class="bp-row"><span class="lbl">新材质前缀</span><span class="field">g05</span></div>
+  <div class="bp-report">12 个材质，默认勾了 3 个</div>
+</div>
+<ul>
+  <li><b>勾上的 3 个</b>是衣服：<code>pc_g05_hd_body 1</code>、<code>pc_g05_hd_body 2</code>、<code>pc_g05_hd_skin</code>（手指上那一小块）。保持这样就是「整套衣服」。</li>
+  <li>没勾的是 g05 的脸、头发、眼睛、睫毛、眉毛、身体，按名字自动排除。想连头发一起搬就把 <code>pc_g_nk_hair</code> 勾上（这次不要）。</li>
+  <li><b>源的身体材质 = <code>pc_g01_nk_body</code></b>：g05 full 里贴着衣服做的那份身体，第 ② 步拿它量「衣服贴在身体哪里」。</li>
+  <li><b>目标的裸体材质 = <code>pc_a01_nk_body_nude</code></b>：a08 full 里裸体那份身体，衣服就贴在它上面。<b>这一项决定了「穿到 a08 的 nude 上」</b>。</li>
+  <li>新材质前缀 <code>g05</code>：搬过来的材质都叫 <code>g05_…</code>。</li>
+</ul>
+<div class="warn">两个身体材质是自动填的。要是显示的不是上面这两个（比如空的），手动改成上面的名字，否则插件只能按骨骼摆，贴不了身。</div>
+
+<h2 id="s6"><span class="no">6</span>选项：这次全用默认</h2>
+<p>读取材质之后，面板下半部分是这样（全是默认值，不用改）：</p>
+<div class="bpanel">
+  <div class="bp-box">
+    <div class="bp-chk on"><span class="cb">✓</span>按身体形状贴身拟合</div>
+    <div class="bp-pair"><span>贴身距离 cm 2.000</span><span>远离距离 cm 12.000</span></div>
+    <div class="bp-chk on"><span class="cb">✓</span>按骨骼方向旋转</div>
+    <div class="bp-chk on"><span class="cb">✓</span>贴身部分跟着皮肤动</div>
+    <div class="bp-pair"><span>跟随距离 cm 1.500</span><span>过渡 cm 2.000</span></div>
+    <div class="bp-row"><span class="lbl">拆分材质</span><span class="num">按挂的骨头 ▾</span></div>
+    <div class="bp-chk on"><span class="cb">✓</span>两套衣服的刚体互不碰撞</div>
+    <div class="bp-chk on"><span class="cb">✓</span>新衣服碰目标的身体</div>
+    <div class="bp-chk"><span class="cb"></span>加进「衣服非表示」</div>
+    <div class="bp-chk on"><span class="cb">✓</span>做完导入场景</div>
+  </div>
+  <div class="bp-btn go mark">👕 换装</div>
+</div>
+<div class="table-wrap"><table>
+  <tr><th>选项</th><th>这次</th><th>对应</th><th>意思</th></tr>
+  <tr><td>按身体形状贴身拟合</td><td>开</td><td>②③</td><td>按 a08 的身材收放衣服；关掉就只按骨骼摆</td></tr>
+  <tr><td>贴身距离 / 远离距离</td><td>2 / 12 cm</td><td>③</td><td>离身体 2 cm 内的衣服完全贴身，12 cm 外（光环、法杖）只按骨骼，中间渐变</td></tr>
+  <tr><td>按骨骼方向旋转</td><td>开</td><td>①</td><td>两个模型都是 A 字形，开不开结果一样</td></tr>
+  <tr><td>贴身部分跟着皮肤动</td><td>开</td><td>④</td><td>贴在皮肤上的部分用 a08 皮肤的权重。关掉的话胸带下面的皮肤跳舞时会顶出来（每帧 108 个顶点）</td></tr>
+  <tr><td>拆分材质</td><td>按挂的骨头</td><td>—</td><td>g05 的 3 个材质拆成 37 个小材质（前片、花环、光环、胸带……），之后好挑零件</td></tr>
+  <tr><td>两套衣服的刚体互不碰撞</td><td>开</td><td>⑤</td><td>g05 的飘带不会和 a08 的裙子打架</td></tr>
+  <tr><td>新衣服碰目标的身体</td><td>开</td><td>⑤</td><td>g05 的前片、披帛会碰 a08 的腿和身体，不会穿进去</td></tr>
+  <tr><td>加进「衣服非表示」</td><td><b>不勾</b></td><td>—</td><td>不勾：拉「衣服非表示」只脱掉 a08 自己的衣服，g05 的留着，正好就是「g05 穿在裸体上」。勾上的话 g05 的也一起藏</td></tr>
+  <tr><td>做完导入场景</td><td>开</td><td>—</td><td>做完自动用 mmd_tools 导入（缩放 0.08），马上能看</td></tr>
+</table></div>
+
+<h2 id="s7"><span class="no">7</span>点「换装」 <span class="step-note">（①–⑤ 一次做完）</span></h2>
+<ol>
+  <li>点蓝色的「<b>换装</b>」按钮，等十几秒（Blender 会卡住一会儿，正常）。</li>
+  <li>面板最下面显示：<br><b>「写出 pc_a08_hd_full_穿g05衣服.pmx：37 个新材质，42 根骨，30 刚体，30 关节」</b></li>
+  <li>场景里多了一个模型，名字是 <b>Pc A08 Hd Full 穿G05衣服</b>（mmd_tools 导入时会把名字改成首字母大写）。</li>
+  <li>输出文件夹 <code>练习_a08穿g05\</code> 里有 <code>pc_a08_hd_full_穿g05衣服.pmx</code> 和 <code>textures\</code>（11 张贴图，实拷贝，整个文件夹能挪走）。</li>
+</ol>
+<div class="ok">37 个新材质 = g05 的衣服拆成的小零件；42 根骨 = a08 没有、跟着衣服搬过来的骨头（飘带、前片、花环、光环……）；30 刚体 / 30 关节 = g05 衣服的物理。</div>
+
+<h2 id="s8"><span class="no">8</span>检查：拉「衣服非表示」</h2>
+<p>刚导入时是默认状态：a08 自己的衣服和 g05 的衣服都在（最上面第一张图）。要看「g05 穿在裸体上」：</p>
+<ol>
+  <li>点一下新模型（任何一部分都行）。</li>
+  <li>侧栏 MMD 页签里找到「<b>变形工具</b>」面板（默认是折叠的，点标题展开）。</li>
+  <li>面板最上面一排按钮选「<b>组</b>」（Group）。列表里有 <b>衣服非表示</b>，点它。</li>
+  <li>列表下面如果<b>没有</b>「值」这个滑块：点列表右边那一竖排按钮里的 <b>▼</b>（下拉箭头）→ 选「<b>绑定</b>」（Bind）。
+    这是 mmd_tools 把表情滑块绑定到模型上，绑定一次就行。</li>
+  <li>把「<b>值</b>」拉到 <b>1</b>：a08 的衣服消失、换成裸体那份身体，g05 的衣服穿在裸体上（上面第二张图）。拉回 0 就恢复。</li>
+</ol>
+<div class="ok">为什么是裸体那份：a08 full 里有两份身体。贴衣服的那份往里收过，防止穿模；裸体那份平时是透明的。「衣服非表示」= 1 时两份对调，所以 g05 的衣服当初就要贴在裸体那份上（第 5 步的「目标的裸体材质」）。</div>
+<figure>
+  <img src="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/a08_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2/%E8%83%B8%E9%83%A8_%E4%BF%AE%E6%AD%A3%E5%89%8D%E5%90%8E_%E6%94%BE%E5%A4%A7_%E5%9C%A8a08%E8%A3%B8%E4%BD%93%E6%A8%A1%E5%9E%8B%E4%B8%8A%E6%B8%B2%E6%9F%93.jpg" alt="胸部修正前后">
+  <figcaption>第 ④ 步「贴身部分跟着皮肤动」的作用：左边是关掉时，跳舞时乳头从白色胸带里透出来；右边是开着时（成品）。这组是在 a08 裸体模型上渲的，同一个身体网格、同一套衣服。</figcaption>
+</figure>
+
+<h2 id="s9"><span class="no">9</span>换成游戏材质（可选）</h2>
+<ol>
+  <li>点一下模型，侧栏 MMD 页签找到「<b>ROE 游戏材质</b>」面板。</li>
+  <li>点「<b>换上游戏原始材质</b>」。第一次用某个角色要几十秒，之后几秒。</li>
+  <li>面板下面显示：<b>「角色 a08 + a01×2 + g05×37：换了 46 个材质，保留 4 个（眼睛 / 睫毛 / 眉毛等），错误 0」</b>
+    <ul>
+      <li>a08 = a08 自己的衣服、头发、脸；a01×2 = 两份身体（a08 用的是家族底模 a01 的身体）；g05×37 = 搬过来的 g05 衣服。</li>
+    </ul>
+  </li>
+  <li>「游戏材质 / MMD 着色」两个按钮来回切，对比最明显。「衣服非表示」在游戏材质下照样管用。</li>
+</ol>
+<div class="warn">这一步要用 10-25 修过的插件（0.1.1）。今天之前打开的 Blender 要<b>重启</b>一次才会用上新版；旧版只会换 a08 的 7 个材质，g05 的衣服和身体不变。
+自己在 mmd_tools 里解绑、重新绑定过表情滑块的话，点一下「游戏材质」按钮重新接上。</div>
+<figure>
+  <img src="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/a08_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2/%E6%B8%B8%E6%88%8F%E6%9D%90%E8%B4%A8_%E6%94%B9%E5%89%8D%E6%94%B9%E5%90%8E.jpg" alt="游戏材质改前改后">
+  <figcaption>上：旧版插件，g05 的衣服和皮肤还是 MMD 着色；中：新版，全部换成游戏材质；下：新版下拉「衣服非表示」= 1。</figcaption>
+</figure>
+
+<h2 id="s10"><span class="no">10</span>跳个舞看看（可选）</h2>
+<ol>
+  <li>选中模型，菜单 <b>文件 → 导入 → MikuMikuDance Motion (.vmd)</b>，选默认测试舞：
+    <span class="path">E:\Downloads\mmd\0.meeynara手势舞2025.2.14by小王动画\适配瓦雷莎.vmd</span></li>
+  <li>侧栏 MMD 页签最上面那个面板里，「物理:」那一行点「<b>建立</b>」，让刚体开始算物理。</li>
+  <li>按 <kbd>空格</kbd> 播放。看前片、披帛会不会穿进腿，拉「衣服非表示」= 1 再看胸带。</li>
+</ol>
+<p>我渲好的同一段舞（「衣服非表示」= 1，MMD 着色）：<a href="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/a08_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2/pc_a08_hd_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2_%E6%89%8B%E5%8A%BF%E8%88%9E.mp4">pc_a08_hd_full_穿g05衣服_v2_手势舞.mp4</a>。</p>
+
+<h2 id="s11"><span class="no">11</span>挑零件、导出 PMX</h2>
+<p>g05 的衣服拆成了 37 个材质，名字是 <code>g05_&lt;原材质&gt;_&lt;挂的骨头&gt;</code>，看名字就知道是哪一块：</p>
+<div class="table-wrap"><table>
+  <tr><th>材质名里有</th><th>是哪件</th></tr>
+  <tr><td><code>Riband_M</code></td><td>正前方的长前片</td></tr>
+  <tr><td><code>Riband_BL</code> / <code>Riband_BR</code></td><td>左 / 右披帛（挂在手臂上的长飘带）</td></tr>
+  <tr><td><code>Riband_L</code> / <code>Riband_R</code></td><td>胸前左 / 右吊坠（红宝石）</td></tr>
+  <tr><td><code>chest_L</code> / <code>chest_R</code></td><td>左 / 右胸带</td></tr>
+  <tr><td><code>Leaf_L</code> / <code>Leaf_R</code></td><td>左 / 右半边花环</td></tr>
+  <tr><td><code>Headgear</code></td><td>头后的光环</td></tr>
+  <tr><td><code>上半身</code> / <code>下半身</code></td><td>胸前、腰上的主体布和金饰</td></tr>
+  <tr><td><code>左足D</code> / <code>LCalfTwist</code> / <code>足首</code> / <code>足先EX</code></td><td>腿环、小腿绑带、脚踝、凉鞋</td></tr>
+  <tr><td><code>手首</code> / <code>ForeTwist</code> / 手指名（<code>親指</code>、<code>人指</code>……）</td><td>手腕、前臂、手指上的饰物</td></tr>
+</table></div>
+<h3>在 Blender 里删不要的零件</h3>
+<ol>
+  <li>点模型的网格，按 <kbd>Tab</kbd> 进编辑模式，按 <kbd>Alt</kbd>+<kbd>A</kbd> 先全部取消选择。</li>
+  <li>右边属性编辑器点<b>材质</b>页（红色小球图标），在材质列表里点一个 <code>g05_…</code>，点下面的「<b>选择</b>」。</li>
+  <li>按 <kbd>X</kbd> → <b>面</b>，这块就删掉了。要删 a08 自己的衣服也一样，选 <code>pc_a08_hd_body1</code> / <code>body2</code>。</li>
+  <li>删完按 <kbd>Tab</kbd> 回物体模式。在大纲视图里点模型最上层的根（名字 <code>Pc A08 Hd Full 穿G05衣服</code>）。</li>
+  <li>菜单 <b>文件 → 导出 → MikuMikuDance Model (.pmx)</b>，右边勾上「<b>复制纹理</b>」，存到一个<b>新文件夹</b>。</li>
+</ol>
+<p>也可以用 PMXEditor：打开 PMX，在材质页按名字删材质（顶点会一起删），另存。</p>
+<div class="warn">现在删材质只会删掉顶点，那件衣服的骨头、刚体、关节还在：看不见的布照样在算物理，偶尔会挡到别的布。
+要彻底去掉，还得把对应的刚体删掉（比如披帛的 <code>Riband_BL_…</code>）。「勾选零件 → 连骨头、刚体一起删」的按钮在待做清单第 3 项里。</div>
+
+<h2 id="s12"><span class="no">12</span>出问题时</h2>
+<div class="table-wrap"><table>
+  <tr><th>看到</th><th>原因 / 怎么办</th></tr>
+  <tr><td>侧栏 MMD 页签里没有「换装（服装移植）」</td><td>插件没勾上，回到第 2 步。勾上了还没有就重启 Blender</td></tr>
+  <tr><td>「输出已存在，不覆盖」</td><td>输出路径里的文件已经有了，换个文件夹名</td></tr>
+  <tr><td>「没有勾选任何材质」/ 列表是空的</td><td>先点「读取源模型的材质」</td></tr>
+  <tr><td>面板提示 skeleton fit only / 没找到身体材质</td><td>两个身体材质没填对，手动填 <code>pc_g01_nk_body</code> 和 <code>pc_a01_nk_body_nude</code></td></tr>
+  <tr><td>「变形工具」里没有「值」滑块</td><td>表情滑块没绑定：列表右边 ▼ → 绑定</td></tr>
+  <tr><td>换了游戏材质后拉「衣服非表示」没反应</td><td>点一下「游戏材质」按钮重新接上；还不行就确认 Blender 重启过（插件要 0.1.1）</td></tr>
+  <tr><td>跳舞时胸带下面皮肤顶出来</td><td>换装时「贴身部分跟着皮肤动」被关掉了，开着重做一次</td></tr>
+  <tr><td>光环、法杖、披帛末端位置不太对</td><td>离身体远的东西只按骨骼放，在 Blender 里挪一下，或把「远离距离」调小再做</td></tr>
+</table></div>
+
+<h2 id="s13"><span class="no">13</span>命令行做法（同样的结果）</h2>
+<p>不开 Blender 界面，PowerShell 里一条命令，参数和面板默认一样（我交付的那个就是这样做的）：</p>
+<pre>&amp; "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b --factory-startup `
+    --python E:\code\othercode\ripper_tpose\scripts\blender_addons\pmx_outfit_transfer\cli.py -- `
+    "E:\game_export\RiseOfEros\Luf\pmx\pc_g05_hd_full\pc_g05_hd_full_裙子碰撞修正_瞳孔修正.pmx" `
+    "E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_full\pc_a08_hd_full_裙子碰撞修正.pmx" `
+    "E:\game_export\RiseOfEros\_混搭\练习_a08穿g05\pc_a08_hd_full_穿g05衣服.pmx"</pre>
+<p>最后一行会打印 <code>REPORT {...}</code>，里面是同样的数字。更多参数见仓库 <code>docs/pmx-outfit-transfer-usage.md</code> 第七节。</p>
+
+<p class="meta" style="margin-top:40px">相关文档（仓库里）：<code>docs/pmx-outfit-transfer-usage.md</code>（用法总表）、<code>docs/pmx-outfit-transfer.md</code>（原理、数字、踩过的坑）、
+<code>scripts/blender_addons/roe_game_materials/README.md</code>（游戏材质插件）。成品和图：<a href="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/a08_full_%E7%A9%BFg05%E8%A1%A3%E6%9C%8D_v2/"><code>E:\game_export\RiseOfEros\_混搭\a08_full_穿g05衣服_v2\</code></a></p>
+</main>
+</body>
+</html>

@@ -5,6 +5,9 @@
 
 原理和踩过的坑见 [pmx-outfit-transfer.md](pmx-outfit-transfer.md)，插件目录：`scripts/blender_addons/pmx_outfit_transfer/`。
 
+带图、一步一步的例子（g05 的衣服 → a08 full 的裸体，2026-10-25）：本地网页
+[`scripts/riseoferos/html/换装教程_g05衣服穿到a08_full.html`](../scripts/riseoferos/html/换装教程_g05衣服穿到a08_full.html)。
+
 ## 一、安装
 
 本机已经装好（目录联接），别的机器这样装：
