@@ -13,6 +13,11 @@ How the clothes find their place on the new body (3 steps):
 3. fit: each garment vertex keeps its offset from the nearest donor body face, expressed in that face's frame, and
    the face is moved by the displacement field - like Blender's Surface Deform.  Far from the body (the halo, a
    staff, a long train) the skeleton step alone decides: the fit fades out between ``near_cm`` and ``far_cm``.
+4. weights (``follow_body``): the parts lying on the target's skin take the skin's weights at the point under them,
+   so they move with it - the donor's weights on the target's bones split a breast or a thigh differently from the
+   target's own skin (g05's cups on Inase a08's nude: the skin came out through them in every frame of a dance).
+   Within ``follow_reach_cm`` of the skin fully, fading out over ``follow_fade_cm``; the share on the garment's own
+   physics bones (a panel's top row) is kept.  The target's body is not touched.
 
 Physics: the garment's rigid bodies and joints come along on the garment bones; a joint onto a donor body on a
 matched bone is re-hung on the target's body there.  ``isolate`` moves the garment's dynamic bodies to collision
@@ -37,6 +42,9 @@ BUST = re.compile(r"^(?:[a-z0-9]+[ _])?(?:breast|chest_[lr])|bust|胸|乳|oppai|
                   re.IGNORECASE)
 MATCH_CM = 5.0            # a nameless donor bone matches a target bone this close (same parent subtree)
 UNIT_CM = 8.0             # PMX unit at mmd_tools' usual 0.08 import scale
+FOLLOW_REACH_CM = 1.5     # follow_body: garment vertices this close to the target's skin take its weights fully
+FOLLOW_FADE_CM = 2.0      # ... and fade back to their own weights over this much further out
+HIDE_MORPH = "衣服非表示"  # the material morph made when the target has none to add the clothes to
 
 
 # -- pmx module -------------------------------------------------------------------------------------------------------
@@ -77,6 +85,31 @@ def weights_of(pmx, v):
     elif len(bones) == 2 and len(ws) == 1:
         ws = [ws[0], 1.0 - ws[0]]
     return [(b, float(x)) for b, x in zip(bones, ws) if b is not None and b >= 0 and x > 0]
+
+
+def set_weights(pmx, w, weights):
+    """{bone: weight} into a BDEF1 / BDEF2 / BDEF4 record (the four largest, renormalised)."""
+    items = sorted(((b, x) for b, x in weights.items() if b is not None and b >= 0 and x > 1e-4),
+                   key=lambda kv: -kv[1])[:4]
+    total = sum(x for _b, x in items)
+    items = [(b, x / total) for b, x in items]
+    if len(items) == 1:
+        w.type, w.bones, w.weights = pmx.BoneWeight.BDEF1, [items[0][0]], []
+    elif len(items) == 2:
+        w.type, w.bones, w.weights = pmx.BoneWeight.BDEF2, [items[0][0], items[1][0]], [items[0][1]]
+    else:
+        items += [(items[0][0], 0.0)] * (4 - len(items))
+        w.type, w.bones, w.weights = pmx.BoneWeight.BDEF4, [b for b, _x in items], [x for _b, x in items]
+
+
+def hide_offset(pmx):
+    """A material morph offset that hides its material: diffuse and edge alpha x 0 (as ROE's 衣服非表示)."""
+    o = pmx.MaterialMorphOffset()
+    o.offset_type = pmx.MaterialMorphOffset.TYPE_MULT
+    o.diffuse_offset, o.specular_offset, o.shininess_offset = [1.0, 1.0, 1.0, 0.0], [1.0, 1.0, 1.0], 1.0
+    o.ambient_offset, o.edge_color_offset, o.edge_size_offset = [1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 0.0], 1.0
+    o.texture_factor, o.sphere_texture_factor, o.toon_texture_factor = [1.0] * 4, [1.0] * 4, [1.0] * 4
+    return o
 
 
 def material_faces(model):
@@ -443,10 +476,14 @@ class Transfer:
 
 def transfer(donor_path, target_path, out_path, materials=None, donor_body=None, target_body=None, fit=True,
              near_cm=2.0, far_cm=12.0, align_rotation=True, split="bone", min_piece=100, prefix=None,
-             isolate=True, collide_body=True, hide_morph="", log=print):
+             isolate=True, collide_body=True, hide_morph="", follow_body=True, follow_reach_cm=FOLLOW_REACH_CM,
+             follow_fade_cm=FOLLOW_FADE_CM, log=print):
     """Dress the target in the donor's materials.  Returns a report dict; writes out_path (+ textures\\).
     split: "bone" = one material per bone the pieces hang on, "island" = one per connected piece (small ones
-    together by bone, < min_piece vertices), "none" = the donor's materials as they are."""
+    together by bone, < min_piece vertices), "none" = the donor's materials as they are.
+    hide_morph: the target's material morph that hides its outfit (ROE full: 衣服非表示_材質) takes the new clothes too;
+    a target with neither it nor a 衣服非表示 morph (a nude model) gets a 衣服非表示 material morph for them.
+    follow_body: garment vertices on the target's skin take its weights (needs the fit's body materials)."""
     pmx = pmx_module()
     D, T = pmx.load(donor_path), pmx.load(target_path)
     if os.path.exists(out_path):
@@ -613,6 +650,51 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
         T.bones.append(b)
     report["bones_added"] = len(bring)
 
+    # -- weights: the parts on the skin move with the target's skin ------------------------------------------------------
+    follow = {}                                    # donor vertex -> {target bone: weight}
+    if follow_body and fit:
+        # the garment's physics: bones that came along carrying a dynamic body, or hanging under one
+        dyn_bones = set()
+        for i in bring:
+            j = i
+            while j is not None and j >= 0 and j not in bmap:
+                if j in tr.d_dyn:
+                    dyn_bones.add(i)
+                    break
+                j = D.bones[j].parent
+        f_t, pts_t, bary_t = near_t.query(P_final)
+        d_cm = np.linalg.norm(P_final - pts_t, axis=1) * UNIT_CM
+        reach = np.clip((follow_reach_cm + follow_fade_cm - d_cm) / max(follow_fade_cm, 1e-6), 0.0, 1.0)
+        body_w = {}
+        full = 0
+        for k, v in enumerate(garment_verts):
+            ws = gv_weights[v]
+            tot = sum(x for _b, x in ws)
+            r = float(reach[k])
+            if r <= 1e-3 or tot <= 0.0:
+                continue
+            # the share on the garment's physics bones stays as it is (a panel's top row half on its chain);
+            # the rest moves from the garment's own bones to the skin's by r
+            rest = 1.0 - sum(x for b, x in ws if b in dyn_bones) / tot
+            if rest <= 1e-3:
+                continue
+            mixed = defaultdict(float)
+            for b, x in ws:
+                mixed[map_bone(b)] += (x if b in dyn_bones else (1.0 - r) * x) / tot
+            bary = np.clip(bary_t[k], 0.0, None)
+            bary = bary / (bary.sum() + 1e-12)
+            for corner, bw in zip(FT[f_t[k]], bary):
+                tv = int(bt[corner])
+                if tv not in body_w:
+                    body_w[tv] = weights_of(pmx, T.vertices[tv])
+                for b, x in body_w[tv]:
+                    mixed[b] += r * rest * bw * x
+            follow[v] = mixed
+            full += r >= 0.999
+        report["follow_body"] = {"vertices": len(follow), "fully": int(full)}
+        log("weights: %d garment vertices take the skin's weights (%d fully, the rest blended); the share on the "
+            "garment's physics bones is kept" % (len(follow), full))
+
     # -- mesh ------------------------------------------------------------------------------------------------------------
     out_dir = os.path.dirname(os.path.abspath(out_path))
     tex_dir = os.path.join(out_dir, "textures")
@@ -652,7 +734,9 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
         nv.co = [float(x) for x in P_final[k]]
         nv.normal = [float(x) for x in N_final[k]]
         w = nv.weight
-        if isinstance(w.bones, (list, tuple)):
+        if v in follow:
+            set_weights(pmx, w, follow[v])
+        elif isinstance(w.bones, (list, tuple)):
             w.bones = [map_bone(b) if b is not None and b >= 0 else b for b in w.bones]
         if w.type == pmx.BoneWeight.SDEF:
             d = disp[k]
@@ -729,17 +813,34 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
     log("materials: %d new (%s%s)" % (len(new_mats), ", ".join(report["materials_added"][:5]),
                                       " ..." if len(new_mats) > 5 else ""))
 
-    # -- the full's outfit switch -----------------------------------------------------------------------------------------
+    # -- the outfit switch ----------------------------------------------------------------------------------------------
     if hide_morph:
-        hide = next((mo for mo in T.morphs if mo.name == hide_morph), None)
-        if hide is not None and hide.offsets and hasattr(hide.offsets[0], "index"):
+        def material_morph(name):
+            return next((mo for mo in T.morphs if mo.name == name and isinstance(mo, pmx.MaterialMorph)), None)
+        hide = material_morph(hide_morph) or material_morph(HIDE_MORPH)
+        if hide is not None:
             for mi in new_mats:
-                o = copy.deepcopy(hide.offsets[0])
+                o = copy.deepcopy(hide.offsets[0]) if hide.offsets else hide_offset(pmx)
                 o.index = mi
                 hide.offsets.append(o)
-            log("morph %s now hides the new clothes too" % hide_morph)
+            log("morph %s now hides the new clothes too" % hide.name)
+        elif not any(mo.name in (hide_morph, HIDE_MORPH) for mo in T.morphs):
+            # a nude model has no outfit switch: one for the new clothes, listed with the expressions
+            hide = pmx.MaterialMorph(HIDE_MORPH, "hide outfit", pmx.Morph.CATEGORY_OHTER)
+            for mi in new_mats:
+                o = hide_offset(pmx)
+                o.index = mi
+                hide.offsets.append(o)
+            T.morphs.append(hide)
+            frame = next((d for d in T.display if d.isSpecial and d.name == "表情"), None)
+            if frame is not None:
+                frame.data.append((1, len(T.morphs) - 1))
+            report["hide_morph_made"] = HIDE_MORPH
+            log("new morph %s hides the new clothes" % HIDE_MORPH)
         else:
-            warn("no material morph %s in the target" % hide_morph)
+            other = next(mo for mo in T.morphs if mo.name in (hide_morph, HIDE_MORPH))
+            warn("%s is a %s, not a material morph: the new clothes are not in it" % (other.name,
+                                                                                      type(other).__name__))
 
     # -- display frame ---------------------------------------------------------------------------------------------------
     if bring:

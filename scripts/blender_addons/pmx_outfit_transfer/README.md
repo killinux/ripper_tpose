@@ -12,6 +12,8 @@ scripts/blender_addons/pmx_outfit_transfer/
 
 2026-10-24 第一个用例：Luf g05（女神装）的整套衣服 → Inase a08 full 的裸体，成品在
 `E:\game_export\RiseOfEros\_混搭\a08_full_穿g05衣服\`。
+2026-10-25 第二个：同一套衣服 → a08 的**裸体模型** `pc_a08_hd_nude.pmx`（成品 `_混搭\a08_nude_穿g05衣服\`），
+为它加了「贴身部分跟着皮肤动」（默认开）和裸体模型的「衣服非表示」。
 一步一步的用法（面板、挑零件、拼几套、常见问题）见 [docs/pmx-outfit-transfer-usage.md](../../../docs/pmx-outfit-transfer-usage.md)，
 做法、数字和坑见 [docs/pmx-outfit-transfer.md](../../../docs/pmx-outfit-transfer.md)。
 
@@ -39,8 +41,11 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
    - **贴身距离 / 远离距离**：离源身体 2 cm 以内的衣服完全跟着身体形状走，12 cm 以外只跟骨骼（光环、法杖、长披帛的末端），中间渐变；
    - **按骨骼方向旋转**：两个模型休息姿势不同（T 形 / A 形）时需要，相同时没影响；
    - **拆分材质**：「按挂的骨头」一根骨头一个材质（`g05_body2_Leaf_L`、`g05_body1_Riband_M`……），挑零件方便；「按连通块」每块布一个；「不拆」原样；
+   - **贴身部分跟着皮肤动**（2026-10-25 起，默认开）：离目标皮肤 1.5 cm 以内的衣服改用皮肤在那里的权重，再往外 2 cm 渐变回衣服自己的；
+     胸带、腰带、腿环跳舞时和皮肤一起动，皮肤基本不会顶出来。挂在衣服物理骨上的份额（前片、披帛、吊坠）不变，目标的身体一点不动；
    - **两套衣服的刚体互不碰撞**、**新衣服碰目标的身体**；
    - **加进「衣服非表示」**：full 版拉这个表情时新衣服也一起藏。默认不加：拉「衣服非表示」= 脱掉目标自己的衣服、留下新衣服，正好是「新衣服穿在裸体上」。
+     目标是裸体模型（没有「衣服非表示」）时，勾上就新建一个只管新衣服的「衣服非表示」（放在表情面板「其他」里）。
 4. 点「**换装**」。十几秒后写出 PMX，默认再用 mmd_tools 导入场景。
 5. 之后在 Blender 或 PMXEditor 里挑零件：不要的材质删掉；要调位置就改那块布的顶点。
 
@@ -49,7 +54,8 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 ```powershell
 & "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b --factory-startup --python scripts\blender_addons\pmx_outfit_transfer\cli.py -- `
     源.pmx 目标.pmx 输出.pmx [--materials "a,b"] [--donor-body M] [--target-body M] [--no-fit] [--near 2] [--far 12] `
-    [--no-rotation] [--split bone|island|none] [--prefix g05] [--no-isolate] [--no-body-collision] [--hide-morph 衣服非表示_材質]
+    [--no-rotation] [--split bone|island|none] [--prefix g05] [--no-isolate] [--no-body-collision] [--hide-morph 衣服非表示_材質] `
+    [--no-follow-body] [--follow-reach 1.5] [--follow-fade 2]
 ```
 
 普通 Python（装了 numpy）也能跑 `python cli.py ...`，最近点搜索用 numpy 暴力算，慢一些。
@@ -67,12 +73,15 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 4. **物理**：衣服骨上的刚体、关节一起搬，位置按第 1–3 步同样移动；一头挂在源身体刚体上的关节改挂目标同名骨头的刚体（g05 胸前的吊坠挂到 a08 的胸部刚体上）。
    碰撞组：新衣服的动态刚体换到目标没用的组，目标的衣服刚体屏蔽这些组，新衣服只碰目标的身体碰撞体。
 5. 材质、贴图真复制到输出文件夹的 `textures\`；新骨骼放进显示枠「`<前缀>衣服`」。
+6. **权重**（贴身部分跟着皮肤动）：拟合之后，每个衣服顶点找目标裸体上最近的点，离皮肤 1.5 cm 以内用那个点的权重（三角形三个顶点的权重按重心坐标混合），
+   1.5–3.5 cm 和衣服自己的权重线性混合，再远不变；挂在衣服物理骨（带动态刚体的骨，和它下面的骨）上的份额照旧。
+   为什么：源的权重换到目标骨头上以后，胸、大腿这些地方和目标皮肤的分法不一样（g05 胸带挂胸骨的份额比 a08 皮肤小，胸一晃皮肤就顶出胸带）。
 
 ## 做不了 / 要自己来的
 
 - 两边都要有裸体材质才能贴身拟合，没有就只按骨骼走（会提示）。
-- 衣服的权重照搬源的骨头名，不会改成目标身体的权重。full 版胸带下面的身体和胸带摆动比例不一样的问题照旧，挑完零件后用
-  `scripts/riseoferos/pmx_body_follows_cups.py` + `pmx_body_cover_cups.py` 处理。
+- 离皮肤远的衣服（宽松的长袍、光环）照旧用源的权重。2026-10-25 之前做的成品（`a08_full_穿g05衣服`）没有「贴身部分跟着皮肤动」，
+  胸带下面的身体会顶出来：重新换一次装，或者用 `scripts/riseoferos/pmx_body_follows_cups.py` + `pmx_body_cover_cups.py` 处理。
 - 源的表情（材质表情、顶点表情）不搬。
 - IK 骨不搬 IK 设置。
 - 远离身体的东西（法杖、光环）只按骨骼放，位置要自己看。

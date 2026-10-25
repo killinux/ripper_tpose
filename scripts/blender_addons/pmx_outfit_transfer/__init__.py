@@ -11,7 +11,7 @@ UI: 3D viewport sidebar > MMD tab > 换装（服装移植）.  Headless: cli.py.
 bl_info = {
     "name": "PMX Outfit Transfer",
     "author": "ripper_tpose",
-    "version": (0, 1, 0),
+    "version": (0, 2, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > 换装（服装移植）",
     "description": "把一个 PMX 模型的衣服贴身穿到另一个 PMX 模型的裸体上（骨骼重定向 + 按身体形状拟合），"
@@ -67,7 +67,16 @@ class POT_Settings(bpy.types.PropertyGroup):
     collide_body: bpy.props.BoolProperty(name="新衣服碰目标的身体", default=True,
                                          description="新衣服的刚体和目标身体碰撞体碰撞（像在源模型上那样）")
     hide_with_outfit: bpy.props.BoolProperty(name="加进「衣服非表示」", default=False,
-                                             description="full 版：拉「衣服非表示」时新衣服也一起藏起来")
+                                             description="full 版：拉「衣服非表示」时新衣服也一起藏起来；"
+                                                         "目标是裸体模型（没有这个表情）时新建一个只管新衣服的「衣服非表示」")
+    follow_body: bpy.props.BoolProperty(name="贴身部分跟着皮肤动", default=True,
+                                        description="贴在目标皮肤上的部分（胸带、腰带、腿环……）改用皮肤在那里的权重，"
+                                                    "跳舞时和皮肤一起动，皮肤基本不会从衣服里顶出来；挂在衣服物理骨上的份额不变，"
+                                                    "目标的身体不动")
+    follow_reach_cm: bpy.props.FloatProperty(name="跟随距离 cm", default=core.FOLLOW_REACH_CM, min=0.0, max=10.0,
+                                             description="离皮肤不超过这个距离的衣服完全用皮肤的权重")
+    follow_fade_cm: bpy.props.FloatProperty(name="过渡 cm", default=core.FOLLOW_FADE_CM, min=0.0, max=10.0,
+                                            description="再往外这么远渐变回衣服自己的权重")
     import_result: bpy.props.BoolProperty(name="做完导入场景", default=True)
     report: bpy.props.StringProperty()
 
@@ -147,7 +156,8 @@ class POT_OT_transfer(bpy.types.Operator):
                                    align_rotation=s.align_rotation, split=s.split, min_piece=s.min_piece,
                                    prefix=prefix, isolate=s.isolate, collide_body=s.collide_body,
                                    hide_morph="衣服非表示_材質" if s.hide_with_outfit else "",
-                                   log=lambda t: (print(t), lines.append(t)))
+                                   follow_body=s.follow_body, follow_reach_cm=s.follow_reach_cm,
+                                   follow_fade_cm=s.follow_fade_cm, log=lambda t: (print(t), lines.append(t)))
         except Exception as exc:                                    # noqa: BLE001
             traceback.print_exc()
             self.report({"ERROR"}, str(exc))
@@ -200,6 +210,11 @@ class POT_PT_panel(bpy.types.Panel):
         row.prop(s, "near_cm")
         row.prop(s, "far_cm")
         box.prop(s, "align_rotation")
+        box.prop(s, "follow_body")
+        if s.follow_body:
+            row = box.row(align=True)
+            row.prop(s, "follow_reach_cm")
+            row.prop(s, "follow_fade_cm")
         box.prop(s, "split")
         if s.split == "island":
             box.prop(s, "min_piece")

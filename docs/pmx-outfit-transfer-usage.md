@@ -38,6 +38,8 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 │ │ ☑ 按身体形状贴身拟合                │                      │
 │ │   贴身距离 cm [2.0]  远离距离 cm [12.0] │                   │
 │ │ ☑ 按骨骼方向旋转                    │                      │
+│ │ ☑ 贴身部分跟着皮肤动                │                      │
+│ │   跟随距离 cm [1.5]  过渡 cm [2.0]  │                      │
 │ │ 拆分材质 [按挂的骨头 ▾]             │                      │
 │ │ ☑ 两套衣服的刚体互不碰撞            │                      │
 │ │ ☑ 新衣服碰目标的身体                │                      │
@@ -56,12 +58,15 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
    有修正版（裙子碰撞修正、胸部修正）就用修正版，衣服的物理会一起搬过去。
 2. **穿到**：目标 PMX。例子：`E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_full\pc_a08_hd_full_裙子碰撞修正.pmx`。
    用 **full 版**（裸体 + 衣服在一个文件里）最好：有裸体材质才能贴身拟合，而且之后拉「衣服非表示」就能脱掉目标自己的衣服。
+   也可以直接用**裸体模型**（例：`E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_nude\pc_a08_hd_nude.pmx`）：成品就是只穿新衣服的裸体，
+   没有目标自己的衣服叠在一起；再勾「加进『衣服非表示』」，会新建一个只管新衣服的「衣服非表示」表情（2026-10-25 的 `a08_nude_穿g05衣服` 就是这样做的）。
 3. **输出 PMX**：留空就在目标旁边新建文件夹 `<目标文件名>_穿<前缀>衣服\`，PMX 和 `textures\` 都放里面。
    想放别处就填完整路径。已经存在的文件不会覆盖，会报错。
 4. 点「**读取源模型的材质**」。列表里是源 PMX 的全部材质：
    - 身体、脸、头发、眼睛、睫毛、眉毛、武器默认**不勾**（按名字认：`_nk_body`、`_nk_face`、`_nude`、`eye_`、`lash`、`brow`、`_nk_hair`、`wp_`）；
    - 其余默认勾上。要搬头发就勾头发（它的物理链会一起来）；只要裙子就把上衣的材质去掉。
-   - 同时会填好「源的身体材质」和「目标的裸体材质」：ROE 的 full 版源用 `*_nk_body`（衣服下面贴身那份），目标用 `*_nk_body_nude`。
+   - 同时会填好「源的身体材质」和「目标的裸体材质」：ROE 的 full 版源用 `*_nk_body`（衣服下面贴身那份），目标用 `*_nk_body_nude`；
+     目标是裸体模型（没有 `_nude` 那份）就用它的 `*_nk_body`（a08 裸体：`pc_a01_nk_body`）。
      不是 ROE 的模型要自己填：源填「衣服是在哪个身体上做的」那个材质，目标填裸体材质。填错或留空，就只按骨骼重定向、不贴身。
 5. 选项一般不用动（见第六节）。
 6. 点「**换装**」。十几秒（g05 → a08：13 秒）。面板下面显示写出了什么；有警告（比如某根 IK 骨没带 IK）也在这里。
@@ -87,7 +92,7 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 2. 删完回物体模式，选中模型的根（空物体），文件 → 导出 → MikuMikuDance Model (.pmx)，勾「复制贴图」，存到新文件夹。
 
 拉表情「**衣服非表示**」= 脱掉目标自己的衣服、显示裸体，新衣服留着（新衣服默认不加进这个表情）。
-想让新衣服也跟着脱，换装时勾「加进『衣服非表示』」。
+想让新衣服也跟着脱，换装时勾「加进『衣服非表示』」。目标是裸体模型时，勾上会新建「衣服非表示」，拉到 1 = 新衣服全部藏起来。
 
 ## 五、拼几套衣服
 
@@ -104,10 +109,12 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 | 贴身距离 cm | 2 | 离源身体不超过这个距离的衣服完全跟着身体形状走（贴身衣、腰带、胸带）。衣服本来就离身体远（宽松长袍）可以加大 |
 | 远离距离 cm | 12 | 超过这个距离只按骨骼放（光环、法杖、披帛末端），中间渐变。觉得远处的东西被身材带歪了就调小 |
 | 按骨骼方向旋转 | 开 | 两边休息姿势一样（ROE 都是 A 形）时没影响；一边 T 形一边 A 形时必须开 |
+| 贴身部分跟着皮肤动 | 开 | 2026-10-25 起。贴在皮肤上的衣服改用目标皮肤的权重，跳舞时和皮肤一起动（g05 胸带穿到 a08 裸体上：不开时每帧 112 个皮肤顶点顶出胸带，开了 1.5 个，都在吊坠根部，最深 1.3 mm）。挂在衣服物理骨上的部分不变，目标的身体不动。想要衣服原来的权重（和旧版一样）就关掉 |
+| 跟随距离 / 过渡 cm | 1.5 / 2 | 离皮肤 1.5 cm 以内完全用皮肤的权重，再往外 2 cm 渐变回衣服自己的。厚的护甲、离身体远的腰饰想保持硬挺就调小 |
 | 拆分材质 | 按挂的骨头 | 「按连通块」每块布一个材质（小碎块按骨头合并，阈值「最小零件顶点数」）；「不拆」源材质原样 |
 | 两套衣服的刚体互不碰撞 | 开 | 基本不用关 |
 | 新衣服碰目标的身体 | 开 | 新衣服的刚体和目标的身体碰撞体碰撞（和在源身上一样）。关掉就谁也不碰 |
-| 加进「衣服非表示」 | 关 | 见第四节 |
+| 加进「衣服非表示」 | 关 | 见第四节；目标是裸体模型时勾上会新建这个表情 |
 | 做完导入场景 | 开 | 批量做时关掉 |
 
 ## 七、命令行（不开 Blender 界面）
@@ -118,7 +125,8 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
     源.pmx 目标.pmx 输出.pmx `
     [--materials "pc_g05_hd_body 1,pc_g05_hd_body 2"] [--donor-body pc_g01_nk_body] [--target-body pc_a01_nk_body_nude] `
     [--no-fit] [--near 2] [--far 12] [--no-rotation] [--split bone|island|none] [--prefix g05] `
-    [--no-isolate] [--no-body-collision] [--hide-morph 衣服非表示_材質]
+    [--no-isolate] [--no-body-collision] [--hide-morph 衣服非表示_材質] `
+    [--no-follow-body] [--follow-reach 1.5] [--follow-fade 2]
 ```
 
 不写 `--materials` 就是面板里默认勾的那些。最后一行 `REPORT {...}` 是 JSON 报告。
@@ -132,8 +140,12 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 - **衣服陷进身体**：源的身体材质填成了裸体那份（`_nude`）而不是贴身那份（`_nk_body`）时会这样——源的衣服本来就压进裸体几毫米，
   照搬到目标裸体上就陷进去。填 `_nk_body`。
 - **光环、法杖、长披帛位置不对**：这些离身体远，只按骨骼放，在 Blender 里挪一下。调「远离距离」也行。
-- **胸带下面的身体跳舞时顶出来**（full 版）：目标裸体乳头跟胸摆的比例（0.9）和胸带（0.44 左右）不一样，和 g05 full 当初一样。
-  挑完零件后跑 `scripts\riseoferos\pmx_body_follows_cups.py` + `pmx_body_cover_cups.py --body <裸体材质>`，见 [roe-full-chest-fix.md](roe-full-chest-fix.md)。
+- **胸带下面的身体跳舞时顶出来**：2026-10-25 起「贴身部分跟着皮肤动」默认开，胸带跟着目标的胸一起动，基本不会再顶出来
+  （g05 → a08 裸体：每帧 112 → 1.5 个顶点，剩下的在吊坠根部，最深 1.3 mm）。
+  这之前做的成品（`a08_full_穿g05衣服`）没有这一步：重新换一次装；或者挑完零件后跑 `scripts\riseoferos\pmx_body_follows_cups.py` +
+  `pmx_body_cover_cups.py --body <裸体材质>`（改的是身体，见 [roe-full-chest-fix.md](roe-full-chest-fix.md)）。
+- **要不要再跑 `cloth_collision_pmx.py` 重新拟合身体碰撞体**：先别。g05 → a08 裸体的测试里，重新拟合（`--skin --thigh-halves`）以后前片、披帛
+  穿进腿的反而从每帧 10.8 / 14.8 个（手势舞 / 八方来才）变成 26.2 / 41.1 个；目标原来的碰撞体更好。
 - **源的表情没了**：源的材质表情、顶点表情不搬，目标自己的都在。
 - **源的衣服骨和目标重名**（两条裙链都叫 `Skirt_L_01`）：自动改名 `<前缀>:Skirt_L_01`，不会挂错。
 - **IK 骨**：衣服用到的 IK 骨会搬过来但不带 IK 设置，面板会警告。
