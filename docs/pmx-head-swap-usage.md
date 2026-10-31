@@ -8,7 +8,8 @@
 
 ## 一、安装
 
-本机已经装好（目录联接），别的机器这样装（两个插件都要，换头插件借用换衣插件的底层代码）：
+本机已经装好（目录联接），Blender 3.6 里也已经勾上了（2026-10-31），直接看第二节。
+别的机器这样装（两个插件都要，换头插件借用换衣插件的底层代码）：
 
 ```powershell
 New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\scripts\addons\pmx_outfit_transfer" `
