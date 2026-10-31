@@ -104,7 +104,16 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 - **头发穿过肩膀**：头发不参与脖子过渡，位置按脖子那一圈刚性摆的；长发碰肩膀处自己挪一下，或者在 PMXEditor 里把头发刚体改碰衣服。
 - **源的材质表情（换眼睛贴图之类）没了**：不搬，只搬顶点表情、UV 表情、骨骼表情和它们的组。
 
-## 七、它怎么做的（一句话版）
+## 七、别家游戏的头 / 身体（2026-10-31 起，0.2）
+
+例子：Inase a08 的裸体模型换上星刃 Eve 的头，成品 `E:\game_export\RiseOfEros\_混搭\跨游戏换头_a08身体换Eve头\`。
+1. 头来自 `E:\game_export\StellarBlade\Eve\pmx\Nude_Barefoot\Eve_Nude_Barefoot.pmx`，换到 `…\Inase\pmx\pc_a08_hd_nude\pc_a08_hd_nude.pmx`。
+2. 读取材质后，别家的材质名默认勾不对，手动勾头部材质：脸 `MI_EVE_Head_V02` 放第一个（或填「源的脸材质」），
+   眼睛、睫毛、眉毛、牙齿、口腔、头发（`MI_Hair_New_Ponytail_4`、`MI_EVE_HR_01_TypeA`）。
+3. 目标是别家模型时（把 ROE 的头换到 Eve 身上），「目标去掉的材质」手填 Eve 的那些头部材质；「目标的身体材质」留空会认成 `SkinEve`。
+4. 两边脖子接缝的顶点数不同也能焊（Eve 44 个、a08 60 个）。长发可能穿到肩前，开物理会落下来。
+
+## 八、它怎么做的（一句话版）
 
 头按脖子那一圈刚性摆好 → 接缝顶点直接挪到身体对应顶点上 → 位移在脖子上 4 cm 里衰减、在脸上平滑 → 接缝处用身体的法线和权重 →
 脸贴图按接缝两侧肤色乘增益、剩余差别烘成渐变 → 旧头删掉、新头的骨骼 / 物理 / 表情接上。细节见 [pmx-head-swap.md](pmx-head-swap.md)。

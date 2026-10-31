@@ -306,7 +306,10 @@ def rasterize_factor(img, tris_uv, tri_factors):
 
 # -- the swap ---------------------------------------------------------------------------------------------------------
 def swap_head(donor_path, target_path, out_path, head_materials=None, remove_materials=None, blend_cm=4.0,
-              tone="seam", scale=1.0, prefix=None, log=print):
+              tone="seam", scale=1.0, prefix=None, face=None, body=None, log=print):
+    """face: the donor's face material (the one whose open edge is the neck ring; default: by name, else the first
+    head material); body: the target's body material(s), comma-separated (default ROE *_nk_body, else the outfit
+    transfer's body guess - another game's model)."""
     pmx = oc.pmx_module()
     D, T = pmx.load(donor_path), pmx.load(target_path)
     if os.path.exists(out_path):
@@ -321,12 +324,14 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
             raise RuntimeError("both models need the bones 首 and 頭")
     head_mats = head_materials or auto_head_materials(D)
     remove_mats = remove_materials if remove_materials is not None else auto_head_materials(T, with_nude=True)
-    face_mat = face_material(D, head_mats)
+    face_mat = face or face_material(D, head_mats)
     if face_mat is None:
         raise RuntimeError("no face material among %s" % head_mats)
-    t_body = body_materials(T)
+    t_body = [n.strip() for n in body.split(",") if n.strip()] if body else body_materials(T)
+    if not t_body and oc.auto_body(T, nude=False):
+        t_body = [oc.auto_body(T, nude=False)]           # another game: SkinEve, *-body05 ...
     if not t_body:
-        raise RuntimeError("no body material (*_nk_body) in the target")
+        raise RuntimeError("no body material in the target (ROE *_nk_body; else name it: body=...)")
     log("head: %s (face %s); removed from the target: %s; body ring on %s" % (
         ", ".join(head_mats), face_mat, ", ".join(remove_mats) or "-", t_body[0]))
 
@@ -402,21 +407,23 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
         report["ring"] = {"pairing": "1:1", "move_cm_mean": round(float(dist.mean()) * UNIT_CM, 2),
                           "move_cm_max": round(float(dist.max()) * UNIT_CM, 2)}
     else:
-        # different sampling: each donor vertex to the nearest point of the target polyline; the target vertices are
-        # cut into the donor's boundary edges so both edges become the same polyline
-        tp = np.concatenate([t_pos_sorted, t_pos_sorted[:1]])
-        tnn = np.concatenate([t_nrm_sorted, t_nrm_sorted[:1]])
+        # different sampling: each donor vertex goes onto the target polyline AT ITS OWN ANGLE (between the two target
+        # vertices around it), and the target vertices are cut into the donor's boundary edges by angle too, so both
+        # edges become the same polyline in the same order.  (Placing the donor vertices at the nearest point instead
+        # let them overtake the cut-in target vertices: the edge folded back and left little triangular holes along
+        # the seam - Stellar Blade Eve's 44-vertex neck on Inase a08's 60.)
+        t_ang_sorted = t_ang[t_order]
+        ext_ang = np.concatenate([t_ang_sorted, t_ang_sorted[:1] + 2 * np.pi])
         tw = t_w_sorted + t_w_sorted[:1]
-        for v in d_ring:
-            p = P[hv[v]]
-            seg = tp[1:] - tp[:-1]
-            tt = np.clip(((p - tp[:-1]) * seg).sum(1) / ((seg * seg).sum(1) + 1e-12), 0, 1)
-            q = tp[:-1] + tt[:, None] * seg
-            k = int(np.argmin(np.linalg.norm(q - p, axis=1)))
-            pair_pos[v] = q[k]
-            n = tnn[k] * (1 - tt[k]) + tnn[k + 1] * tt[k]
+        for i_r, v in enumerate(d_ring):
+            th = d_ang[i_r]
+            pair_pos[v] = interp_ring(t_ang_sorted, t_pos_sorted, np.array([th]))[0]
+            n = interp_ring(t_ang_sorted, t_nrm_sorted, np.array([th]))[0]
             pair_nrm[v] = n / (np.linalg.norm(n) + 1e-12)
-            pair_w[v] = blend_weights(tw[k], tw[k + 1], float(tt[k]))
+            t = np.mod(th - ext_ang[0], 2 * np.pi) + ext_ang[0]
+            k = int(np.clip(np.searchsorted(ext_ang, t) - 1, 0, len(ext_ang) - 2))
+            frac = float((t - ext_ang[k]) / (ext_ang[k + 1] - ext_ang[k] + 1e-12))
+            pair_w[v] = blend_weights(tw[k], tw[k + 1], frac)
         # target vertices between two consecutive donor ring vertices (by angle): split that donor edge there
         d_sorted = [d_ring[k] for k in d_order]
         d_ang_sorted = d_ang[d_order]
@@ -736,6 +743,10 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
             if a in tri and b in tri:
                 split_faces.setdefault(f, []).append((a, b, t, v_t))
                 break
+    if splits:
+        cut = sum(len(x) for x in split_faces.values())
+        log("  %d of %d target ring vertices cut into the head's edge" % (cut, len(splits)))
+        report["ring"]["cut_in"] = cut
     added_mats = []
     for mi in head_mi:
         mt = copy.deepcopy(D.materials[mi])

@@ -10,6 +10,8 @@ Options: --head "a,b"      the donor's head materials (default: face / eyes / la
          --tone seam|whole|none   skin colour of the face texture: gain + seam gradient (default) / gain only / as is
          --scale 1.0       head scale about the neck ring
          --prefix a08
+         --face M          the donor's face material (its open edge is the neck ring)
+         --body "a,b"      the target's body material(s) (default: ROE *_nk_body, else a body / skin material)
 Prints the report as JSON on the last line (REPORT {...})."""
 import argparse
 import json
@@ -31,11 +33,14 @@ def main(argv):
     ap.add_argument("--tone", default="seam", choices=("seam", "whole", "none"))
     ap.add_argument("--scale", type=float, default=1.0)
     ap.add_argument("--prefix", default=None)
+    ap.add_argument("--face", default=None)
+    ap.add_argument("--body", default=None)
     args = ap.parse_args(argv)
     head = [s.strip() for s in args.head.split(",") if s.strip()] or None
     remove = None if args.remove is None else [s.strip() for s in args.remove.split(",") if s.strip()]
     report = core.swap_head(args.donor, args.target, args.out, head_materials=head, remove_materials=remove,
                             blend_cm=args.blend, tone=args.tone, scale=args.scale, prefix=args.prefix,
+                            face=args.face, body=args.body,
                             log=lambda s: print(s, flush=True))
     print("REPORT " + json.dumps(report, ensure_ascii=False), flush=True)
 

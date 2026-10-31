@@ -9,7 +9,7 @@ Needs the pmx_outfit_transfer add-on folder next to this one (shared helpers).
 bl_info = {
     "name": "PMX Head Swap",
     "author": "ripper_tpose",
-    "version": (0, 1, 0),
+    "version": (0, 2, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > 换头",
     "description": "把一个 PMX 模型的头（脸、眼睛、睫毛、眉毛、头发、表情、头发物理）换到另一个 PMX 模型的身体上，"
@@ -53,6 +53,10 @@ class PHS_Settings(bpy.types.PropertyGroup):
     scale: bpy.props.FloatProperty(name="头的缩放", default=1.0, min=0.5, max=2.0,
                                    description="以脖子那一圈为中心缩放整个头")
     prefix: bpy.props.StringProperty(name="前缀", description="新骨骼显示枠、重名材质用；留空从源文件名取")
+    face: bpy.props.StringProperty(name="源的脸材质",
+                                   description="开口边就是脖子接缝的那个材质；留空按名字认（ROE _nk_face），认不出取勾选的第一个")
+    body: bpy.props.StringProperty(name="目标的身体材质",
+                                   description="脖子接缝在这个材质上；留空用 ROE 的 *_nk_body，没有就按 body / skin 认；几个用逗号隔开")
     import_result: bpy.props.BoolProperty(name="做完导入场景", default=True)
     report: bpy.props.StringProperty()
 
@@ -127,7 +131,8 @@ class PHS_OT_swap(bpy.types.Operator):
         os.makedirs(os.path.dirname(out), exist_ok=True)
         try:
             report = core.swap_head(donor, target, out, head_materials=head, remove_materials=remove,
-                                    blend_cm=s.blend_cm, tone=s.tone, scale=s.scale, prefix=prefix, log=print)
+                                    blend_cm=s.blend_cm, tone=s.tone, scale=s.scale, prefix=prefix,
+                                    face=s.face or None, body=s.body or None, log=print)
         except Exception as exc:                                    # noqa: BLE001
             traceback.print_exc()
             self.report({"ERROR"}, str(exc))
@@ -177,6 +182,8 @@ class PHS_PT_panel(bpy.types.Panel):
         box.prop(s, "tone")
         box.prop(s, "scale")
         box.prop(s, "prefix")
+        box.prop(s, "face")
+        box.prop(s, "body")
         box.prop(s, "import_result")
         layout.operator("pmx_head_swap.swap", icon="USER")
         if s.report:
