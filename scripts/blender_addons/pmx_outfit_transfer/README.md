@@ -62,6 +62,10 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
    - 直接点勾；
    - **名字含** 填一段字（比如 `pc_a08_hd_body`、`g05_body2`、`wp_`），点「勾上」/「去掉」，名字里有这段字的一起改；
    - 在 3D 视图里选中模型网格上的面（编辑模式，`L` 选一整块），点「**去掉选中的面所在的零件**」。
+   - 一个材质里装着好几样东西（ROE 自己的衣服整套就在 `body1` / `body2` 两个材质里，头饰、裙子、袖子都在一起）：
+     在列表里点一下它，选「拆法」（**按挂的骨头** / 按连通块），点「**拆开选中的这个零件**」。写出 `<模型>_拆开.pmx`
+     并导入，列表换成拆开后的小零件（`pc_a08_hd_body2_頭` 头饰、`_Skirt_L` 左裙片……），再按上面的办法挑。
+     拆开只是把面分到几个同样的材质里，顶点、权重、物理都不动；指向原材质的材质表情项复制给每一块。
 3. **输出 PMX** 留空就写到模型旁边「`<模型>_挑零件.pmx`」（已有就 `_挑零件2`、`3`…）。不覆盖，原文件不动；换了文件夹会把贴图拷过去。
 4. 点「**删掉没勾的零件**」。几秒钟，导入结果，场景里原来那个模型藏起来；列表换成新模型的零件，可以接着挑。
 
@@ -86,7 +90,8 @@ python scripts\blender_addons\pmx_outfit_transfer\pick_cli.py 模型.pmx [输出
     [--keep "x,y"] [--dry-run] [--keep-bones] [--keep-empty-morphs]
 ```
 
-`--dry-run` 只列出会删掉什么。Blender 里跑：`blender -b --factory-startup --python pick_cli.py -- ...`。
+`--dry-run` 只列出会删掉什么。拆开：`pick_cli.py 模型.pmx --split "a,b" [--split-mode bone|island] [--min-piece 100]`
+（写出 `<模型>_拆开.pmx`，再拿它挑）。Blender 里跑：`blender -b --factory-startup --python pick_cli.py -- ...`。
 
 命令行（批处理、不开 Blender 界面）：
 

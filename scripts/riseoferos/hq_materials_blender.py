@@ -930,6 +930,25 @@ def remove_hq(materials):
 
 
 # --- entry points --------------------------------------------------------------------------------------
+def relocate_recorded(mat, cache):
+    """roe_hq_pmx / roe_hq_xps an earlier run recorded, pointed at this run's cache where the file is gone there
+    (hq_cache.relocate).  Returns how many paths changed."""
+    n = 0
+    path = mat.get("roe_hq_pmx")
+    moved = hq_cache.relocate(path, cache)
+    if moved != path:
+        mat["roe_hq_pmx"] = moved
+        n += 1
+    if mat.get("roe_hq_xps"):
+        maps = json.loads(mat["roe_hq_xps"])
+        new = {k: hq_cache.relocate(v, cache) for k, v in maps.items()}
+        changed = sum(1 for k in maps if new[k] != maps[k])
+        if changed:
+            mat["roe_hq_xps"] = json.dumps(new)
+            n += changed
+    return n
+
+
 def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print, in_place=False, params=None,
           cid=None, game=None, rebuild=False):
     """Build the game materials on the slots of `meshes`.  Returns (state, report); state is what
@@ -992,6 +1011,7 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
     builders = {c: Builder(d, cache, "UVMap", params) for c, d in datas.items()}
     state, upgraded, kept, done = [], [], [], set()
     strokes, irises = [], []
+    relocated = 0
     for k, ((obj, index, old, albedo, source), game_mat) in enumerate(zip(slots, picks)):
         data, builder = datas[slot_cid[k]], builders[slot_cid[k]]
         label = "%s[%d]" % (obj.name, index)
@@ -1012,7 +1032,10 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
             continue
         if not in_place and old is not None and old.get("roe_hq_role"):
             if not rebuild:
-                # an earlier run's material: a second run (pieces it could not resolve then) leaves it
+                # an earlier run's material: a second run (pieces it could not resolve then) leaves it, only the
+                # export maps it recorded follow the cache when that moved (D: -> E: 2026-10-17; else the PMX /
+                # XPS exports fall back to the bare albedo: no AO in the PMX colour, no bump / spec / AO in the XPS)
+                relocated += relocate_recorded(old, cache)
                 upgraded.append("%s %s (%s, earlier run)" % (label, old.name, old["roe_hq_role"]))
                 continue
             if game_mat is not None and not old.name.endswith("__replaced"):
@@ -1056,7 +1079,8 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
               # slots per character whose data they were looked up in (more than one: another character's clothes)
               "characters": {c: slot_cid.count(c) for c in datas},
               "overrides": datas[cid].get("overrides", {}),
-              "images": len({img.name for b in builders.values() for img in b.images})}
+              "images": len({img.name for b in builders.values() for img in b.images}),
+              "relocated_export_paths": relocated}
     if summary:
         report["decoded"] = summary.get("decoded")
         report["missing"] = summary.get("missing")
@@ -1094,7 +1118,7 @@ def use_pmx_textures(state):
     after revert(), right before the PMX export (the last export: it rewrites the scene anyway)."""
     swapped = []
     for obj, index, old in state:
-        path = old.get("roe_hq_pmx") if old is not None else None
+        path = hq_cache.relocate(old.get("roe_hq_pmx")) if old is not None else None
         node = _base_color_image_node(old) if path and os.path.isfile(path) else None
         if node is None:
             continue

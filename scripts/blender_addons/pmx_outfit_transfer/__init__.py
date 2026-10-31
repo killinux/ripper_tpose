@@ -105,6 +105,10 @@ class POT_Settings(bpy.types.PropertyGroup):
                                                description="只管删掉的零件的表情（比如只藏武器的「武器非表示」）跟着删")
     parts_import: bpy.props.BoolProperty(name="做完导入场景", default=True,
                                          description="导入结果，场景里原来那个模型藏起来（大纲里点眼睛能再显示）")
+    parts_split_mode: bpy.props.EnumProperty(
+        name="拆法", default="bone",
+        items=(("bone", "按挂的骨头", "连在一起的每一块按它主要挂的骨头归类，一根骨头一个零件（头饰、裙子、袖子……）"),
+               ("island", "按连通块", "每块连在一起的布一个零件，小碎块按骨头合并")))
     parts_report: bpy.props.StringProperty()
 
 
@@ -338,6 +342,56 @@ class POT_OT_parts_from_selection(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _import_replacing(context, path, old_name):
+    """Import a written PMX and hide the scene's models that came from the one it was made from."""
+    if not hasattr(bpy.ops, "mmd_tools") or not hasattr(bpy.ops.mmd_tools, "import_model"):
+        return False
+    old_roots = [o for o in context.scene.objects if getattr(o, "mmd_type", "") == "ROOT" and o.mmd_root.name == old_name]
+    bpy.ops.mmd_tools.import_model(filepath=path, scale=0.08, types={"MESH", "ARMATURE", "PHYSICS", "MORPHS", "DISPLAY"})
+    for root in old_roots:
+        for o in [root] + list(root.children_recursive):
+            try:
+                o.hide_set(True)
+            except RuntimeError:
+                pass
+    return bool(old_roots)
+
+
+class POT_OT_parts_split(bpy.types.Operator):
+    bl_idname = "pmx_outfit.parts_split"
+    bl_label = "拆开选中的这个零件"
+    bl_description = ("列表里选中（高亮）的那个零件按「拆法」拆成几块，写出 <模型>_拆开.pmx 并导入，列表换成拆开后的；"
+                      "比如 ROE 的衣服整套在一两个材质里，拆开才能只留头饰")
+
+    def execute(self, context):
+        s = _settings(context)
+        src = _parts_src(s)
+        if not (len(s.parts) and 0 <= s.parts_active < len(s.parts)):
+            self.report({"ERROR"}, "先「读取零件」，在列表里点一下要拆的那个")
+            return {"CANCELLED"}
+        name = s.parts[s.parts_active].name
+        keep = {it.name: it.keep for it in s.parts}
+        try:
+            report = parts.split_parts(src, None, names=[name], mode=s.parts_split_mode, log=print)
+        except Exception as exc:                                    # noqa: BLE001
+            traceback.print_exc()
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        out, pieces = report["out"], report["parts"][name]
+        M = core.pmx_module().load(out)
+        s.parts.clear()
+        for mt in M.materials:
+            it = s.parts.add()
+            it.name, it.faces = mt.name, mt.vertex_count // 3
+            it.keep = keep.get(mt.name, keep.get(name, True))
+        s.parts_src = out
+        s.parts_report = "%s 拆成 %d 块，写出 %s" % (name, len(pieces), os.path.basename(out))
+        if _import_replacing(context, out, report["source_name"]):
+            s.parts_report += "；场景里原来的模型藏起来了"
+        self.report({"INFO"}, s.parts_report)
+        return {"FINISHED"}
+
+
 class POT_OT_parts_remove(bpy.types.Operator):
     bl_idname = "pmx_outfit.parts_remove"
     bl_label = "删掉没勾的零件"
@@ -374,19 +428,8 @@ class POT_OT_parts_remove(bpy.types.Operator):
         if s.parts_import:
             if not hasattr(bpy.ops, "mmd_tools") or not hasattr(bpy.ops.mmd_tools, "import_model"):
                 self.report({"WARNING"}, "mmd_tools 没启用，结果没导入场景")
-            else:
-                old_roots = [o for o in context.scene.objects if getattr(o, "mmd_type", "") == "ROOT"
-                             and o.mmd_root.name == report["source_name"]]
-                bpy.ops.mmd_tools.import_model(filepath=out, scale=0.08,
-                                               types={"MESH", "ARMATURE", "PHYSICS", "MORPHS", "DISPLAY"})
-                for root in old_roots:
-                    for o in [root] + list(root.children_recursive):
-                        try:
-                            o.hide_set(True)
-                        except RuntimeError:
-                            pass
-                if old_roots:
-                    s.parts_report += "；场景里原来的模型藏起来了（大纲里点眼睛能再显示）"
+            elif _import_replacing(context, out, report["source_name"]):
+                s.parts_report += "；场景里原来的模型藏起来了（大纲里点眼睛能再显示）"
         s.parts_src = out                                         # the list now shows the new model: pick again
         for i in reversed(range(len(s.parts))):
             if not s.parts[i].keep:
@@ -420,6 +463,9 @@ class POT_PT_parts(bpy.types.Panel):
             row.operator("pmx_outfit.parts_mark", text="勾上").keep = True
             row.operator("pmx_outfit.parts_mark", text="去掉").keep = False
             layout.operator("pmx_outfit.parts_from_selection", icon="RESTRICT_SELECT_OFF")
+            row = layout.row(align=True)
+            row.prop(s, "parts_split_mode", text="")
+            row.operator("pmx_outfit.parts_split", icon="MOD_EXPLODE")
             n_off = sum(1 for it in s.parts if not it.keep)
             layout.label(text="勾着的留下：%d 个；没勾的删掉：%d 个" % (len(s.parts) - n_off, n_off))
         layout.prop(s, "parts_out")
@@ -434,8 +480,8 @@ class POT_PT_parts(bpy.types.Panel):
 
 
 CLASSES = (POT_MaterialItem, POT_PartItem, POT_Settings, POT_OT_scan, POT_OT_transfer, POT_UL_materials, POT_PT_panel,
-           POT_OT_parts_scan, POT_OT_parts_mark, POT_OT_parts_from_selection, POT_OT_parts_remove, POT_UL_parts,
-           POT_PT_parts)
+           POT_OT_parts_scan, POT_OT_parts_mark, POT_OT_parts_from_selection, POT_OT_parts_split, POT_OT_parts_remove,
+           POT_UL_parts, POT_PT_parts)
 
 
 def register():

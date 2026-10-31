@@ -292,6 +292,17 @@ python export_hq.py --list                 # 每个模型在 E 盘缺什么；--
   新版两只耳朵和脸、头发都换成魔化贴图）。
   E 盘这两套的 .blend / PMX / XPS 还是旧的，重出之前画廊卡片保留「缺图」。在它们的副本上跑一遍修好的脚本，
   两只耳朵都换成了各自魔化脸的游戏材质（`HQ_pc_e01_fm_nk_face__UVMap`、`HQ_pc_f01_fm_nk_face__UVMap`）；
+  **2026-10-31 已重出**（用户说都做完）：存档的 .blend 上跑修复 + 游戏材质（`--preview`），再出 PMX、bust B、XPS，换掉 E 盘的，
+  旧文件在 `E:\game_export\RiseOfEros\_meta\backup_替换前_20261031\`；画廊两张卡片 `--recheck-slots` 去掉了「缺图」，缩略图换新。
+  - 顺带查出一个 bug：游戏材质缓存 2026-10-17 从 `D:\roe_exports\_hq_materials` 搬到了 `E:\...\_meta\_hq_materials`，
+    这之前做的 .blend，材质上记的 PMX / XPS 贴图（`roe_hq_pmx` / `roe_hq_xps`）还指向 D 盘。重出时这一步对「上次已经换好」的材质
+    原样跳过，导出就找不到烘好的贴图：PMX 的 12 个材质全退回到原始颜色贴图，脸连贴图都没有；XPS 只剩颜色贴图（没有 AO、凹凸、高光，
+    渲染组 5/7 而不是 24/25，50 个文件只剩 22 个）。
+  - 修：`hq_cache.relocate()` 把不存在的缓存路径换成现在缓存里的同一个文件；`hq_materials_blender.py` 跳过旧材质前先改它记的路径
+    （报告里 `relocated_export_paths`，这两套各 60 条），`use_pmx_textures()`、`export_suit_pmx_blender.py` 读路径时也走一遍。
+    之后 PMX 0 个退回、XPS 48 个文件（渲染组 24 / 25 回来了）。
+  - e01 魔化套的瞳孔从偏绿变成红色：10-02 以后「瞳孔乘游戏的 _IrisColor」这一版第一次用在这个文件上（10-02 那次没重出），按游戏数据算的。
+  - e01 的 PMX 关节 23 → 25：头发物理用的是现在的工具。
 - 裸模身体缺六槽标记 `roe_nude_slots` 的（8 个）补上：插件导 XPS 靠这个标记认出槽 0 是身体，没有它会把身体当成脸、漏掉眉毛；
 - 偶像装双丸子的第 2 个材质槽，游戏里是角色头发 `pc_j_nk_hair`（在 `chara_mat_bare_pc_j_common_head.ab`，拼装也没读），
   原来是灰色，换成头发网格的材质；

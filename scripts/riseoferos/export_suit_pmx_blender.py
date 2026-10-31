@@ -41,6 +41,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import export_character_model_blender as worker  # noqa: E402
+import hq_cache  # noqa: E402
 
 ADDON = os.path.join(HERE, "roe_xps_addon.py")
 
@@ -58,7 +59,7 @@ def pmx_colour_materials(addon, meshes):
             if mat is None or not mat.get("roe_hq_role"):
                 continue
             if mat.name not in made:
-                path = mat.get("roe_hq_pmx")
+                path = hq_cache.relocate(mat.get("roe_hq_pmx"))     # a .blend from before the cache moved to E:
                 if not (path and os.path.isfile(path)):
                     # no baked texture (a material without export maps): its own albedo
                     node = next((n for n in mat.node_tree.nodes if n.type == "TEX_IMAGE" and n.image

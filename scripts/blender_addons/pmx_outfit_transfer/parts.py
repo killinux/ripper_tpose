@@ -17,6 +17,7 @@ what it shows becomes visible by default; when everything it shows is removed, i
 
 Runs in Blender (mmd_tools' pmx module) or a plain Python (the module core.pmx_module() finds).
 """
+import copy
 import os
 import re
 import shutil
@@ -408,15 +409,126 @@ def check(M, pmx):
     return bad
 
 
-def default_out(src):
+def _label(M, pmx, faces):
+    """The bone a group of faces mostly hangs on, as a short part name (chain numbers and _Dummy dropped)."""
+    acc = defaultdict(float)
+    for f in faces:
+        for v in M.faces[f]:
+            for b, w in core.weights_of(pmx, M.vertices[v]):
+                acc[b] += w
+    if not acc:
+        return "part"
+    name = M.bones[max(acc, key=acc.get)].name
+    short = re.sub(r"[_\s]?\d+$", "", re.sub(r"_Dummy$", "", name))
+    return short or name
+
+
+def split_material(M, pmx, name, mode="bone", min_piece=100, log=print):
+    """Cut one material into parts, in place: "bone" = the connected pieces grouped by the bone they mostly hang on,
+    "island" = every connected piece of at least min_piece vertices on its own, the smaller ones together by bone.
+    The parts are copies of the material (<name>_<bone>), its faces regrouped; vertices do not move, so vertex morphs
+    stay valid; material morph entries on it are copied to every part (衣服非表示 still hides all of it).
+    Returns the part names ([] when it stays in one piece)."""
+    names = [mt.name for mt in M.materials]
+    if name not in names:
+        raise ValueError("模型里没有这个材质: %s" % name)
+    mi = names.index(name)
+    mft = core.material_faces(M)
+    groups = core.islands(M.faces, mft[mi])
+    pieces = []
+    if mode == "bone":
+        by = defaultdict(list)
+        for g in groups:
+            by[_label(M, pmx, g)].extend(g)
+        pieces = [(lab, sorted(by[lab])) for lab in sorted(by, key=lambda k: -len(by[k]))]
+    elif mode == "island":
+        big = [g for g in groups if len({v for f in g for v in M.faces[f]}) >= min_piece]
+        small = defaultdict(list)
+        for g in groups:
+            if len({v for f in g for v in M.faces[f]}) < min_piece:
+                small[_label(M, pmx, g)].extend(g)
+        seen = defaultdict(int)
+        for g in sorted(big, key=lambda g: -len(g)):
+            lab = _label(M, pmx, g)
+            seen[lab] += 1
+            pieces.append((lab if seen[lab] == 1 else "%s_%d" % (lab, seen[lab]), sorted(g)))
+        pieces += [("%s_小件" % lab, sorted(small[lab])) for lab in sorted(small, key=lambda k: -len(small[k]))]
+    else:
+        raise ValueError("mode: bone / island")
+    if len(pieces) < 2:
+        log("%s: one piece, left as it is" % name)
+        return []
+    taken = set(names)
+    new_mats, part_names = [], []
+    for lab, faces in pieces:
+        mt = copy.deepcopy(M.materials[mi])
+        base = "%s_%s" % (name, lab)
+        nm, k = base, 2
+        while nm in taken:
+            nm, k = "%s_%d" % (base, k), k + 1
+        taken.add(nm)
+        mt.name = mt.name_e = nm
+        mt.vertex_count = 3 * len(faces)
+        new_mats.append(mt)
+        part_names.append(nm)
+    order = [f for i in range(len(M.materials)) for f in (
+        [f for _lab, fs in pieces for f in fs] if i == mi else mft[i])]
+    M.faces = [M.faces[f] for f in order]
+    M.materials = M.materials[:mi] + new_mats + M.materials[mi + 1:]
+    shift = len(new_mats) - 1
+    for mo in M.morphs:
+        if isinstance(mo, pmx.MaterialMorph):
+            offs = []
+            for o in mo.offsets:
+                if o.index == mi:
+                    for k in range(len(new_mats)):
+                        c = copy.deepcopy(o)
+                        c.index = mi + k
+                        offs.append(c)
+                else:
+                    if o.index > mi:
+                        o.index += shift
+                    offs.append(o)
+            mo.offsets = offs
+    log("%s -> %d parts: %s" % (name, len(part_names), ", ".join(
+        "%s (%d faces)" % (n, len(fs)) for n, (_l, fs) in zip(part_names, pieces))))
+    return part_names
+
+
+def default_out(src, suffix=PICK_SUFFIX):
     """<model>_挑零件.pmx next to the model; _挑零件2, 3 ... when taken."""
     stem, folder = os.path.splitext(os.path.basename(src))[0], os.path.dirname(os.path.abspath(src))
     k = 1
     while True:
-        out = os.path.join(folder, "%s%s%s.pmx" % (stem, PICK_SUFFIX, "" if k == 1 else k))
+        out = os.path.join(folder, "%s%s%s.pmx" % (stem, suffix, "" if k == 1 else k))
         if not os.path.exists(out):
             return out
         k += 1
+
+
+def split_parts(src, out=None, names=(), mode="bone", min_piece=100, log=print):
+    """Write a copy of the PMX `src` with the materials in `names` cut into parts (split_material).
+    out=None: <model>_拆开.pmx next to it.  Returns {"out", "parts": {material: [part names]}}."""
+    pmx = core.pmx_module()
+    M = pmx.load(src)
+    source_name = M.name
+    parts = {n: split_material(M, pmx, n, mode, min_piece, log) for n in names}
+    if not any(parts.values()):
+        raise ValueError("选的零件都是一整块，没有可拆的")
+    bad = check(M, pmx)
+    if bad:
+        raise RuntimeError("拆完索引不对（没写文件）: %s" % "; ".join(bad[:5]))
+    out = out or default_out(src, "_拆开")
+    if os.path.exists(out):
+        raise ValueError("输出已存在，不覆盖: %s" % out)
+    if os.path.normcase(os.path.dirname(os.path.abspath(out))) != os.path.normcase(os.path.dirname(os.path.abspath(src))):
+        raise ValueError("拆开的模型要和原模型放在同一个文件夹（贴图按相对路径找）")
+    M.name = M.name_e = os.path.splitext(os.path.basename(out))[0]
+    pmx.save(out, M, add_uv_count=M.header.additional_uvs)
+    back = pmx.load(out)
+    report = {"out": out, "source_name": source_name, "parts": parts, "problems": check(back, pmx)}
+    log("wrote %s: %d materials" % (out, len(back.materials)))
+    return report
 
 
 def pick_parts(src, out=None, remove=(), keep=None, bones=True, empty_morphs=True, dry_run=False, log=print):

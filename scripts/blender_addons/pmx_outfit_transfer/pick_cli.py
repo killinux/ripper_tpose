@@ -11,6 +11,8 @@ entries and textures that only they used (parts.py).  Blender headless or a plai
 --dry-run        print what would go and stop
 --keep-bones     drop vertices / faces / morph entries only, keep every bone, rigid body and joint
 --keep-empty-morphs   keep morphs that lose all their entries
+--split "a,b"    instead: cut these materials into parts (--split-mode bone | island, --min-piece 100) and write
+                 <model>_拆开.pmx (same folder); pick from that file afterwards
 out.pmx defaults to <model>_挑零件.pmx next to the model (_挑零件2 ... when taken); never overwritten.
 Prints the report as JSON on the last line (REPORT {...})."""
 import argparse
@@ -34,7 +36,15 @@ def main(argv):
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--keep-bones", action="store_true")
     ap.add_argument("--keep-empty-morphs", action="store_true")
+    ap.add_argument("--split", default="")
+    ap.add_argument("--split-mode", default="bone", choices=("bone", "island"))
+    ap.add_argument("--min-piece", type=int, default=100)
     args = ap.parse_args(argv)
+    if args.split:
+        report = parts.split_parts(args.model, args.out, names=[s.strip() for s in args.split.split(",") if s.strip()],
+                                   mode=args.split_mode, min_piece=args.min_piece, log=lambda s: print(s, flush=True))
+        print("REPORT " + json.dumps(report, ensure_ascii=False), flush=True)
+        return
     if args.list:
         M = core.pmx_module().load(args.model)
         for i, mt in enumerate(M.materials):

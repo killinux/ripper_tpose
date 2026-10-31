@@ -326,7 +326,9 @@ g05 飘带、前片的物理 ───⑤ 搬刚体关节、隔开碰撞组 ─�
 </ol>
 <p>和在 PMXEditor 里删材质不一样：只给这块布用的骨头、刚体、关节、表情项、贴图会一起删掉，看不见的布不会再在后台算物理。</p>
 <div class="ok">只要「a08 的裸体穿 g05 的衣服」：去掉 <code>pc_a08_hd_body1</code>、<code>pc_a08_hd_body2</code>（a08 自己的衣服）、<code>pc_a01_nk_body</code>（贴身那份身体）、<code>wp_a08_l</code>、<code>wp_a08_r</code>（大剑）。<code>pc_a08_hd_body2_hair</code> 是头饰，留着。
-删完裸体那份身体自动改成默认显示，不用再拉「衣服非表示」。我按这个做好的一份：<a href="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/%E6%8C%91%E9%9B%B6%E4%BB%B6%E7%A4%BA%E4%BE%8B_a08%E5%8F%AA%E7%A9%BFg05%E8%A1%A3%E6%9C%8D/">_混搭\挑零件示例_a08只穿g05衣服\</a>。</div>
+删完裸体那份身体自动改成默认显示，不用再拉「衣服非表示」。
+想留 a08 头上的金色翼冠：它和衣服在同一个材质 <code>pc_a08_hd_body2</code> 里，先在列表里点它，「拆法」选「按挂的骨头」，点「<b>拆开选中的这个零件</b>」，它拆成 32 块，金冠是 <code>pc_a08_hd_body2_頭</code>，留着它、去掉其余的就行。
+我按这两种做好的：<a href="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/%E6%8C%91%E9%9B%B6%E4%BB%B6%E7%A4%BA%E4%BE%8B_a08%E5%8F%AA%E7%A9%BFg05%E8%A1%A3%E6%9C%8D/">_混搭\挑零件示例_a08只穿g05衣服\</a>。</div>
 <h3>挪布的位置、导出</h3>
 <p>要挪某块布：编辑模式里改它的顶点，<kbd>Tab</kbd> 回物体模式，在大纲视图里点模型最上层的根，菜单 <b>文件 → 导出 → MikuMikuDance Model (.pmx)</b>，右边勾上「<b>复制纹理</b>」，存到一个<b>新文件夹</b>。</p>
 
