@@ -79,6 +79,42 @@ python html\make_gallery.py        # 每批导出后重跑；打开 scripts\hone
 按「角色卡·穿好 / 角色卡·裸 / 底模 / 单件」分类、可搜索，卡片上有正面 / 3/4 / 脸部预览、组成物品、
 规格和 `.blend` 链接。
 
+## 转 PMX（`export_pmx_blender.py`，2026-10-31，样品 Akina Obata）
+
+```powershell
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' -b --factory-startup `
+  "E:\game_export\HoneySelect2\Akina Obata\blend\HS2_ill_F_000\HS2_ill_F_000.blend" `
+  --python scripts\honeyselect2\export_pmx_blender.py -- `
+  --out "E:\game_export\HoneySelect2\Akina Obata\pmx" --name HS2_ill_F_000 --model-name "Akina Obata"
+```
+
+走的是剑星 / ROE 那条转换链（Convert_to_MMD5 建 MMD 骨架、身体碰撞体和捩骨，mmd_cloth_physics 加头发物理，
+blender2xps 把节点算出来的颜色烘成一张贴图，mmd_tools 按 12.5 写 PMX）。Illusion 的骨架不是 Biped，这个脚本先做这些：
+
+- **骨骼对照**：`cf_J_Hips` = 全ての親的来源、`cf_J_Kosi01` = 下半身、`cf_J_Spine01..03` = 上半身 / 上半身2 / 上半身3、
+  `cf_J_Neck` / `cf_J_Head`、`cf_J_Shoulder` / `ArmUp00` / `ArmLow01` / `Hand`、`cf_J_LegUp00` / `LegLow01` / `Foot01` / `Toes01`、
+  手指 `Thumb` / `Index` / `Middle` / `Ring` / `Little` 01–03、`cf_J_eye_rs` = 眼睛（带着眼球）、`cf_J_Mune00` = 胸。`_L` 是角色自己的左边。
+- **辅助骨的蒙皮并回主关节**：Illusion 的主关节本身不带蒙皮，身体蒙在游戏脚本驱动的缩放 / 阻尼辅助骨上
+  （`cf_J_ArmUp01_s`、`cf_J_LegUp02_s`、`cf_J_Spine02_s`、`cf_J_Mune02_s`、`cf_J_Siri_s` …）。这些权重并到上面的槽位骨；
+  手臂再由 Convert_to_MMD5 自己的捩骨分配把 腕 / ひじ 分到 腕捩 / 手捩。膝盖、手肘的垫骨（`cf_J_LegKnee_*`、`cf_J_ArmElbo*`）
+  保留，交给 ROE 的辅助骨规划按位置分到关节的一半左右（0.50–0.54）。脸部骨骼并到 頭（表情用游戏的形态键），
+  胸部的子骨并到 `cf_J_Mune00`，饰品骨并到上面的骨；没有蒙皮的骨骼删掉（353 → 73 根，转换后 179 根）。
+- **头发**：头皮骨（`c_J_hair*_top`）并到 頭；每束头发在游戏里只挂一根骨（DynamicBone 晃它），物理插件至少要两节，
+  所以按这束头发蒙皮的范围拆成一条链（每节约 6 cm，最多 6 节，权重在相邻两节之间线性过渡）。
+- **烘焙前的两处修正**：头发、眼镜的 UV 是平铺的（−2.99 … 1.07），烘焙只填 0–1 的范围，结果是空的，被当成全透明藏掉了；
+  所以先把第一层 UV 的每个面按整格平移回 0–1（贴图是重复的，采到的颜色不变），PMX 保留平移后的 UV。
+  睫毛的透明度在角色卡 .blend 里是 min(R, G, B) × A，可它的遮罩只有红色通道，结果全透明（Blender 预览里睫毛其实也没有）；
+  这种遮罩的 MINIMUM 节点改成 MAXIMUM。
+- **表情**：游戏的形态键在头、睫毛、泪膜上同名（`e*` 眼、`g*` 眉、`k*` 嘴），`RECIPES` 在每个带这些键的网格上
+  混出同名的 MMD 表情（29 个：まばたき、笑い、ウィンク 两种、びっくり、じと目、はぅ、なごみ、眉毛 6 个、あいうえお、
+  にっこり、にやり、∧、口角、口横広げ、ワ、ぺろっ），游戏原来的形态键也一起导出（「その他」）。
+  牙齿和舌头只有张嘴的三档（`k01_open0` / `k02_open1` / `k03_open2`），每个嘴型按它自己下巴下降多少去开牙齿和舌头
+  （游戏里头部 `k09_open1` 配牙齿 `k02_open1`，下降比约 1.12）。
+- **贴图透明度**（`scripts/pmx_tools/texture_alpha_blender.py`）：只被不透明材质用的贴图透明度补成 1。
+
+样品（`E:\game_export\HoneySelect2\Akina Obata\pmx\HS2_ill_F_000\`）：`HS2_ill_F_000.pmx`、`textures\`、`表情一览.jpg`、
+`Akina_Obata_手势舞.mp4`、`_converted.blend`、`_report.json`。其余卡（穿衣 / 裸体各一）等用户看过样品再做。
+
 ## 已验证（2026-09-24）
 
 15 张角色卡穿好 + 裸各一份、男女底模、31 个类别各一件单独导出，全部 PASS；逐张看过预览。

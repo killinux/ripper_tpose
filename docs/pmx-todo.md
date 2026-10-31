@@ -68,6 +68,17 @@
 - 这些模型现在用不上换装、换头、爆衣、物理这一整套。
 - TFD 是 Biped 骨名（和 ROE 一样），ROE 的转换链可能直接能用；HS2（cf_J_）、DOA（KTGL）、NARAKA 要先做骨骼对照。
 
+- **10-31，ROE_pmx 窗口做的部分**（分工里归这边）：
+  - **星刃 NPC 样品 Raven 做完，等用户看**：新脚本 `scripts/stellarblade/npc/export_npc_pmx.py`（做法见
+    `scripts/stellarblade/npc/README.md`「导出 PMX」），成品 `E:\game_export\StellarBlade\Raven\pmx\Raven\`（PMX + 表情一览 + 手势舞视频）。
+    用户点头后做其余 17 个造型；每个造型要定「贴合碰撞体用哪些材质」（皮肤、脸、紧身衣）。
+  - **HS2 样品 Akina Obata（穿衣版）做完，等用户看**：新脚本 `scripts/honeyselect2/export_pmx_blender.py`（做法见
+    `scripts/honeyselect2/README.md`「转 PMX」），成品 `E:\game_export\HoneySelect2\Akina Obata\pmx\HS2_ill_F_000\`。
+    用户点头后做其余角色卡（穿衣 / 裸体各一）。
+  - **AION2（用户直接点名要的）**：Yustiel、Leda、Hadar、Satia、Snotra、Urd、Siel 七位有了 PMX + XPS
+    （`E:\aion2_exports\pmx` / `xps`，`scripts/aion2/export_pmx_blender.py`），表情用游戏自己的 ARKit 姿势，见
+    `scripts/aion2/README.md`「转 PMX / XPS」。其余 NPC、玩家时装还没转。
+
 ## 5. 表情（10-25 开始做，第一步做完）
 
 - **现状**：
@@ -95,6 +106,18 @@
   - FF7 三作剩下的 85 个 PMX 批量补表情；
   - 对魔忍 Squad 缺的标准表情：它们的眼睛画在贴图上、没有眼球网格，这个插件做不了，要另想办法；
   - 「18」系列 ウィンク 左右修正的批量。
+- **10-31 三件都在做**（用户：「把这些都顺序做完」；这一项由 ROE_pmx 窗口做）：
+  - 「18」系列 ウィンク：新脚本 `scripts/pmx_tools/fix_wink_sides.py`。`E:\Downloads` 里路径带「 18」的 306 个 PMX，
+    修好的副本放在 `E:\game_export\_18系列_ウィンク修正\`（目录结构照原样，文件名加 `_winkfix`，原文件不动，
+    贴图仍指向原文件夹）：293 个对调，11 个没有 ウィンク，2 个左右判断不清没动
+    （Keleira Pure Temptation 18、Tifa Lockhart Remake 18 None）。
+  - 对魔忍 Squad：新脚本 `scripts/pmx_tools/fill_standard_morphs.py`，用已有的顶点表情按配方混合出缺的标准表情。
+    151 个 PMX 写出 142 个 `*_表情补全.pmx`（放在原文件旁边），0 个出错；9 个没有 まばたき，补不了
+    （Deathknight、Gsoldier1、Harbinger、Library ×2、Paladin、Paladin2、Rin、Yeager）。两个脚本的说明在
+    `scripts/pmx_tools/README.md`。
+  - FF7 三作：用 FF7R Tifa 试做的 43 个表情，经「表情移植」插件的命令行（`cli.py`），每个 PMX 旁边写一个
+    `*_表情移植.pmx`。86 个里 40 个做完（CCFF7R 20 个全部、FF7 Rebirth 20 个）、0 个出错；批量跑到后台任务的 2 小时上限被停下，
+    进度存在 `results.json`，可以接着跑（剩下的里有几个大 mod 模型，一个要 17–50 分钟）。**等用户决定要不要接着跑。**
 
 ## 6. 手肘、膝盖的变形（SDEF）
 

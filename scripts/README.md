@@ -20,7 +20,7 @@
 | Taimanin Squad（対魔忍スクワッド） | Unity 2022.3 Addressables（UnityFS，不加密） | [`taimaninsquad/`](taimaninsquad/) | `taimaninsquad\list_models.py` / `export_model.py` |
 | Action Taimanin（アクション対魔忍） | Unity 2022.3 老式 AssetBundle（39 个大包，3 个数据表包加密） | [`actiontaimanin/`](actiontaimanin/) | `actiontaimanin\list_models.py` / `export_model.py` |
 | Taimanin Collection（対魔忍コレクション） | Unity 2018.4 玩家数据 `data.unity3d`（UnityFS，不加密，**没有类型树**；卡牌图片加密） | [`taimanincollection/`](taimanincollection/) | `taimanincollection\list_models.py` / `export_model.py` |
-| AION2（永恒之塔 2） | Unreal 5.3 IoStore（282 个容器，AES 加密，exe 带 NCGuard 壳；无版本属性，用 UE Viewer 特制版） | [`aion2/`](aion2/) | `aion2\list_models.py` / `export_model.py` |
+| AION2（永恒之塔 2） | Unreal 5.3 IoStore（282 个容器，AES 加密，exe 带 NCGuard 壳；无版本属性，用 UE Viewer 特制版） | [`aion2/`](aion2/) | `aion2\list_models.py` / `export_model.py`；转 PMX / XPS：`export_pmx_blender.py` / `export_xps_blender.py`（Blender） |
 | Vindictus（洛奇英雄传）北美服 | Source 引擎改版，`.hfs` v4 包（加密压缩，用 Unicorn 跑游戏自己的 `FileSystem_Stdio.dll` 读） | [`vindictusna/`](vindictusna/) | `vindictusna\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
@@ -133,9 +133,14 @@ UnityPy：`list_models.py` 读 `list\characustom` 里 MessagePack 编码的物�
 31 类共 812 件带网格的物品（脸型 / 衣服 / 头发 / 饰品）和 `UserData\chara` 的角色卡（可出
 JSON / CSV / 带游戏缩略图的 HTML）；`export_model.py` 按游戏的拼装规则（头挂 `cf_J_Head_s`、衣服按骨名
 并到身体骨、头发挂 `N_hair_Root`、饰品挂 `N_*`）把单件、底模或整张角色卡（`--nude` 可选）拼成一副骨架，
-蒙皮烘到静止姿势，交给 `build_blend.py` 出 `.blend`（+ `--fbx`）与预览。详见
+蒙皮烘到静止姿势，交给 `build_blend.py` 出 `.blend`（+ `--fbx`）与预览。`export_pmx_blender.py`（2026-10-31）把角色卡
+`.blend` 转成 PMX（`cf_J_*` 骨骼对照、辅助骨并回主关节、单骨发束拆成骨骼链、游戏形态键混出 MMD 表情）。详见
 [`honeyselect2/README.md`](honeyselect2/README.md) 与
 [HoneySelect 2 提取](../docs/honey-select-2-extraction.md)。
+
+[`pmx_tools/`](pmx_tools/README.md)（2026-10-31）：不开 Blender 直接改 PMX 的小工具——`fix_wink_sides.py`（ウィンク 左右反了就对调）、
+`fill_standard_morphs.py`（用已有表情混出缺的 MMD 标准表情）；另有 `texture_alpha_blender.py`，给各导出脚本在 Blender 里
+修 PMX 贴图的透明度（MMD 会把贴图透明度乘进材质）。剑星 Eve 以外的女角色转 PMX 见 `stellarblade/npc/export_npc_pmx.py`。
 
 NARAKA: BLADEPOINT（永劫无间）的 StreamingAssets 是 12,818 个哈希命名的 bundle——改了文件头的 UnityFS
 （签名、LZ4 编号 6、4 KB 对齐），没加密。`naraka/` 只用 UnityPy + lz4：`naraka_bundle.py` 按需解压，

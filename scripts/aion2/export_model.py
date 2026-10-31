@@ -231,7 +231,8 @@ def map_generic_slots(part: dict, classes: dict, umodel_root: str, export, log, 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("model")
-    ap.add_argument("--head", help="head for a wearable set (default <G>_Head_001)")
+    ap.add_argument("--head", help="head for a wearable set (default <G>_Head_001); for an NPC: a player head "
+                                   "instead of its own (Satia: --head GF_Head_006)")
     ap.add_argument("--hair", help="hairstyle for a wearable set (default <G>_Hair_001)")
     ap.add_argument("--variant", default="A", help="letter of the alternative parts to use (Body_A / Body_B ...)")
     ap.add_argument("--game-root", default=pak.DEFAULT_GAME_ROOT)
@@ -282,9 +283,9 @@ def main():
         suffix = ""
         g = res.get("gender")
         if res.get("head") and res["head"] != lm.DEFAULT_HEAD.get(g):
-            suffix += "__" + res["head"].replace(g + "_", "")
+            suffix += "__" + re.sub(r"^G[FM]_", "", res["head"])        # NPCs have no gender code
         if res.get("hair") and res["hair"] != lm.DEFAULT_HAIR.get(g):
-            suffix += "__" + res["hair"].replace(g + "_", "")
+            suffix += "__" + re.sub(r"^G[FM]_", "", res["hair"])
         if args.variant != "A":
             suffix += "__" + args.variant
         out_id = args.model + suffix

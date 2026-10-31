@@ -23,6 +23,10 @@ grey or wrong:
          boosted by OpacityFar; cards use the atlas' top half, the scalp cap the bottom half (UV v halved -
          build_blend.py rewrites the hair UVs).  Many hairstyles' slots come out of UE Viewer as "material_0":
          export_model.py maps them to the MI_<mesh> next to the mesh.
+  phantom (CM_Mob_Phantom) the ghost shader (rim-lit, faded): Satia's whole look, head included (*_LT
+         instances, there are no others).  Baked like armor from its BaseColor / ARM / Normal_BC5 - the colours
+         the ghost is drawn over (her outfit uses GM_0042_T04's maps) - so the model is not a white figure; the
+         ghost effect itself is not reproduced.
 
 Output: <out>/textures/<material>_albedo.png (RGBA when it has alpha), _orm.png (R AO, G roughness,
 B metallic), _emission.png; normal maps are used as they are (DirectX: green flipped in Blender);
@@ -137,6 +141,8 @@ class Props:
             return "eye"
         if "cm_hair" in names or "haircard" in names:
             return "hair"
+        if "cm_mob_phantom" in names:
+            return "phantom"
         return "generic"
 
 
@@ -402,7 +408,7 @@ def bake_generic(name, p: Props, root, tex_dir, entry):
 
 BAKERS = {"armor": bake_armor, "skin": lambda n, p, r, t, e: bake_skin_or_face(n, p, r, t, e, False),
           "face": lambda n, p, r, t, e: bake_skin_or_face(n, p, r, t, e, True), "eye": bake_eye,
-          "eye_ao": bake_eye_ao, "hair": bake_hair, "generic": bake_generic}
+          "eye_ao": bake_eye_ao, "hair": bake_hair, "phantom": bake_armor, "generic": bake_generic}
 
 
 def index_materials(root: str) -> dict:
@@ -437,7 +443,7 @@ def bake(root: str, out_dir: str, names: list, rels: dict | None = None) -> dict
         entry["chain"] = [os.path.basename(c) for c in p.chain]
         entry["blend_mode"] = p.blend_mode
         entry["two_sided"] = bool(p.two_sided)
-        npath = find_texture(root, p.textures.get("NormalBase", p.textures.get("Normal", "")))
+        npath = find_texture(root, p.textures.get("NormalBase", p.textures.get("Normal", p.textures.get("Normal_BC5", ""))))
         if npath and entry["kind"] not in ("eye", "eye_ao", "tear"):
             entry["normal"] = npath
         if entry["kind"] == "tear":

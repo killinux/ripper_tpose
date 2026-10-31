@@ -1,10 +1,11 @@
 # AION2（永恒之塔 2）模型提取
 
 AION2 是 NCSOFT 的 MMORPG，Unreal Engine 5.3，Steam app `3393110`。本机安装在
-`D:\Program Files (x86)\Steam\steamapps\common\AION2`。这套脚本做两件事：
+`D:\Program Files (x86)\Steam\steamapps\common\AION2`。这套脚本做三件事：
 
 1. 列出游戏里所有模型并分类计数；
-2. 把一个模型（例如一个女性角色穿一套时装）导出成带完整材质的 `.blend`，附预览图。
+2. 把一个模型（例如一个女性角色穿一套时装）导出成带完整材质的 `.blend`，附预览图；
+3. 把导出的 `.blend` 转成 MMD 的 PMX（裙子、胸部和带骨骼的头发有物理，表情是游戏原版的）和 XNALara 的 XPS。
 
 ## 快速开始
 
@@ -19,6 +20,7 @@ python list_models.py --find yustiel leda siel        # 按名字找模型（支
 python export_model.py GF_Angel_01 --hair GF_Hair_308 # 导出：天使时装 + 308 号长卷发
 python export_model.py NPC_Yustiel_01                 # 导出一个 NPC（身体、头、头发都是它自己的）
 python html\make_gallery.py                           # 画廊：scripts\aion2\html\index.html（见下面「画廊」）
+python face_data.py                                   # 转 PMX 前第一次：游戏的表情数据（见下面「转 PMX / XPS」）
 ```
 
 导出结果在 `E:\aion2_exports\blend\<模型>\`：
@@ -187,6 +189,101 @@ python export_model.py GF_Nude --hair GF_Hair_308      # 裸体 + 001 号脸 + 3
 
 补出来的面带面属性 `nude_fill`（> 0，按洞编号），在 Blender 编辑模式里可以按属性选中，拿来重画或雕刻。
 
+## 转 PMX / XPS
+
+```powershell
+$blender = "D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
+python face_data.py        # 第一次：游戏的表情数据 -> E:\aion2_exports\_meta\face（要 CUE4Parse CLI 和类型映射，见下）
+& $blender -b E:\aion2_exports\blend\NPC_Yustiel_01\NPC_Yustiel_01.blend --python export_pmx_blender.py -- --out E:\aion2_exports\pmx --model-name Yustiel
+& $blender -b E:\aion2_exports\blend\NPC_Yustiel_01\NPC_Yustiel_01.blend --python export_xps_blender.py -- --out E:\aion2_exports\xps
+```
+
+输入是 `export_model.py` 导出的 `.blend`（不改它）。PMX 在 `E:\aion2_exports\pmx\<模型>\<模型>.pmx`（贴图在 `textures\`，
+旁边的 `<模型>_converted.blend` 是转换后的场景），XPS 在 `E:\aion2_exports\xps\<模型>\`。一个人的 PMX 转换 40–100 秒。
+重新导出时只替换 PMX、`textures\` 和转换后的场景，文件夹里别的东西（视频、截图）不动。
+
+2026-10-31 导出的 7 位（都在 `E:\aion2_exports\pmx` 和 `xps` 下）：
+
+| 模型 | `.blend` | 刚体 | 表情 | 说明 |
+|---|---|---|---|---|
+| Yustiel | `NPC_Yustiel_01` | 94 | 89 | 头发是生成的骨骼链（7 条 × 5–7 节） |
+| Leda | `NPC_Leda_01` | 152 | 89 | 披风、头发、裙子；另有 AI 放大版 `NPC_Leda_01_AI4x` |
+| Hadar | `NPC_Hadar_01` | 61 | 89 | |
+| Satia | `NPC_Satia_01__Head_006` | 35 | 89 | 游戏里是幽灵，见下 |
+| Snotra | `NPC_Snotra_01` | 37 | 89 | 光头是原设计；左右眼两个材质 |
+| Urd | `NPC_Urd_01` | 74 | 89 | 肩上的松鼠并成一根骨骼 |
+| Siel | `NPC_Siel_01` | 157 | 0 | 过场模型：缩小 0.612 倍，武器球去掉，没有表情骨 |
+
+（表情 89 = 26 个标准 MMD 表情 + 11 个过场表情 + 52 个 ARKit 表情；刚体数含按腿拟合时大腿、小腿各拆成两半的碰撞体。）
+
+PMX 转换复用 Rise of Eros / Stellar Blade / FF7 / CCFF7R 那套（Convert_to_MMD5 建 MMD 骨骼和身体碰撞体、手臂放到 37° 的 A 姿势、
+付与骨、mmd_cloth_physics 给裙子和头发链加物理、mmd_tools 写 PMX），`export_pmx_blender.py` 只补 AION2 自己的差别：
+
+- **骨骼**：Biped 骨骼名带连字符（`Bip001-L-Clavicle`），改成空格写法；眼球骨 `b_L_Eye_0` / `b_R_Eye_0`（过场骨架是
+  `Bone_eye_L` / `_R`）当左右目；`Face_Root` 下 120 多根表情骨和 `Helmet` 挂点并进头；胸部 `b_L_Breast_Base` + `_001`
+  并成一根，加胸部物理；肌肉辅助骨（`Bipceps`、`Triceps`、`Deltoid`、`Butt` → `Butt_Jiggle` ……）算肢体辅助骨，不当布料
+  （两根连着的会被当成一条布链乱甩）；`Skirt_Root` 下的链改名 `Skirt_*`、长袖 `LinkFore_*` 改名 `Sleeve_*`、名字带 `cloth`
+  的链改名 `Drape_*`，物理插件才会选裙子、袖子、飘带的预设（`cloth` 不在 Convert_to_MMD5 的布料词表里：Siel 背后那段披帛
+  `B_hand_cloth` 被当成脊椎辅助骨并进了脊椎，手臂放下时撕开了 13 条边）。
+- **头发没有骨骼**（Yustiel：长发蒙皮挂在头、脊椎、骨盆、锁骨上）：`hair_chains.py` 先在头发上生成骨骼链再转换——按头顶看的
+  方位角把长发均匀分成 7 条，每条按高度约 8 cm 一节，关节放在该条头发的中心；原来挂在脊椎、锁骨上的权重按方位角分给相邻
+  两条、按高度分给相邻两节，挂在头上的部分不动，搭在肩上的短发（方位角 55°–75° 以外）保持原样。骨骼名 `Hair_Gen_<条>_<节>`，
+  物理插件按头发预设加刚体（Yustiel 42 个）。`--hair-chains off` 不生成。头发自带骨骼链的（玩家发型、Leda、Hadar、Siel）不动。
+- **第二套 Biped**（Urd 肩上的松鼠：`Bip002-*`）整套并成一根骨骼，挂在原来的肩上；不然物理插件会把它的 30 根骨骼当成一件外套甩。
+- **武器**：挂在根骨骼上、名字带 `weapon` 的骨骼，它的网格删掉（Siel 的金球在过场的初始姿势里离她 3.4 米）；`--keep-weapon` 保留。
+- **巨人**：头部骨骼高过 2 米的模型缩到和其他人一样（头部骨骼 1.67 米）。Siel 在过场里头高 2.73 米，缩小 0.612 倍；MMD 的动作
+  是按普通身高做的。
+- **身体碰撞体按实际的腿和身体拟合**（写完 PMX 后的最后一步，`scripts/mmd_physics/cloth_collision_pmx.py --skin … --thigh-halves`）：
+  Convert_to_MMD5 按穿着衣服的网格量碰撞体，物理插件对「一开始就压在碰撞体里」的布不检测和那类碰撞体的碰撞——Hadar 的裙子前面
+  是开口的两片，压在大腿上却不撞大腿，两腿一分开大腿就从两片裙子里穿了出来（跳舞第 110 帧起整条腿露在前面）。拟合的表面是
+  皮肤和脸的材质 + `*_Pants` 部件的材质（被绑腿盖住的腿，腿的表面就是绑腿），`*_Boots` 部件的材质管小腿；拟合后裙子一直挡在腿前。
+  皮肤和衣服共用一个材质的（Siel）跳过。`--no-collider-fit` 不做。转换后的 `.blend` 里还是拟合前的碰撞体，以 PMX 为准。
+  物理插件的 `legs_inside="collide"`（`--legs-inside collide`）对 Hadar 没用，留作选项。
+- **贴图透明度**（10-31 加，`scripts/pmx_tools/texture_alpha_blender.py`）：MMD 会把贴图的透明度乘进材质。写完 PMX 后，
+  只被裁切材质用的贴图按游戏的裁切值（0.33）把边缘变干净（Hadar 的身体和裤子、Leda 的披风、Urd 的身体、Siel 的镂空部分），
+  只被不透明材质用的贴图透明度补成 1（这 7 位本来就没有这个问题）。10-31 已经对 14 个 PMX（含 AI4x）补做过一遍。
+- **表情**（全是顶点表情）：游戏的女性头部带一份 ARKit 表情姿势表 `GF_Head_006_FACS_PA`（52 个：`eyeBlinkLeft`、`jawOpen`、
+  `mouthSmileLeft` ……，每个是脸部骨骼的叠加姿势）。脚本在脸部骨骼还在的时候逐个摆出来，存成形态键（`facs_morphs.py`），
+  转换手臂时先收起来（转换会跳过带形态键的网格），转换完放回，然后
+  - 26 个标准 MMD 表情（まばたき、笑い、ウィンク、あいうえお、眉……）按 Stellar Blade 的配方从 ARKit 表情混合；
+  - 11 个过场动画的整脸表情（`GF_CineFacial_PoseAsset_01`：`Face_Smile`、`Face_Angry`、`Face_Sad`、`Mouth_A` ……，
+    游戏动画师调的 ARKit 比例），放在「其他」栏；
+  - 52 个 ARKit 表情原样放在「其他」栏。
+
+  姿势表在 UE 5.3 里是稀疏存的：`Tracks[t]` 是骨骼名，`TrackPoseInfluenceIndices[t]` 列出（姿势号，变换号），变换在
+  `Poses[姿势号].LocalSpacePose[变换号]` 里；叠加方式是 R = dR × R_ref，T = T_ref + dT。各骨骼的参考姿势从头部那个部件的 PSK 读：
+  UE Viewer 把骨架按 Y 轴镜像写出（位置 (x, -y, z)，旋转取共轭），脚本先核对 PSK 骨骼和 Blender 骨架的位置（Yustiel 误差
+  0.0000 cm），对不上就报错。`--facs none` 不做表情，`--game-faces none` 不要过场表情。
+- **贴图**：MMD 只画一张颜色贴图，没有法线贴图和 AO。衣服（`armor` / `phantom` 类材质）把法线贴图的凹凸明暗乘进颜色
+  （系数 = 1 − 0.6 ×（1 − nz²），nz 是法线的竖直分量，斜面变暗），衣服、皮肤、脸再补乘 ORM 贴图的 AO，写成 `<材质>_pmx.png`。
+  `bake_materials.py` 给 `.blend` 烘颜色时已经乘过一部分 AO（颜色 ×（k + (1 − k) × AO），衣服 k = 0.55，皮肤和脸 0.65），
+  PMX 只补剩下的 AO ÷（k + (1 − k) × AO），合起来正好是完整的 AO 一次；AO 通道中位数低于 0.25 的不当 AO（Snotra 脸上的金属
+  饰件那张图 AO 通道全是 0，乘了就成了黑的）。Yustiel 的裙子在游戏里是纯色缎面，刺绣、饰纹、褶皱全在法线贴图里，不乘的话
+  MMD 里是一片光滑的纯色。`--relief 0` 不乘凹凸，`--no-ao` 不乘 AO。
+- **高清**：贴图用的是游戏里最大的那一级——实测各贴图包头里记的尺寸（`aion2_pak` 读包，找 `PF_` 像素格式字符串前面的宽高）：
+  NPC 的衣服 1024（Leda、Siel），共用的身体和脸 2048，UE Viewer 导出的已经是最高一级，游戏里没有更大的。想要更大只能 AI 放大：
+  `E:\tools\upscale\esrgan.py`（4x-UltraSharp）把 `.blend` 的 `textures\*_albedo.png` 放大到另一个文件夹，再加
+  `--albedo-dir <那个文件夹>` 转换，同名的颜色贴图就换成放大的（凹凸和 AO 跟着放大的尺寸算）。放大出来的细节是 AI 画的。
+  Leda 的样品：`E:\aion2_exports\pmx\NPC_Leda_01_AI4x\`（贴图 4096，文件夹 246 MB，原版 85 MB），对比图在同一文件夹。
+
+**Satia** 在游戏里是幽灵：她的材质只有 `*_LT` 一套，父材质 `CM_Mob_Phantom`（边缘发光、半透明），头部也只有一个这种材质，
+眼睛也画成了皮肤。`bake_materials.py` 把这种材质当盔甲烘（`phantom` 类，用它底下的颜色 / ARM / `Normal_BC5` 贴图，衣服用的是
+男性盔甲 `GM_0042_T04` 的灰色底图，没有染色，所以是白银色），头换成她材质里引用的 006 号玩家脸：
+`python export_model.py NPC_Satia_01 --head GF_Head_006`（给 NPC 指定 `--head` 就替换它自己的头，目录名加 `__Head_006`）。
+幽灵效果本身没有做。
+
+**表情数据**：`face_data.py` 用 CUE4Parse CLI（`E:\tools\cue4parse_cli\cue4parse.exe`）读游戏包，AES 密钥和 `aion2_pak.py`
+读法一样，不打印。AION2 的包没有属性标签，CUE4Parse 要类型映射（usmap），AION2 没有公开的（得从运行中的游戏里导，
+游戏有 NCGuard，不做）。姿势表用到的类（`PoseAsset`、`PoseData`、`Transform`）是 UE 5.3 引擎自带的，给 Vindictus 拼的 UE 5.3
+映射（TFD 的 5.2 映射 + `scripts/vindictus/levels/patch_usmap.py`）就能读，放在 `E:\tools\aion2\vdf53_patched.usmap`。
+同时导出的还有 `GF_Head_023_FACS_PA`（另一款女性头）和 `GM_Head_004_FACS_Pose`（男性头）。
+
+**XPS**：`export_xps_blender.py` 用 Blender2XPS 导出。骨骼名换成 XPS 标准名（`arm left shoulder 2` ……，所以 XPS 姿势能用），
+颜色贴图 + 法线贴图（XNALara 会用法线贴图），单位缩小 100 倍（Yustiel 1.84）。XPS 没有表情，表情在 PMX 里。
+
+**在 Blender 里看 PMX**：用 mmd_tools 导入 PMX 渲染时，它把半透明材质设成「哈希」透明，EEVEE 下头发和它投的影子会有白色闪点；
+改成「裁剪」就没有了。MMD 里不会这样。
+
 ## 已知限制
 
 - **裸体是光滑的"芭比"身体**：游戏的皮肤贴图在胸部和私处本来就没有画任何细节（`GF_BaseBody_D` 实测），裆部形状来自商店人台。
@@ -204,9 +301,14 @@ python export_model.py GF_Nude --hair GF_Hair_308      # 裸体 + 001 号脸 + 3
   Chloris 只有头盔，`NPC_F_Daeva_04` 这类路人没有头和头发——剩下的部分游戏按 NPC 外观数据用玩家的脸和发型拼，这部分数据还没解。
 - NPC 用的玩家发型（Leda 的 `GF_Hair_402`）颜色是那款发型材质的默认色，游戏里可能另外调过。
 - 过场模型（`NPC_Siel_01`）是一个整网格，皮肤和衣服共用一个材质；裙子的亮片是自发光贴图 × 8，静止的图里比游戏里亮。
+- PMX：过场骨架（Siel）没有 `Face_Root` 那套表情骨，游戏的 ARKit 表情用不上（可以用表情移植插件从别的 PMX 搬）。
+  Leda 的披风在手臂放到 A 姿势时有 3 条边被拉长（最多 16 mm，物理会带开）。Satia 的幽灵效果没有做。
 
 ## 依赖
 
 - Python 3：`numpy`、`Pillow`、`cryptography`；Oodle 解压用 `E:\tools\cue4parse_cli\oodle-data-shared.dll`（`--oodle` 可改）。
 - UE Viewer：`E:\tools\umodel_specific\materials\umodel_materials_ue5.exe`（Gildor 论坛 spiritovod 的 UE5 特制版）。
 - Blender 3.6.15（`D:\Program Files\blender-3.6.15-windows-x64`）+ 插件 `io_scene_psk_psa`。
+- 转 PMX：Blender 3.6 里装好 `mmd_tools`、`Convert_to_MMD5` 和本仓库的 `scripts/blender_addons/mmd_cloth_physics`；
+  表情数据要 CUE4Parse CLI（`E:\tools\cue4parse_cli\cue4parse.exe`）和 `E:\tools\aion2\vdf53_patched.usmap`。
+- 转 XPS：Blender2XPS（`E:\code\othercode\blender2xps`，环境变量 `BLENDER2XPS` 可改）。

@@ -55,6 +55,7 @@ python archive_npc_looks.py                    # 3. 存进 E:，写画廊清单�
 | `build_npc_blend.py` | Blender 3.6：导入各个网格，建材质，渲预览，存 .blend |
 | `build_npc_looks.py` | 按 `npc_looks.json` 并行跑上一个 |
 | `archive_npc_looks.py` | 用 `scripts/archive/blend_package.py` 把 .blend 做成独立目录（贴图拷进 `textures\`，相对路径，存完重新打开核对），写 `package.json`、`README.txt`，更新画廊清单，重新生成画廊 |
+| `export_npc_pmx.py` | Blender 3.6：一个造型的 `_HQ.blend` -> PMX（见下面「导出 PMX」） |
 
 ## 材质怎么建（预览版）
 
@@ -111,8 +112,43 @@ python hq_npc_looks.py --only Iberis   # 单个
 头发、眉毛、睫毛（它们的脚本还不认识这些主材质）保留预览版的接法；皮肤只有颜色和法线（`MA_Skin_*` 的参数名不同，
 那两个脚本读不到），也保留预览版的接法。
 
+## 导出 PMX（`export_npc_pmx.py`，2026-10-31，样品 Raven）
+
+```powershell
+& 'D:\Program Files\blender-3.6.15-windows-x64\blender.exe' -b --factory-startup `
+  E:\game_export\StellarBlade\Raven\blend\Raven\Raven_HQ.blend --python export_npc_pmx.py -- `
+  --out E:\game_export\StellarBlade\Raven\pmx --name Raven --model-name Raven `
+  --hq-materials E:\game_export\StellarBlade\Raven\blend\Raven\hq_materials.json `
+  --collider-skin "*BaseBody*,*Suit01*,*_Head"
+```
+
+它把 Eve 的 PMX 导出脚本 `../export_pmx_blender.py` 当模块载入、原样调用（那个文件是另一个窗口的，不改），
+前后各加几步，都是 NPC 才有的情况：
+
+- **三副骨架合一**：脸、头发各带一副骨架，挂在身体骨架下，静止姿势对齐、骨骼同名。导出脚本只认一副，
+  所以先把同名骨合并（核对位置差 < 0.01 cm），只有脸 / 头发骨架才有、而且带蒙皮的骨骼才复制过去，
+  网格改绑身体骨架。Raven：脸骨架 185 根全部同名；头发骨架多出的 25 根（武器、齿轮、饰品）都没有蒙皮，没复制。
+- **表情**：Raven 的脸带游戏自己的 180 个形态键（`jaw_open`、`upLid_down_L`、`lipCorner_pull` …，不是 ARKit 的名字），
+  Eve 那套 ARKit 配方用不上；`NPC_RECIPES` 用这些名字混出 28 个 MMD 标准表情（あいうえお、まばたき、笑い、
+  ウィンク 两种、眉毛、口角、ワ、ん），原来的 180 个也一起导出（「その他」）。`_L` / `_left` 是角色自己的左边
+  （核对过：`upLid_down_L` 闭的是左脚那一侧的眼睛）；`jaw_open` 自己会带下牙。
+- **头发物理**：头发骨骼叫 `HBN_*` / `HBn_*`，物理插件只给名字里有 hair 的头下链条加物理，所以改名成 `Hair_*`
+  （`HBn_Root` 是头皮，不动）。Raven 13 条发束、133 根骨。
+- **挂在扭转辅助骨上的饰品链**：Raven 右大腿的饰品链挂在 `Ab-R-Thigh-Tw1` 下，物理插件把这根带大腿肉的辅助骨
+  当成链的第一节去晃；这种链改挂到辅助骨的父骨（大腿本身）上。
+- **贴图透明度**（`../../pmx_tools/texture_alpha_blender.py`）：MMD 会把贴图透明度乘进材质。
+  只被不透明材质用的贴图补成 1（Raven 的眼睛贴图有透明度 0 的地方）；只被裁切材质用的贴图按游戏的裁切值
+  重新映射（Raven 的长发原来中位数 0.25、游戏在 0.333 处裁切，MMD 里又稀又透）。
+- **碰撞体贴合**（`--collider-skin`）：身体碰撞体是按穿衣网格量的，贴在胸前的长发一开始就在上身碰撞体里面，
+  物理插件就让它不和上身碰撞，跳舞时前发沉进了胸口。用 `scripts/mmd_physics/cloth_collision_pmx.py` 按给定材质
+  （皮肤、脸、紧身衣）重新贴合碰撞体，之后 143 个头发 / 布料刚体里 138 个和全身每个部位都碰撞。
+  每个造型要选「贴身」的材质：Raven 是 `BaseBody` + `Suit01`（紧身战衣）+ 头。
+
+结果（`E:\game_export\StellarBlade\Raven\pmx\Raven\`）：`Raven.pmx`、`textures\`、`表情一览.jpg`、`Raven_手势舞.mp4`、
+`Raven_converted.blend`。其余 17 个造型等用户看过样品再做。
+
 ## 还没做
 
-- PMX / XPS（`../export_pmx_blender.py --hq-materials` 已经能读每个角色自己的眼睛参数，要做时直接用）。
-- 表情：脸部网格的 morph 没导（PSK 不带 morph）。
+- 其余 17 个造型的 PMX（样品 Raven 等用户看）；XPS。
+- 表情：Raven 的脸带游戏形态键（10-31 核实）；其它角色的脸带不带，批量时逐个看。
 - 皮肤的高清接法（`MA_Skin_EVE` / `MA_Skin_NPC` 的 `ORSS Mask`）。

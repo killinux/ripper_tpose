@@ -143,6 +143,75 @@
 
 ---
 
+## 2026-10-31 — 表情批量（「18」系列 ウィンク、对魔忍 Squad 补标准表情、FF7 三作表情移植）；剑星 NPC 和 HoneySelect 2 转 PMX 的样品（Raven、Akina Obata）；AION2 七位的 AI 高清版；PMX 贴图透明度共用模块
+
+**新增**
+
+- `scripts/pmx_tools/`（新文件夹，说明见其中的 `README.md`）：
+  - `fix_wink_sides.py`：按 ウィンク / ウィンク右 实际动的是哪只眼（顶点、骨骼、组合表情都算）判断左右，反了就对调名字，
+    写成新文件；`--skip-existing` 用于中断后接着跑。
+  - `fill_standard_morphs.py`：用模型已有的顶点表情按配方混出缺的 MMD 标准表情（じと目、びっくり、なごみ、はぅ、真面目、上、下、
+    にこり、∧、口角上げ、口横広げ、にやり、ワ、ん），写成原文件旁边的 `*_表情补全.pmx`。
+  - `texture_alpha_blender.py`：导出脚本在 Blender 里调用。MMD 会把贴图透明度乘进材质：只被不透明材质用的贴图透明度补成 1，
+    只被裁切材质用的贴图按源材质的裁切值重新映射（±0.05 过渡）。只改 PMX 自己文件夹里的贴图。
+- `scripts/stellarblade/npc/export_npc_pmx.py`（新）：剑星 Eve 以外的女角色造型转 PMX。把 `../export_pmx_blender.py` 当模块原样调用，
+  前后加：脸 / 头发骨架并入身体骨架；用脸上游戏自己的 180 个形态键（不是 ARKit 名字）混出 28 个 MMD 表情；
+  `HBN_*` 头发骨改名 `Hair_*` 才有头发物理；挂在扭转辅助骨上的饰品链改挂到肢体骨上；贴图透明度（见上）；
+  `--collider-skin` 按皮肤 / 紧身衣重新贴合身体碰撞体（`scripts/mmd_physics/cloth_collision_pmx.py`）。
+- `scripts/honeyselect2/export_pmx_blender.py`（新）：HS2 角色卡 `.blend` 转 PMX。Illusion `cf_J_*` 骨架的槽位对照；
+  缩放 / 阻尼辅助骨的蒙皮并回主关节（手臂由 Convert_to_MMD5 分到捩骨），膝肘垫骨按位置分一半左右；脸部骨并到 頭；
+  单骨发束拆成骨骼链；平铺 UV 按整格移回 0–1 再烘焙；只有红色通道的睫毛遮罩 MIN 改 MAX；共用材质的网格先合并再烘焙；
+  `e*` / `g*` / `k*` 形态键在头、睫毛、泪膜上同名混出 29 个 MMD 表情，牙齿和舌头按每个嘴型的下巴下降量张开。
+- `scripts/aion2/export_pmx_blender.py`：写完 PMX 后调用 `texture_alpha_blender`。
+
+**修复**
+
+- `fill_standard_morphs.py`：一个配方的原料都在、但混出来什么都不动时（smile_face 不动眉毛），改试下一个备选（にこり 多补了 11 个）。
+- `fix_wink_sides.py` / `fill_standard_morphs.py`：先写成目标旁边的 `*.tmp`、读回检查后才改名。第一次 ウィンク 批量在后台任务时限被强制停下时，
+  `Tifa Majestic Glamour 18 V1_winkfix.pmx` 只写了一半（7.3 MB / 15 MB，读不出骨骼和表情），接着跑时 `--skip-existing` 把它当成已完成跳过；
+  ROE_g05 窗口的全盘 PMX 体检发现后重做了这一个。
+- 剑星 Raven：长发贴图透明度中位数 0.25，游戏在 0.333 处裁切，原样写进 PMX 又稀又透；眼睛贴图有透明度 0 的地方；
+  前发静止时就在上身碰撞体里，物理插件让它不和上身碰撞，跳舞时沉进胸口；右大腿的饰品链把带大腿肉的扭转辅助骨当第一节去甩。
+- HS2：刘海、后发、睫毛、眼镜框原来烘出来是空的（见上面三条原因）。
+- AION2 已导出的 14 个 PMX（7 位 + 7 个 AI4x）补做贴图透明度：Hadar 的身体和裤子、Leda 的披风、Urd 的身体、Siel 这 5 种裁切材质
+  按游戏裁切值处理；不透明材质的贴图本来就没问题。
+
+**结果（都是新文件，原文件不动）**
+
+- 「18」系列：`E:\Downloads` 里路径带「 18」的 306 个 PMX → `E:\game_export\_18系列_ウィンク修正\`（目录照原样、文件名加 `_winkfix`，
+  贴图仍指向原文件夹）：293 个对调，11 个没有 ウィンク，2 个判断不出左右没改（Keleira Pure Temptation 18、
+  Tifa Lockhart Remake 18 None）。
+- 对魔忍 Squad：151 个 PMX 写出 142 个 `*_表情补全.pmx`；9 个没有 まばたき 补不了。示例对照图
+  `E:\game_export\TaimaninSquad\Yuzuriha\pmx\17_yuzuriha\表情补全一览.jpg`。
+- FF7 三作：FF7R Tifa 试做的 43 个表情经表情移植插件的 `cli.py` 写成每个 PMX 旁边的 `*_表情移植.pmx`。86 个里 40 个做完
+  （CCFF7R 20 个全部、FF7 Rebirth 20 个），0 个出错；批量跑到后台任务的 2 小时上限被停下，进度存在 `results.json`，可以接着跑。
+- AION2 AI 高清版：其余 6 位也做了（`E:\aion2_exports\pmx\NPC_*_AI4x\`，每个带对比图）；Yustiel 那张 2×2 的纯色贴图会让放大程序崩溃，跳过。
+- 样品（等用户看过再做批量）：剑星 `E:\game_export\StellarBlade\Raven\pmx\Raven\`；HS2 `E:\game_export\HoneySelect2\Akina Obata\pmx\HS2_ill_F_000\`。
+  各带 PMX、贴图、`表情一览.jpg`、手势舞视频。
+
+**用户如何操作**
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\pmx_tools
+python fix_wink_sides.py E:\Downloads --contains " 18" --base E:\Downloads --out E:\game_export\_18系列_ウィンク修正 --skip-existing
+python fill_standard_morphs.py E:\game_export\TaimaninSquad
+```
+
+剑星 NPC、HS2 的转换命令见 `scripts/stellarblade/npc/README.md`「导出 PMX」和 `scripts/honeyselect2/README.md`「转 PMX」。
+
+**实现原理与兼容性**
+
+- 两个新导出脚本都按模块载入剑星 / ROE 的脚本（一份实现，不复制），对它们的改动只在本次运行里生效（例如 `sb.RECIPES` 换成 NPC 配方、
+  ROE 的辅助骨名字规则加上 `elbo`、物理插件的辅助骨规则排除 `cf_J_`）。剑星 Eve 自己的导出流程不变。
+- 检查视频：EEVEE 里把材质改成裁切透明度重渲时，Raven 的长发整片消失（Cycles 里是在的），检查视频改成保留抖动透明、48 采样重渲。
+
+**已执行的验证**
+
+- Raven：28 个 MMD 表情的一览图逐个看过（ウィンク 闭的是模型自己的左眼）；碰撞体贴合后 143 个头发 / 布料刚体里 138 个和全身每个部位都碰撞，
+  跳舞时前发尖端一直在胸前 9–21 cm；按三角形中心采样，长发的透明度和游戏的发丝遮罩一致。
+- HS2：29 个表情的一览图逐个看过；刘海三角形中心有头发的比例从 6% 升到 47%，后发 82% → 98%；没有撕裂的边（`torn 0`）。
+- Squad 抽一个（Yuzuriha）渲了表情一览；「18」系列修好的副本抽 6 个检查贴图全部能找到。
+
 ## 2026-10-31 — 挑零件能「拆开」一个材质（只留 a08 的头饰）；e01 / f01 魔化套耳朵重出；游戏材质缓存搬家后旧 .blend 重出丢贴图的 bug
 
 **新增 / 修复**
@@ -242,6 +311,49 @@
   - 手势舞 304 帧，飘带、披帛的物理和 v2 一样正常。
 
 ---
+
+## 2026-10-31 — AION2：转 PMX / XPS（7 位有名字的女角色）；表情用游戏自己的 ARKit 姿势；没骨骼的长发生成骨骼链；Satia（幽灵）、Snotra、Urd、Siel 的特殊处理
+
+**新增**
+
+- 用户：「三位女角色转 PMX」，看过 Yustiel 样品后「头发加物理，Leda 和 Siel 也做，Leda、Hadar、Satia、Snotra、Urd、Siel 都导出一个模型，材质要高清的」。
+- `scripts/aion2/export_pmx_blender.py`：`.blend` → PMX，复用 FF7 / Stellar Blade / ROE 那套（Convert_to_MMD5 + mmd_cloth_physics + mmd_tools），
+  只补 AION2 的差别：连字符 Biped 名、眼球骨、脸部骨骼并进头、胸部两节并一节加胸部物理、肌肉辅助骨不当布料、裙子 / 长袖 / `cloth` 链改名选对物理预设。
+- **表情**（`facs_morphs.py` + `face_data.py`）：游戏女性头部的 ARKit 姿势表 `GF_Head_006_FACS_PA`（52 个，脸部骨骼的叠加姿势，UE 5.3 稀疏存储）
+  在骨骼还在时逐个摆出来存成形态键，转换后混合成 26 个标准 MMD 表情（Stellar Blade 的配方），再加过场动画的 11 个整脸表情
+  （`GF_CineFacial_PoseAsset_01`，游戏动画师调的 ARKit 比例）和 52 个 ARKit 原样，全是顶点表情；头发、头箍也挂了脸部骨骼的，跟着一起动。
+  姿势表用 CUE4Parse CLI + 给 Vindictus 拼的 UE 5.3 类型映射（`E:\tools\aion2\vdf53_patched.usmap`）读出。
+- **头发骨骼链**（`hair_chains.py`）：Yustiel 的长发在游戏里没有骨骼（挂在头、脊椎、锁骨上），按方位角生成 7 条 × 5–7 节，原来挂在身体上的权重分过去，加头发物理。
+- **贴图**：衣服把法线贴图的凹凸明暗乘进颜色（Yustiel 的裙子在游戏里是纯色缎面，刺绣和褶皱全在法线贴图里），衣服、皮肤、脸补乘 AO（`.blend` 已乘过的部分扣掉，合起来乘一次）。
+  游戏里贴图最大就是导出的这么大（NPC 衣服 1024，身体和脸 2048，实测包头）；`--albedo-dir` 可换成 AI 放大的颜色贴图（Leda 的样品 `NPC_Leda_01_AI4x`，4096）。
+- `scripts/aion2/export_xps_blender.py`：Blender2XPS，骨骼改成 XPS 标准名。
+- **Satia** 在游戏里是幽灵（材质只有 `CM_Mob_Phantom` 一套，头上眼睛也是皮肤）：`bake_materials.py` 新增 `phantom` 类按盔甲烘；
+  `export_model.py NPC_Satia_01 --head GF_Head_006`（给 NPC 指定 `--head` 就换掉它自己的头）。
+- **Urd** 肩上的松鼠（第二套 Biped `Bip002`）并成一根骨骼；**Siel**（过场模型，头高 2.73 米）缩到正常身高，武器球去掉，背后披帛当飘带。
+- **身体碰撞体按实际的腿拟合**（写完 PMX 后调 `scripts/mmd_physics/cloth_collision_pmx.py --skin 皮肤+脸+裤子 --thigh-halves`，靴子管小腿）：
+  Hadar 前面开口的裙子原来压在大腿上却不撞大腿，两腿一分开大腿就穿出来；拟合后一直挡在腿前（插件的 `legs_inside="collide"` 对她没用）。
+- 画廊卡片多了 PMX / XPS 的位置（读两个转换脚本留在输出文件夹里的报告）。
+
+**怎么用**（详见 `scripts/aion2/README.md`「转 PMX / XPS」）
+
+```powershell
+python face_data.py
+& $blender -b E:\aion2_exports\blend\NPC_Leda_01\NPC_Leda_01.blend --python export_pmx_blender.py -- --out E:\aion2_exports\pmx --model-name Leda
+& $blender -b E:\aion2_exports\blend\NPC_Leda_01\NPC_Leda_01.blend --python export_xps_blender.py -- --out E:\aion2_exports\xps
+```
+
+结果在 `E:\aion2_exports\pmx\<模型>\` 和 `xps\<模型>\`：Yustiel、Leda、Hadar、Satia、Snotra、Urd、Siel。
+
+**验证**
+
+- 7 个 PMX 全部转换成功：没有缺权重的顶点；脸部 PSK 骨骼和 Blender 骨架核对误差 0.0000 cm；转换前后脸没有移动（形态键原样放回）。
+- 撕裂的边：Leda 披风 3 条（最多 16 mm，报警线 20 mm），其余 0（Siel 原来 13 条，披帛改名后 0）。
+- 表情一览（导出的 PMX 用 mmd_tools 读回来逐个渲）：Yustiel 的 26 个标准表情和 11 个过场表情方向、幅度都对；眨眼闭对眼（ウィンク = 左眼）。
+- 跳舞视频（手势舞，MMD 式物理）：Yustiel 裙子、长袖、头发物理正常，背面看头发沿后背摆动不穿背。
+- 7 位全部用最终版重新渲了手势舞视频和表情一览（放在各自的 PMX 文件夹里）：Hadar 的裙子按腿拟合后从头到尾挡在腿前（拟合前第 110 帧起整条腿露在前面）；
+  Urd 的松鼠坐在肩上不动；Siel 缩到正常身高后披帛、长裙物理正常；Snotra 脸上的金属饰件不再发黑。
+  `cloth_check_pmx.py`：挨着腿却不撞腿的刚体 Hadar 4 → 0、Leda 7 → 0、Yustiel 6 → 0、Satia 2 → 0、Snotra 1 → 0（Siel 皮肤和衣服共用材质，没拟合，39 个照旧）。
+- Leda 的 AI 放大版：衣服的布纹、缝线、镶边更清楚，深色布条上多了原图没有的细线（AI 补画的）；脸部变化不大（`贴图对比_游戏原图_AI放大.jpg`）。
 
 ## 2026-10-31 — Vindictus 北美服：新导出流程 `scripts/vindictusna`（19 位女角色，高清材质 `.blend` + XPS + PMX，带各自体型和表情）；眼睛修好：补全眼白、眼球转动中心、4 位两只眼挂在同一根眼骨上
 

@@ -231,6 +231,15 @@ def resolve(models: dict, mid: str, head: str | None = None, hair: str | None = 
                 out["notes"].append("%s: variant %s used (%s skipped)" % (slot, variant, name))
                 continue
         chosen.setdefault(slot, p)
+    if head and m["kind"] not in WEARABLE:
+        # an NPC with a player head instead of its own: Satia's own head carries one phantom material for skin and
+        # eyes alike (her face is GF_Head_006's)
+        if head not in models:
+            raise KeyError("head %s" % head)
+        if "Head" in chosen:
+            out["notes"].append("own head %s replaced by %s" % (stem(chosen["Head"]), head))
+        chosen["Head"] = models[head]["parts"][0]
+        out["head"] = head
     for slot, p in chosen.items():
         out["parts"].append({"name": slot, "path": p, "package": pkg(p)})
     if m["kind"] in WEARABLE and m["gender"]:

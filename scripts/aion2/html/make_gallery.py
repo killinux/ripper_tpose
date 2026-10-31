@@ -176,6 +176,37 @@ def collect_exports(root, force=False):
     return rows
 
 
+def collect_conversions(root):
+    """{source .blend (normcase): [{"fmt", "path", "size", "info"}]} from the reports export_pmx_blender.py
+    (<root>\\pmx\\<name>\\<name>_report.json) and export_xps_blender.py (<root>\\xps\\<name>\\<name>_xps.json) leave."""
+    out = {}
+    for fmt, sub, suffix, source_key, path_key in (("PMX", "pmx", "_report.json", "source", "pmx"),
+                                                    ("XPS", "xps", "_xps.json", "blend", "path")):
+        base = os.path.join(root, sub)
+        for name in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+            try:
+                with open(os.path.join(base, name, name + suffix), encoding="utf-8") as fh:
+                    r = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            target = os.path.normpath(r.get(path_key) or "")
+            if not r.get(source_key) or not os.path.isfile(target):
+                continue
+            if fmt == "PMX":
+                facs = r.get("facs") if isinstance(r.get("facs"), dict) else {}
+                arkit = max((len(v) for v in (facs.get("keys") or {}).values()), default=0)
+                morphs = len(r.get("vertex_morphs") or []) + len(r.get("game_faces") or []) + arkit
+                info = "%s 个刚体 · %s" % (r.get("rigid_bodies", "?"),
+                                          ("%d 个表情" % morphs) if morphs else "没有表情")
+                if r.get("albedo_dir"):
+                    info += " · AI 放大贴图"
+            else:
+                info = "%s 根骨骼 · %s 个顶点" % (r.get("bones", "?"), "{:,}".format((r.get("stats") or {}).get("vertices", 0)))
+            out.setdefault(os.path.normcase(os.path.normpath(r[source_key])), []).append(
+                {"fmt": fmt, "path": target, "size": os.path.getsize(target), "info": info})
+    return out
+
+
 def chip_of(kind):
     for key, _label, kinds in CHIP_GROUPS:
         if kind in kinds:
@@ -208,6 +239,10 @@ def render_card(row, catalogue):
         badges += '<span class="badge badge-f">♀</span>'
     if row["blend"]:
         badges += '<a class="badge badge-fmt" href="%s" title="%s">blend</a>' % (esc(file_uri(row["dir"])), esc(row["dir"]))
+    for conv in row.get("conversions", []):
+        folder = os.path.dirname(conv["path"])
+        badges += '<a class="badge badge-fmt" href="%s" title="%s">%s</a>' % (
+            esc(file_uri(folder)), esc(folder), conv["fmt"].lower())
     if row["thumb"]:
         figure = '<a class="shot" href="%s" target="_blank" rel="noopener" title="点击看原图"><img loading="lazy" src="%s" alt="%s"></a>' % (
             esc(file_uri(row["shots"]["front"])), esc(file_uri(row["thumb"])), esc(row["name"]))
@@ -230,6 +265,11 @@ def render_card(row, catalogue):
                      '<button class="copy" data-copy="%s">复制</button></dd>' % (
                          esc(file_uri(row["blend"])), esc(row["blend"]), esc(os.path.basename(row["blend"])),
                          human_size(row["blend_size"]), esc(row["blend"])))
+    for conv in row.get("conversions", []):
+        lines.append('<dt>%s</dt><dd><a href="%s" title="%s">%s</a> <span class="muted">%s · %s</span> '
+                     '<button class="copy" data-copy="%s">复制</button></dd>' % (
+                         conv["fmt"], esc(file_uri(conv["path"])), esc(conv["path"]), esc(os.path.basename(conv["path"])),
+                         human_size(conv["size"]), esc(conv["info"]), esc(conv["path"])))
     links = []
     for key, label in (("back", "背面"), ("face", "脸部"), ("sheet", "总图")):
         if key in row["shots"]:
@@ -526,6 +566,10 @@ def render(catalogue, exports, root):
 def build(root=lm.DEFAULT_EXPORT_ROOT, out=None, force=False):
     catalogue = load_catalogue(root)
     exports = collect_exports(root, force)
+    conversions = collect_conversions(root)
+    for row in exports:
+        row["conversions"] = sorted(conversions.get(os.path.normcase(os.path.normpath(row["blend"])), []),
+                                    key=lambda c: (c["fmt"], c["path"])) if row["blend"] else []
     out = out or os.path.join(HERE, PAGE_NAME)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(render(catalogue, exports, root))
