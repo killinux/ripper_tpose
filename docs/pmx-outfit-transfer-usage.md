@@ -132,6 +132,8 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 | 按骨骼方向旋转 | 开 | 两边休息姿势一样（ROE 都是 A 形）时没影响；一边 T 形一边 A 形时必须开 |
 | 贴身部分跟着皮肤动 | 开 | 2026-10-25 起。贴在皮肤上的衣服改用目标皮肤的权重，跳舞时和皮肤一起动（g05 胸带穿到 a08 裸体上：不开时每帧 112 个皮肤顶点顶出胸带，开了 1.5 个，都在吊坠根部，最深 1.3 mm）。挂在衣服物理骨上的部分不变，目标的身体不动。想要衣服原来的权重（和旧版一样）就关掉 |
 | 跟随距离 / 过渡 cm | 1.5 / 2 | 离皮肤 1.5 cm 以内完全用皮肤的权重，再往外 2 cm 渐变回衣服自己的。厚的护甲、离身体远的腰饰想保持硬挺就调小 |
+| 和皮肤的最小间隙 mm | 1 | 2026-10-31 起。贴身衣服离目标皮肤不到 1 mm 或陷进去就推出来，皮肤从衣服中间顶出来的地方也推（g05 → a08：上衣陷进皮肤的顶点 9.6% → 0，皮肤顶出 17% → 8%）。离皮肤 2 cm 以外的零件、鞋不推。0 = 不推，和以前完全一样 |
+| 源的身体在另一个 PMX | 空 | 跨游戏用（第十节）：衣服模型里没有衣服底下的身体时，填同一个角色的裸体 PMX |
 | 拆分材质 | 按挂的骨头 | 「按连通块」每块布一个材质（小碎块按骨头合并，阈值「最小零件顶点数」）；「不拆」源材质原样 |
 | 两套衣服的刚体互不碰撞 | 开 | 基本不用关 |
 | 新衣服碰目标的身体 | 开 | 新衣服的刚体和目标的身体碰撞体碰撞（和在源身上一样）。关掉就谁也不碰 |
@@ -147,10 +149,10 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
     [--materials "pc_g05_hd_body 1,pc_g05_hd_body 2"] [--donor-body pc_g01_nk_body] [--target-body pc_a01_nk_body_nude] `
     [--no-fit] [--near 2] [--far 12] [--no-rotation] [--split bone|island|none] [--prefix g05] `
     [--no-isolate] [--no-body-collision] [--hide-morph 衣服非表示_材質] `
-    [--no-follow-body] [--follow-reach 1.5] [--follow-fade 2]
+    [--no-follow-body] [--follow-reach 1.5] [--follow-fade 2] [--donor-body-pmx 裸体.pmx] [--min-gap 1.0]
 ```
 
-不写 `--materials` 就是面板里默认勾的那些。最后一行 `REPORT {...}` 是 JSON 报告。
+不写 `--materials` 就是面板里默认勾的那些。身体材质可以写几个，逗号隔开。最后一行 `REPORT {...}` 是 JSON 报告。
 装了 numpy 的普通 Python 也能 `python cli.py …`，最近点搜索用 numpy 暴力算，慢一些。
 
 ## 八、常见问题
@@ -171,6 +173,25 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 - **源的衣服骨和目标重名**（两条裙链都叫 `Skirt_L_01`）：自动改名 `<前缀>:Skirt_L_01`，不会挂错。
 - **IK 骨**：衣服用到的 IK 骨会搬过来但不带 IK 设置，面板会警告。
 - **mmd_tools 没启用**：换装照样写 PMX，只是不导入场景。
+
+## 十、别家游戏的衣服（2026-10-31 起，0.4）
+
+例子：星刃 Eve 的 Nikke_06 套装（粉色紧身衣 + 红夹克）→ Inase a08 的裸体模型。成品
+`E:\game_export\RiseOfEros\_混搭\跨游戏_a08穿Eve_Nikke06\`（`静止_原版对比.jpg`）。
+
+1. **衣服来自**：`E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06.pmx`；
+   **穿到**：`E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_nude\pc_a08_hd_nude.pmx`。
+2. **源的身体在另一个 PMX**：`E:\game_export\StellarBlade\Eve\pmx\Nude_Barefoot\Eve_Nude_Barefoot.pmx`。
+   星刃的套装里没有衣服底下的身体，插件要拿同一个角色的裸体来量衣服离身体多远（先自动摆成套装的姿势）。
+3. 点「读取源模型的材质」：裸体文件里也有的材质（头发、脸、眼睛、牙齿）自动不勾，剩下的 4 个就是衣服；「源的身体材质」自动认成 `SkinEve`。
+4. 其余默认，点「换装」。
+
+要知道的：
+- 这些游戏的紧身衣几乎画在皮肤上。默认的「和皮肤的最小间隙 1 mm」会把它推到皮肤外面；关掉的话紧身衣一半被 a08 的皮肤盖住。
+- **鞋**会被拉扭（Eve 穿坡跟鞋，光脚的裸体是平脚，ROE 的脚是为高跟做的）。不要就用「挑零件」删掉 `…_左足首D`、`…_右足首D` 两块。
+- Vindictus 的衣服同样能搬（`Fiona_BaseBody.pmx` 当源身体，身体材质填
+  `4_BaseBody-MI-pc-female-body05_0.1_0_0,4_BaseBody-MI-pc-female-handfoot05_0.1_0_0`），但 PCF_002 那件连体衣的罩杯
+  是照着托高的胸做的，两份身体都不是它贴着的那具，罩杯会落在 a08 胸部上方，这种衣服换不好。
 
 ## 九、它怎么做的（一句话版）
 

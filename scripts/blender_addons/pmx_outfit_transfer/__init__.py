@@ -12,7 +12,7 @@ UI: 3D viewport sidebar > MMD tab > 换装（服装移植） and 挑零件.  Hea
 bl_info = {
     "name": "PMX Outfit Transfer",
     "author": "ripper_tpose",
-    "version": (0, 3, 0),
+    "version": (0, 4, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > 换装（服装移植）",
     "description": "把一个 PMX 模型的衣服贴身穿到另一个 PMX 模型的裸体上（骨骼重定向 + 按身体形状拟合），"
@@ -53,9 +53,13 @@ class POT_Settings(bpy.types.PropertyGroup):
     materials: bpy.props.CollectionProperty(type=POT_MaterialItem)
     active: bpy.props.IntProperty()
     donor_body: bpy.props.StringProperty(name="源的身体材质",
-                                         description="衣服是在这个身体上做的（ROE：*_nk_body，衣服下那份）")
+                                         description="衣服是在这个身体上做的（ROE：*_nk_body，衣服下那份）；几个材质用逗号隔开")
+    donor_body_pmx: bpy.props.StringProperty(
+        name="源的身体在另一个 PMX", subtype="FILE_PATH",
+        description="衣服模型里没有衣服底下的身体时（星刃的套装、Vindictus 的连衣裙），填同一个角色的裸体 PMX："
+                    "先把它摆成衣服模型的姿势，再拿它量衣服；「源的身体材质」填这个文件里的材质名，留空自动认")
     target_body: bpy.props.StringProperty(name="目标的裸体材质",
-                                          description="衣服贴到这个身体上（ROE full：*_nk_body_nude）")
+                                          description="衣服贴到这个身体上（ROE full：*_nk_body_nude）；几个材质用逗号隔开")
     prefix: bpy.props.StringProperty(name="新材质前缀", description="留空：从源文件名取（pc_g05_... → g05）")
     fit: bpy.props.BoolProperty(name="按身体形状贴身拟合", default=True,
                                 description="关掉只按骨骼位置重定向，不管两个人身材的差别")
@@ -86,6 +90,9 @@ class POT_Settings(bpy.types.PropertyGroup):
                                              description="离皮肤不超过这个距离的衣服完全用皮肤的权重")
     follow_fade_cm: bpy.props.FloatProperty(name="过渡 cm", default=core.FOLLOW_FADE_CM, min=0.0, max=10.0,
                                             description="再往外这么远渐变回衣服自己的权重")
+    min_gap_mm: bpy.props.FloatProperty(name="和皮肤的最小间隙 mm", default=core.MIN_GAP_MM, min=0.0, max=10.0,
+                                        description="贴身衣服离目标皮肤不到这么远（或陷进去）就往外推，皮肤从衣服里顶出来的地方也推；"
+                                                    "鞋不推。0 = 不推（和 0.3 之前一样）")
     import_result: bpy.props.BoolProperty(name="做完导入场景", default=True)
     report: bpy.props.StringProperty()
 
@@ -134,12 +141,14 @@ class POT_OT_scan(bpy.types.Operator):
         try:
             pmx = core.pmx_module()
             D = pmx.load(donor)
-            auto = set(core.auto_outfit_materials(D))
+            body_file = _abs(s.donor_body_pmx)
+            body = pmx.load(body_file) if os.path.isfile(body_file) else None
+            auto = set(core.auto_outfit_materials(D, body))
             s.materials.clear()
             for mt in D.materials:
                 it = s.materials.add()
                 it.name, it.faces, it.enabled = mt.name, mt.vertex_count // 3, mt.name in auto
-            s.donor_body = core.auto_body(D, nude=False) or ""
+            s.donor_body = core.auto_body(body if body is not None else D, nude=False) or ""
             if os.path.isfile(target):
                 T = pmx.load(target)
                 s.target_body = core.auto_body(T, nude=True) or ""
@@ -188,7 +197,8 @@ class POT_OT_transfer(bpy.types.Operator):
                                    prefix=prefix, isolate=s.isolate, collide_body=s.collide_body,
                                    hide_morph="衣服非表示_材質" if s.hide_with_outfit else "",
                                    follow_body=s.follow_body, follow_reach_cm=s.follow_reach_cm,
-                                   follow_fade_cm=s.follow_fade_cm, log=lambda t: (print(t), lines.append(t)))
+                                   follow_fade_cm=s.follow_fade_cm, donor_body_pmx=_abs(s.donor_body_pmx) or None,
+                                   min_gap_mm=s.min_gap_mm, log=lambda t: (print(t), lines.append(t)))
         except Exception as exc:                                    # noqa: BLE001
             traceback.print_exc()
             self.report({"ERROR"}, str(exc))
@@ -233,6 +243,7 @@ class POT_PT_panel(bpy.types.Panel):
             layout.template_list("POT_UL_materials", "", s, "materials", s, "active", rows=6)
         col = layout.column(align=True)
         col.prop(s, "donor_body")
+        col.prop(s, "donor_body_pmx")
         col.prop(s, "target_body")
         col.prop(s, "prefix")
         box = layout.box()
@@ -246,6 +257,7 @@ class POT_PT_panel(bpy.types.Panel):
             row = box.row(align=True)
             row.prop(s, "follow_reach_cm")
             row.prop(s, "follow_fade_cm")
+        box.prop(s, "min_gap_mm")
         box.prop(s, "split")
         if s.split == "island":
             box.prop(s, "min_piece")

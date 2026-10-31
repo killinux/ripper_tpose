@@ -10,6 +10,9 @@ Options: --materials "a,b"  (donor materials; default: everything that is not bo
          --no-isolate  --no-body-collision  --hide-morph 衣服非表示_材質  (a nude target without one: a new
          衣服非表示 for the new clothes)
          --no-follow-body  --follow-reach 1.5 --follow-fade 2  (cm: parts on the skin take the skin's weights)
+         --donor-body-pmx nude.pmx  (the donor's body from the same character's nude model: outfit models of other
+         games often have no body under the clothes)
+         --min-gap 1.0  (mm: garment vertices closer to the target's skin, or inside it, are pushed out; 0 = off)
 Prints the report as JSON on the last line (REPORT {...})."""
 import argparse
 import json
@@ -43,6 +46,10 @@ def main(argv):
                     help="keep the donor's weights everywhere (default: parts on the skin take the skin's weights)")
     ap.add_argument("--follow-reach", type=float, default=core.FOLLOW_REACH_CM)
     ap.add_argument("--follow-fade", type=float, default=core.FOLLOW_FADE_CM)
+    ap.add_argument("--donor-body-pmx", default=None,
+                    help="take the donor's body from this PMX (the same character's nude model)")
+    ap.add_argument("--min-gap", type=float, default=core.MIN_GAP_MM,
+                    help="mm between the clothes and the target's skin (pushed out where closer); 0 = off")
     args = ap.parse_args(argv)
     mats = [s.strip() for s in args.materials.split(",") if s.strip()] or None
     report = core.transfer(args.donor, args.target, args.out, materials=mats, donor_body=args.donor_body,
@@ -51,7 +58,7 @@ def main(argv):
                            prefix=args.prefix, isolate=not args.no_isolate,
                            collide_body=not args.no_body_collision, hide_morph=args.hide_morph,
                            follow_body=not args.no_follow_body, follow_reach_cm=args.follow_reach,
-                           follow_fade_cm=args.follow_fade,
+                           follow_fade_cm=args.follow_fade, donor_body_pmx=args.donor_body_pmx, min_gap_mm=args.min_gap,
                            log=lambda s: print(s, flush=True))
     print("REPORT " + json.dumps(report, ensure_ascii=False), flush=True)
 

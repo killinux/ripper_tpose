@@ -45,6 +45,11 @@ UNIT_CM = 8.0             # PMX unit at mmd_tools' usual 0.08 import scale
 FOLLOW_REACH_CM = 1.5     # follow_body: garment vertices this close to the target's skin take its weights fully
 FOLLOW_FADE_CM = 2.0      # ... and fade back to their own weights over this much further out
 HIDE_MORPH = "衣服非表示"  # the material morph made when the target has none to add the clothes to
+MIN_GAP_MM = 1.0          # clearance: garment vertices closer to the target's skin than this are pushed out
+FOOT = re.compile(r"足首|つま先|足先|toe|foot|ankle|ball", re.IGNORECASE)   # footwear: no clearance push (below)
+PUSH_DEPTH_CM = 1.0       # ... but not cloth deeper in the skin than this, nor skin further through the cloth: that is
+                          # a pose difference (Stellar Blade's wedge sneakers on ROE's heel-ready feet) or the other
+                          # side's skin, and pushing it blows the piece up
 
 
 # -- pmx module -------------------------------------------------------------------------------------------------------
@@ -295,9 +300,88 @@ def smooth_field(values, F, iterations=5, lam=0.5):
     return out
 
 
+def push_out(P, near, NV, F_body, gap, depth, G=None, SV=None, rounds=3, fixed=None, skin_skip=None):
+    """Garment points P closer than `gap` to the body (near: its NearestOnMesh, NV its vertex normals, F_body its
+    faces, SV its vertex positions) or inside it go out along the skin normal; points deeper than `depth` inside are
+    left alone (the skin of the other side, between the legs, is nearer to them).
+    The push is a field ON THE SKIN: each skin vertex takes the largest push the garment points over it need, the
+    field is spread over the skin (a dilating smooth), and every garment point moves by the field where it lies over
+    the skin - so two layers over one spot (Stellar Blade's suit + its gloss layer) move together and keep their
+    order instead of both landing at exactly `gap` and flickering.  Points more than 2 x `depth` off the skin
+    (a halo, a skirt's hem) are not moved.
+    With the garment's faces G (and SV) it also looks the other way: a skin vertex under the inside of a garment face
+    (not at the garment's edge) that sticks out through the cloth, or comes closer to it than `gap`, asks for that
+    much more push at its place - the skin can be finer than the cloth and bulge between the cloth's vertices
+    (Stellar Blade's suit on Inase a08's thighs).  `rounds` passes, then a last exact push of the garment points.
+    fixed: garment points never moved (footwear); skin_skip: skin vertices whose pokes are not looked at.
+    Returns (P, points moved)."""
+    def signed(Q):
+        f, q, bary = near.query(Q)
+        n = np.einsum("nk,nkj->nj", bary, NV[F_body[f]])
+        n /= np.linalg.norm(n, axis=1, keepdims=True) + 1e-12
+        return np.einsum("nj,nj->n", Q - q, n), n, f, bary
+    inner_faces = None
+    if G is not None and SV is not None and len(G):
+        edges = np.sort(np.concatenate([G[:, [0, 1]], G[:, [1, 2]], G[:, [2, 0]]]), axis=1)
+        key = edges[:, 0] * (len(P) + 1) + edges[:, 1]
+        uniq, cnt = np.unique(key, return_counts=True)
+        border = set(uniq[cnt == 1].tolist())
+        rim = np.zeros(len(P), bool)                           # vertices on the cloth's open edges
+        for (a, b), k in zip(edges, key):
+            if int(k) in border:
+                rim[a] = rim[b] = True
+        inner_faces = ~rim[G].any(axis=1)
+    moved = np.zeros(len(P), bool)
+    Q = P.copy()
+    for _ in range(max(1, rounds)):
+        d, n, f, bary = signed(Q)
+        need = np.where(d > -depth, np.clip(gap - d, 0.0, None), 0.0)          # per garment point
+        if fixed is not None:
+            need[fixed] = 0.0
+        if inner_faces is not None:
+            # the skin's own vertices against the cloth (outward = the skin normal there): the three corners of the
+            # cloth face a skin vertex pokes through must move out by that much
+            near_g = NearestOnMesh(Q, G)
+            gf, gq, _gb = near_g.query(SV)
+            off = SV - gq
+            ds = np.einsum("nj,nj->n", off, NV)
+            under = inner_faces[gf] & (np.linalg.norm(off, axis=1) < depth) & (ds > -gap) & (ds < depth)
+            if skin_skip is not None:
+                under &= ~skin_skip
+            for c in range(3):
+                np.maximum.at(need, G[gf[under], c], ds[under] + gap)
+            if fixed is not None:
+                need[fixed] = 0.0
+        field = np.zeros(len(NV))                                              # the same, as a field on the skin
+        corners = F_body[f]
+        for c in range(3):
+            np.maximum.at(field, corners[:, c], need)
+        for _ in range(3):                                    # spread a little over the skin, keeping the peaks
+            field = np.maximum(field, smooth_field(field[:, None], F_body, iterations=2, lam=0.5)[:, 0])
+        push = np.einsum("nk,nk->n", np.clip(bary, 0.0, None), field[corners]) / (
+            np.clip(bary, 0.0, None).sum(1) + 1e-12)
+        push = np.where((d > -depth) & (d < 2.0 * depth), np.maximum(push, need), 0.0)   # parts off the skin stay
+        if fixed is not None:
+            push[fixed] = 0.0
+        moved |= push > 1e-9
+        Q = Q + push[:, None] * n
+        if not (push > 1e-6 * gap).any():
+            break
+    d2, n2, _f, _b = signed(Q)
+    last = np.where(d2 > -depth, np.clip(gap - d2, 0.0, None), 0.0)
+    if fixed is not None:
+        last[fixed] = 0.0
+    moved |= last > 1e-9
+    return Q + last[:, None] * n2, int(moved.sum())
+
+
 # -- the transfer -----------------------------------------------------------------------------------------------------
-def auto_outfit_materials(model):
-    return [mt.name for mt in model.materials if not NOT_OUTFIT.search(mt.name) and mt.vertex_count > 0]
+def auto_outfit_materials(model, body=None):
+    """The donor's clothes: everything that is not body / face / hair / eyes / weapon by ROE's names - and, with the
+    same character's nude model (body), nothing that model has too (another game's hair, head, eyes, teeth)."""
+    keep = {mt.name for mt in body.materials} if body is not None else set()
+    return [mt.name for mt in model.materials if not NOT_OUTFIT.search(mt.name) and mt.vertex_count > 0
+            and mt.name not in keep]
 
 
 def auto_body(model, nude):
@@ -477,13 +561,16 @@ class Transfer:
 def transfer(donor_path, target_path, out_path, materials=None, donor_body=None, target_body=None, fit=True,
              near_cm=2.0, far_cm=12.0, align_rotation=True, split="bone", min_piece=100, prefix=None,
              isolate=True, collide_body=True, hide_morph="", follow_body=True, follow_reach_cm=FOLLOW_REACH_CM,
-             follow_fade_cm=FOLLOW_FADE_CM, log=print):
+             follow_fade_cm=FOLLOW_FADE_CM, donor_body_pmx=None, min_gap_mm=MIN_GAP_MM, log=print):
     """Dress the target in the donor's materials.  Returns a report dict; writes out_path (+ textures\\).
     split: "bone" = one material per bone the pieces hang on, "island" = one per connected piece (small ones
     together by bone, < min_piece vertices), "none" = the donor's materials as they are.
     hide_morph: the target's material morph that hides its outfit (ROE full: 衣服非表示_材質) takes the new clothes too;
     a target with neither it nor a 衣服非表示 morph (a nude model) gets a 衣服非表示 material morph for them.
-    follow_body: garment vertices on the target's skin take its weights (needs the fit's body materials)."""
+    follow_body: garment vertices on the target's skin take its weights (needs the fit's body materials).
+    donor_body_pmx: the donor's body (the one its clothes sit on) from this file instead - the same character's nude
+    model, posed into the donor's rest pose here - for outfit models that have no body under the clothes.
+    min_gap_mm: garment vertices closer to the target's skin than this (or inside it) are pushed out; 0 = off."""
     pmx = pmx_module()
     D, T = pmx.load(donor_path), pmx.load(target_path)
     if os.path.exists(out_path):
@@ -491,7 +578,8 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
     report = {"warnings": []}
     warn = report["warnings"].append
     prefix = prefix or prefix_of(donor_path)
-    names = materials or auto_outfit_materials(D)
+    B_file = pmx.load(donor_body_pmx) if donor_body_pmx else None
+    names = materials or auto_outfit_materials(D, B_file)
     d_mats = [i for i, mt in enumerate(D.materials) if mt.name in names]
     if not d_mats:
         raise RuntimeError("no donor material selected")
@@ -546,14 +634,37 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
     frame_rot = np.tile(np.eye(3), (len(P), 1, 1))
     fit_weight = np.zeros(len(P))
     extra_pts = []                                 # (array of points, weights) moved like garment points later
-    body_d_name = donor_body or auto_body(D, nude=False)
+    # the body the clothes were made on: in the donor file, or (donor_body_pmx) the same character's nude model in
+    # another file - most outfit models of other games ship without the body under the clothes (Stellar Blade's suits,
+    # a Vindictus dress keeps only the bits that show).  That body is first posed into the donor's rest pose with the
+    # same skeleton retarget as step 1, run the other way (its bones -> the donor's, by name / position, tail
+    # directions aligned): Vindictus' dresses and its nude base hold the arms 10 degrees apart
+    B, body_pose = D, None
+    if fit and B_file is not None:
+        B = B_file
+        body_pose = Transfer(pmx, B, D, log)
+        body_pose.map_bones(set())
+        body_pose.bone_transforms(True)
+        same = len(body_pose.bmap)
+        gaps = sorted(float(np.linalg.norm(body_pose.d_head[i] - body_pose.t_head[t])) for i, t in body_pose.bmap.items())
+        med = gaps[len(gaps) // 2] * UNIT_CM if gaps else float("inf")
+        log("donor body from %s: %d of its %d bones matched to the donor's, rest poses %.2f cm apart (median), "
+            "posed into the donor's" % (os.path.basename(donor_body_pmx), same, len(B.bones), med))
+        report["donor_body_pmx"] = {"file": donor_body_pmx, "bones_matched": same, "median_gap_cm": round(med, 2)}
+        if same < 20:
+            warn("the donor body's file shares too few bones with the donor (%d): skeleton fit only" % same)
+            fit = False
+    body_d_name = donor_body or auto_body(B, nude=False)
     body_t_name = target_body or auto_body(T, nude=True)
     if fit and (body_d_name is None or body_t_name is None):
         warn("no body material found (donor %s, target %s): skeleton fit only" % (body_d_name, body_t_name))
         fit = False
     if fit:
-        bd = material_vertices(D, re.compile("^%s$" % re.escape(body_d_name)))
-        bt = material_vertices(T, re.compile("^%s$" % re.escape(body_t_name)))
+        # several materials, comma-separated, make one body (Vindictus: body05 + handfoot05)
+        d_names = [n.strip() for n in body_d_name.split(",") if n.strip()]
+        t_names = [n.strip() for n in body_t_name.split(",") if n.strip()]
+        bd = material_vertices(B, re.compile("^(%s)$" % "|".join(re.escape(n) for n in d_names)))
+        bt = material_vertices(T, re.compile("^(%s)$" % "|".join(re.escape(n) for n in t_names)))
         if len(bd) < 100 or len(bt) < 100:
             warn("body material too small (donor %d, target %d vertices): skeleton fit only" % (len(bd), len(bt)))
             fit = False
@@ -562,15 +673,24 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
                                                                                 len(bt)))
         # donor body faces (whole triangles inside the material), re-indexed 0..nb-1
         bd_set = {int(v): k for k, v in enumerate(bd)}
-        FD = np.array([[bd_set[v] for v in D.faces[f]] for mi, mt in enumerate(D.materials)
-                       if mt.name == body_d_name for f in mf[mi]], np.int64)
+        mfb = mf if B is D else material_faces(B)
+        FD = np.array([[bd_set[v] for v in B.faces[f]] for mi, mt in enumerate(B.materials)
+                       if mt.name in d_names for f in mfb[mi]], np.int64)
         bt_set = {int(v): k for k, v in enumerate(bt)}
         mft = material_faces(T)
         FT = np.array([[bt_set[v] for v in T.faces[f]] for mi, mt in enumerate(T.materials)
-                       if mt.name == body_t_name for f in mft[mi]], np.int64)
-        VD = np.array([D.vertices[int(v)].co for v in bd], float)
+                       if mt.name in t_names for f in mft[mi]], np.int64)
+        VD = np.array([B.vertices[int(v)].co for v in bd], float)
         VT = np.array([T.vertices[int(v)].co for v in bt], float)
-        WD = [weights_of(pmx, D.vertices[int(v)]) for v in bd]
+        WD = [weights_of(pmx, B.vertices[int(v)]) for v in bd]
+        if body_pose is not None:                                  # the other file's body in the donor's pose / bones
+            VD = body_pose.skin_points(VD, WD)
+            d_root = next((i for i, b in enumerate(D.bones) if b.name == "下半身"), 0)
+
+            def to_donor(b):
+                a = body_pose.anchor(b)
+                return body_pose.bmap[a] if a is not None else d_root
+            WD = [[(to_donor(b), w) for b, w in ws] for ws in WD]
         VD1 = tr.skin_points(VD, WD)                               # the donor body in the target's skeleton
         near_t = NearestOnMesh(VT, FT)
         _f, pts, _b = near_t.query(VD1)
@@ -616,6 +736,26 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
         fit_points = None
     P_final, N_final = P + disp, N1
     vmap = {v: k for k, v in enumerate(garment_verts)}
+
+    # -- clearance: games that hide the body under a tight suit draw the suit ON the skin or a hair inside it (Stellar
+    #    Blade's bodysuits: half of it inside Inase a08 after the fit, median 0.0 mm) - the target's skin, still there,
+    #    covers it.  Garment vertices closer than min_gap to the target's skin are pushed out along the skin normal;
+    #    the push is smoothed over the garment so the cloth stays even, then the stragglers get a last exact push
+    if fit and min_gap_mm > 0:
+        NT = np.array([T.vertices[int(v)].normal for v in bt], float)
+        G = np.array([[vmap[v] for v in D.faces[f]] for mi in d_mats for f in take_faces[mi]], np.int64)
+        # footwear is left as fitted: the two characters' feet are often posed apart (wedge heels on a flat foot,
+        # ROE's heel-ready feet), a shoe is stiff, and pushing it out blew Stellar Blade's sneakers 10 -> 15 cm wide
+        fixed = np.array([bool(gv_weights[v]) and FOOT.search(tr.dn[max(gv_weights[v], key=lambda bw: bw[1])[0]])
+                          is not None for v in garment_verts])
+        tnames = [b.name for b in T.bones]
+        skin_skip = np.array([FOOT.search(tnames[max(ws, key=lambda bw: bw[1])[0]]) is not None if ws else False
+                              for ws in (weights_of(pmx, T.vertices[int(v)]) for v in bt)])
+        P_final, pushed = push_out(P_final, near_t, NT, FT, min_gap_mm / 10.0 / UNIT_CM, PUSH_DEPTH_CM / UNIT_CM, G=G, SV=VT,
+                                   fixed=fixed, skin_skip=skin_skip)
+        disp = P_final - P
+        report["clearance"] = {"min_gap_mm": min_gap_mm, "pushed": pushed}
+        log("  clearance: %d garment vertices pushed out to %.1f mm from the skin" % (pushed, min_gap_mm))
 
     def move_extra(Q, ws):
         """Points that are not vertices (bone heads, bodies, joints): skeleton + fit like a vertex would be."""
