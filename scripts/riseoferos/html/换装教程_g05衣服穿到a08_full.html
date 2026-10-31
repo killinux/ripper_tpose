@@ -312,17 +312,23 @@ g05 飘带、前片的物理 ───⑤ 搬刚体关节、隔开碰撞组 ─�
   <tr><td><code>左足D</code> / <code>LCalfTwist</code> / <code>足首</code> / <code>足先EX</code></td><td>腿环、小腿绑带、脚踝、凉鞋</td></tr>
   <tr><td><code>手首</code> / <code>ForeTwist</code> / 手指名（<code>親指</code>、<code>人指</code>……）</td><td>手腕、前臂、手指上的饰物</td></tr>
 </table></div>
-<h3>在 Blender 里删不要的零件</h3>
+<h3>用「挑零件」面板删不要的零件（2026-10-31 起）</h3>
 <ol>
-  <li>点模型的网格，按 <kbd>Tab</kbd> 进编辑模式，按 <kbd>Alt</kbd>+<kbd>A</kbd> 先全部取消选择。</li>
-  <li>右边属性编辑器点<b>材质</b>页（红色小球图标），在材质列表里点一个 <code>g05_…</code>，点下面的「<b>选择</b>」。</li>
-  <li>按 <kbd>X</kbd> → <b>面</b>，这块就删掉了。要删 a08 自己的衣服也一样，选 <code>pc_a08_hd_body1</code> / <code>body2</code>。</li>
-  <li>删完按 <kbd>Tab</kbd> 回物体模式。在大纲视图里点模型最上层的根（名字 <code>Pc A08 Hd Full 穿G05衣服</code>）。</li>
-  <li>菜单 <b>文件 → 导出 → MikuMikuDance Model (.pmx)</b>，右边勾上「<b>复制纹理</b>」，存到一个<b>新文件夹</b>。</li>
+  <li>换装面板下面就是「<b>挑零件（删掉不要的零件）</b>」面板。「模型」一栏留空，就用刚换装写出的那个。点「<b>读取零件</b>」：列表里 50 个零件，都勾着，勾着 = 留下。</li>
+  <li>把不要的去掉勾，三种方法随便用：
+    <ul>
+      <li>直接点前面的勾；</li>
+      <li>「名字含」填一段字，点「<b>去掉</b>」：比如填 <code>Leaf</code> 去掉两片花环，填 <code>wp_</code> 去掉 a08 的大剑；</li>
+      <li>在 3D 视图里点模型的网格，<kbd>Tab</kbd> 进编辑模式，鼠标指着那块布按 <kbd>L</kbd> 选中一整块（按住 <kbd>Shift</kbd> 能多选几块），点「<b>去掉选中的面所在的零件</b>」。</li>
+    </ul>
+  </li>
+  <li>点「<b>删掉没勾的零件</b>」。几秒后写出 <code>pc_a08_hd_full_穿g05衣服_挑零件.pmx</code>（和原文件在同一个文件夹，原文件不动），导入场景，原来那个模型自动藏起来。列表变成新模型的零件，还能接着挑。</li>
 </ol>
-<p>也可以用 PMXEditor：打开 PMX，在材质页按名字删材质（顶点会一起删），另存。</p>
-<div class="warn">现在删材质只会删掉顶点，那件衣服的骨头、刚体、关节还在：看不见的布照样在算物理，偶尔会挡到别的布。
-要彻底去掉，还得把对应的刚体删掉（比如披帛的 <code>Riband_BL_…</code>）。「勾选零件 → 连骨头、刚体一起删」的按钮在待做清单第 3 项里。</div>
+<p>和在 PMXEditor 里删材质不一样：只给这块布用的骨头、刚体、关节、表情项、贴图会一起删掉，看不见的布不会再在后台算物理。</p>
+<div class="ok">只要「a08 的裸体穿 g05 的衣服」：去掉 <code>pc_a08_hd_body1</code>、<code>pc_a08_hd_body2</code>（a08 自己的衣服）、<code>pc_a01_nk_body</code>（贴身那份身体）、<code>wp_a08_l</code>、<code>wp_a08_r</code>（大剑）。<code>pc_a08_hd_body2_hair</code> 是头饰，留着。
+删完裸体那份身体自动改成默认显示，不用再拉「衣服非表示」。我按这个做好的一份：<a href="file:///E:/game_export/RiseOfEros/_%E6%B7%B7%E6%90%AD/%E6%8C%91%E9%9B%B6%E4%BB%B6%E7%A4%BA%E4%BE%8B_a08%E5%8F%AA%E7%A9%BFg05%E8%A1%A3%E6%9C%8D/">_混搭\挑零件示例_a08只穿g05衣服\</a>。</div>
+<h3>挪布的位置、导出</h3>
+<p>要挪某块布：编辑模式里改它的顶点，<kbd>Tab</kbd> 回物体模式，在大纲视图里点模型最上层的根，菜单 <b>文件 → 导出 → MikuMikuDance Model (.pmx)</b>，右边勾上「<b>复制纹理</b>」，存到一个<b>新文件夹</b>。</p>
 
 <h2 id="s12"><span class="no">12</span>出问题时</h2>
 <div class="table-wrap"><table>

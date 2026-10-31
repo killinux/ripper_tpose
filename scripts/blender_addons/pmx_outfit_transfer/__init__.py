@@ -4,14 +4,15 @@
 The clothes (chosen by material) come with their bones, rigid bodies, joints, materials and textures; they are
 re-skinned to the target's skeleton and shrink-fitted to the target's nude body (core.py).  The two outfits'
 rigid bodies never collide with each other.  The result is a new PMX next to the target (textures copied), imported
-into the scene for picking the parts to keep.
+into the scene for picking the parts to keep.  Picking (parts.py): the materials left unticked go with the bones,
+rigid bodies, joints, morph entries and textures only they used.
 
-UI: 3D viewport sidebar > MMD tab > 换装（服装移植）.  Headless: cli.py.
+UI: 3D viewport sidebar > MMD tab > 换装（服装移植） and 挑零件.  Headless: cli.py, pick_cli.py.
 """
 bl_info = {
     "name": "PMX Outfit Transfer",
     "author": "ripper_tpose",
-    "version": (0, 2, 0),
+    "version": (0, 3, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > 换装（服装移植）",
     "description": "把一个 PMX 模型的衣服贴身穿到另一个 PMX 模型的裸体上（骨骼重定向 + 按身体形状拟合），"
@@ -26,14 +27,22 @@ import traceback
 import bpy
 
 from . import core
+from . import parts
 
 importlib.reload(core)
+importlib.reload(parts)
 
 
 class POT_MaterialItem(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty()
     faces: bpy.props.IntProperty()
     enabled: bpy.props.BoolProperty(default=True)
+
+
+class POT_PartItem(bpy.types.PropertyGroup):
+    name: bpy.props.StringProperty()
+    faces: bpy.props.IntProperty()
+    keep: bpy.props.BoolProperty(name="留下", default=True)
 
 
 class POT_Settings(bpy.types.PropertyGroup):
@@ -79,6 +88,24 @@ class POT_Settings(bpy.types.PropertyGroup):
                                             description="再往外这么远渐变回衣服自己的权重")
     import_result: bpy.props.BoolProperty(name="做完导入场景", default=True)
     report: bpy.props.StringProperty()
+
+    parts_src: bpy.props.StringProperty(name="模型", subtype="FILE_PATH",
+                                        description="要挑零件的 PMX（任何 PMX 都行）；留空用上面换装写出的那个")
+    parts: bpy.props.CollectionProperty(type=POT_PartItem)
+    parts_active: bpy.props.IntProperty()
+    parts_filter: bpy.props.StringProperty(name="名字含",
+                                           description="配合「勾上」「去掉」：名字里有这段字的零件一起改；留空 = 全部")
+    parts_out: bpy.props.StringProperty(name="输出 PMX", subtype="FILE_PATH",
+                                        description="留空：模型旁边「<模型>_挑零件.pmx」（已有就 _挑零件2、3…）；"
+                                                    "不会覆盖已有文件；换了文件夹会把贴图拷过去")
+    parts_bones: bpy.props.BoolProperty(name="骨骼、刚体、关节一起删", default=True,
+                                        description="只挂在删掉的零件上的骨骼（MMD 标准骨除外）连同上面的刚体和关节一起删；"
+                                                    "关掉就只删网格和表情项，和在 PMXEditor 里删材质一样")
+    parts_empty_morphs: bpy.props.BoolProperty(name="删掉变空的表情", default=True,
+                                               description="只管删掉的零件的表情（比如只藏武器的「武器非表示」）跟着删")
+    parts_import: bpy.props.BoolProperty(name="做完导入场景", default=True,
+                                         description="导入结果，场景里原来那个模型藏起来（大纲里点眼睛能再显示）")
+    parts_report: bpy.props.StringProperty()
 
 
 def _settings(context):
@@ -228,7 +255,187 @@ class POT_PT_panel(bpy.types.Panel):
                 layout.label(text=line)
 
 
-CLASSES = (POT_MaterialItem, POT_Settings, POT_OT_scan, POT_OT_transfer, POT_UL_materials, POT_PT_panel)
+# -- 挑零件 ----------------------------------------------------------------------------------------------------------------
+
+def _parts_src(s):
+    return _abs(s.parts_src) or _abs(s.out)
+
+
+class POT_OT_parts_scan(bpy.types.Operator):
+    bl_idname = "pmx_outfit.parts_scan"
+    bl_label = "读取零件"
+    bl_description = "列出模型的全部材质（一个材质 = 一个零件），默认都勾着 = 都留下"
+
+    def execute(self, context):
+        s = _settings(context)
+        src = _parts_src(s)
+        if not os.path.isfile(src):
+            self.report({"ERROR"}, "找不到模型 PMX: %s" % src)
+            return {"CANCELLED"}
+        try:
+            M = core.pmx_module().load(src)
+        except Exception as exc:                                    # noqa: BLE001
+            traceback.print_exc()
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        s.parts_src = src
+        s.parts.clear()
+        for mt in M.materials:
+            it = s.parts.add()
+            it.name, it.faces, it.keep = mt.name, mt.vertex_count // 3, True
+        s.parts_report = "%d 个零件；把不要的去掉勾" % len(M.materials)
+        return {"FINISHED"}
+
+
+class POT_OT_parts_mark(bpy.types.Operator):
+    bl_idname = "pmx_outfit.parts_mark"
+    bl_label = "勾上 / 去掉"
+    bl_description = "名字里有「名字含」那段字的零件一起勾上（留下）或去掉；留空 = 全部"
+    keep: bpy.props.BoolProperty()
+
+    def execute(self, context):
+        s = _settings(context)
+        key = s.parts_filter.strip().lower()
+        n = 0
+        for it in s.parts:
+            if not key or key in it.name.lower():
+                it.keep = self.keep
+                n += 1
+        self.report({"INFO"}, "%s %d 个" % ("勾上" if self.keep else "去掉", n))
+        return {"FINISHED"}
+
+
+class POT_OT_parts_from_selection(bpy.types.Operator):
+    bl_idname = "pmx_outfit.parts_from_selection"
+    bl_label = "去掉选中的面所在的零件"
+    bl_description = "在 3D 视图里选中模型网格上的面（编辑模式，L 选一整块），这些面所在的材质在列表里去掉勾"
+
+    def execute(self, context):
+        s = _settings(context)
+        obj = context.active_object
+        if obj is None or obj.type != "MESH":
+            self.report({"ERROR"}, "先选中模型的网格，进编辑模式选面")
+            return {"CANCELLED"}
+        if obj.mode == "EDIT":
+            obj.update_from_editmode()
+        slots = {p.material_index for p in obj.data.polygons if p.select}
+        if not slots:
+            self.report({"ERROR"}, "网格上没有选中的面")
+            return {"CANCELLED"}
+        names = set()
+        for k in slots:
+            mat = obj.material_slots[k].material if k < len(obj.material_slots) else None
+            if mat is not None:
+                mmd = getattr(mat, "mmd_material", None)
+                names.add(mmd.name_j if mmd is not None and mmd.name_j else mat.name)
+        hit = [it for it in s.parts if it.name in names]
+        if not hit:
+            self.report({"ERROR"}, "选中的面不在列表这个模型里（%s）" % "、".join(sorted(names))[:200])
+            return {"CANCELLED"}
+        for it in hit:
+            it.keep = False
+        self.report({"INFO"}, "去掉 %d 个：%s" % (len(hit), "、".join(it.name for it in hit))[:300])
+        return {"FINISHED"}
+
+
+class POT_OT_parts_remove(bpy.types.Operator):
+    bl_idname = "pmx_outfit.parts_remove"
+    bl_label = "删掉没勾的零件"
+    bl_description = ("没勾的材质连同只给它们用的骨骼、刚体、关节、表情项、贴图一起删，写出新的 PMX（原文件不动）；"
+                      "full 版删了贴身那份身体，裸体那份自动改成默认显示")
+
+    def execute(self, context):
+        s = _settings(context)
+        src = _parts_src(s)
+        if not os.path.isfile(src):
+            self.report({"ERROR"}, "找不到模型 PMX: %s" % src)
+            return {"CANCELLED"}
+        if not len(s.parts):
+            self.report({"ERROR"}, "先点「读取零件」")
+            return {"CANCELLED"}
+        remove = [it.name for it in s.parts if not it.keep]
+        if not remove:
+            self.report({"ERROR"}, "都勾着，没有要删的")
+            return {"CANCELLED"}
+        lines = []
+        try:
+            report = parts.pick_parts(src, _abs(s.parts_out) or None, remove=remove, bones=s.parts_bones,
+                                      empty_morphs=s.parts_empty_morphs, log=lambda t: (print(t), lines.append(t)))
+        except Exception as exc:                                    # noqa: BLE001
+            traceback.print_exc()
+            self.report({"ERROR"}, str(exc))
+            s.parts_report = "失败: %s" % exc
+            return {"CANCELLED"}
+        out = report["out"]
+        s.parts_report = "写出 %s：删了 %d 个零件、%d 根骨、%d 刚体、%d 关节、%d 个表情%s" % (
+            os.path.basename(out), len(report["removed_materials"]), len(report["removed_bones"]),
+            len(report["removed_rigids"]), len(report["removed_joints"]), len(report["removed_morphs"]),
+            "".join("；" + t for t in report["swaps"]))
+        if s.parts_import:
+            if not hasattr(bpy.ops, "mmd_tools") or not hasattr(bpy.ops.mmd_tools, "import_model"):
+                self.report({"WARNING"}, "mmd_tools 没启用，结果没导入场景")
+            else:
+                old_roots = [o for o in context.scene.objects if getattr(o, "mmd_type", "") == "ROOT"
+                             and o.mmd_root.name == report["source_name"]]
+                bpy.ops.mmd_tools.import_model(filepath=out, scale=0.08,
+                                               types={"MESH", "ARMATURE", "PHYSICS", "MORPHS", "DISPLAY"})
+                for root in old_roots:
+                    for o in [root] + list(root.children_recursive):
+                        try:
+                            o.hide_set(True)
+                        except RuntimeError:
+                            pass
+                if old_roots:
+                    s.parts_report += "；场景里原来的模型藏起来了（大纲里点眼睛能再显示）"
+        s.parts_src = out                                         # the list now shows the new model: pick again
+        for i in reversed(range(len(s.parts))):
+            if not s.parts[i].keep:
+                s.parts.remove(i)
+        self.report({"INFO"}, s.parts_report)
+        return {"FINISHED"}
+
+
+class POT_UL_parts(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        row = layout.row(align=True)
+        row.prop(item, "keep", text="")
+        row.label(text="%s  (%d 面)" % (item.name, item.faces))
+
+
+class POT_PT_parts(bpy.types.Panel):
+    bl_label = "挑零件（删掉不要的零件）"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "MMD"
+
+    def draw(self, context):
+        s = _settings(context)
+        layout = self.layout
+        layout.prop(s, "parts_src")
+        layout.operator("pmx_outfit.parts_scan", icon="VIEWZOOM")
+        if len(s.parts):
+            layout.template_list("POT_UL_parts", "", s, "parts", s, "parts_active", rows=8)
+            row = layout.row(align=True)
+            row.prop(s, "parts_filter")
+            row.operator("pmx_outfit.parts_mark", text="勾上").keep = True
+            row.operator("pmx_outfit.parts_mark", text="去掉").keep = False
+            layout.operator("pmx_outfit.parts_from_selection", icon="RESTRICT_SELECT_OFF")
+            n_off = sum(1 for it in s.parts if not it.keep)
+            layout.label(text="勾着的留下：%d 个；没勾的删掉：%d 个" % (len(s.parts) - n_off, n_off))
+        layout.prop(s, "parts_out")
+        box = layout.box()
+        box.prop(s, "parts_bones")
+        box.prop(s, "parts_empty_morphs")
+        box.prop(s, "parts_import")
+        layout.operator("pmx_outfit.parts_remove", icon="TRASH")
+        if s.parts_report:
+            for line in s.parts_report.split("；"):
+                layout.label(text=line)
+
+
+CLASSES = (POT_MaterialItem, POT_PartItem, POT_Settings, POT_OT_scan, POT_OT_transfer, POT_UL_materials, POT_PT_panel,
+           POT_OT_parts_scan, POT_OT_parts_mark, POT_OT_parts_from_selection, POT_OT_parts_remove, POT_UL_parts,
+           POT_PT_parts)
 
 
 def register():

@@ -76,7 +76,7 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 ## 四、换完还要做的
 
 - **头饰 / 旧头的零件**：目标头上原来戴的东西如果在衣服材质里（g05 的光环在 `pc_g05_hd_body 2` 里），会留在新头上。
-  不要就在 PMXEditor 或 Blender 里按材质 / 按连通块删。
+  不要就用换装插件的「挑零件」面板删（连同只给它用的骨骼、刚体、关节一起删，见 [pmx-outfit-transfer-usage.md](pmx-outfit-transfer-usage.md) 第四节）。
 - **胸部表情、眼睛跟踪**照常；源模型有 `両目` 之类标准骨的话 MMD 的眼睛跟踪能用。
 - **头发碰到衣领**：头发只碰身体碰撞体，不碰衣服刚体。想让它碰衣服就在 PMXEditor 里把头发刚体的非碰撞组改一下。
 
