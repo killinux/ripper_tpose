@@ -207,6 +207,9 @@ def add_eye_bones(arm, meshes):
     left_dir = (arm.matrix_world @ lc.head_local - arm.matrix_world @ rc.head_local).normalized()
     up = Vector((0.0, 0.0, 1.0))
     fwd = left_dir.cross(up).normalized()             # left x up = forward (right-handed)
+    # read before the first edit-mode round trip below: leaving edit mode rebuilds the Bones, and head_bone then
+    # points at freed memory (Vindictus: each eyeball its own mesh, the second read garbage and both eyes went to one side)
+    head_pos = arm.matrix_world @ head_bone.head_local
     made = []
     for mesh in meshes:
         slots = [i for i, sl in enumerate(mesh.material_slots)
@@ -217,7 +220,6 @@ def add_eye_bones(arm, meshes):
         for poly in mesh.data.polygons:
             if poly.material_index in slots:
                 verts.update(poly.vertices)
-        head_pos = arm.matrix_world @ head_bone.head_local
         world = {i: mesh.matrix_world @ mesh.data.vertices[i].co for i in verts}
         for side, sign in (("L", 1.0), ("R", -1.0)):
             ids = [i for i in verts if sign * (world[i] - head_pos).dot(left_dir) > 0]

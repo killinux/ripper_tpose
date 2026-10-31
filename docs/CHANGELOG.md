@@ -14,6 +14,61 @@
 
 ---
 
+## 2026-10-31 — Vindictus 北美服：新导出流程 `scripts/vindictusna`（19 位女角色，高清材质 `.blend` + XPS + PMX，带各自体型和表情）；眼睛修好：补全眼白、眼球转动中心、4 位两只眼挂在同一根眼骨上
+
+**新增**
+
+- 用户 10-25 自己装好北美服（`D:\vindictus\appdata\en-US`），要一个导出模型的脚本：高清材质，Blender、XPS、PMX 三种格式。
+- `scripts/vindictusna/`（详见该目录的 `README.md`）：
+  - `hfs.py` / `hfs_emu.py`：包是加密压缩的 `.hfs` v4。用 Unicorn 模拟器跑游戏自己的 `bin\FileSystem_Stdio.dll`，由它解出目录和文件；
+    目录共 4,369 个包、205,934 个文件（`python hfs.py --catalog`，10 个进程约 11 分钟）。
+  - `source_mdl.py`：Source `.mdl` v44/45 + `.vvd` + `.dx90.vtx`，包括表情（flex）。
+  - `looks.py`：19 位女角色各一个默认外观（脸、发型、服装、颜色）。游戏里缺贴图的脸借别人的，逐条写进 `.blend` 的「说明」。
+  - `build_blend.py`：按游戏着色器还原材质（染色遮罩 → `VindDye` 节点组、皮肤次表面散射、头发各向异性高光、眼睛投影虹膜）；
+    每位角色的体型文件 `csf/bodyshape_<角色>_default.fig` 烘进网格；flex 做成形态键。
+  - `export_model.py`：`python export_model.py <角色> [--xps] [--pmx]`，`--all` 导全部；另有 `--outfit` `--hair` `--head` `--nude`
+    `--variant` `--redo` `--prepare-only` `--no-figure`。
+  - XPS：`export_xps_blender.py`，经 blender2xps，骨骼改成 XPS 标准名。
+  - PMX：`export_pmx_blender.py`，走星刃 / ROE 那条 Biped 链（IK、身体刚体、胸部和衣摆物理）；flex 做成 MMD 标准表情
+    （まばたき、笑い、ウィンク、あいうえお 等，原始 flex 也保留）。
+  - `html/make_gallery.py` → `html/index.html` 画廊；`overview.py` → `E:\game_export\VindictusNA\_overview\女性角色_效果总览.png`。
+- 导出结果：`E:\game_export\VindictusNA\<角色>\{blend,xps,pmx}\<外观>\`，19 位，约 0.9 GB。
+
+**修复**（用户 10-25：「眼睛的材质好像有问题」）
+
+- **PMX 转眼时眼眶发黑**：游戏的眼球贴图只有眼皮露出的杏仁形是白的，其余是黑的。眼皮阴影烘在了贴图里；游戏里眼球不转，只移动投影的虹膜，
+  所以看不出来。`textures.fill_sclera` 另做一张完整眼白，`.blend` 的眼睛材质用节点 `FullSclera` 切换（默认 0 = 游戏原样），
+  XPS / PMX 导出时自动切到 1。
+- **转眼时眼球从眼皮里甩出来**：眼球网格只是前半个球壳，共用脚本按整球估的转轴落在角膜上。`fix_eye_pivots` 改用球面拟合的球心，
+  多数角色往后挪 17–21 mm。
+- **艾莉莎、萨恩、纱妮娅、泰莎的两只眼挂在同一根眼骨上**：`scripts/stellarblade/export_pmx_blender.add_eye_bones` 按「在头骨哪一侧」
+  分左右眼，头骨位置是在循环里读的。第一只眼建骨时切过一次编辑模式，Blender 重建了骨骼，之前拿到的头骨引用就指向已释放的内存
+  （在艾莉莎上实测读出 (-0.55, -0.03, 1.08)，是别的骨骼的位置）。Vindictus 每只眼球是单独的网格，第二只眼就按这个乱值分了边。
+  现在头骨位置在循环前读一次；两只眼在同一个网格里的模型（星刃 Eve）结果不变。`fix_eye_pivots` 加了检查：必须正好两只眼、
+  拟合半径 5–30 mm，否则报错，不会悄悄导出坏眼睛。
+- 泰莎补上表情（她是第一批导出的，当时还没有表情代码）。
+
+**用户如何操作**
+
+- 单个角色：`cd scripts\vindictusna`，`python export_model.py lynn --xps --pmx`。
+- 全部：先单进程 `python export_model.py --all --prepare-only --redo`，再分几组并行 `python export_model.py <几位角色> --redo --xps --pmx`；
+  完了 `python html\make_gallery.py --force`、`python overview.py`。
+- 已导出的 19 位都换成了修好眼睛的版本，直接打开即可；画廊是 `scripts\vindictusna\html\index.html`。
+
+**实现原理与兼容性**
+
+- 北美服和国服的 `FileSystem_Stdio.dll` 逐字节相同，设置 `VINDICTUS_DIR` 也能读国服。
+- 共用脚本只是把一行挪到循环前，星刃的导出结果不变。
+
+**验证**
+
+- 18 位用最终代码重导（4 组并行约 17 分钟），XPS、PMX 全部成功，网格没有撕裂。修正眼骨后，那 4 位只重导了 PMX：
+  左右眼各 161 个顶点，拟合半径 17–19 mm。
+- 19 个 PMX 都用 `scripts/stellarblade/preview_pmx_blender.py` 渲染了视线、表情、带物理跳舞：两只眼一起转，眼白完整，没有报错；
+  刚体离胯部最远 1.16 m，是丹雅拖地的和服下摆，没有飞出去的。
+
+---
+
 ## 2026-10-25 — AION2：导出三位有名字的女性（Yustiel、Leda、Siel）；新画廊页（页首写好导出脚本怎么用）；`list_models.py` 能判断 NPC / 怪物的性别；修好 NPC 眼睛全黑、头发套错材质、眉毛重复
 
 **新增**

@@ -21,6 +21,7 @@
 | Action Taimanin（アクション対魔忍） | Unity 2022.3 老式 AssetBundle（39 个大包，3 个数据表包加密） | [`actiontaimanin/`](actiontaimanin/) | `actiontaimanin\list_models.py` / `export_model.py` |
 | Taimanin Collection（対魔忍コレクション） | Unity 2018.4 玩家数据 `data.unity3d`（UnityFS，不加密，**没有类型树**；卡牌图片加密） | [`taimanincollection/`](taimanincollection/) | `taimanincollection\list_models.py` / `export_model.py` |
 | AION2（永恒之塔 2） | Unreal 5.3 IoStore（282 个容器，AES 加密，exe 带 NCGuard 壳；无版本属性，用 UE Viewer 特制版） | [`aion2/`](aion2/) | `aion2\list_models.py` / `export_model.py` |
+| Vindictus（洛奇英雄传）北美服 | Source 引擎改版，`.hfs` v4 包（加密压缩，用 Unicorn 跑游戏自己的 `FileSystem_Stdio.dll` 读） | [`vindictusna/`](vindictusna/) | `vindictusna\list_models.py` / `export_model.py` |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
