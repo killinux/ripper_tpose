@@ -12,10 +12,10 @@ scripts/blender_addons/pmx_outfit_transfer/
   pick_cli.py   挑零件的命令行：python pick_cli.py 模型.pmx [输出.pmx] --remove "a,b" [选项]
 ```
 
-2026-10-24 第一个用例：Luf g05（女神装）的整套衣服 → Inase a08 full 的裸体，成品在
-`E:\game_export\RiseOfEros\_混搭\a08_full_穿g05衣服\`。
+2026-10-24 第一个用例：Luf g05（女神装）的整套衣服 → Inase a08 full 的裸体（成品 `_混搭\a08_full_穿g05衣服\`）。
 2026-10-25 第二个：同一套衣服 → a08 的**裸体模型** `pc_a08_hd_nude.pmx`（成品 `_混搭\a08_nude_穿g05衣服\`），
 为它加了「贴身部分跟着皮肤动」（默认开）和裸体模型的「衣服非表示」。
+这两个旧成品 2026-10-31 放进了回收站；现在的成品是 0.2 重做的 `E:\game_export\RiseOfEros\_混搭\a08_full_穿g05衣服_v2\`。
 2026-10-31（0.3）：「挑零件」面板。示例：v2 成品删掉 a08 自己的衣服、贴身那份身体和武器 =
 `_混搭\挑零件示例_a08只穿g05衣服\`（裸体穿 g05 的衣服，默认就是这样，不用拉表情）。
 一步一步的用法（面板、挑零件、拼几套、常见问题）见 [docs/pmx-outfit-transfer-usage.md](../../../docs/pmx-outfit-transfer-usage.md)，

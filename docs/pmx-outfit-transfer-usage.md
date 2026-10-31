@@ -62,7 +62,7 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 2. **穿到**：目标 PMX。例子：`E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_full\pc_a08_hd_full_裙子碰撞修正.pmx`。
    用 **full 版**（裸体 + 衣服在一个文件里）最好：有裸体材质才能贴身拟合，而且之后拉「衣服非表示」就能脱掉目标自己的衣服。
    也可以直接用**裸体模型**（例：`E:\game_export\RiseOfEros\Inase\pmx\pc_a08_hd_nude\pc_a08_hd_nude.pmx`）：成品就是只穿新衣服的裸体，
-   没有目标自己的衣服叠在一起；再勾「加进『衣服非表示』」，会新建一个只管新衣服的「衣服非表示」表情（2026-10-25 的 `a08_nude_穿g05衣服` 就是这样做的）。
+   没有目标自己的衣服叠在一起；再勾「加进『衣服非表示』」，会新建一个只管新衣服的「衣服非表示」表情（2026-10-25 的 `a08_nude_穿g05衣服` 就是这样做的，10-31 已删）。
 3. **输出 PMX**：留空就在目标旁边新建文件夹 `<目标文件名>_穿<前缀>衣服\`，PMX 和 `textures\` 都放里面。
    想放别处就填完整路径。已经存在的文件不会覆盖，会报错。
 4. 点「**读取源模型的材质**」。列表里是源 PMX 的全部材质：
