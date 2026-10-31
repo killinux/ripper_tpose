@@ -171,7 +171,8 @@ def main():
             '<title>Vindictus 北美服画廊</title><style>%s</style></head><body><main>' % CSS,
             '<h1>洛奇英雄传 Vindictus（北美服）· 女性角色</h1>',
             '<p class="lead">每位一个外观：.blend（游戏材质、全分辨率贴图、角色体型、表情形态键）+ XPS + PMX（物理、MMD 表情）。'
-            '点图片看原图，点文件按钮打开所在文件夹。生成于 %s，scripts/vindictusna。</p>' % now,
+            '点图片看原图，点文件按钮打开所在文件夹。生成于 %s，scripts/vindictusna。'
+            '<a href="hd.html" style="color:var(--acc)">高清版（AI 放大）对比 →</a></p>' % now,
             '<div class="stats"><span>已导出 <b>%d</b> / 19</span><span>游戏里可玩角色 <b>%d</b>（女 %d · 男 %d）</span>'
             '<span>NPC 模型 <b>%d</b></span><span>怪物模型 <b>%d</b></span><span>女性服装 <b>%d</b> 套（贴图齐全 %d）</span></div>' % (
                 n_done, COUNTS['female'] + COUNTS['male'], COUNTS['female'], COUNTS['male'], COUNTS['npc_models'],

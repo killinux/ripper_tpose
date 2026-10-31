@@ -260,3 +260,90 @@ def note(look, cfg, build_log, face_tex, brow_rgb):
     if miss:
         L += ['', '仍然没有贴图的材质（显示为灰色）：' + '、'.join(miss)]
     return '\n'.join(L) + '\n'
+
+
+# ------------------------------------------------------------------------------------------------ NPCs / bosses
+# Female NPCs and bosses whose textures are in the NA data (10-31 survey: list_models-style material check, breast-bone
+# skin weights for the gender).  Each is ONE complete game model (body, face, hair, clothes) - no assembly.
+# Not here: Alice (built from Lann's face / hair and a male raiment: not a woman), Lady's mate (= lady.mdl, smaller),
+# Iset's story / playable copies; the bosses with missing textures need a name remap first (see README).
+NPC_DYES = [rgb(200, 200, 206), rgb(56, 60, 74), rgb(190, 160, 92)]
+NPCS = {
+    'ceara': dict(name='Ceara', cn='Ceara', kind='剧情 NPC', look='Ceara', models=['models/npc/ceara/npc_ceara.mdl'],
+                  csf='csf/npc_ceara.csf', hair_mats=['pc_fiona_ceara_hair', 'pc_fiona_ceara_hair_scalp'],
+                  about='主线剧情的女主角级 NPC；菲欧娜的脸和头发就是借她的'),
+    'eire': dict(name='Eire', cn='Eire', kind='剧情 NPC', look='Eire', models=['models/npc/eire/npc_eire.mdl'],
+                 about='第二季剧情 NPC（模型的事件表是第二季 Crom Cruach、Elahan 两段结局过场）'),
+    'iset_npc': dict(name='Iset', cn='Iset（NPC 版）', kind='剧情 NPC', look='Iset_NPC', models=['models/npc/iset/npc_iset.mdl'],
+                     about='穿长袍、戴兜帽的 NPC 版'),
+    'dwyn': dict(name='Dwyn', cn='Dwyn', kind='剧情 NPC', look='Dwyn', models=['models/npc/female/dwyn_face.mdl'],
+                 override={'kadan_teeth': 'lynn_teeth'}, dyes=[rgb(196, 198, 204), rgb(44, 58, 104), rgb(196, 162, 84)],
+                 hide=['pc_uni_knightplate2_head', 'pc_uni_knightplate2_feather'],
+                 hide_why='头盔和羽饰是第 8 章过场里拿在手上的道具（整个挂在 bone_helmet 骨上，绑定姿势下飘在头左边约 60 厘米）',
+                 about='骑士板甲，露脸的版本（dwyn_face.mdl，第 8 章过场用；dwyn.mdl 是戴头盔不露脸的）'),
+    'dwyn_helmet': dict(name='Dwyn', cn='Dwyn（戴头盔）', kind='剧情 NPC', look='Dwyn_Helmet',
+                        models=['models/npc/female/dwyn.mdl'],
+                        dyes=[rgb(196, 198, 204), rgb(44, 58, 104), rgb(196, 162, 84)],
+                        about='骑士板甲戴头盔、不露脸的版本（dwyn.mdl；露脸的是 dwyn_face.mdl）'),
+    'lady': dict(name='Lady', cn='Lady（人偶）', kind='女性 Boss', look='Lady', models=['models/monster/lady/lady.mdl'],
+                 about='人偶 Boss（伙伴版 lady_mate.mdl 是同一个网格，小一号）'),
+    'iset_boss': dict(name='Iset', cn='Iset（Boss 版）', kind='女性 Boss', look='Iset_Boss', models=['models/monster/iset/iset.mdl'],
+                      about='Boss 战的本体（另有剧情版 iset_story.mdl、国服可操作版 iset_playable.mdl）'),
+}
+
+
+def csf_colours(path):
+    """a costume preset (csf/*.csf, KeyValues: one block per slot with "sn" item number and "color") ->
+    {slot: [[r, g, b] or None] x 3}.  The colours are packed 0xRRGGBB: npc_ceara.csf's hair 9966098 = (152, 18, 18),
+    the dark red of her portrait (scaleform/npc_portrait/ceara.dds).  -1 = no colour."""
+    t = open(path, encoding='utf-8', errors='ignore').read()
+    out = {}
+    for name, body in re.findall(r'"(\w+)"\s*\{([^{}]*)\}', t):
+        m = re.search(r'"color"\s+"([-\d ]+)"', body)
+        if m:
+            out[name.lower()] = [[(v >> 16) & 255, (v >> 8) & 255, v & 255] if v >= 0 else None
+                                 for v in map(int, m.group(1).split())]
+    return out
+
+
+def resolve_npc(key):
+    look = dict(NPCS[key])
+    look.update(hero=key, npc=True, pieces=[], outfit=None, outfit_name=look['look'])
+    look.setdefault('dyes', NPC_DYES)
+    return look
+
+
+def note_npc(look, cfg, build_log):
+    """the .blend's 说明 text for an NPC / boss (one complete game model)"""
+    L = ['洛奇英雄传 Vindictus（北美服）%s —— 说明' % look['cn'], '',
+         '来源',
+         '  游戏：%s（NEXON，Source 引擎），从 .hfs 包里读出（scripts/vindictusna）' % hfs.GAME_DIR,
+         '  模型：%s —— %s，一个完整的游戏模型（身体、脸、头发、衣服都在里面），没有拼装' % ('、'.join(look['models']), look['kind']),
+         '  %s' % look.get('about', ''), '']
+    fix = []
+    if look.get('override'):
+        fix.append('游戏包里缺贴图的材质整个换成别的角色的同类材质：' + '；'.join('%s → %s' % kv for kv in look['override'].items()) + '。')
+    if look.get('hide'):
+        fix.append('默认隐藏 %s：%s。.blend 里取消隐藏就能看到；XPS / PMX 里不带。' % ('、'.join(look['hide']), look.get('hide_why', '')))
+    if fix:
+        L += ['我补 / 修的部分'] + ['  %d. %s' % (i + 1, t) for i, t in enumerate(fix)] + ['']
+    dyed = sorted(set(re.findall(r'MAT (\S+)\s+\S*\s+kind=\S+\s+dye=True', build_log)))
+    if look.get('csf') and cfg.get('dye'):
+        L += ['颜色（游戏官方）',
+              '  头发按游戏里这个 NPC 的外观预设 %s 上色（%s）：%s。' % (
+                  look['csf'], '、'.join(cfg['dye']), ' / '.join('RGB(%d, %d, %d)' % tuple(c) for c in look.get('hair_rgb', []))), '']
+        dyed = [m for m in dyed if m.lower() not in cfg['dye']]
+    if dyed:
+        L += ['颜色',
+              '  这些材质的贴图是染色遮罩（R / G / B 三个染色槽）：%s。游戏给 NPC 上什么颜色没有读到，这里的颜色是我配的：' % '、'.join(dyed),
+              '  染色1 RGB%s / 染色2 RGB%s / 染色3 RGB%s；每个材质里的「VindDye」节点组可以改。' % tuple(tuple(c) for c in look['dyes']), '']
+    L += ['结构',
+          '  %s_rig   骨架（ValveBiped，游戏原名），所有网格都绑在上面，可以摆姿势' % look['name'],
+          '  %s        模型' % look['name'], '',
+          '材质：法线贴图是 DirectX 规范（绿通道已翻转接入）；皮肤次表面散射按真实皮肤（红 3.6 / 绿 1.35 / 蓝 0.75 毫米）。',
+          '灯光：3 盏平行光 + Blender 自带的 studio 环境贴图（只用于反射和补光，背景是纯色）。',
+          '单位：1 游戏单位 = 1 英寸（0.0254 米），游戏原比例。']
+    miss = sorted(set(re.findall(r'MAT (\S+)\s+\S*\s+kind=\S+\s+dye=\S+\s+base=None', build_log)))
+    if miss:
+        L += ['', '仍然没有贴图的材质（显示为灰色）：' + '、'.join(miss)]
+    return '\n'.join(L) + '\n'

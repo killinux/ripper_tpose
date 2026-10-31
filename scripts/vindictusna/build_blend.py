@@ -1169,6 +1169,16 @@ def apply_figure(path):
 if cfg.get('figure') and os.path.exists(cfg['figure']):
     apply_figure(cfg['figure'])
 
+# a texture's alpha is transparency only where the material blends; elsewhere it is a game mask (spec / SSS), and
+# EEVEE multiplies a straight-alpha colour image's alpha into its colour: texels with alpha 0 drew black (Dwyn's eyes
+# sit in the face texture's corner, alpha 0, 10-31) and faces darkened where the mask is low (eye creases, lip line,
+# nostrils).  Channel packed keeps the RGB as is.  Non-Color images (normal maps, dye masks) were never affected.
+see_through = {n.image.name for m in bpy.data.materials if m.use_nodes and m.blend_method != 'OPAQUE'
+               for n in m.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image}
+for im in bpy.data.images:
+    if im.source == 'FILE' and im.name not in see_through and im.alpha_mode == 'STRAIGHT':
+        im.alpha_mode = 'CHANNEL_PACKED'
+
 # ------------------------------------------------------------------ render + save
 vis = [o for o in scene.objects if o.type == 'MESH' and not o.hide_render]
 lo = Vector((1e9,) * 3); hi = Vector((-1e9,) * 3)

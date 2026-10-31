@@ -76,18 +76,40 @@ MORPHS = [
     ('悲しい', 'sad', 'OTHER', ('sad',)),
     ('痛い', 'hurt', 'OTHER', ('hurt',)),
 ]
+# Faces rigged with HL2-style FACS controllers instead of whole-face expressions (Eire: lid_droop closes the eyes,
+# lid_raiser widens them, inner_raiser / lowerer = worried / angry brows, corner_puller smiles, conner_depres [sic]
+# frowns, mouth_drop opens the jaw, stretcher / lip_oo / lip_oh shape the lips; her upper_left / upper_right only let
+# the lids follow the gaze).  Used when the face has no 'blink' - every heroine has one and keeps MORPHS.
+# (source, factor, half): half L / R keeps the deltas on that side only (+X = the model's left, see wink_sides).
+FACS_MORPHS = [
+    ('まばたき', 'blink', 'EYE', ('lid_droop', 1.0, None)),
+    ('ウィンク', 'wink', 'EYE', ('lid_droop', 1.0, 'L')),
+    ('ウィンク右', 'wink_R', 'EYE', ('lid_droop', 1.0, 'R')),
+    ('じと目', 'half_closed', 'EYE', ('lid_droop', 0.5, None)),
+    ('びっくり', 'surprised', 'EYE', ('lid_raiser', 1.0, None)),
+    ('困る', 'trouble', 'EYEBROW', ('inner_raiser', 1.0, None)),
+    ('怒り', 'anger', 'EYEBROW', ('lowerer', 1.0, None)),
+    ('あ', 'a', 'MOUTH', ('mouth_drop', 1.0, None)),
+    ('い', 'i', 'MOUTH', ('stretcher', 1.0, None)),
+    ('う', 'u', 'MOUTH', ('lip_oo', 1.0, None)),
+    ('お', 'o', 'MOUTH', ('lip_oh', 1.0, None)),
+    ('にっこり', 'smile_mouth', 'MOUTH', ('corner_puller', 1.0, None)),
+    ('∧', 'mouth_∧', 'MOUTH', ('conner_depres', 1.0, None)),
+]
 
 
-def _copy_key(ob, src, name, mirror=False):
+def _copy_key(ob, src, name, mirror=False, factor=1.0, half=None):
     """new shape key = src (optionally mirrored across X: the delta of vertex v goes to the vertex at v's mirrored
-    place).  Returns False when a mirror cannot be found for most of the moved vertices."""
+    place; or scaled by factor, or kept on one half: L = +X).  Returns False when a mirror cannot be found for most
+    of the moved vertices."""
     keys = ob.data.shape_keys.key_blocks
     base = [v.co.copy() for v in ob.data.vertices]
     sk = keys[src]
     new = ob.shape_key_add(name=name, from_mix=False)
     if not mirror:
         for i, p in enumerate(sk.data):
-            new.data[i].co = p.co
+            keep = half is None or (base[i].x > 0) == (half == 'L')
+            new.data[i].co = p.co if keep and factor == 1.0 else base[i] + (p.co - base[i]) * (factor if keep else 0.0)
         return True
     from mathutils.kdtree import KDTree
     kd = KDTree(len(base))
@@ -126,25 +148,30 @@ def add_morphs(root, meshes):
     have_any = {k.name for ob in meshes if ob.data.shape_keys for k in ob.data.shape_keys.key_blocks[1:]}
     if not have_any:
         return {'made': [], 'note': 'no flexes'}
-    side = wink_sides(meshes)
     plan = []
-    for name, name_e, cat, srcs in MORPHS:
-        src = next((s for s in srcs if s in have_any), None)
-        mirror = False
-        if src is None and name in ('ウィンク', 'ウィンク右') and 'wink' in have_any and side:
-            own = 'ウィンク' if side == 'L' else 'ウィンク右'
-            src, mirror = 'wink', name != own
-        if src:
-            plan.append((name, name_e, cat, src, mirror))
+    if 'blink' not in have_any and 'lid_droop' in have_any:          # FACS controllers only (Eire)
+        plan = [(name, name_e, cat, src, False, f, half) for name, name_e, cat, (src, f, half) in FACS_MORPHS
+                if src in have_any]
+    else:
+        side = wink_sides(meshes)
+        for name, name_e, cat, srcs in MORPHS:
+            src = next((s for s in srcs if s in have_any), None)
+            mirror = False
+            if src is None and name in ('ウィンク', 'ウィンク右') and 'wink' in have_any and side:
+                own = 'ウィンク' if side == 'L' else 'ウィンク右'
+                src, mirror = 'wink', name != own
+            if src:
+                plan.append((name, name_e, cat, src, mirror, 1.0, None))
     made = []
-    for name, name_e, cat, src, mirror in plan:
+    for name, name_e, cat, src, mirror, f, half in plan:
         ok = False
         for ob in meshes:
             keys = ob.data.shape_keys.key_blocks if ob.data.shape_keys else None
             if keys and src in keys and name not in keys:
-                ok = _copy_key(ob, src, name, mirror) or ok
+                ok = _copy_key(ob, src, name, mirror, f, half) or ok
         if ok:
-            made.append((name, name_e, cat, src + (' (mirrored)' if mirror else '')))
+            made.append((name, name_e, cat, src + (' (mirrored)' if mirror else '') + (' x%g' % f if f != 1 else '')
+                         + (' (%s half)' % half if half else '')))
     mmd = root.mmd_root
     have = {m.name for m in mmd.vertex_morphs}
     for name, name_e, cat, _src in made:
@@ -200,9 +227,46 @@ def fix_eye_pivots(arm, meshes):
         eb.tail = eb.head + d * max(r * 1.5, 0.01)
         bpy.ops.object.mode_set(mode='OBJECT')
         out.append('%s: pivot moved %.1f mm back to the sphere centre (r %.1f mm)' % (name, (old - ctr).length * 1000, r * 1000))
-    if len(out) != 2:
-        raise RuntimeError('eye bones: %d of 2 eyes (%s)' % (len(out), ', '.join(b.name for b in arm.data.bones if 'Eye' in b.name)))
+    have = [b.name for b in arm.data.bones if re.match(r'Bip001 [LR] Eye', b.name)]
+    if have and len(out) != 2:          # no eye bones at all is fine: some NPCs / bosses have their eyes painted on
+        raise RuntimeError('eye bones: %d of 2 eyes (%s)' % (len(out), ', '.join(have)))
     return out
+
+
+def mask_alpha_images(meshes):
+    """file names of the images only OPAQUE materials use: the game keeps a mask in their alpha (the face's spec /
+    SSS mask, Iset's body ~0.05), which build_blend never wires to transparency (hair / lashes / cut-outs blend)"""
+    see, opaque = set(), set()
+    for o in meshes:
+        for s in o.material_slots:
+            m = s.material
+            if m is None or not m.use_nodes:
+                continue
+            names = {os.path.basename(bpy.path.abspath(n.image.filepath)).lower()
+                     for n in m.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image and n.image.filepath}
+            (opaque if m.blend_method == 'OPAQUE' else see).update(names)
+    return opaque - see
+
+
+def fill_mask_alpha(tex_dir, names):
+    """MMD multiplies a texture's alpha into its material, so a mask in alpha made the part see-through (Iset's body
+    nearly invisible, every face a little, Dwyn's eyes gone): set those textures' alpha to 1.  Returns the files."""
+    import numpy as np
+    done = []
+    for f in sorted(os.listdir(tex_dir)) if os.path.isdir(tex_dir) else []:
+        if f.lower() not in names:
+            continue
+        im = bpy.data.images.load(os.path.join(tex_dir, f))
+        if im.channels == 4:
+            px = np.empty(len(im.pixels), dtype=np.float32)
+            im.pixels.foreach_get(px)
+            if px[3::4].min() < 1.0:
+                px[3::4] = 1.0
+                im.pixels.foreach_set(px)
+                im.save()
+                done.append(f)
+        bpy.data.images.remove(im)
+    return done
 
 
 def prepare(arm, meshes):
@@ -240,6 +304,7 @@ def main():
         shutil.rmtree(out_dir)
     os.makedirs(out_dir, exist_ok=True)
     report['full_sclera'] = rig.full_sclera()        # eye bones turn the ball: no black lid shadow on it
+    mask_alpha = mask_alpha_images(meshes)           # before the conversion gives every material the MMD shader
     baked = sb.bake_node_colours(meshes, os.path.join(out_dir, 'textures'))
     report.update(prepare(arm, meshes))
 
@@ -309,6 +374,7 @@ def main():
     bpy.ops.mmd_tools.export_pmx(filepath=path, scale=12.5, copy_textures=True, log_level='ERROR')
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         raise RuntimeError('PMX not written: %s' % path)
+    report['opaque_textures'] = fill_mask_alpha(os.path.join(out_dir, 'textures'), mask_alpha)
     report['grant_order_violations'] = roe.verify_grant_order(path)
     report['bytes'] = os.path.getsize(path)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out_dir, name + '_converted.blend'))

@@ -7,6 +7,8 @@ r"""Export a Vindictus heroine: .blend with the game's materials at full texture
     python export_model.py --all --xps --pmx            # every heroine of looks.py
     python export_model.py lynn --redo                  # build again (otherwise an existing .blend is reused
                                                         #   for --xps / --pmx)
+    python export_model.py lynn --upscale --xps --pmx   # HD copy: colour textures + dye masks AI-upscaled 4x
+                                                        #   (4x-UltraSharp, esrgan.py), look name + _HD
 
 Output (E:\game_export\VindictusNA, scripts/archive layout):
     <Name>\blend\<Look>\<Look>.blend   + textures\ (relative), <Look>_front/_34/_side/_back/_face.png, 说明 text
@@ -19,6 +21,7 @@ one body and skeleton between all of them), with her own face, hair and the outf
 game data lacks are substituted and listed in the .blend's 说明 text.
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -36,7 +39,11 @@ import textures  # noqa: E402
 WORK = hfs.WORK
 ROOT = os.path.join(WORK, 'root')
 PNG = os.path.join(WORK, 'png')
+PNG_HD = os.path.join(WORK, 'png_hd')        # --upscale: 4x copies of the colour textures, same names
 STATS = os.path.join(WORK, 'stats.json')
+UPSCALE_MODEL = os.environ.get('UPSCALE_MODEL', r'E:\tools\upscale\models\4x-UltraSharp.pth')
+UPSCALE_MAX = 4096
+COLOUR_KEYS = ('basetexture', 'basetexture2', 'iris')   # colour maps / dye masks; normals and masks keep game size
 EXPORT = os.environ.get('VINDICTUSNA_EXPORT', r'E:\game_export\VindictusNA')
 BLENDER = os.environ.get('BLENDER', r'D:\Program Files\blender-3.6.15-windows-x64\blender.exe')
 HDRI = os.path.join(os.path.dirname(BLENDER), '3.6', 'datafiles', 'studiolights', 'world', 'studio.exr')
@@ -92,16 +99,18 @@ def fetch_materials(mdl_files, extra_materials=(), layers=()):
     for m in extra_materials:
         want.update(by_base.get(m.lower(), [])[:3])
     hfs.fetch(ROOT, [low[v] for v in want], quiet=True)
-    vtfs = set()
+    vtfs, colour = set(), set()                  # colour = PNG names of colour maps / dye masks (for --upscale)
     for v in want:
         try:
             t = re.sub(r'//[^\n]*', '', open(local(low[v]), errors='ignore').read())
         except OSError:
             continue
         for k, x in re.findall(r'"\$([a-z0-9_]+)"\s+"?([^"\r\n]*)"?', t, re.I):
-            q = 'materials/' + x.strip().replace('\\', '/').lower().lstrip('/') + '.vtf'
-            if k.lower() in TEX_KEYS and x.strip() and q.replace('.vtf.vtf', '.vtf') in low:
-                vtfs.add(low[q.replace('.vtf.vtf', '.vtf')])
+            q = ('materials/' + x.strip().replace('\\', '/').lower().lstrip('/') + '.vtf').replace('.vtf.vtf', '.vtf')
+            if k.lower() in TEX_KEYS and x.strip() and q in low:
+                vtfs.add(low[q])
+                if k.lower() in COLOUR_KEYS:
+                    colour.add(low[q].rsplit('/', 1)[-1][:-4])
     for layer in layers:
         hits = [n for n in low if n.startswith('materials/models/player/face_layer/') and n.endswith('/%s.vtf' % layer.lower())]
         vtfs.update(low[h] for h in hits)
@@ -122,7 +131,8 @@ def fetch_materials(mdl_files, extra_materials=(), layers=()):
                 src, dst = os.path.join(PNG, b + '.png'), os.path.join(PNG, b + '_sclera.png')
                 if os.path.exists(src) and (not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src)):
                     textures.fill_sclera(src, dst)
-    return len(want), len(vtfs), n
+                colour.add(b + '_sclera')
+    return len(want), len(vtfs), n, colour
 
 
 def vmt_base(material):
@@ -223,6 +233,79 @@ def make_config(look, files, figure=None):
     return path, cfg, face_tex, brow_c
 
 
+def make_config_npc(look, files):
+    """an NPC / boss (looks.NPCS): its one complete game model, no body / face / outfit assembly, no body shape"""
+    name, tag = look['name'], look['look']
+    comp = os.path.join(WORK, 'comp', tag)
+    if os.path.isdir(comp):
+        shutil.rmtree(comp)
+    os.makedirs(comp)
+    out = os.path.join(WORK, 'build', tag)
+    os.makedirs(out, exist_ok=True)
+    models = [{'mdl': files[m], 'collection': name, 'tag': 'body'} for m in look['models']]
+    for spec in models:
+        if look.get('hide'):
+            spec['hide_materials'] = look['hide']
+    dye = {}
+    if look.get('csf'):                                  # the game's own costume preset for this NPC: official colours
+        low = hfs.lower_index()
+        hfs.fetch(ROOT, [low[look['csf']]], quiet=True)
+        col = looks.csf_colours(local(low[look['csf']]))
+        hair = [c or [200, 200, 200] for c in col.get('hair', [])][:3]
+        if len(hair) == 3:
+            look['hair_rgb'] = hair
+            dye = {m.lower(): [lin(c) for c in hair] for m in look.get('hair_mats', [])}
+        if col.get('upper_body') and all(col['upper_body']):
+            look['dyes'] = col['upper_body']
+    cfg = {
+        'name': name, 'tag': tag, 'scale': 0.0254, 'flip_normal_green': True, 'dye_gain': 2.0,
+        'hdri': HDRI, 'hdri_strength': 0.8, 'key': 2.6, 'fill': 0.7, 'rim': 1.8,
+        'models': models, 'material_roots': [ROOT], 'png_dirs': [comp, PNG], 'tex_stats': STATS,
+        'alias': look.get('alias', {}), 'override': look.get('override', {}), 'solid': {}, 'synth': {}, 'force_dye': [],
+        'dye_default': [lin(c) for c in look['dyes']], 'dye': dye,
+        'face_hide': [], 'render_dir': out, 'out_blend': os.path.join(out, tag + '.blend'),
+        'views': {'front': [0, -1, 0.08], '34': [-0.7, -0.8, 0.1]}, 'res': [600, 900], 'figure': None,
+    }
+    path = os.path.join(WORK, 'cfg', tag + '.json')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    json.dump(cfg, open(path, 'w', encoding='utf-8'), indent=1, ensure_ascii=False)
+    return path, cfg
+
+
+def upscale_look(cfg, cfg_path, colour):
+    """--upscale: 4x copies of the look's colour maps and dye masks in PNG_HD, cached by name (shared ones such as the
+    body are done once); the brow composite in comp/<tag> is swapped for its 4x copy (cached by content); PNG_HD is
+    searched before PNG, so normal maps and masks keep the game's size.  Returns the number of new upscales."""
+    names = set(colour)
+    names.update(v for v in cfg['alias'].values()             # textures reached through an alias (borrowed irises)
+                 if not re.search(r'_(normal|n|pe|mask|spec)$', v, re.I))
+    jobs = []
+    for b in sorted(names):
+        src, dst = os.path.join(PNG, b + '.png'), os.path.join(PNG_HD, b + '.png')
+        if os.path.exists(src) and (not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src)):
+            jobs.append((src, dst))
+    comp = cfg['png_dirs'][0]
+    swaps = []
+    for f in sorted(os.listdir(comp)):
+        src = os.path.join(comp, f)
+        cached = os.path.join(PNG_HD, '_comp', hashlib.md5(open(src, 'rb').read()).hexdigest() + '.png')
+        if not os.path.exists(cached):
+            jobs.append((src, cached))
+        swaps.append((cached, src))
+    if jobs:
+        import esrgan
+        net = esrgan.load_model(UPSCALE_MODEL)
+        for src, dst in jobs:
+            tmp = dst[:-4] + '.part.png'                     # parallel exports never see half a file
+            esrgan.upscale_file(net, src, tmp, UPSCALE_MAX)
+            os.replace(tmp, dst)
+    for cached, src in swaps:
+        shutil.copy2(cached, src)
+    cfg['png_dirs'] = [comp, PNG_HD, PNG]
+    json.dump(cfg, open(cfg_path, 'w', encoding='utf-8'), indent=1, ensure_ascii=False)
+    return len(jobs)
+
+
 # ---------------------------------------------------------------------------------------------- Blender steps
 def blender(script, args, blend=None, log=None):
     cmd = [BLENDER, '-b']
@@ -240,21 +323,32 @@ def blender(script, args, blend=None, log=None):
 
 
 def export(hero, args):
-    look = looks.resolve(hero, outfit=args.outfit, variant=args.variant, hair=args.hair, nude=args.nude,
-                         head=args.head)
+    if hero in looks.NPCS:
+        look = looks.resolve_npc(hero)
+    else:
+        look = looks.resolve(hero, outfit=args.outfit, variant=args.variant, hair=args.hair, nude=args.nude,
+                             head=args.head)
+    if args.upscale:                                     # the HD copy sits beside the game-size look
+        look['look'] += '_HD'
+        look['cn'] += '·高清'
     name, tag = look['name'], look['look']
     blend_dir = os.path.join(EXPORT, name, 'blend', tag)
     blend = os.path.join(blend_dir, tag + '.blend')
     t0 = time.time()
-    print('== %s  %s  (%s)' % (tag, look['cn'], ', '.join(os.path.basename(p) for p in look['pieces']) or 'nude'), flush=True)
+    print('== %s  %s  (%s)' % (tag, look['cn'], ', '.join(os.path.basename(p) for p in look.get('models') or look['pieces'])
+                                or 'nude'), flush=True)
+    npc = look.get('npc')
     if args.redo or not os.path.exists(blend):
-        paths = [look['face']['mdl'], look['hair']['mdl']] + look['pieces'] + [BODY_MDL, FIONA_MDL, LYNN_ORIENTAL]
+        if npc:
+            paths = list(look['models'])
+        else:
+            paths = [look['face']['mdl'], look['hair']['mdl']] + look['pieces'] + [BODY_MDL, FIONA_MDL, LYNN_ORIENTAL]
         if look.get('borrow'):
             paths.append(look['borrow']['mdl'])
         local_files = fetch_models(paths)
         files = dict(zip(paths, local_files))
         extra = list(look.get('alias', {}).values()) + list(look.get('override', {}).values())
-        n_vmt, n_vtf, n_new = fetch_materials(local_files, extra, [look['brow']] if look.get('brow') else [])
+        n_vmt, n_vtf, n_new, colour = fetch_materials(local_files, extra, [look['brow']] if look.get('brow') else [])
         print('  %d materials, %d textures (%d converted now)' % (n_vmt, n_vtf, n_new), flush=True)
         figure = None
         fig_name = 'csf/bodyshape_%s_default.fig' % look['hero']
@@ -262,7 +356,15 @@ def export(hero, args):
         if not args.no_figure and fig_name in low:
             hfs.fetch(ROOT, [low[fig_name]], quiet=True)
             figure = local(low[fig_name])
-        cfg_path, cfg, face_tex, brow_c = make_config(look, files, figure)
+        if npc:
+            (cfg_path, cfg), face_tex, brow_c = make_config_npc(look, files), None, None
+        else:
+            cfg_path, cfg, face_tex, brow_c = make_config(look, files, figure)
+        if args.upscale:
+            t1 = time.time()
+            n_up = upscale_look(cfg, cfg_path, colour)
+            print('  upscaled 4x: %d new, %d colour textures in the look (%.0fs)' % (n_up, len(colour), time.time() - t1),
+                  flush=True)
         if args.prepare_only:
             print('  prepared: %s' % cfg_path, flush=True)
             return tag
@@ -270,7 +372,8 @@ def export(hero, args):
         sec, text = blender('build_blend.py', [cfg_path], log=os.path.join(build_dir, 'build.log'))
         print('  built in %.0fs' % sec, flush=True)
         note = os.path.join(build_dir, '说明.txt')
-        open(note, 'w', encoding='utf-8').write(looks.note(look, cfg, text, face_tex, brow_c))
+        open(note, 'w', encoding='utf-8').write(looks.note_npc(look, cfg, text) if npc else
+                                                looks.note(look, cfg, text, face_tex, brow_c))
         if os.path.isdir(blend_dir):
             shutil.rmtree(blend_dir)
         sec, _ = blender('package_blend.py', [cfg['out_blend'], blend_dir, tag, note, 'outfit_head'],
@@ -299,8 +402,9 @@ def export(hero, args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('heroes', nargs='*', help='internal hero names (python list_models.py)')
+    ap.add_argument('heroes', nargs='*', help='internal hero names (python list_models.py) or NPC / boss keys (looks.NPCS)')
     ap.add_argument('--all', action='store_true', help='every heroine of looks.py')
+    ap.add_argument('--npcs', action='store_true', help='every NPC / boss of looks.NPCS (one complete game model each)')
     ap.add_argument('--outfit', help='armour set folder under models/armor/ (instead of the look\'s)')
     ap.add_argument('--variant', help='piece variant inside the set, e.g. create')
     ap.add_argument('--hair', help='hair model (game path or file name)')
@@ -313,8 +417,11 @@ def main():
                     help='extract, convert and write the build config only (run once before parallel exports)')
     ap.add_argument('--no-figure', action='store_true',
                     help="keep the shared body's proportions (default: the heroine's own body shape from the game)")
+    ap.add_argument('--upscale', action='store_true',
+                    help='HD copy <look>_HD: colour textures and dye masks AI-upscaled 4x (4x-UltraSharp, max %d px); '
+                         'run --prepare-only --upscale once before parallel exports (it does the GPU work)' % UPSCALE_MAX)
     a = ap.parse_args()
-    heroes = list(looks.HEROES) if a.all else a.heroes
+    heroes = (list(looks.HEROES) if a.all else []) + (list(looks.NPCS) if a.npcs else []) + a.heroes
     if not heroes:
         ap.print_help()
         return

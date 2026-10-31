@@ -14,6 +14,59 @@
 
 ---
 
+## 2026-10-31 — Vindictus 北美服：19 位女主角的高清版（AI 放大贴图）和对比画廊；7 个剧情 NPC / 女性 Boss；贴图 Alpha 修正（PMX 在 MMD 里脸发虚、Blender 里眼睛发黑 / 脸偏暗），19 个 PMX 重导；Eire 的标准表情
+
+**新增**
+
+- `export_model.py --upscale`：高清版 `<外观>_HD`（PMX 名字带「·高清」），原版不动。颜色贴图和服装 / 头发的染色遮罩用 4x-UltraSharp 放大 4 倍
+  （最大 4096；`esrgan.py` 自带 ESRGAN 网络，PyTorch + CUDA，权重在仓库外 `E:\tools\upscale\models`），法线和各种遮罩保持游戏原尺寸，
+  透明通道用 Lanczos 普通放大；放大结果按文件名缓存，叠了眉毛的脸按内容哈希缓存。19 位都导了（.blend / XPS / PMX）。
+- `html/make_hd_gallery.py` → `html/hd.html`：每位女主角的原版和高清版同机位渲脸、眼睛、衣服、全身（`compare_views_blender.py`），
+  页面上拖动分界线对比；`html/index.html` 链过去。
+- 剧情 NPC 和女性 Boss：`looks.NPCS` + `export_model.py <键>` / `--npcs`，一个完整的游戏模型直接导出（`make_config_npc`、`looks.note_npc`）。
+  7 个：Ceara、Eire、Iset（NPC 版）、Dwyn（露脸 / 戴头盔）、Lady、Iset（Boss 版）。Ceara 的发色用游戏的外观预设
+  `csf/npc_ceara.csf`（`looks.csf_colours`）；Dwyn 露脸版的头盔是过场里拿在手上的道具，挂在 `bone_helmet` 上飘在头旁边，默认隐藏（`hide`）。
+- Eire 的脸是 HL2 式的面部动作单元（`lid_droop`、`mouth_drop`、`corner_puller` ……），没有 `blink` 这类整脸表情：
+  `export_pmx_blender.FACS_MORPHS` 给她做出 13 个 MMD 标准表情（单眼眨眼只取一侧，じと目 = 闭眼 × 0.5），原始 15 个仍在「その他」。
+- `outfit_names.py`：451 套女性服装的中文名。
+
+**修复**
+
+- 贴图 Alpha：Source 把高光 / 次表面遮罩放在贴图的 Alpha 里（脸上平均 0.7–0.9，Iset 的身体约 0.05），只有透明材质的 Alpha 才是透明度。
+  - PMX：MMD 把贴图 Alpha 乘进材质，脸发虚、Iset 身体几乎看不见、Dwyn 的眼睛消失。现在只被不透明材质用到的贴图导出后 Alpha 填成 1
+    （`fill_mask_alpha`，颜色逐像素不变，报告 `opaque_textures`）。19 位女主角的 PMX 已重导（只动 PMX；PMX 文件夹里的预览图保留）。
+  - Blender：Straight 模式下 EEVEE 把颜色贴图的 Alpha 乘进颜色，Dwyn 的眼睛全黑，女主角脸上眼周、唇线、鼻孔偏暗。
+    `build_blend.py` 把不透明材质用的贴图设成 Channel Packed。法线等非颜色数据不受影响（实测改不改逐像素相同）。
+- NPC 的「贴图齐全」改按网格实际画出的材质算：MDL 的贴图表里还有眼球的虹膜材质和引擎的 `glint`，按表数 Eire 像是缺两只瞳孔，
+  其实齐全。
+- `fix_eye_pivots` 允许没有眼球网格的模型（眼睛画在脸上的 NPC / Boss）。
+
+**用户如何操作**
+
+- 高清版：`python export_model.py lynn --upscale --xps --pmx`；对比页 `python html\make_hd_gallery.py`（`--render` 全部重渲）。
+- NPC：`python export_model.py --npcs --xps --pmx`，或单个 `python export_model.py eire --xps --pmx`。
+- 文件：`E:\game_export\VindictusNA\<角色>\{blend,xps,pmx}\<外观>_HD\`；NPC 在 `Ceara`、`Eire`、`Iset`、`Dwyn`、`Lady` 文件夹；
+  总览图在 `_overview\`（剧情NPC和女性Boss、PMX透明通道修正_对比、旧版blend脸部Alpha_对比、金属原样_blend和PMX对比）。
+
+**实现原理与兼容性**
+
+- `FACS_MORPHS` 只在脸上没有 `blink`、有 `lid_droop` 时启用；19 位女主角和 Dwyn 都有 `blink`，表情和以前逐项相同（复制形态键的路径没变）。
+- 对比渲染时两边都按新的 Alpha 规则设置，差别只来自贴图。10-31 之前做的 19 个原版 `.blend` 没有重做，脸部仍略偏暗（README 已知限制）。
+- 高清导出单个 Blender 峰值约 4 GB；别的窗口也在跑 Blender 时最多并行 2 组。
+
+**已执行的验证**
+
+- 19 位女主角的 PMX 重导：全部成功，撕裂面 0，表情数和重导前一样；每位的脸部贴图 Alpha 填成 1（卡莉亚另有手部金属，露米艾尔另有借来的一小块脸）。
+  按 MMD 的方式混合（导入后所有材质 HASHED）渲琳、芈璃的脸：不再发虚。
+- 高清版 19 位：XPS 全部 ok，PMX 撕裂面 0；`verify_hd.py` 和原版逐项对比（PMX 骨骼 / 刚体 / 关节 / 表情数 / 眼骨，XPS 骨骼 / 网格）19 位全部一致；
+  三种格式合计 3.56 GB；高清 PMX 的脸部贴图抽查 Alpha 全是 255。对比页 19 套原版 + 19 套高清对比图（每套 4 张）渲染无报错。
+- NPC 7 个都有 .blend / XPS / PMX，撕裂面 0。Eire：1.70 m，两只眼骨（球面拟合半径 16.3 mm），13 个标准表情在 PMX 上逐个渲图检查，
+  带物理跳舞无穿插；Dwyn 戴头盔版 2.12 m（含羽饰），头盔戴在头上。
+- Alpha：琳、芈璃、菲欧娜、露米艾尔的原版 .blend 同机位比 Straight 和 Channel Packed（脸部特写 1–10% 的像素有差别，琳最多）；
+  只切换法线贴图的模式，渲染逐像素相同。
+
+---
+
 ## 2026-10-31 — PMX Head Swap 0.2：别家游戏的头 / 身体（星刃 Eve ↔ Inase a08），修好脖子接缝顶点数不同时的小洞
 
 **新增 / 修复**
