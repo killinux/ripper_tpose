@@ -14,6 +14,27 @@
 
 ---
 
+## 2026-11-01 — ELDEN RING 角色 mod → 高清材质 Blender / XPS / PMX（`scripts/eldenring/`，一条命令）；第一个：Nexus 11065「Reika Hardsuit - Gantz」（GANTZ 玲花，带外骨骼 / 不带外骨骼两版）
+
+**新增**
+
+- `scripts/eldenring/`：读 FromSoftware 格式（`fromsoft.py`：DCX DFLT / KRAK、BND4、TPF、FLVER2、MATBIN，纯 Python + numpy），
+  `unpack_mod.py` → `build_blend.py` → `export_xps_blender.py` / `export_pmx_blender.py`，`export_mod.py` 串成一条命令并回读预览（跳舞、眼睛转动）。
+  本机不用装 Elden Ring；Oodle 用 CUE4Parse 的 DLL，BC6H 用 DirectXTex `texconv`（下载到 `E:\tools\directxtex\`）。
+- 第一个 mod：`E:\game_export\EldenRing\Reika\`：`blend\mod11065_Reika_Hardsuit\`（24 个网格、74 根骨、4K 贴图），
+  `xps\`、`pmx\` 各两版：完整版，和 `_无外骨骼`（不要巨型机械手臂、管子、刀，只有战斗服的玲花）。
+  PMX：186 根骨、34 个刚体（身体碰撞体 + 胸部 + 胸前长发 7 束 16 节）、眼睛骨骼 + 両目。
+- `scripts/archive/games.py` 登记 `eldenring`（`D:\eldenring_exports` → `E:\game_export\EldenRing`）。
+
+**踩过的坑（脚本里都处理了，细节见 `scripts/eldenring/README.md`）**
+
+- 左手系 Y 向上 → Blender 是镜像：三角形绕向翻转（拿顶点法线核对）；BND4 格式字节高位在前；FLVER 里 Spine / Pelvis 都是根骨；mod 权重和 0.5–1.9，逐顶点归一。
+- BC6H 颜色贴图游戏当线性颜色用（按 sRGB 读皮肤偏红偏暗）；Pillow 会把 BC6H 截到 8 位，改用 texconv 解成浮点；BC6H 法线贴图是带符号的。
+- 法线贴图是 DirectX 方向，**蓝通道是光滑度不是 Z**：派生 OpenGL 法线（Blender）、DirectX 法线（XPS）、粗糙度 = 1 - 蓝。
+- 头发贴图几乎是黑的，游戏的毛发着色器把它染成铜橘色：按作者展示动图量出的颜色 `#a95e37` 重新上色（`--tint`）；外骨骼的蓝灯发光也是着色器做的，从贴图的青蓝色区域做自发光。
+- 胸前的长发：`scripts/aion2/hair_chains.py` 只处理垂在背后的头发，生成时把骨架临时转 180°（并放大 100 倍，它按厘米算）。
+- 武器没有游戏的握持数据：刀身沿小指根 → 食指根，刀柄在掌心。
+
 ## 2026-10-31 — Vindictus 北美服：19 位女主角的高清版（AI 放大贴图）和对比画廊；7 个剧情 NPC / 女性 Boss；贴图 Alpha 修正（PMX 在 MMD 里脸发虚、Blender 里眼睛发黑 / 脸偏暗），19 个 PMX 重导；Eire 的标准表情
 
 **新增**

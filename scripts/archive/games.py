@@ -770,6 +770,28 @@ ROE_NAMES = {"a": "Inase", "b": "Kart", "c": "Misa", "d": "Erin", "e": "Miri", "
 ROE_ID = re.compile(r"^(?:[a-z]\d\d|[a-z]_[a-z]+\d+)$")   # a08; seasonal a_swimsuit01
 
 
+ELDENRING = r"D:\eldenring_exports"
+
+
+def er_character(name):
+    """mod11065_Reika_Hardsuit(_无外骨骼) -> Reika: the word after mod<id>_."""
+    m = re.match(r"^mod\d+_([^_]+)", name)
+    return m.group(1) if m else "Other"
+
+
+def collect_eldenring():
+    products = []
+    for fmt in ("blend", "xps", "pmx"):
+        for name in subdirs(j(ELDENRING, fmt)):
+            src = j(ELDENRING, fmt, name)
+            main = name + "." + fmt
+            products.append(Product(er_character(name), fmt, name, src, main=main if exists(j(src, main)) else None,
+                                    preview="preview.png" if exists(j(src, "preview.png")) else None,
+                                    desc="Nexus mod（scripts/eldenring/export_mod.py）"))
+    metas = [Meta(j(ELDENRING, "mods"), "mod_sources"), Meta(j(ELDENRING, "logs"), "logs")]
+    return products, metas
+
+
 def roe_character(key):
     """a01 / pc_a01_nk_bs -> Inase（字母 = 角色，数字 = 服装变体，见 scripts/riseoferos/character-roster.md）。"""
     m = re.match(r"^(?:pc_)?([a-z])(?:\d|_[a-z]+\d)", key)
@@ -927,6 +949,10 @@ GAMES = {g.key: g for g in [
          sources=[VVP], collect=collect_vvp, regenerable=regen_vvp),
     Game("hotelvip", "HotelVIP", "Hotel VIP（2D 游戏，没有 3D 模型）",
          sources=[HOTELVIP], collect=collect_hotelvip, galleries=["scripts/hotelvip/html/index.html"]),
+    Game("eldenring", "EldenRing", "ELDEN RING（Nexus 角色 mod）",
+         sources=[ELDENRING], collect=collect_eldenring,
+         regenerable=[(j(ELDENRING, "work"), "work\\ = unpack_mod.py 的中间文件（model.json / model.npz / 贴图），"
+                                             "scripts/eldenring/export_mod.py 可重新生成")]),
     Game("roe", "RiseOfEros", "Rise of Eros",
          sources=[ROE] + ROE_EXTRA, collect=collect_roe, regenerable=regen_roe,
          galleries=["scripts/riseoferos/html/index.html"],
