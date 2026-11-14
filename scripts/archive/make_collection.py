@@ -10,7 +10,8 @@ converted and what it lacks, and which archived folders belong to it ("glob" und
 <format>/<model>, or a "fmt" for folders laid out otherwise).  For every section the script
   * hard-links every file of those folders into <out>/<section dir>/<format>/<model>/ (same volume as the archive:
     no extra space; editing a file there edits the archived one - the gallery says so);
-  * makes a thumbnail per model (_thumbs/, from the folder's preview image or a "thumb_from" pattern);
+  * makes a thumbnail per model (_thumbs/, from the folder's preview image or a "thumb_from" pattern; an item's
+    "thumb_panels": n says that preview is n views side by side, front first - the thumbnail keeps the front one);
   * copies the source's own picture (the mod page's image) into _thumbs/source/.
 Then writes <out>/index.html (the gallery, local files only) and <out>/说明.md.  Re-running replaces the links;
 folders the spec no longer names are left alone (listed in the run's output).
@@ -66,11 +67,13 @@ def find_preview(folder, model):
     return None
 
 
-def thumb(src, dst, height=420):
+def thumb(src, dst, height=420, panels=1):
     if Image is None or not src or not os.path.isfile(src):
         return False
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     im = Image.open(src).convert("RGB")
+    if panels > 1 and im.width > 1.5 * im.height:     # front / side / back strip: keep the front view
+        im = im.crop((0, 0, im.width // panels, im.height))
     if im.height > height:
         im = im.resize((max(1, round(im.width * height / im.height)), height), Image.LANCZOS)
     im.save(dst, quality=86)
@@ -114,7 +117,7 @@ def build(spec, dry):
                     prev = find_preview(folder, name)
                 if prev and (m["thumb"] is None or fmt == "blend"):
                     t = os.path.join(out, "_thumbs", sec["dir"], name + ".jpg")
-                    if dry or thumb(prev, t):
+                    if dry or thumb(prev, t, panels=item.get("thumb_panels", 1)):
                         m["thumb"] = os.path.relpath(t, out).replace("\\", "/")
         pic = sec.get("source", {}).get("picture")
         pic_rel = None

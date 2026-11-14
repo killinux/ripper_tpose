@@ -84,7 +84,7 @@
               "picture": "nexus/11065-1789913924-1001332938.jpg"},
    "converted": "2026-11-01，scripts/eldenring/export_mod.py（自己写的 FromSoftware 格式读取：DCX / BND4 / FLVER / TPF / MATBIN）。",
    "notes": "完整版（外骨骼、管子、刀）和「无外骨骼」版。头发颜色、蓝灯发光是游戏着色器做的，按作者截图补的。",
-   "models": [{"glob": "EldenRing/Reika/*/mod11065_*"}]
+   "models": [{"glob": "EldenRing/Reika/*/mod11065_*", "thumb_panels": 3}]
   },
   {
    "dir": "08_EldenRing_Tifa_mod4684", "short": "ER Tifa #4684",
@@ -96,7 +96,7 @@
               "picture": "nexus/4684-1709896976-1206497900.png"},
    "converted": "2026-11-14，scripts/eldenring/export_mod.py：每个压缩包是一种颜色，每种颜色按盔甲编号分三套（1500 比基尼、1810 全覆盖、2110 裸体），共 9 个模型。",
    "notes": "部件里夹着作者当模板用的原版盔甲网格（三角面全收成一点，游戏里看不见），已去掉；几个部件的骨架父子关系是断的，按完整骨架重新对齐。胸部用的是游戏布料代理骨（[cloth]BD_M_2140_Board_001），PMX 里按左右拆成左胸 / 右胸各一个物理球；长发生成 7 束物理链；眼睛加了骨骼。头发颜色跟套装走（作者截图里是混搭的）。",
-   "models": [{"glob": "EldenRing/Tifa/*/mod4684_*"}]
+   "models": [{"glob": "EldenRing/Tifa/*/mod4684_*", "thumb_panels": 3}]
   },
   {
    "dir": "09_EldenRing_Naotora_mod1196", "short": "ER 直虎 #1196",
@@ -107,7 +107,7 @@
               "picture": "nexus/1196-1652917368-589348925.jpeg"},
    "converted": "2026-11-14，scripts/eldenring/export_mod.py。",
    "notes": "DOA 的井伊直虎穿 GANTZ 战斗服，腿上有 X 枪套。PMX 没有眼睛骨骼（眼睛画在脸的贴图上）也没有胸部物理（原模型没有胸骨），只有身体碰撞体。",
-   "models": [{"glob": "EldenRing/Naotora/*/mod1196_*"}]
+   "models": [{"glob": "EldenRing/Naotora/*/mod1196_*", "thumb_panels": 3}]
   },
   {
    "dir": "10_只狼_Tifa_mod1838", "short": "只狼 Tifa #1838",
@@ -118,7 +118,7 @@
               "picture": "nexus/1838-1711239613-585495476.png"},
    "converted": "2026-11-14，scripts/eldenring/export_mod.py（只狼和 Elden Ring 同一套格式）：三种颜色 × 三套（9000 全覆盖、9120 比基尼、9130 裸体），每套都带楔丸（刀身发蓝光）。",
    "notes": "后脑的长发做在一个 NPC 的骨架上（脖子差 25 cm），游戏按自己的绑定姿势把它挪回去，这里同样挪回；文件里它横着往后伸（游戏靠物理吊下来），转成自然下垂。胸部挂在原版绳子物理骨上，PMX 拆成左右两个物理球；后发生成 7 束物理链。",
-   "models": [{"glob": "Sekiro/Tifa/*/mod1838_*"}]
+   "models": [{"glob": "Sekiro/Tifa/*/mod1838_*", "thumb_panels": 3}]
   },
   {
    "dir": "11_HS2_GGAdams_GantzSuit", "short": "HS2 Gantz Suit",

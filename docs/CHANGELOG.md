@@ -26,7 +26,8 @@
   `export_pmx_blender.py` 加 `--bust-spring` / `--bust-limits`；`preview_pmx_blender.py` 加 `--dance-views front,side,back`。
 - 新 `scripts/honeyselect2/coordinate_export.py`：服装卡 + zipmod 穿到角色卡上（zipmod 的 abdata 排在游戏前面查找，列表 CSV 并进物件列表，按类别对上 sideloader 的 ID）。
 - 新 `scripts/archive/make_collection.py` + `collections/gantz.json`：按 JSON 清单把各游戏归档里的成品硬链接到一个主题目录，配本地画廊 `index.html` 和 `说明.md`；
-  归档工具登记了 Sekiro（`fromsoft_collector`，和 ELDEN RING 共用）。
+  归档工具登记了 Sekiro（`fromsoft_collector`，和 ELDEN RING 共用）。合集现在 13 个来源、58 个造型；
+  预览是正面 / 侧面 / 背面一长条的，清单里写 `"thumb_panels": 3`，缩略图只取正面。
 
 **转出来的（都在 `E:\game_export\_GANTZ合集\`，按来源分目录）**
 
