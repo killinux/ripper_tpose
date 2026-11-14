@@ -14,6 +14,50 @@
 
 ---
 
+## 2026-11-14 — PMX 的 MMD 材质（第一步）和 ray-mmd 高清材质（第二步）：`scripts/pmx_tools/hq_materials/`，15 个游戏各一个样品
+
+pmx-todo 第 2 项「MMD 里的材质」，用户选「两步都做」。做法、换算和坑见 `docs/pmx-hq-materials.md`。
+
+**新增**
+
+- `make_hq_materials.py <PMX 或文件夹>`：
+  - 第一步，写 `<名字>_材质.pmx`（原文件不动）。按材质是什么（皮肤、头发、眼睛、睫毛、嘴、布、半金属、金属、
+    乳胶 / 皮革 / 塑料、玻璃、发光件）配生成的 toon 渐变、sphere、高光和描边；
+  - 第二步，写 ray-mmd 版到 `E:\game_export\_raymmd\<游戏>\<模型>\`：`model.pmx` 和贴图都是硬链接，
+    每个材质一个 ray-mmd `.fx`，再加 MME 的 `scene.emm`。
+  - 类别先按名字（英 / 中 / 日关键词），再用游戏贴图在这个材质自己的 UV 里量出来的金属度 / 粗糙度 / 自发光面积。
+    贴图算强证据，节点树里的常数算弱证据。
+- `extract_pbr_blender.py`：在 PMX 的源 .blend 里读每个材质的 Principled BSDF。源 .blend 是导出脚本留下的
+  `*_converted.blend`，或 ROE 归档里的高清 .blend。能直接用的贴图（含单通道、1 − x、反绿通道的法线）直接引用，
+  其余用 Cycles 烘焙。
+- `mmd_drive.py`：用窗口消息驱动 MMD 本体。可以出对比图（原 / 第一步 / ray-mmd 三栏），在一个 MMD 里连续给多个
+  模型存 `scene.pmm`；会读回 MME 的 MaterialMap 分页，核对有几个材质真的用上了我们的 .fx。
+- 这台电脑的 MMD（`E:\tools\MikuMikuDanceE_v932x64`）装了 MME 0.37 x64（BowlRoll，SHA-1 和页面公布的一致）
+  和 ray-mmd 1.5.2（GitHub tag）。
+
+**用户怎么用**：普通 MMD 直接载入 `_材质.pmx`；ray-mmd 打开该模型 ray-mmd 文件夹里的 `scene.pmm`。
+也可以自己载入 ray.x、天空盒、`model.pmx`，再在 MME 的 Effect Mapping 窗口 File → Open 选 `scene.emm`。
+样品页：`scripts/pmx_tools/hq_materials/html/MMD材质样品.html`。
+
+**踩过的坑**
+
+- MME 只读模型同名 `.emd` 的 `[Effect]`（Main 分页）。`[MaterialMap]`、`[Effect@MaterialMap]` 都报错，
+  所以按材质分配只能用 `.emm`。格式照 MME 自己存的文件：`[Effect@MaterialMap]`、`Owner = Acs1`、`Pmd3[n]`，
+  必须有 `[Effect]` 段。
+- MME 按日文编码处理路径：中文文件夹里的模型在它那里是乱码，.emm 对不上；.emd 根本找不到，而且不报错。
+  所以 ray-mmd 版放在纯英文路径。
+- 普通 MMD 会把加算 sphere 的 alpha 带进材质：有镂空的贴图透明处变灰斑，alpha 0 的 sphere 让整个材质消失。
+  ELDEN RING 战斗服的外层（贴图不透明）也出现了灰斑。所以有镂空的材质不加 sphere，金属类默认不加 sphere。
+- ray-mmd 的粗糙度换算：smoothness = 1 − roughness（`SMOOTHNESS_MAP_TYPE 2`）。法线图和 Blender 一样是 OpenGL 方向。
+
+**验证**：15 个游戏各一个样品都在 MMD 9.32 本体里渲染了三栏对比（ROE、ELDEN RING、只狼、星刃、HS2、FF7 重制版 / 重生、
+CCFF7R、Vindictus DF / NA、对魔忍 Squad / Collection / Action、永劫无间、TFD）。第二步每个样品的材质全部用上了游戏贴图，
+共 186 个材质，MME 零编译错误。15 个 `scene.pmm` 在一个 MMD 会话里存好；在新开的 MMD 里打开 ELDEN RING 那个，18/18 个材质自动生效。
+已知要调的：CCFF7R Aerith 的裙子和身体同一张贴图，被名字判成皮肤；TFD 脸的红晕被皮肤 toon 放大。
+AION2 和「18」系列的文件归另一个窗口管，没碰。
+
+---
+
 ## 2026-11-14 — GANTZ：ELDEN RING / 只狼 / 星刃 / HS2 的 GANTZ mod 全部转成 Blender + XPS + PMX；跨游戏合集 `E:\game_export\_GANTZ合集` 和注明出处的画廊
 
 **新增**

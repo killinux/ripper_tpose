@@ -1,0 +1,112 @@
+<!doctype html><html lang='zh'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'><title>MMD 材质样品</title>
+<style>
+:root{--bg:#f6f6f4;--fg:#1d1d1f;--muted:#666;--card:#fff;--line:#ddd;--accent:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#18181b;--fg:#ececec;--muted:#a1a1aa;--card:#232327;--line:#3a3a40;--accent:#7aa2ff}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 "Microsoft YaHei",system-ui,sans-serif}
+main{max-width:1500px;margin:0 auto;padding:24px 16px}
+h1{font-size:26px;margin:0 0 6px} h2{font-size:19px;margin:0 0 10px}
+.lead{color:var(--muted);margin:0 0 18px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:0 0 22px}
+.card img{width:100%;height:auto;border-radius:6px;border:1px solid var(--line)}
+table{border-collapse:collapse;margin:10px 0 0;font-size:14px} td{padding:3px 12px 3px 0;vertical-align:top}
+td:first-child{color:var(--muted);white-space:nowrap}
+a{color:var(--accent)} code{font-family:Consolas,monospace;font-size:13px}
+ol li,ul li{margin:3px 0} .toc a{margin-right:12px;white-space:nowrap}
+</style></head><body><main>
+<h1>MMD 材质样品：每个游戏一个</h1>
+<p class='lead'>pmx-todo 第 2 项「MMD 里的材质」，两步都做（2026-11-14）。每张图从左到右：原 PMX（普通 MMD）、第一步 <code>_材质.pmx</code>（普通 MMD）、第二步 ray-mmd（MMD + MME + ray-mmd，游戏的法线 / 粗糙度 / 金属度 / 自发光）。上面是全身，下面是同一张图里裁出的上半身。三张都是在 MMD 本体里渲染的（MMD 9.32 x64，默认相机，第二步用 Helipad GoldenHour 天空盒、ray-mmd 默认设置）。做法见仓库 <code>docs/pmx-hq-materials.md</code>。</p>
+<div class='box'><h2>在 MMD 里自己看</h2><ol><li>第一步：直接载入 PMX 旁边的 <code>&lt;名字&gt;_材质.pmx</code>。</li><li>第二步（这台电脑的 MMD 已装 MME 0.37 和 ray-mmd 1.5.2）：打开该模型 ray-mmd 文件夹里的 <code>scene.pmm</code>；或者依次载入 <code>ray-mmd-1.5.2\ray.x</code>（配件）、<code>Skybox\Helipad GoldenHour\Sky with box.pmx</code>、文件夹里的 <code>model.pmx</code>，再点菜单 MMEffect → Effect Mapping，在窗口里 File → Open 选 <code>scene.emm</code>，按 OK。</li><li>ray-mmd 版统一放在 <code>E:\game_export\_raymmd\</code> 下：MME 不认中文路径（会变成乱码），所以单独放在英文路径里，模型和贴图都是硬链接，不占空间。</li></ol></div>
+<p class='toc'><a href='#s0'>Rise of Eros</a><a href='#s1'>ELDEN RING</a><a href='#s2'>只狼</a><a href='#s3'>星刃 Eve CH_P_EVE_Nikke_06</a><a href='#s4'>HoneySelect 2 Saki Kusano Gantz Full</a><a href='#s5'>FF7 重制版</a><a href='#s6'>FF7 重生</a><a href='#s7'>CCFF7R Aerith</a><a href='#s8'>Vindictus: Defying Fate Fiona</a><a href='#s9'>Vindictus NA Arisha Silver Fox</a><a href='#s10'>对魔忍 Squad 46 Aina</a><a href='#s11'>对魔忍 Collection Asagi costume 1</a><a href='#s12'>Action 对魔忍 Asagi costume 1</a><a href='#s13'>永劫无间 宁红夜</a><a href='#s14'>The First Descendant Viessa</a></p>
+<div class='card' id='s0'><h2>Rise of Eros - 天野 pc_m01_doctor</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/roe_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/roe_sheet.jpg' alt='Rise of Eros - 天野 pc_m01_doctor'></a>
+<table><tr><td>材质</td><td>19 个：布 3、眼睛 1、泪光/遮罩 1、玻璃/透明 2、乳胶/皮革/塑料 2、头发 1、睫毛/眉毛 2、金属 1、半金属 4、皮肤 2</td></tr><tr><td>源 .blend</td><td>pc_m01_doctor.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 1 个；因镂空不加 sphere 的 1 个</td></tr><tr><td>第二步</td><td>18 / 18 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/RiseOfEros/Amano/pmx/pc_m01_doctor'>E:\game_export\RiseOfEros\Amano\pmx\pc_m01_doctor\pc_m01_doctor_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/RiseOfEros/Amano_pc_m01_doctor_ce727d'>E:\game_export\_raymmd\RiseOfEros\Amano_pc_m01_doctor_ce727d</a></td></tr>
+</table></div>
+<div class='card' id='s1'><h2>ELDEN RING #4684 Tifa Gantz 黑 全覆盖</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/er_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/er_sheet.jpg' alt='ELDEN RING #4684 Tifa Gantz 黑 全覆盖'></a>
+<table><tr><td>材质</td><td>19 个：眼睛 1、头发 2、金属 9、半金属 3、嘴 2、皮肤 2</td></tr><tr><td>源 .blend</td><td>mod4684_Tifa_Gantz_黑_全覆盖_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 1 个；因镂空不加 sphere 的 2 个</td></tr><tr><td>第二步</td><td>18 / 18 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/EldenRing/Tifa/pmx/mod4684_Tifa_Gantz_%E9%BB%91_%E5%85%A8%E8%A6%86%E7%9B%96'>E:\game_export\EldenRing\Tifa\pmx\mod4684_Tifa_Gantz_黑_全覆盖\mod4684_Tifa_Gantz_黑_全覆盖_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/EldenRing/Tifa_mod4684_Tifa_Gantz_32b3ef'>E:\game_export\_raymmd\EldenRing\Tifa_mod4684_Tifa_Gantz_32b3ef</a></td></tr>
+</table></div>
+<div class='card' id='s2'><h2>只狼 #1838 Tifa Gantz 金属 全覆盖</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/sekiro_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/sekiro_sheet.jpg' alt='只狼 #1838 Tifa Gantz 金属 全覆盖'></a>
+<table><tr><td>材质</td><td>19 个：发光 1、眼睛 1、头发 3、金属 8、半金属 2、嘴 2、皮肤 2</td></tr><tr><td>源 .blend</td><td>mod1838_Tifa_Gantz_金属_全覆盖_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 1 个；因镂空不加 sphere 的 3 个</td></tr><tr><td>第二步</td><td>18 / 18 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/Sekiro/Tifa/pmx/mod1838_Tifa_Gantz_%E9%87%91%E5%B1%9E_%E5%85%A8%E8%A6%86%E7%9B%96'>E:\game_export\Sekiro\Tifa\pmx\mod1838_Tifa_Gantz_金属_全覆盖\mod1838_Tifa_Gantz_金属_全覆盖_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/Sekiro/Tifa_mod1838_Tifa_Gantz_3078b4'>E:\game_export\_raymmd\Sekiro\Tifa_mod1838_Tifa_Gantz_3078b4</a></td></tr>
+</table></div>
+<div class='card' id='s3'><h2>星刃 Eve CH_P_EVE_Nikke_06</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/sb_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/sb_sheet.jpg' alt='星刃 Eve CH_P_EVE_Nikke_06'></a>
+<table><tr><td>材质</td><td>17 个：布 5、眼睛 3、泪光/遮罩 1、乳胶/皮革/塑料 2、头发 1、睫毛/眉毛 1、嘴 3、皮肤 1</td></tr><tr><td>源 .blend</td><td>Eve_CH_P_EVE_Nikke_06_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 3 个；因镂空不加 sphere 的 3 个</td></tr><tr><td>第二步</td><td>16 / 16 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/StellarBlade/Eve/pmx/CH_P_EVE_Nikke_06'>E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/StellarBlade/Eve_Eve_CH_P_EVE_Nikke_06_378729'>E:\game_export\_raymmd\StellarBlade\Eve_Eve_CH_P_EVE_Nikke_06_378729</a></td></tr>
+</table></div>
+<div class='card' id='s4'><h2>HoneySelect 2 Saki Kusano Gantz Full</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/hs2_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/hs2_sheet.jpg' alt='HoneySelect 2 Saki Kusano Gantz Full'></a>
+<table><tr><td>材质</td><td>17 个：眼睛 1、泪光/遮罩 1、头发 3、睫毛/眉毛 2、金属 6、嘴 2、皮肤 2</td></tr><tr><td>源 .blend</td><td>Gantz_Full_SakiKusano_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 2 个；因镂空不加 sphere 的 3 个</td></tr><tr><td>第二步</td><td>16 / 16 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/HoneySelect2/Saki%20Kusano/pmx/Gantz_Full_SakiKusano'>E:\game_export\HoneySelect2\Saki Kusano\pmx\Gantz_Full_SakiKusano\Gantz_Full_SakiKusano_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/HoneySelect2/Saki_Kusano_Gantz_Full_SakiKusano_505453'>E:\game_export\_raymmd\HoneySelect2\Saki_Kusano_Gantz_Full_SakiKusano_505453</a></td></tr>
+</table></div>
+<div class='card' id='s5'><h2>FF7 重制版 #1707 Tifa Gantz Basic Suit</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/ff7r_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/ff7r_sheet.jpg' alt='FF7 重制版 #1707 Tifa Gantz Basic Suit'></a>
+<table><tr><td>材质</td><td>12 个：眼睛 1、乳胶/皮革/塑料 1、头发 2、睫毛/眉毛 2、金属 1、嘴 1、皮肤 4</td></tr><tr><td>源 .blend</td><td>mod1707_PC0002_00_Tifa_Gantz_Basic_Suit_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 1 个；因镂空不加 sphere 的 2 个</td></tr><tr><td>第二步</td><td>11 / 11 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/FF7Remake/Tifa/pmx/mod1707_PC0002_00_Tifa_Gantz_Basic_Suit'>E:\game_export\FF7Remake\Tifa\pmx\mod1707_PC0002_00_Tifa_Gantz_Basic_Suit\mod1707_PC0002_00_Tifa_Gantz_Basic_Suit_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/FF7Remake/Tifa_mod1707_PC0002_00_Tifa_Gantz_Basic_Suit_f38d05'>E:\game_export\_raymmd\FF7Remake\Tifa_mod1707_PC0002_00_Tifa_Gantz_Basic_Suit_f38d05</a></td></tr>
+</table></div>
+<div class='card' id='s6'><h2>FF7 重生 #1083 Tifa Oasis Momiji</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/ff7rb_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/ff7rb_sheet.jpg' alt='FF7 重生 #1083 Tifa Oasis Momiji'></a>
+<table><tr><td>材质</td><td>10 个：布 1、眼睛 1、头发 1、睫毛/眉毛 2、嘴 1、皮肤 4</td></tr><tr><td>源 .blend</td><td>mod1083_Oasis_Momiji_Tifa_Striped_Bikini_Dresscode_Version_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 1 个；因镂空不加 sphere 的 1 个</td></tr><tr><td>第二步</td><td>9 / 9 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/FF7Rebirth/Tifa/pmx/mod1083_Oasis_Momiji_Tifa_Striped_Bikini_Dresscode_Version'>E:\game_export\FF7Rebirth\Tifa\pmx\mod1083_Oasis_Momiji_Tifa_Striped_Bikini_Dresscode_Version\mod1083_Oasis_Momiji_Tifa_Striped_Bikini_Dresscode_Version_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/FF7Rebirth/Tifa_mod1083_Oasis_Momiji_Tifa_Striped_Bikini_Dr_e0c7e8'>E:\game_export\_raymmd\FF7Rebirth\Tifa_mod1083_Oasis_Momiji_Tifa_Striped_Bikini_Dr_e0c7e8</a></td></tr>
+</table></div>
+<div class='card' id='s7'><h2>CCFF7R Aerith</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/ccff7r_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/ccff7r_sheet.jpg' alt='CCFF7R Aerith'></a>
+<table><tr><td>材质</td><td>10 个：布 1、眼睛 1、头发 2、睫毛/眉毛 1、嘴 1、皮肤 4</td></tr><tr><td>源 .blend</td><td>aerith_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 1 个；因镂空不加 sphere 的 6 个</td></tr><tr><td>第二步</td><td>9 / 9 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/CCFF7R/Aerith/pmx/aerith'>E:\game_export\CCFF7R\Aerith\pmx\aerith\aerith_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/CCFF7R/Aerith_aerith_a06fa5'>E:\game_export\_raymmd\CCFF7R\Aerith_aerith_a06fa5</a></td></tr>
+</table></div>
+<div class='card' id='s8'><h2>Vindictus: Defying Fate Fiona</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/vdf_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/vdf_sheet.jpg' alt='Vindictus: Defying Fate Fiona'></a>
+<table><tr><td>材质</td><td>19 个：布 11、眼睛 1、头发 1、睫毛/眉毛 2、嘴 1、皮肤 3</td></tr><tr><td>源 .blend</td><td>Fiona_converted.blend</td></tr><tr><td>第一步</td><td>因镂空不加 sphere 的 1 个</td></tr><tr><td>第二步</td><td>18 / 18 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/Vindictus/Fiona/pmx/Fiona'>E:\game_export\Vindictus\Fiona\pmx\Fiona\Fiona_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/Vindictus/Fiona_Fiona_d19e5d'>E:\game_export\_raymmd\Vindictus\Fiona_Fiona_d19e5d</a></td></tr>
+</table></div>
+<div class='card' id='s9'><h2>Vindictus NA Arisha Silver Fox</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/vna_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/vna_sheet.jpg' alt='Vindictus NA Arisha Silver Fox'></a>
+<table><tr><td>材质</td><td>17 个：眼睛 2、头发 2、睫毛/眉毛 1、金属 5、嘴 1、皮肤 6</td></tr><tr><td>源 .blend</td><td>Arisha_SilverFox_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 2 个；因镂空不加 sphere 的 4 个</td></tr><tr><td>第二步</td><td>16 / 16 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/VindictusNA/Arisha/pmx/Arisha_SilverFox'>E:\game_export\VindictusNA\Arisha\pmx\Arisha_SilverFox\Arisha_SilverFox_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/VindictusNA/Arisha_Arisha_SilverFox_135589'>E:\game_export\_raymmd\VindictusNA\Arisha_Arisha_SilverFox_135589</a></td></tr>
+</table></div>
+<div class='card' id='s10'><h2>对魔忍 Squad 46 Aina</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/squad_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/squad_sheet.jpg' alt='对魔忍 Squad 46 Aina'></a>
+<table><tr><td>材质</td><td>10 个：布 2、头发 2、金属 1、皮肤 5</td></tr><tr><td>源 .blend</td><td>46_aina_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 9 个；因镂空不加 sphere 的 1 个</td></tr><tr><td>第二步</td><td>9 / 9 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/TaimaninSquad/Aina/pmx/46_aina'>E:\game_export\TaimaninSquad\Aina\pmx\46_aina\46_aina_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/TaimaninSquad/Aina_46_aina_45ba34'>E:\game_export\_raymmd\TaimaninSquad\Aina_46_aina_45ba34</a></td></tr>
+</table></div>
+<div class='card' id='s11'><h2>对魔忍 Collection Asagi costume 1</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/tcol_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/tcol_sheet.jpg' alt='对魔忍 Collection Asagi costume 1'></a>
+<table><tr><td>材质</td><td>6 个：眼睛 1、头发 1、皮肤 4</td></tr><tr><td>源 .blend</td><td>prf_asagi_costume_1_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 5 个；因镂空不加 sphere 的 1 个</td></tr><tr><td>第二步</td><td>5 / 5 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/TaimaninCollection/Asagi/pmx/prf_asagi_costume_1'>E:\game_export\TaimaninCollection\Asagi\pmx\prf_asagi_costume_1\prf_asagi_costume_1_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/TaimaninCollection/Asagi_prf_asagi_costume_1_f472d5'>E:\game_export\_raymmd\TaimaninCollection\Asagi_prf_asagi_costume_1_f472d5</a></td></tr>
+</table></div>
+<div class='card' id='s12'><h2>Action 对魔忍 Asagi costume 1</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/atm_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/atm_sheet.jpg' alt='Action 对魔忍 Asagi costume 1'></a>
+<table><tr><td>材质</td><td>6 个：布 2、眼睛 1、头发 1、皮肤 2</td></tr><tr><td>源 .blend</td><td>asagi_costume_1_f_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 5 个；</td></tr><tr><td>第二步</td><td>5 / 5 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/ActionTaimanin/Asagi/pmx/asagi_costume_1_f'>E:\game_export\ActionTaimanin\Asagi\pmx\asagi_costume_1_f\asagi_costume_1_f_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/ActionTaimanin/Asagi_asagi_costume_1_f_276111'>E:\game_export\_raymmd\ActionTaimanin\Asagi_asagi_costume_1_f_276111</a></td></tr>
+</table></div>
+<div class='card' id='s13'><h2>永劫无间 宁红夜</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/naraka_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/naraka_sheet.jpg' alt='永劫无间 宁红夜'></a>
+<table><tr><td>材质</td><td>9 个：布 1、眼睛 1、头发 2、睫毛/眉毛 1、半金属 1、皮肤 3</td></tr><tr><td>源 .blend</td><td>ch_f_ming_mangjianke_lv_a0_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 1 个；因镂空不加 sphere 的 2 个</td></tr><tr><td>第二步</td><td>8 / 8 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/NARAKA/%E5%AE%81%E7%BA%A2%E5%A4%9C/pmx/ch_f_ming_mangjianke_lv_a0'>E:\game_export\NARAKA\宁红夜\pmx\ch_f_ming_mangjianke_lv_a0\ch_f_ming_mangjianke_lv_a0_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/NARAKA/ch_f_ming_mangjianke_lv_a0_822b0b'>E:\game_export\_raymmd\NARAKA\ch_f_ming_mangjianke_lv_a0_822b0b</a></td></tr>
+</table></div>
+<div class='card' id='s14'><h2>The First Descendant Viessa</h2>
+<a href='file:///E:/game_export/_raymmd/_samples/tfd_sheet.jpg'><img src='file:///E:/game_export/_raymmd/_samples/tfd_sheet.jpg' alt='The First Descendant Viessa'></a>
+<table><tr><td>材质</td><td>11 个：眼睛 2、泪光/遮罩 1、乳胶/皮革/塑料 2、头发 1、睫毛/眉毛 2、嘴 1、皮肤 2</td></tr><tr><td>源 .blend</td><td>Viessa_converted.blend</td></tr><tr><td>第一步</td><td>保留游戏自带 toon / sphere 的材质 2 个；因镂空不加 sphere 的 2 个</td></tr><tr><td>第二步</td><td>10 / 10 个材质在 MMD 里用上了游戏贴图的 .fx</td></tr><tr><td>MMD / MME 报错</td><td>无</td></tr>
+<tr><td>第一步 PMX</td><td><a href='file:///E:/game_export/TheFirstDescendant/Viessa/pmx/Viessa'>E:\game_export\TheFirstDescendant\Viessa\pmx\Viessa\Viessa_材质.pmx</a></td></tr>
+<tr><td>ray-mmd 文件夹</td><td><a href='file:///E:/game_export/_raymmd/TheFirstDescendant/Viessa_Viessa_fc9f78'>E:\game_export\_raymmd\TheFirstDescendant\Viessa_Viessa_fc9f78</a></td></tr>
+</table></div>
+</main></body></html>

@@ -68,6 +68,12 @@ MMD 会把贴图的透明度乘进材质。导出脚本在写 PMX 之前用 `sou
 
 用到它的：`scripts/stellarblade/npc/export_npc_pmx.py`、`scripts/honeyselect2/export_pmx_blender.py`。
 
+## hq_materials/：MMD 材质和 ray-mmd 高清材质
+
+给 PMX 配 MMD 自己的材质（toon / sphere / 高光 / 描边，写 `<名字>_材质.pmx`），并用源 .blend 里的游戏贴图做 ray-mmd 材质包
+（`E:\game_export\_raymmd\<游戏>\<模型>\`，带 `scene.emm` / `scene.pmm`）；还有用脚本驱动 MMD 本体出图的 `mmd_drive.py`。
+用法见 [hq_materials/README.md](hq_materials/README.md)，做法见 [docs/pmx-hq-materials.md](../../docs/pmx-hq-materials.md)。
+
 ## 跑过的批次
 
 - **2026-10-31 Taimanin Squad**（`E:\game_export\TaimaninSquad`，151 个 PMX）：写出 142 个 `*_表情补全.pmx`，0 个出错。

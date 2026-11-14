@@ -7,7 +7,7 @@
 | # | 方向 | 状态 |
 |---|---|---|
 | 1 | 在 MMD 本体里验证 | 待挑 |
-| 2 | MMD 里的材质 | 待挑 |
+| 2 | MMD 里的材质 | **11-14 开始做**（用户选「两步都做」：按材质类别配 toon / 高光 / sphere / 描边，再加 ray-mmd 高清材质；每个游戏先做一个样品给用户看） |
 | 3 | 换装 / 换头的后半程 | **10-31 做完**：挑零件、拆开；跨游戏换装（星刃 Eve 的套装 → a08）；跨游戏换头（Eve ↔ a08）。没做：脸只到下巴的模型 |
 | 4 | PMX 覆盖面 | 待挑 |
 | 5 | 表情 | **10-25 做了「表情移植」插件 + FF7 第一批 2 个，等用户看效果** |
@@ -39,6 +39,15 @@
 - **要做**：
   - 先按材质类别（皮肤、头发、眼睛、布、金属）配 toon、高光、sphere、描边：把 Vindictus 的 `scripts/vindictus/pmx_materials.py` 推广到所有游戏；
   - 再进一步：用 `E:\game_export\RiseOfEros\_meta\_hq_materials` 等处已有的法线、粗糙度、金属度贴图生成 ray-mmd 材质，MMD 里也有游戏质感。
+- **11-14 两步都做了，样品等用户看**（用户：「2，高清材质都做一下」，选了「两步都做」）：
+  - 工具 `scripts/pmx_tools/hq_materials/`，做法、换算和坑见 [pmx-hq-materials.md](pmx-hq-materials.md)。
+  - 第一步写 `<名字>_材质.pmx`（toon / 高光 / sphere / 描边按材质类别）；
+    第二步写 `E:\game_export\_raymmd\<游戏>\<模型>\`（游戏的法线 / 粗糙度 / 金属度 / 自发光 → ray-mmd 的 .fx，`scene.emm`、
+    一键打开的 `scene.pmm`）。
+  - 这台电脑的 MMD 装了 MME 0.37 x64 和 ray-mmd 1.5.2。
+  - 15 个游戏各一个样品，都在 MMD 本体里渲染过：第二步每个样品的所有材质都用上了游戏贴图，MME 零报错。
+    本地页 `scripts/pmx_tools/hq_materials/html/MMD材质样品.html`。
+  - 用户点头后整批（约 2,000 个 PMX）：两步都在后台跑，不开 MMD；`scene.pmm` 要开 MMD，一个会话连续做。
 
 ## 3. 换装 / 换头的后半程
 
