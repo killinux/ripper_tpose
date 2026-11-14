@@ -1,5 +1,5 @@
-r"""HQ .blend of the archived Nexus-mod outfits worn by Eve (Gantz Reika A / B, and the nude body of
-EveOriginalProportions), so the stellarblade_game_materials add-on finds every material of their PMX.  The mod's own
+r"""HQ .blend of the archived Nexus-mod outfits worn by Eve (Gantz Reika A / B, Vindictus Fiona, Vindictus Demon Maiden,
+and the nude body of EveOriginalProportions), so the stellarblade_game_materials add-on finds every material of their PMX.  The mod's own
 material instances are read with CUE4Parse together with their game parents and masters, flattened, and handed to
 the SB HQ scripts unchanged: ../hq_materials.py (materials.json) -> ../hq_materials_blender.py on the archived outfit
 .blend -> <label>_HQ.blend.
@@ -13,12 +13,18 @@ unpacked into a scratch folder next to a junction to the game's Paks, so its ins
 Per outfit (E:\game_export\StellarBlade\<char>\blend\<package>\<label>.blend), data in _meta\hq_materials\<package>\:
   1. mi_json\: CUE4Parse JSON of the mod folder, then of every parent up to the master;
   2. staged\MI_<name>.json: each instance the outfit's mesh uses, flattened - UE's rule: the child's value wins, the
-     master's defaults (its CachedExpressionData) for what no instance sets.  One translation hq_materials.py has no
+     master's defaults (its CachedExpressionData) for what no instance sets; parameter names are FNames, which UE
+     compares without case (Vindictus Fiona's shoes set "BaseColor" over their parent's "Basecolor": one parameter,
+     kept under the master side's spelling).  One translation hq_materials.py has no
      rule for: the GlowEmissive layer (static switch UseGlowEmissive; the Planet Diving Suit master MA_CH_P_EVE_09,
      which the Gantz Reika suits inherit through MI_P_EVE_09_Metal02_Layered) lights the ML_GlowEmissive_CH channel of
      the Emissive map in ML_GlowEm_EyeCoreHDRTint - written as Emissive_CH / EmissiveColor (HDR, kept as is) /
      EmissivePower 1 (only switches the wiring on).  The layer's fresnel / boost terms are not reproduced;
-  3. ../hq_materials.py --mi-json staged --textures <outfit folder>\textures --out <data dir>;
+  3. ../hq_materials.py --mi-json staged --textures <outfit folder>\textures --out <data dir>; then normals.json: the
+     green direction of every normal map the outfit wires, by an integrability test (normal_convention(): a map made
+     from a height field has no curl only when read its own way).  UE's maps are DirectX; one that is clearly the
+     OpenGL way (Vindictus Fiona's dress PCF_005_Onepiece_N - flipped by the mod, the Vindictus original and the
+     outfit's other maps are DirectX - so the game lights its relief upside down) is read the OpenGL way in step 5;
   4. ../hq_materials_blender.py on the archived .blend -> <label>_HQ.blend next to it (the eye rebuilt from the
      game's values on the way, as in every HQ .blend);
   5. this script inside Blender (--post):
@@ -26,12 +32,23 @@ Per outfit (E:\game_export\StellarBlade\<char>\blend\<package>\<label>.blend), d
        A subsurface; hq_materials.py reads none of these names) are wired here: roughness = G between MinRoughness and
        MaxRoughness, specular = B x BaseSpecularValue, the DirectX normal x NormalStrength; the subsurface settings
        are the head material's, so the body skin meets the face (whose archive network stays) without a seam -
-       skin.json lists what was read;
+       skin.json lists what was read.  A skin whose ORSS mask is not among the outfit's textures keeps its parent's;
+       layout_kept() correlates the skin's normal map with the parent's.  A body on the parent's UV layout (Vindictus
+       Demon Maiden: Eve's BaseBody V02_F1 repainted, r 0.92) gets the parent's mask itself, copied to
+       textures\extra; one on another layout (Vindictus Fiona: Eve's CH_P_EVE_BB_V01_ORSS on Fiona's UVs, r about 0)
+       would have Eve's creases land at random, so the mask's means become constants (orss_mean(); both game
+       textures exported once to <data>\orss\).  An opaque master's skin is made opaque where the archive had wired
+       the base colour's alpha (Fiona's skin textures carry UV coverage there);
+     - normal maps normals.json calls OpenGL get their green unpack turned (flip_green());
      - nodes the new wiring left with no path to the output are dropped (the archive had guessed ORM / normal /
        emission from file names).
+A material is looked up by the instance's name, then as <name>_mod: swap_mod_mesh.py packages (a CNS outfit such as
+Vindictus Demon Maiden, its own mesh in a copy of a game outfit's package) name the materials built from the mod's maps
+so, and their PMX carries the same names.
 The archived .blend is only read.  The add-on picks the HQ .blend that holds most of a PMX's materials (per layer for
-a pmx_layers.py model), so the Reika PMX take every material from their own HQ .blend and the nude layer from the
-nude's; the Cooling Suit and the other Eve PMX keep theirs.
+a pmx_layers.py model), so the Reika and Vindictus Fiona PMX take every material from their own HQ .blend and the
+nude layer from the nude's; the Cooling Suit and the other Eve PMX keep theirs (a tie goes to the first folder in
+name order: Eve before Fiona).
 """
 import argparse
 import glob
@@ -59,6 +76,17 @@ HEAD = "MI_EVE_Head_V02"          # Eve's face material in every outfit .blend: 
 OUTFITS = {
     "Mod_GantzReika_A": {"character": "Reika", "mod": "SB/Content/OutfitMods/GantzReika", "mesh": "GantzReika_A"},
     "Mod_GantzReika_B": {"character": "Reika", "mod": "SB/Content/OutfitMods/GantzReika", "mesh": "GantzReika_B"},
+    # Nexus 1145 "Vindictus Fiona": mounted at test/Content (an io store mod's mount name is free); its mesh replaces
+    # the Planet Diving Suit 7th (CH_P_EVE_09) and its instances sit in the 09 / 16 / 21 folders; .uasset only, as for
+    # the nude below (a texture's .ubulk exported in parallel to the same JSON)
+    "Mod_VindictusFiona": {"character": "Fiona", "mod": "test/Content", "packages": ["test/Content/*.uasset"],
+                           "mesh": "CH_P_EVE_09"},
+    # Nexus 1807 "Vindictus - Demon Maiden" (AlomX), a CNS outfit: its own mesh on the CH_P_EVE_01 skeleton, not
+    # installed - read from the copy of its zip (the files at the zip's root) kept with the archive's mod sources
+    "Mod_VindictusDemonMaiden": {
+        "character": "Eve", "mod": "SB/Content/OutfitMods/VindictusDemonMaidenOutfit",
+        "packages": ["SB/Content/OutfitMods/VindictusDemonMaidenOutfit/*.uasset"], "mesh": "CH_P_EVE_DemonMaiden",
+        "archive": ARCHIVE + r"\_meta\mod_sources\DemonMaiden\Vindictus - DemonMaiden - Outfit-1807-1-0-1754919465.zip"},
     "Nude_Barefoot": {"character": "Eve", "mod": "SB/Content/Art/Character/PC/CH_P_EVE_InnerSuit",
                       # .uasset, not .*: the game's own .ubulk of the mesh would be exported to the same JSON in
                       # parallel (CUE4Parse crashes on the locked file)
@@ -91,8 +119,8 @@ def package_glob(object_path):
     return path + ".*"
 
 
-def cue4parse(patterns, out_dir, paks):
-    cmd = [CUE4PARSE, "-i", paks, "-g", "GAME_UE4_26", "-m", USMAP, "-f", "json", "-y", "-o", out_dir]
+def cue4parse(patterns, out_dir, paks, fmt="json"):
+    cmd = [CUE4PARSE, "-i", paks, "-g", "GAME_UE4_26", "-m", USMAP, "-f", fmt, "-y", "-o", out_dir]
     for p in patterns:
         cmd += ["-p", p]
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -103,17 +131,22 @@ def cue4parse(patterns, out_dir, paks):
 def mod_paks(entry, paks, work):
     """the Paks folder CUE4Parse reads for this outfit: the game's own (an installed mod sits in its ~mods), or for a
     mod that is not installed a folder in `work` with the variant's files from its archive and a junction to the
-    game's Paks (the mod's instances name game parents).  Returns (folder, junction or None)."""
+    game's Paks (the mod's instances name game parents).  Without a "member" the mod's files sit at the archive's root
+    (Vindictus Demon Maiden's zip) and are unpacked into <work>/Paks/mod.  Returns (folder, junction or None)."""
     if not entry.get("archive"):
         return paks, None
     folder = os.path.join(work, "Paks")
+    member = entry.get("member")
+    sub = os.path.join(folder, member or "mod")
     os.makedirs(folder)
-    r = subprocess.run([TAR, "-xf", entry["archive"], "-C", folder, entry["member"]], capture_output=True, text=True,
-                       encoding="utf-8", errors="replace")
-    found = glob.glob(os.path.join(folder, entry["member"], "*.utoc")) + \
-        glob.glob(os.path.join(folder, entry["member"], "*.pak"))
+    if not member:
+        os.makedirs(sub)
+    r = subprocess.run([TAR, "-xf", entry["archive"], "-C"] + ([folder, member] if member else [sub]),
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    found = glob.glob(os.path.join(sub, "*.utoc")) + glob.glob(os.path.join(sub, "*.pak"))
     if r.returncode != 0 or not found:
-        raise SystemExit("could not unpack %s from %s:\n%s" % (entry["member"], entry["archive"], r.stdout + r.stderr))
+        raise SystemExit("could not unpack %s from %s:\n%s" % (member or "the mod's files", entry["archive"],
+                                                               r.stdout + r.stderr))
     link = os.path.join(folder, "game")
     r = subprocess.run(["cmd", "/c", "mklink", "/J", link, paks], capture_output=True, text=True, encoding="utf-8",
                        errors="replace")
@@ -184,22 +217,34 @@ def flatten(name, mats):
     if not insts:
         return None, {}
     defaults = master_defaults(master) if master is not None else {"scalars": {}, "vectors": {}}
-    scalars, vectors = dict(defaults["scalars"]), dict(defaults["vectors"])
-    textures, switches, overrides = {}, {}, {}
+    scalars, vectors, textures, switches, overrides = {}, {}, {}, {}, {}
+    spelling = {}
+
+    def put(store, name, value):
+        # parameter names are FNames, which UE compares without case: the Vindictus Fiona shoes set "BaseColor"
+        # over their parent's "Basecolor" - one parameter, kept under the master side's spelling
+        store[spelling.setdefault((id(store), name.lower()), name)] = value
+
+    for k, v in defaults["scalars"].items():
+        put(scalars, k, v)
+    for k, v in defaults["vectors"].items():
+        put(vectors, k, v)
     for inst in reversed(insts):                           # master side first: the child's value wins
         p = inst.get("Properties") or {}
         for s in p.get("ScalarParameterValues") or []:
-            scalars[s["ParameterInfo"]["Name"]] = s["ParameterValue"]
+            put(scalars, s["ParameterInfo"]["Name"], s["ParameterValue"])
         for s in p.get("VectorParameterValues") or []:
-            vectors[s["ParameterInfo"]["Name"]] = s["ParameterValue"]
+            put(vectors, s["ParameterInfo"]["Name"], s["ParameterValue"])
         for s in p.get("TextureParameterValues") or []:
             if (s.get("ParameterValue") or {}).get("ObjectPath"):
-                textures[s["ParameterInfo"]["Name"]] = s["ParameterValue"]
+                put(textures, s["ParameterInfo"]["Name"], s["ParameterValue"])
         for s in (p.get("StaticParameters") or {}).get("StaticSwitchParameters") or []:
-            switches[s["ParameterInfo"]["Name"]] = s["Value"]
+            put(switches, s["ParameterInfo"]["Name"], s["Value"])
         overrides.update(p.get("BasePropertyOverrides") or {})
     master_name = master["Name"] if master is not None else parent_of(insts[-1])
-    notes = {"chain": [c["Name"] for c in chain], "master": master_name}
+    notes = {"chain": [c["Name"] for c in chain], "master": master_name,
+             "blend": (overrides.get("BlendMode") or ((master or {}).get("Properties") or {}).get("BlendMode")
+                       or "EBlendMode::BLEND_Opaque").split("::")[-1]}
 
     def rgb(v):
         return max(v.get("R", 0.0), v.get("G", 0.0), v.get("B", 0.0)) if isinstance(v, dict) else 0.0
@@ -244,18 +289,125 @@ def skin_record(staged, tex_dir):
         name = t.get(key)
         if not name:
             return None
-        for sub in ("", "extra"):
+        for sub in ("", "extra", "mod"):            # mod\: the mod's own maps, as swap_mod_mesh.py copies them
             path = os.path.join(tex_dir, sub, name + ".png")
             if os.path.isfile(path):
                 return path
         return "MISSING:" + name
 
+    objects = {x["ParameterInfo"]["Name"]: x["ParameterValue"]["ObjectPath"] for x in p["TextureParameterValues"]}
     return {"base": find("BaseColor"), "normal": find("BaseNormal"), "orss": find("ORSS Mask"),
+            "orss_object": objects.get("ORSS Mask"),
             "roughness_min": s.get("MinRoughness", 0.2), "roughness_max": s.get("MaxRoughness", 1.0),
             "specular": s.get("BaseSpecularValue", 0.4), "normal_strength": s.get("NormalStrength", 1.0),
             "not_wired": {k: t[k] for k in t if k not in ("BaseColor", "BaseNormal", "ORSS Mask")},
             "values": {k: s[k] for k in ("BaseSSS", "GlobalRoughness", "FresnelRoughness", "Detail Tiling",
                                          "Detail Strength") if k in s}}
+
+
+def orss_mean(object_path, data, paks):
+    """[R, G, B, A] means (0-1) of a game texture over its drawn texels (any RGB above 2/255: the UV islands, not the
+    black padding).  A mod skin that keeps its parent's ORSS mask gets a mask painted for ANOTHER body's UV layout
+    (Vindictus Fiona's skin inherits Eve's CH_P_EVE_BB_V01_ORSS, laid out for Eve's body): wired the way the game does
+    it, Eve's creases, nipples and black gaps would land at random on the new body, so --post sets the means as
+    constants.  The texture is exported once into <data>\\orss\\."""
+    import numpy as np
+    from PIL import Image
+    out = os.path.join(data, "orss")
+    os.makedirs(out, exist_ok=True)
+    path = object_path.split(".")[0]
+    if path.startswith("/Game/"):
+        path = "SB/Content/" + path[len("/Game/"):]
+    name = os.path.basename(path)
+    hits = glob.glob(os.path.join(out, "**", name + ".png"), recursive=True)
+    if not hits:
+        cue4parse([path + ".uasset"], out, paks, fmt="png")        # .uasset: not its .ubulk in parallel
+        hits = glob.glob(os.path.join(out, "**", name + ".png"), recursive=True)
+    if not hits:
+        return None, None
+    Image.MAX_IMAGE_PIXELS = None
+    a = np.asarray(Image.open(hits[0]).convert("RGBA"), dtype=np.float32) / 255.0
+    drawn = a[..., :3].max(-1) > 2.0 / 255.0
+    return [round(float(x), 4) for x in a[drawn].mean(0)], hits[0]
+
+
+LAYOUT_R = 0.5          # the mod's skin normal map against its parent's: same UV layout above this correlation
+
+
+def layout_kept(normal_png, parent_normal_object, data, paks):
+    """Correlation (-1..1) of the mod skin's BaseNormal with its parent's, both shrunk to 256 px (x / y slopes): a
+    body that keeps its parent's UV layout keeps its relief where the parent has it, so the parent's ORSS mask fits it.
+    Measured: Vindictus Demon Maiden (Eve's BaseBody V02_F1 repainted, CH_EVE_BaseBody_V02_F1_N_Rav against the game's
+    _N) 0.92; Vindictus Fiona's four skins (Fiona's own body against Eve's) -0.01 to 0.01.  The parent's map is
+    exported into <data>\\orss\\ next to the mask.  None when a map is missing."""
+    import numpy as np
+    from PIL import Image
+    if not normal_png or not os.path.isfile(normal_png) or not parent_normal_object:
+        return None
+    out = os.path.join(data, "orss")
+    path = package_glob(parent_normal_object)[:-2]
+    name = os.path.basename(path)
+    hits = glob.glob(os.path.join(out, "**", name + ".png"), recursive=True)
+    if not hits:
+        cue4parse([path + ".uasset"], out, paks, fmt="png")
+        hits = glob.glob(os.path.join(out, "**", name + ".png"), recursive=True)
+    if not hits:
+        return None
+    Image.MAX_IMAGE_PIXELS = None
+
+    def slopes(p):
+        a = np.asarray(Image.open(p).convert("RGB").resize((256, 256), Image.BOX), dtype=np.float32) / 255.0
+        v = (a[..., :2] - 0.5).reshape(-1)
+        return v - v.mean()
+    a, b = slopes(normal_png), slopes(hits[0])
+    return round(float((a * b).sum() / np.sqrt((a * a).sum() * (b * b).sum() + 1e-12)), 3)
+
+
+def parent_texture(chain, mats, param):
+    """the object path of a texture parameter as the first instance above the mod's sets it (None if none does)"""
+    for name in chain[1:]:
+        props = (mats.get(name) or {}).get("Properties") or {}
+        for t in props.get("TextureParameterValues") or []:
+            if t["ParameterInfo"]["Name"].lower() == param.lower() and t.get("ParameterValue"):
+                return t["ParameterValue"]["ObjectPath"]
+    return None
+
+
+GREEN_RATIO = 1.4       # OpenGL only when its curl is this many times smaller than DirectX's
+
+
+def normal_convention(path, size=2048):
+    """("DirectX" | "OpenGL", {convention: curl}) of a tangent-space normal map.  A map made from a height field is
+    integrable - its gradient field has no curl - only when read with its own green direction.  UE's maps are DirectX,
+    and so is every map the SB HQ wiring unpacks; a mod can ship one the other way (Vindictus Fiona's dress
+    PCF_005_Onepiece_N: green flipped against the Vindictus original and the outfit's three other maps, so the game
+    lights its relief upside down).  Texture space: column ~ u, row ~ 1 - v, n ~ (-dh/du, -dh/dv, 1); measured inside
+    the islands (away from their borders) where the map has detail."""
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
+    im = Image.open(path).convert("RGB")
+    if im.size != (size, size):
+        im = im.resize((size, size), Image.BILINEAR)
+    a = np.asarray(im, dtype=np.float64) / 255.0
+    nx, g, nz = a[..., 0] * 2 - 1, a[..., 1] * 2 - 1, a[..., 2] * 2 - 1
+    valid = nz > 0.35
+    inner = valid.copy()
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            inner &= np.roll(np.roll(valid, dy, 0), dx, 1)
+    nz = np.where(valid, nz, 1.0)
+    fc = -nx / nz
+    d_fc_dr = (np.roll(fc, -1, 0) - np.roll(fc, 1, 0)) / 2
+    d_g_dc = (np.roll(g / nz, -1, 1) - np.roll(g / nz, 1, 1)) / 2
+    detail = (np.abs(d_fc_dr) + np.abs(d_g_dc))[inner]
+    if not detail.size:
+        return "DirectX", {}
+    keep = detail > np.percentile(detail, 50)
+    curls = {}
+    for name, sign in (("OpenGL", 1.0), ("DirectX", -1.0)):          # dh/dr = +g/nz (OpenGL), -g/nz (DirectX)
+        curls[name] = round(float(np.abs(d_fc_dr - sign * d_g_dc)[inner][keep].mean()), 5)
+    return ("OpenGL" if curls["OpenGL"] * GREEN_RATIO < curls["DirectX"] else "DirectX"), curls
 
 
 def run_outfit(package, args):
@@ -300,6 +452,17 @@ def run_outfit(package, args):
         if note.get("skin"):
             skins[name] = skin_record(staged, tex_dir)
             skins[name]["chain"] = note["chain"]
+            skins[name]["blend"] = note["blend"]
+            obj = skins[name].get("orss_object")
+            if obj and (skins[name]["orss"] or "").startswith("MISSING:"):
+                skins[name]["orss_mean"], png = orss_mean(obj, data, args.paks)
+                r = layout_kept(skins[name]["normal"], parent_texture(note["chain"], mats, "BaseNormal"), data,
+                                args.paks)
+                skins[name]["layout_r"] = r
+                if png and r is not None and r >= LAYOUT_R:
+                    skins[name]["orss_parent"] = png      # same body: --post wires the parent's mask itself
+                log("%s %-12s parent's ORSS mask: normal correlation with the parent %s -> %s" % (
+                    package, name, r, "the mask itself" if skins[name].get("orss_parent") else "its means"))
             continue
         fname = name if name.startswith("MI_") else "MI_" + name        # hq_materials.py globs MI_*.json
         json.dump(staged, open(os.path.join(staged_dir, fname + ".json"), "w", encoding="utf-8"), indent=1)
@@ -309,12 +472,28 @@ def run_outfit(package, args):
         log("%s %-12s %s%s%s" % (package, name, " -> ".join(note.get("chain", [])), "  [glow]" if "glow" in note else "",
                                  "  [skin]" if note.get("skin") else ""))
     text = []
-    r1 = subprocess.run([sys.executable, os.path.join(HERE, "hq_materials.py"), "--mi-json", staged_dir,
-                         "--textures", tex_dir, "--out", data], capture_output=True, text=True, encoding="utf-8",
-                        errors="replace")
+    tex_args = ["--textures", tex_dir]
+    if os.path.isdir(os.path.join(tex_dir, "mod")):      # a swap_mod_mesh.py package keeps the mod's maps there
+        tex_args += ["--textures", os.path.join(tex_dir, "mod")]
+    r1 = subprocess.run([sys.executable, os.path.join(HERE, "hq_materials.py"), "--mi-json", staged_dir] + tex_args +
+                        ["--out", data], capture_output=True, text=True, encoding="utf-8", errors="replace")
     text.append("== hq_materials.py\n" + r1.stdout + r1.stderr)
     if r1.returncode != 0:
         raise SystemExit("hq_materials.py failed:\n" + text[-1])
+    doc = json.load(open(os.path.join(data, "materials.json"), encoding="utf-8"))
+    normals, tested = {}, {}
+    for name, path in [(n, (d.get("textures") or {}).get("normal")) for n, d in doc["materials"].items()] + \
+            [(n, d.get("normal")) for n, d in skins.items()]:
+        if not path or path.startswith("MISSING") or not os.path.isfile(path):
+            continue
+        if path not in tested:
+            tested[path] = normal_convention(path)
+        conv, curls = tested[path]
+        normals[name] = {"texture": path, "convention": conv, "curl": curls}
+        if conv == "OpenGL":
+            log("%s %-12s %s: green the OpenGL way (curl %.4f, DirectX %.4f) -> unpacked so" % (
+                package, name, os.path.basename(path), curls["OpenGL"], curls["DirectX"]))
+    json.dump(normals, open(os.path.join(data, "normals.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     r2 = subprocess.run([BLENDER, "-b", "--factory-startup", blend, "--python",
                          os.path.join(HERE, "hq_materials_blender.py"), "--", "--materials",
                          os.path.join(data, "materials.json"), "--save", hq_blend],
@@ -365,9 +544,17 @@ def wire_skin(mat, d, head):
             links.remove(link)
     done = []
     x0, y = p.location.x - 1500, p.location.y
-    if d["orss"] and not d["orss"].startswith("MISSING"):
+    orss = d["orss"] if d["orss"] and not d["orss"].startswith("MISSING") else None
+    copy_to = None
+    if orss is None and d.get("orss_parent") and os.path.isfile(d["orss_parent"]):
+        import bpy
+        orss = d["orss_parent"]         # the parent's mask on the parent's own UV layout (layout_kept())
+        # copied next to the outfit's other maps: the .blend folder stays self-contained
+        copy_to = os.path.join(os.path.dirname(bpy.data.filepath), "textures", "extra")
+        done.append("parent's ORSS %s (same UV layout: normal r=%s)" % (os.path.basename(orss), d.get("layout_r")))
+    if orss:
         n = nodes.new("ShaderNodeTexImage")
-        n.image = hb.image(d["orss"], True)
+        n.image = hb.image(orss, True, copy_to)
         n.location = (x0, y - 300)
         sep = nodes.new("ShaderNodeSeparateRGB")
         sep.location = (x0 + 300, y - 300)
@@ -386,7 +573,24 @@ def wire_skin(mat, d, head):
         links.new(sep.outputs["B"], spec.inputs[0])
         links.new(spec.outputs[0], p.inputs["Specular"])
         done.append("orss (roughness %.3f-%.3f, specular x%g)" % (d["roughness_min"], d["roughness_max"], d["specular"]))
+    elif d.get("orss_mean"):
+        # the mask belongs to another UV layout (orss_mean()): its means, through the same ranges
+        g, b = d["orss_mean"][1], d["orss_mean"][2]
+        rough = max(0.0, min(1.0, d["roughness_min"] + g * (d["roughness_max"] - d["roughness_min"])))
+        spec = max(0.0, min(1.0, b * d["specular"]))
+        p.inputs["Roughness"].default_value = rough
+        p.inputs["Specular"].default_value = spec
+        done.append("orss of another UV layout -> constants (roughness %.3f, specular %.3f)" % (rough, spec))
     p.inputs["Metallic"].default_value = 0.0
+    if d.get("blend", "BLEND_Opaque") == "BLEND_Opaque" and (p.inputs["Alpha"].is_linked or mat.blend_method != "OPAQUE"):
+        # opaque in the game: the archive wired the base colour's alpha (Vindictus Fiona's T_PCF_Hand01_D /
+        # T_PCF_Lower01_D: UV coverage, 0 only in the padding) and blended the skin with hashed alpha
+        for link in list(p.inputs["Alpha"].links):
+            links.remove(link)
+        p.inputs["Alpha"].default_value = 1.0
+        mat.blend_method = "OPAQUE"
+        mat.shadow_method = "OPAQUE"
+        done.append("opaque as its master")
     if d["normal"] and not d["normal"].startswith("MISSING"):
         n = nodes.new("ShaderNodeTexImage")
         n.image = hb.image(d["normal"], True)
@@ -419,19 +623,59 @@ def wire_skin(mat, d, head):
     return ", ".join(done)
 
 
+def flip_green(mat, image_name):
+    """read the normal map image_name with OpenGL green: the unpack (hq_materials_blender.unpack_normal) is SeparateRGB
+    -> MULTIPLY_ADD per channel, green x-2 +1 for DirectX; x2 -1 reads it the other way.  Returns the nodes turned."""
+    import bpy
+    turned = 0
+    for n in mat.node_tree.nodes:
+        img = getattr(n, "image", None)
+        if n.type != "TEX_IMAGE" or img is None or image_name.lower() not in (
+                img.name.lower(), os.path.basename(bpy.path.abspath(img.filepath)).lower()):
+            continue
+        for link in n.outputs["Color"].links:
+            if link.to_node.type != "SEPRGB":
+                continue
+            for l2 in link.to_node.outputs["G"].links:
+                m = l2.to_node
+                if m.type == "MATH" and m.operation == "MULTIPLY_ADD" and m.inputs[1].default_value < 0:
+                    m.inputs[1].default_value, m.inputs[2].default_value = 2.0, -1.0
+                    turned += 1
+    return turned
+
+
 def post(data):
     import bpy
     sys.path.insert(0, HERE)
     doc = json.load(open(os.path.join(data, "materials.json"), encoding="utf-8"))
     skins = json.load(open(os.path.join(data, "skin.json"), encoding="utf-8"))
+    path = os.path.join(data, "normals.json")
+    normals = json.load(open(path, encoding="utf-8")) if os.path.isfile(path) else {}
     head = bpy.data.materials.get(HEAD)
+
+    def material(name):
+        """the instance's material: its name, or <name>_mod (swap_mod_mesh.py's packages, as in hq_materials_blender)"""
+        for n in (name, name + "_mod"):
+            mat = bpy.data.materials.get(n)
+            if mat is not None and mat.use_nodes:
+                return mat
+        return None
+
     report = {}
     for name, d in skins.items():
-        mat = bpy.data.materials.get(name)
-        report[name] = wire_skin(mat, d, head) if mat is not None and mat.use_nodes else "not in this .blend"
+        mat = material(name)
+        report[name] = wire_skin(mat, d, head) if mat is not None else "not in this .blend"
+    for name, r in normals.items():
+        mat = material(name)
+        if r.get("convention") != "OpenGL" or mat is None:
+            continue
+        note = "normal map read with OpenGL green (%d node)" % flip_green(mat, os.path.basename(r["texture"]))
+        mat["sb_hq_materials"] = ", ".join(x for x in (mat.get("sb_hq_materials", ""), note) if x)
+        if name in report:
+            report[name] += ", " + note
     for name in list(doc["materials"]) + list(skins):
-        mat = bpy.data.materials.get(name)
-        if mat is not None and mat.use_nodes:
+        mat = material(name)
+        if mat is not None:
             dropped = prune(mat)
             report[name] = (report.get(name) or mat.get("sb_hq_materials", "")) + "; %d unused nodes dropped" % dropped
     bpy.context.preferences.filepaths.save_version = 0

@@ -14,6 +14,93 @@
 
 ---
 
+## 2026-11-14 — 剑星：Vindictus Demon Maiden（Nexus 1807，CNS 服装）样品：Blender / XPS / PMX / 高清 .blend，「剑星游戏材质」插件 20 个材质全部换得上；mod 高清脚本支持 swap_mod_mesh 成品（`_mod` 材质名）、根目录放文件的 zip，父材质的皮肤遮罩按法线相关性判断能不能直接用
+
+**新增 / 修复**
+
+- `scripts/stellarblade/hq_mod_outfits.py`：
+  - 加了 `Mod_VindictusDemonMaiden`：mod 没装进游戏，从 `_meta\mod_sources\DemonMaiden\` 里那份 zip 读；网格 `CH_P_EVE_DemonMaiden`。
+  - `mod_paks()`：`archive` 不给 `member` 时整包解到临时 `Paks\mod\`（文件在 zip 根目录的 mod）。
+  - 贴图也去 `textures\mod\` 找（`swap_mod_mesh.py` 把 mod 的贴图放在那里）。
+  - `--post` 找材质时先按实例名，找不到再找 `<名字>_mod`。
+  - **皮肤遮罩**：新增 `layout_kept()`。mod 皮肤沿用父材质的 ORSS 遮罩时，比较 mod 的法线图和父材质的法线图（256 px，x / y 斜率的相关系数）。
+    ≥ 0.5 说明是同一套 UV，直接接父材质的遮罩（拷进 `textures\extra\`）；否则照旧取平均值当常数。
+    Demon Maiden 0.92（Eve 原版身体 V02_F1 重画），Fiona 四个皮肤 -0.01–0.01，Fiona 的结果不变。
+- `scripts/stellarblade/hq_materials_blender.py`：新增 `find_material()`，同样先找实例名、再找 `<名字>_mod`。原来几套的结果不变（都按原名找得到）。
+
+**用户如何操作**
+
+- Blender 里用 mmd_tools 导入 `E:\game_export\StellarBlade\Eve\pmx\Mod_VindictusDemonMaiden\Eve_Mod_VindictusDemonMaiden.pmx`，
+  侧栏 MMD 页点「换上游戏原始材质」，20 个材质全部换上。
+- XPS：`Eve\xps\Mod_VindictusDemonMaiden\`；Blender：`Eve\blend\Mod_VindictusDemonMaiden\`（原版 + `_HQ.blend` + `README.txt`）。
+- 重做高清版：`python scripts/stellarblade/hq_mod_outfits.py --only Mod_VindictusDemonMaiden`。
+
+**实现原理与兼容性**
+
+- CNS 服装不顶替原版，网格做在 `CH_P_EVE_01_Skeleton` 上：`swap_mod_mesh.py --base ...\Eve\blend\CH_P_EVE_01_Body` 换进 01 号成品，
+  脸、头发、马尾是游戏原版；骨骼对齐误差 0.07 cm。**不要加 `--mesh-json`**：CNS 的 `.mat` 按材质实例名起，按槽名找全落空。
+- mod 皮肤另设的 `CH_EVE_BaseBody_V02_F1_ORSS` 不是母材质 `MA_Skin_EVE` 的参数，游戏里不起作用，实际用的是父材质的遮罩。
+- 先试过「皮肤面的 UV 中心落在遮罩有内容像素上的比例」，分不开两种情况（V02_F1 遮罩整张填满 100%；Fiona 的手对不上也有 97%），改用法线相关性。
+- 带角的头发是 mod 的另一个文件（Hair），没下载，样品用 Eve 原版发型。
+
+**已执行的验证**
+
+- 插件实测（真实的插件按钮）：20/20 换上，挑中的是这套的高清 .blend；贴图不缺，没有留下库条目；两种状态再导出 PMX 逐字节一致；去掉后节点清零。
+- 高清 .blend 引用的 30 张贴图都在自己的文件夹里。
+- PMX：353 骨、26 个 MMD 表情、62 刚体 / 52 关节，撕裂 0、权重空洞 0、付与顺序违规 0；回读跳舞，静站 60 帧链根最大漂移 0.7 cm。
+- XPS：233 骨、16 个网格，无警告。
+- 归档：`archive_exports.py stellarblade --only Mod_VindictusDemonMaiden`，112 个文件，自检 3/3；zip 的 md5 和下载原件一致。
+
+## 2026-11-14 — 剑星：Eve 穿 Vindictus Fiona（Nexus 1145）的高清 .blend，「剑星游戏材质」插件 22 个材质全部换得上；mod 高清脚本加三条规则（参数名不分大小写、法线贴图方向自动判断、借来的皮肤遮罩对不上 UV 时用平均值）
+
+**新增 / 修复**
+
+- `scripts/stellarblade/hq_mod_outfits.py`：
+  - 加了 `Mod_VindictusFiona`：mod 挂载在 `test/Content`，网格 `CH_P_EVE_09`，只读 `test/Content/*.uasset`。
+    衣服继承 Eve 服装 16 / 21 的材质，皮肤继承 `MI_P_EVE_09_Skin`。
+  - **参数名不分大小写**：合并实例时按 UE 的 FName 规则处理。鞋子 `shoes` 的 `BaseColor` 盖过父实例的 `Basecolor`；
+    之前拿到的是父实例里 Eve 衬衫的贴图。
+  - **法线贴图方向**：新增 `normal_convention()`，按梯度场旋度判断绿通道方向，结果写进 `normals.json`。
+    明显是 OpenGL 的（旋度比 DirectX 小 1.4 倍以上），`--post` 里按 OpenGL 读（`flip_green()`）。
+    mod 的连衣裙 `PCF_005_Onepiece_N` 被反了绿通道；Defying Fate 原版和这套衣服另外三张都是 DirectX，所以游戏里裙子的凹凸是上下颠倒的。
+  - **皮肤**：
+    - 衣服自己的贴图里没有父实例的 `ORSS Mask` 时，那张遮罩是给别的身体 UV 画的（Fiona 借的是 Eve 身体的 `CH_P_EVE_BB_V01_ORSS`）。
+      新增 `orss_mean()`：导出这张图，取 UV 岛内的平均值，换算成常数（粗糙度 0.473、高光 0.508）。
+    - 母材质不透明的皮肤，存档接了底色透明通道的，断开并改成不透明。
+  - `cue4parse()` 可以导 PNG。
+- `scripts/stellarblade/hq_materials.py`：`describe()` 查贴图参数不分大小写。
+
+**用户如何操作**
+
+- Blender 里用 mmd_tools 导入 `E:\game_export\StellarBlade\Fiona\pmx\Mod_VindictusFiona\Eve_Mod_VindictusFiona.pmx`，
+  在侧栏 MMD 页点「换上游戏原始材质」，22 个材质全部换上。
+- 插件每次换材质时都会重扫存档，新的高清 .blend 能自动找到，不用重启、不用重新扫描。
+- 重做：`python scripts/stellarblade/hq_mod_outfits.py --only Mod_VindictusFiona`（mod 要装在游戏的 `~mods` 里）。
+
+**实现原理与兼容性**
+
+- mod 的贴图本来就是原尺寸：和 Defying Fate 的 PCF_005 逐像素比过，衣服、身体 4096，脸 2048。
+  缺的是材质：存档 .blend 只接了颜色，PMX 只能存颜色。
+- mod 把借来的发光贴图和遮罩贴图都换成了纯黑（256²）：游戏里不发光，布纹、丝绸层都关着。高清版同样不接。
+- 连衣裙法线按正确方向读，这一处和游戏不同，`README.txt` 里写明了。
+- 原版 .blend、PMX 都没动，PMX 不用重导。
+- 插件给每个 PMX 挑同名材质最多的高清 .blend。Fiona 的 PMX 22 个材质都在自己的高清版里；其他 Eve 的 PMX 和它只共用头部 13 个，打平时按文件夹顺序 Eve 在前，照旧用自己的。
+
+**已执行的验证**
+
+- 插件实测（真实的插件按钮）：
+  - 22/22 换上，贴图不缺，没有留下库条目。
+  - 游戏材质和 MMD 两种状态再导出，PMX 逐字节一致。
+  - 「去掉游戏材质」后插件节点清零。
+- 对比图 `Fiona\pmx\Mod_VindictusFiona\插件效果_游戏材质对比.jpg`：全身、胸、腿、脸，MMD 着色对游戏材质，浅灰环境光。
+  裙子是白缎面加蕾丝暗纹，和 Defying Fate 原版的预览一致。
+- 法线方向：9 张里 8 张判为 DirectX（旋度比 1.9–3.2），连衣裙判为 OpenGL（1.8）。
+  对照组：剑星自己的 `Tex_P_EVE_Head_N`、Defying Fate 原版 PCF_005 四张，都是 DirectX。
+- 旧的几套离线复查（不重建）：
+  - Reika A / B：合并后的实例逐个相同，`describe()` 贴图相同，法线都是 DirectX。
+  - 裸体：`custombody_N` 两个方向只差 4%，不翻转。
+  - Reika B、裸体的皮肤本来就不透明、没接透明通道，新规则不改它们。
+
 ## 2026-11-14 — PMX 的 MMD 材质（第一步）和 ray-mmd 高清材质（第二步）：`scripts/pmx_tools/hq_materials/`，15 个游戏各一个样品
 
 pmx-todo 第 2 项「MMD 里的材质」，用户选「两步都做」。做法、换算和坑见 `docs/pmx-hq-materials.md`。

@@ -95,11 +95,12 @@ def describe(mi, roots, patterns):
     s = dict(DEFAULTS)
     s.update(mi["scalars"])
     t, v = mi["textures"], mi["vectors"]
+    lower = {k.lower(): n for k, n in t.items()}      # parameter names are FNames: UE ignores case ("BaseColor")
     tex = {}
     for key, param in (("base", "Basecolor"), ("orm", "ORM"), ("normal", "Baked NormalMap"), ("emissive", "Emissive"),
                        ("fuzz_mask", "FuzzMask"), ("layer_mask", "MaterialLayerMask"),
                        ("shading_mask", "ShadingModelMask"), ("pattern_normal", "Pattern01_Normal")):
-        name = t.get(param)
+        name = t.get(param) or lower.get(param.lower())
         if not name or name in ("FlatNormal",):
             continue
         tex[key] = patterns.get(name) or find_texture(name, roots)

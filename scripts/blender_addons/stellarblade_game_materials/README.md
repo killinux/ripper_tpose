@@ -84,7 +84,23 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
   （`hq_mod_outfits.py`，mod 没装进游戏，直接从下载的压缩包读）。
 - **几层衣服叠在一个 PMX 里**（`scripts/clothes_burst/pmx_layers.py`，例：`Reika\pmx\Mod_GantzReika_Layers\`，Reika A 套在 B 外面、
   B 套在裸体外面）：2026-10-24 起（插件 0.2）19 个材质全部换得上，见下面「分层模型」。
-- **Fiona**（`Mod_VindictusFiona`）：头、头发、眼睛 13 个材质换得上；mod 自己的衣服材质还没有高清 .blend，保持 MMD 着色。
+- **Vindictus Fiona**（Nexus mod 1145，`E:\game_export\StellarBlade\Fiona\pmx\Mod_VindictusFiona\Eve_Mod_VindictusFiona.pmx`）：
+  2026-11-14 起 22 个材质全部换得上，从 `Fiona\blend\Mod_VindictusFiona\Eve_Mod_VindictusFiona_HQ.blend` 搬：
+  - 衣服（`amt` 连衣裙、`head` 头冠、`Ahand` 手部、`acc` / `shoes`）：mod 自己的材质实例，继承 Eve 服装 16 / 21 的材质。
+    - 接了 ORM、DirectX 法线、透明裁切 1/3。
+    - 不发光：mod 把借来的发光贴图换成了黑的。
+    - 连衣裙的法线贴图，mod 把绿通道弄反了，高清版按正确方向读。
+  - 皮肤（`body` / `lowbody` / `hand` / `face`）：法线，次表面散射和脸一样，不透明。
+    粗糙度和高光用常数，因为 mod 借的 Eve 身体遮罩对不上 Fiona 的 UV。
+  - 头、头发、眼睛和 Cooling Suit 那套一样。
+  - 对比图：`Fiona\pmx\Mod_VindictusFiona\插件效果_游戏材质对比.jpg`。
+- **Vindictus Demon Maiden**（Nexus mod 1807，CNS 服装，`E:\game_export\StellarBlade\Eve\pmx\Mod_VindictusDemonMaiden\Eve_Mod_VindictusDemonMaiden.pmx`）：
+  2026-11-14 起 20 个材质全部换得上，从 `Eve\blend\Mod_VindictusDemonMaiden\Eve_Mod_VindictusDemonMaiden_HQ.blend` 搬：
+  - 衣服 6 个（`MI_Rav_*_mod`，母材质 `MA_CH_Standard_Ver03`）：ORM、DirectX 法线、透明裁切。黑色部分有光泽（粗糙度约 0.27），白色饰件是金属。
+  - 皮肤 `MI_Basebody_V02_F1_Inst_mod`：mod 只重画了 Eve 原版身体的颜色和法线，所以直接接父材质的 ORSS 遮罩（UV 对得上），
+    加法线、和脸一样的次表面散射。
+  - 材质名带 `_mod` 后缀（`swap_mod_mesh.py` 起的名，PMX 里也是），高清 .blend 里同名，照常匹配。
+  - 对比图：`Eve\pmx\Mod_VindictusDemonMaiden\插件效果_游戏材质对比.jpg`。
 - **其他服装**：先照 `scripts/stellarblade/README.md`「高清材质」那节做出 `*_HQ.blend`，放进存档
   （`<角色>\blend\<服装包>\`），再点「重新扫描存档」。
 - 别的游戏不行。XPS 也不行，因为 XPS 导出会改材质名。

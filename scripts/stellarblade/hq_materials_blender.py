@@ -230,6 +230,16 @@ def wire_hq(mat, d, copy_to):
     return ", ".join(done)
 
 
+def find_material(name):
+    """the .blend's material for a game instance: its own name, or <name>_mod - swap_mod_mesh.py names the materials
+    it builds from a mod's maps so (Vindictus Demon Maiden), and the PMX made from that .blend carries the same names"""
+    for n in (name, name + "_mod"):
+        mat = bpy.data.materials.get(n)
+        if mat is not None and mat.use_nodes:
+            return mat
+    return None
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
@@ -239,18 +249,19 @@ def main():
     args = ap.parse_args(argv)
     doc = json.load(open(args.materials, encoding="utf-8"))
     mats = doc["materials"]
-    report = {}
+    report, wired = {}, set()
     for name, d in mats.items():
-        mat = bpy.data.materials.get(name)
-        if mat is None or not mat.use_nodes:
+        mat = find_material(name)
+        if mat is None:
             report[name] = "not in this .blend"
             continue
+        wired.add(mat.name)
         report[name] = wire_hq(mat, d, args.copy_textures or None)
     import eye_material
     eyes = doc.get("eyes") or {}
     roots = [os.path.dirname(os.path.abspath(args.materials)), os.path.dirname(bpy.data.filepath)]
     for mat in bpy.data.materials:
-        if mat.name in mats:
+        if mat.name in mats or mat.name in wired:
             continue
         own = eyes.get(eye_material.base_name(mat.name))
         what = eye_material.rewire_eye(mat, own or doc.get("eye"), roots,

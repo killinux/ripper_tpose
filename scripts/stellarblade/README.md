@@ -537,6 +537,87 @@ Reika 的三层模型（A + B + 裸体，`scripts/clothes_burst/pmx_layers.py`�
   插件：单独的裸体 PMX 14/14；三层模型 19/19（每层从自己的高清 .blend 拿，见插件 README「分层模型」）。
 - 没照做：mod 设的 `BaseTint`（F6D7D9，偏粉）。B 的皮肤从父实例继承同一个值，两边都没乘，保持一致；母材质里它乘在哪儿还没查。
 
+**Nexus mod 服装：Vindictus Fiona（2026-11-14，`hq_mod_outfits.py --only Mod_VindictusFiona`）**
+
+用户问 Eve 穿 Vindictus Fiona（Nexus 1145）的 PMX 是不是高清版、能不能在 Blender 里换上高清材质。
+- 贴图本来就是原尺寸：和 Vindictus: Defying Fate 的 PCF_005 逐像素比过，衣服、身体 4096，脸 2048。
+- 插件之前只换得上头、头发、眼睛 13 个材质；衣服和皮肤 9 个没有高清 .blend。
+
+mod 的结构：
+- 装在 `~mods\FionaV_p.*`，挂载名是 `test/Content`（io store mod 的挂载名随意）。只读 `test/Content/*.uasset`。
+- 网格 `CH_P_EVE_09` 替换 Planet Diving Suit 7th。材质实例放在 09 / 16 / 21 三个文件夹，名字是 `body`、`amt` 这种通用名。
+- 继承关系：
+  - 衣服 `Ahand` / `head` / `acc` / `amt` → `MI_CH_P_EVE_16_Suit` → `MA_CH_P_EVE_16`。
+  - `shoes` → `MI_EVE_Cos_21_Shirt_TypeB` → `MA_CH_Standard_Cloth_Ver02`。
+  - 衣服的底色、ORM、`Baked NormalMap` 都是 Defying Fate 的 PCF_005 贴图。
+  - 皮肤 `body` / `lowbody` / `hand` / `face` → `MI_P_EVE_09_Skin` → `MA_Skin_EVE`。mod 只设了底色和法线（Defying Fate 的 `T_PCF_*`、`T_Fiona_Face01`）。
+- 父实例里 Eve 服装 16 / 21 的发光贴图和遮罩贴图（`CH_EVE_Cos_16_01_E` / `_Mask`、`EVE_Cos_21_*`），mod 都换成了 256² 的纯黑图。
+  所以游戏里不发光，遮罩控制的布纹、丝绸层都关着。高清版同样不接。
+
+这次加了三条规则（`hq_mod_outfits.py`、`hq_materials.py`）。对 Reika A / B、裸体做过离线复查：合并结果、贴图、法线判断都没变，皮肤本来就不透明。
+1. **参数名不分大小写**：UE 的参数名是 FName，比较时不分大小写。
+   - 鞋子的 mod 实例写的是 `BaseColor`，父实例写的是 `Basecolor`，两者按同一个参数合并。
+   - 之前鞋子拿到的是父实例里 Eve 衬衫的贴图 `EVE_Cos_21_Shirt_A_TypeB`。
+2. **法线贴图方向自动判断**（`normal_convention()`，结果在 `normals.json`）。
+   - 原理：由高度场生成的法线贴图，只有按它自己的绿通道方向去读，梯度场的旋度才接近 0。
+   - UE 的贴图都是 DirectX。mod 的连衣裙法线 `PCF_005_Onepiece_N` 被反成了 OpenGL：旋度 0.069 对 0.125。
+     Defying Fate 原版和这套衣服另外三张都是 DirectX，所以游戏里裙子的凹凸是上下颠倒的。
+   - 判为 OpenGL（旋度比 DirectX 小 1.4 倍以上）的贴图，`--post` 里按 OpenGL 读（`flip_green()`）。这一处高清版和游戏不同。
+   - Eve 裸体的 `custombody_N` 两个方向只差 4%，按 DirectX 不动。
+3. **皮肤**：
+   - mod 的皮肤沿用父实例的 `CH_P_EVE_BB_V01_ORSS`。这是 Eve 身体的遮罩，按 Eve 的 UV 画，套在 Fiona 的 UV 上是错位的：
+     Eve 的乳下线、肚脐、UV 空隙会乱落到 Fiona 身上。
+   - 这套衣服自己的贴图里没有 ORSS 时，导出父实例那张（`<数据>\orss\`），取 UV 岛内的平均值（G 0.278、B 0.508）当常数：
+     粗糙度 0.473，高光 0.508。
+   - 母材质不透明的皮肤，如果存档接了底色的透明通道，就断开、改成不透明。
+     Fiona 的 `T_PCF_Hand01_D` / `T_PCF_Lower01_D` 透明通道只是 UV 覆盖范围（岛内全白）。
+
+结果（插件实测，对比图 `Fiona\pmx\Mod_VindictusFiona\插件效果_游戏材质对比.jpg`，浅灰环境光）：
+- 22/22 个材质换上，贴图不缺，没有留下库条目。
+- 两种状态再导出，PMX 逐字节一致。「去掉游戏材质」后插件节点清零。
+- 裙子是白缎面加蕾丝暗纹，和 Defying Fate 原版的预览一致。
+- 头发偏灰是剑星高清版头发的老问题：粗糙度是常数，见上面 Cooling Suit。
+- PMX 不用重导。
+
+**文件**：
+- 高清 .blend：`E:\game_export\StellarBlade\Fiona\blend\Mod_VindictusFiona\Eve_Mod_VindictusFiona_HQ.blend`（`README.txt` 加了「高清版 / HQ」一节）。
+- 数据：`_meta\hq_materials\Mod_VindictusFiona\`，包括 `mi_json\`、`staged\`、`materials.json`、`skin.json`、`normals.json`、`chains.json`、`orss\`、`hq_log.txt`。
+
+**Nexus mod 服装：Vindictus Demon Maiden（2026-11-14，CNS，样品）**
+
+[stellarblade/mods/1807](https://www.nexusmods.com/stellarblade/mods/1807)（AlomX）的「Outfit」文件。带角的头发是另一个文件「Hair」，还没下。
+- mod 没装进游戏：zip 拷到 `D:\stellarblade_exports\mods\DemonMaiden\`，解出 `AlomXCNS-VindictusDemonMaiden-1700.*` 和
+  `.dekcns.json`（挂在 `/Game/OutfitMods/VindictusDemonMaidenOutfit/`，网格 `CH_P_EVE_DemonMaiden`）。
+- CUE4Parse 读网格：骨架是 `CH_P_EVE_01_Skeleton`，7 个槽全用 mod 自己的材质实例（皮肤 `MI_Basebody_V02_F1_Inst`、
+  衣服 `MI_Rav_*`）。UE Viewer 单看 mod 读不到父材质，`.props.txt` 里 `Parent = None`、`Skeleton = None`。
+- `swap_mod_mesh.py --base ...\Eve\blend\CH_P_EVE_01_Body`：骨骼对齐误差 0.07 cm，最差的是约束骨 `SC_BurstStanceConstraint`（0.78 cm，不参与变形）。
+  **CNS 服装不要加 `--mesh-json`**：那个参数按槽名（`MI_CH_P_EVE_35_BB`、`0_nt_mat`……）去找 `.mat`，CNS 的 `.mat` 是按材质实例名起的，
+  7 个槽全找不到，只剩 PSK 自带的空材质。不加时 PSK 里的材质名就是实例名，全部接上。脚本新建的材质名后面带 `_mod`。
+- 之后照常：XPS（233 骨、16 个网格）、PMX（353 骨、26 个表情、62 刚体 / 52 关节、撕裂 0；mod 自带的肩部装饰骨 `Ab-*-AX1T`
+  自动建成装饰物理）、`preview_pmx_blender.py --dance-views front,back`（静站 60 帧链根最大漂移 0.7 cm）、
+  `archive_exports.py stellarblade --only Mod_VindictusDemonMaiden`（只归档这一个；zip 和解包另外拷到 `_meta\mod_sources\DemonMaiden\`）。
+
+高清版（`hq_mod_outfits.py --only Mod_VindictusDemonMaiden`）这次补了三处：
+1. **没装进游戏、文件在 zip 根目录的 mod**：`archive` 不给 `member` 时整包解到临时 `Paks\mod\`，旁边照旧建游戏 Paks 的联接。
+   读的是 `_meta\mod_sources\DemonMaiden\` 里那份 zip。
+2. **`_mod` 后缀的材质名**：`swap_mod_mesh.py` 的成品里材质叫 `MI_Rav_Outfit_mod` 这样，PMX 里也是。`hq_materials_blender.py` 和 `--post`
+   先按实例名找，找不到再找 `<名字>_mod`（之前 7 个全报「not in this .blend」）。贴图也去 `textures\mod\` 找。
+3. **父材质的 ORSS 遮罩能不能直接用**（`layout_kept()`）：
+   - mod 皮肤设的 `CH_EVE_BaseBody_V02_F1_ORSS` 不是母材质 `MA_Skin_EVE` 的参数，游戏里不起作用，实际用的是父材质 `MI_Basebody_V02_F1` 的
+     `CH_P_EVE_ReferenceBody/.../CH_EVE_BaseBody_V02_F1_ORSS`。
+   - 判断方法：mod 皮肤的法线图和父材质的法线图各缩到 256 px，比 x / y 斜率的相关系数。Demon Maiden 0.92（Eve 原版身体 V02_F1 重画了颜色和法线），
+     Fiona 四个皮肤 -0.01–0.01（Fiona 自己的身体）。≥ 0.5 直接接父材质的遮罩（拷进 `textures\extra\`），否则照旧取平均值当常数，Fiona 不变。
+   - 先试过「皮肤面的 UV 中心落在遮罩有内容的像素上的比例」，分不开：V02_F1 的遮罩整张填满（100%），Fiona 的手对不上也有 97%。
+
+结果：
+- 插件实测（真实的插件按钮）：20/20 个材质换上，挑中的就是这套的高清 .blend；贴图不缺，没有留下库条目；两种状态再导出 PMX 逐字节一致；去掉后节点清零。
+- 对比图 `Eve\pmx\Mod_VindictusDemonMaiden\插件效果_游戏材质对比.jpg`：黑色紧身衣、裤袜粗糙度约 0.27，是有光泽的非金属，浅灰环境光下泛灰；
+  MMD 着色是纯黑。白色饰件是金属，银白。
+- 高清 .blend 引用的 30 张贴图都在自己的文件夹里。
+
+**文件**（`E:\game_export\StellarBlade\Eve\`）：`blend\Mod_VindictusDemonMaiden\`（.blend、`_HQ.blend`、`README.txt`）、`xps\Mod_VindictusDemonMaiden\`、
+`pmx\Mod_VindictusDemonMaiden\`；数据 `_meta\hq_materials\Mod_VindictusDemonMaiden\`。
+
 ## `validate_eve.py`
 
 脚本导入 Eve 的标准身体、完整 Face_003、默认发型和独立长马尾。身体/头发 PSK 会检查
