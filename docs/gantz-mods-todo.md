@@ -1,6 +1,24 @@
 # GANTZ 相关 mod：待讨论
 
-状态：**待讨论**（2026-11-01 整理）。每一项做不做、先做哪个，等用户挑。
+状态：2026-11-01 整理成「待讨论」；**2026-11-14 用户说「把所有 GANTZ 的都做了」**，第二节 A–D、F 已转完，E 见下。
+全部成品（含以前做的）按来源放在 `E:\game_export\_GANTZ合集\`，画廊 `index.html` 注明出处
+（`scripts/archive/make_collection.py collections/gantz.json` 生成）。
+
+## 2026-11-14 做完的
+
+| # | 结果 | 工具 |
+|---|---|---|
+| A | ELDEN RING #4684 Tifa Gantz：黑 / 金属 / 白 × 比基尼 / 全覆盖 / 裸体 = 9 个（blend + XPS + PMX），`E:\game_export\EldenRing\Tifa\` | `scripts/eldenring/export_mod.py`（加了分套、rar、原版残留网格、断开骨架） |
+| B | ELDEN RING #1196 DOA Naotora Gantz：1 个，`E:\game_export\EldenRing\Naotora\` | 同上（加了贴图槽优先 mod 里有的、BC1 sRGB 用 texconv 解） |
+| C | 星刃 Gantz Sling suit：3 套 + 「更多摇晃」PMX，`E:\game_export\StellarBlade\Eve\` 的 `Mod_GantzSling*` | 新的 `scripts/stellarblade/swap_mod_mesh.py`：mod 网格换进已归档的同款成品 |
+| D | HS2 GGAdams Gantz Suit：Full / Swim 两套，穿在游戏自带角色 Saki Kusano 身上，`E:\game_export\HoneySelect2\Saki Kusano\` | 新的 `scripts/honeyselect2/coordinate_export.py`（服装卡 + zipmod `[gyobobo] Gantz`，自己从公开的 Sideloader Modpack 下的） |
+| F | 只狼 #1838 Tifa Gantz：黑 / 金属 / 白 × 全覆盖 / 比基尼 / 裸体 = 9 个，都带楔丸，`E:\game_export\Sekiro\Tifa\` | `scripts/eldenring/export_mod.py`（只狼的格式也认；别的骨架上做的部件按游戏的方式挪回去） |
+| E | Honey Select 一代 hankokoli gantz suit（女款）：全身连体衣一套，穿在 HS2 的 Saki Kusano 身上，`E:\game_export\HoneySelect2\Saki Kusano\Gantz_HS1_Full_SakiKusano` | 新的 `scripts/honeyselect2/hs1_outfit_export.py`（按骨骼名重新绑到 HS2 骨架，单位 ×10）+ `mask_covered_body.py`（删掉被衣服盖住的身体面） |
+
+还没做的：E 的开胸 / 比基尼 / 长袜几种穿法（要按件选穿着状态、读一代服装卡的配色）；hankokoli 的男款、房间、道具没有下载地址；
+第三节里别的游戏（本机没装）、R2 Studio 的付费玲花，照旧等用户挑。
+
+各自的坑和限制写在对应脚本的 README 里。
 
 ## 怎么搜的
 

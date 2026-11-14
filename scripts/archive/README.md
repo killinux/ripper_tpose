@@ -74,6 +74,7 @@ E:\game_export\
 | Venus Vacation PRISM | `VenusVacationPRISM` | 目录名 | 每个角色的 `complete\` 交付包整个拿走（里面 .blend + .fbx + .glb） |
 | Rise of Eros | `RiseOfEros` | 代号字母 → 名字（`character-roster.md`） | pmx 下的跳舞 / 布料 / 表情场景和视频放进对应造型的 `_scenes\` 并打包；官方裸体基础模型在 `nude_materials` |
 | Hotel VIP | `HotelVIP` | —（2D 游戏，没有 3D 模型） | 2D 美术按类别放 `2D\png\<类别>` |
+| ELDEN RING / SEKIRO | `EldenRing` / `Sekiro` | 名字里 `mod<编号>_` 后面那个词（`mod4684_Tifa_Gantz_黑_全覆盖` → Tifa） | 两个游戏共用 `fromsoft_collector`；`work\` 是中间文件，可重新生成 |
 | 零散目录 | `_misc` | — | `D:\export` 的视频进 `_misc\_meta`；`D:\test`、`D:\tmp`、`D:\_claude_wip` 算可删 |
 
 ## 怎么保证“单独能打开”
@@ -149,6 +150,23 @@ python delete_archived.py --delete-all --keep D:\roe_exports
 
 归档过来的列表页（NARAKA / HS2 的 `_list\index.html`，用相对链接）按页面原来的位置解析每个相对链接，改成从新位置
 出发的相对路径。
+
+## 跨游戏的主题合集（`make_collection.py`）
+
+```powershell
+python make_collection.py collections\gantz.json        # → E:\game_export\_GANTZ合集\
+```
+
+把好几个游戏里同一个主题的成品放到一个目录下，再配一个注明出处的画廊。清单是 JSON（`collections\gantz.json`）：输出目录、归档根目录，
+然后每个来源一节：游戏、标题、作者、链接、日期、下载了哪些文件、怎么转的、缺什么，以及哪些归档目录属于它（`glob`，相对 `E:\game_export`，
+形如 `<游戏>/<角色>/<格式>/<造型>`；格局不同的目录写 `fmt`）。脚本：
+
+- 把这些目录里的每个文件**硬链接**到 `<输出>\<来源目录>\<格式>\<造型>\`：和归档在同一个盘，不另占空间；在合集里改文件就是改归档里那一份。
+  重新跑会换成新的链接；清单里不再有的目录不动（会列出来）。
+- 每个造型一张缩略图（`_thumbs\`，从预览图来，或者用 `thumb_from` 指定）；来源的宣传图（mod 页面的图）放 `_thumbs\source\`。
+- 写 `index.html`（本地画廊，只引用本地文件）和 `说明.md`。
+
+归档目录下划线开头的文件夹不进总表，`_GANTZ合集` 不会被当成游戏。
 
 ## 加一个游戏
 

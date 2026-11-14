@@ -14,6 +14,49 @@
 
 ---
 
+## 2026-11-14 — GANTZ：ELDEN RING / 只狼 / 星刃 / HS2 的 GANTZ mod 全部转成 Blender + XPS + PMX；跨游戏合集 `E:\game_export\_GANTZ合集` 和注明出处的画廊
+
+**新增**
+
+- `scripts/eldenring` 认只狼了（同一家的格式；`D:\sekiro_exports`，归档成 `E:\game_export\Sekiro`），还加了：
+  - 直接吃 `.rar` / `.7z`（7-Zip 解一次放 `work\_extracted\`）；旧式文件名 `<名>-<编号>-<版本>-<时间>.rar` 也认得 mod 编号；
+  - `--set 标签=部件`：一个压缩包里几套衣服各出一个模型（Tifa Gantz：每种颜色三套，每套一个盔甲编号）；`--only-set`、`--label`、预设里的 `file_labels`（Black → 黑）；
+  - `--from-step xps|pmx`：不重新解包，只重做后面几步；`--skip-done` 续跑批量。
+- 新 `scripts/stellarblade/swap_mod_mesh.py`：只换一套原版衣服网格的 mod，把它的网格按骨骼对齐换进已归档的同款成品，mod 没带的材质槽沿用游戏原版。
+  `export_pmx_blender.py` 加 `--bust-spring` / `--bust-limits`；`preview_pmx_blender.py` 加 `--dance-views front,side,back`。
+- 新 `scripts/honeyselect2/coordinate_export.py`：服装卡 + zipmod 穿到角色卡上（zipmod 的 abdata 排在游戏前面查找，列表 CSV 并进物件列表，按类别对上 sideloader 的 ID）。
+- 新 `scripts/archive/make_collection.py` + `collections/gantz.json`：按 JSON 清单把各游戏归档里的成品硬链接到一个主题目录，配本地画廊 `index.html` 和 `说明.md`；
+  归档工具登记了 Sekiro（`fromsoft_collector`，和 ELDEN RING 共用）。
+
+**转出来的（都在 `E:\game_export\_GANTZ合集\`，按来源分目录）**
+
+- ELDEN RING #4684 Tifa Gantz 9 个、#1196 DOA Naotora Gantz 1 个；只狼 #1838 Tifa Gantz 9 个（都带楔丸）；
+- 星刃 Gantz Sling suit（Patreon m.tsqn）3 套 + 「更多摇晃」PMX；HS2 GGAdams Gantz Suit（Patreon）Full / Swim，穿在 Saki Kusano 身上；
+- 合集里另有以前做的 FF7 重制版 #967 / #1707、FF7 重生 #817 / #1613、星刃 #3561、ELDEN RING #11065，和「18」系列 MMD 包。
+
+**修复（ELDEN RING / 只狼工具，影响以后所有 mod）**
+
+- 拿原版盔甲文件当模板的 mod：原版网格的三角面全收成一点，现在不要；含退化 / 重复三角面的网格会让 Blender 设自定义法线时崩溃，现在先去掉这些面。
+- 断开的骨架（父骨缺失，局部变换被当成世界变换，差一米多）按顶端骨在完整骨架里的位置接回；骨架从保留网格最多的部件取；
+  在别的骨架上做的部件（只狼 Tifa 的后发做在 NPC 骨架上，脖子差 25 cm）按游戏的方式做一次线性混合蒙皮挪回；
+  文件里横着的 `Hair\d+` 头发（游戏靠物理吊下来）转成自然下垂。
+- 贴图：同一用途列了几张时取 mod 里有的那张；任何在法线槽的图都生成 Blender / XPS 用的法线；`_n` 以外的普通法线图不再把蓝通道当光滑度；
+  金属度取金属度槽那张图的红通道（Tifa Gantz 叫 `_s`）；有自发光贴图就用它；Pillow 打不开的 DDS（BC1_UNORM_SRGB）用 texconv 解。
+- PMX：中文材质名的头发 / 眼睛也认；两边胸部挂在一根物理代理骨上的（`[cloth]BD_M_2140_Board_001`、`BD_M_[Bone]RopeA_02`）按左右分给左胸 / 右胸，各一个物理球；
+  挂在布料代理骨或 `Hair\d+` 骨链上的长发也生成物理链。
+
+**修复（HS2）**：衣服 `CmpClothes` 里当前穿着状态的那组对象，游戏会打开，有的 mod 在预制体里存成未激活；原来照预制体算，gyobobo 的 Gantz 全身内衬整件丢了。
+
+**验证**：19 个 ELDEN RING / 只狼模型逐个看了正面 / 侧面 / 背面预览和 PMX 回读（静止 60 帧链根最多漂 0.9 cm、跳舞帧前后两面）；Tifa 9 + 9 个都有
+7 束头发物理链、左右胸物理、眼睛骨骼，PMX 66–75 个刚体；Naotora 只有身体碰撞体（没有眼球网格和胸骨）。星刃三套骨骼对齐残差 0.002 cm，PMX 56 个刚体、
+回读跳舞正常；HS2 两套对照 zipmod 作者的预览图。
+
+**另外（HS2）**：新 `hs1_outfit_export.py` 把 Honey Select 一代的衣服按骨骼名重新绑到 HS2 角色上（一代单位是米，×10；Unity 5.3 的组件列表、
+材质属性名两处老格式），`mask_covered_body.py` 删掉被衣服盖住的身体面；hankokoli 的 gantz suit 做了全身连体衣一套（穿在 Saki Kusano 身上）。
+开胸 / 比基尼 / 长袜几种穿法没做，见 `docs/gantz-mods-todo.md`。
+
+---
+
 ## 2026-11-01 — ELDEN RING 角色 mod → 高清材质 Blender / XPS / PMX（`scripts/eldenring/`，一条命令）；第一个：Nexus 11065「Reika Hardsuit - Gantz」（GANTZ 玲花，带外骨骼 / 不带外骨骼两版）
 
 **新增**

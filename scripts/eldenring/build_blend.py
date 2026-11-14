@@ -221,6 +221,7 @@ for m in model["meshes"]:
     me.polygons.foreach_set("use_smooth", np.ones(len(T), dtype=bool))
     me.use_auto_smooth = True
     me.auto_smooth_angle = math.pi
+    me.validate(clean_customdata=False)          # collapsed / repeated faces crash the custom-normal fan code
     me.normals_split_custom_set_from_vertices([tuple(n) for n in N])
     me.materials.append(materials[m["material"]])
     ob = bpy.data.objects.new(m["name"], me)

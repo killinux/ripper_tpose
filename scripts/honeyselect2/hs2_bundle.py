@@ -246,9 +246,28 @@ class Bundles:
         return None
 
 
+def _prop_name(key):
+    """material property key: a str, or a FastPropertyName object in Unity 5.3 files (Honey Select 1)."""
+    return key if isinstance(key, str) else getattr(key, "name", str(key))
+
+
+def _component_pptrs(go):
+    """PPtrs of a GameObject's components.  Unity 5.3 (Honey Select 1) stores m_Component as (classID, PPtr) pairs,
+    newer files as ComponentPair objects; UnityPy's m_Components shim fails on the old form."""
+    raw = getattr(go, "m_Component", None)
+    if raw is None:
+        return [getattr(c, "component", c) for c in go.m_Components]
+    out = []
+    for entry in raw:
+        if isinstance(entry, (tuple, list)):
+            out.append(entry[-1])
+        else:
+            out.append(getattr(entry, "component", entry))
+    return out
+
+
 def _transform_of(go):
-    for comp in go.m_Components:
-        pptr = getattr(comp, "component", comp)
+    for pptr in _component_pptrs(go):
         obj = _safe_read(pptr)
         if obj is not None and type(obj).__name__ in ("Transform", "RectTransform"):
             return obj
@@ -257,16 +276,15 @@ def _transform_of(go):
 
 def _components(go):
     out = []
-    for comp in go.m_Components:
-        obj = _safe_read(getattr(comp, "component", comp))
+    for pptr in _component_pptrs(go):
+        obj = _safe_read(pptr)
         if obj is not None:
             out.append(obj)
     return out
 
 
 def _monobehaviour_tree(go, script_names):
-    for comp in go.m_Components:
-        pptr = getattr(comp, "component", comp)
+    for pptr in _component_pptrs(go):
         try:
             reader = pptr.deref()
         except Exception:  # noqa: BLE001
@@ -296,6 +314,7 @@ class Scene:
         self.materials = {}
         self.textures = {}     # (file, path_id) -> png basename
         self.warnings = []
+        self.unit_scale = {}   # source tag -> factor for meshes in other units (Honey Select 1: metres -> x10)
 
     # ------------------------------------------------------------ nodes
 
@@ -316,7 +335,7 @@ class Scene:
 
     # ------------------------------------------------------------ instances
 
-    def place(self, root_t, tag, anchor=None, merge=False, local_override=None, hide_paths=()):
+    def place(self, root_t, tag, anchor=None, merge=False, local_override=None, hide_paths=(), show_paths=()):
         """Instantiate the prefab rooted at `root_t` under node `anchor`.
 
         merge=True re-binds every transform whose name already exists in the body/head
@@ -325,7 +344,7 @@ class Scene:
         """
         anchor_world = self.node_world(anchor) if anchor else np.eye(4)
         mapping, renderers = {}, []
-        hide_ids = set(hide_paths)
+        hide_ids, show_ids = set(hide_paths), set(show_paths)
         stack = [(root_t, anchor, anchor_world, True, False)]
         while stack:
             t, parent, parent_world, active, hidden = stack.pop()
@@ -342,8 +361,9 @@ class Scene:
                 node = self._new_name(name, tag)
                 self._add_node(node, parent, world, tag)
             mapping[_oid(t)] = node
-            # prefab roots are often saved inactive and switched on after Instantiate
-            active = active and (bool(go.m_IsActive) or t is root_t)
+            # prefab roots are often saved inactive and switched on after Instantiate; so are the clothes
+            # state objects (show_paths), which ChaControl switches on for the state worn
+            active = active and (bool(go.m_IsActive) or t is root_t or _pid(t.m_GameObject) in show_ids)
             hidden = hidden or _pid(t.m_GameObject) in hide_ids
             for comp in _components(go):
                 kind = type(comp).__name__
@@ -397,7 +417,7 @@ class Scene:
         else:
             h = MeshHandler(mesh)
             h.process()
-            verts = np.asarray(h.m_Vertices, dtype=np.float64)[:, :3]
+            verts = np.asarray(h.m_Vertices, dtype=np.float64)[:, :3] * self.unit_scale.get(source, 1.0)
             n = len(verts)
             if n == 0:
                 return None
@@ -427,7 +447,11 @@ class Scene:
                     mats.append(self.node_world(node))
                     continue
                 bones.append(bnode)
-                mats.append(self.node_world(bnode) @ _mat4(mesh.m_BindPose[i]))
+                bp = _mat4(mesh.m_BindPose[i])
+                if source in self.unit_scale:
+                    bp = bp.copy()
+                    bp[:3, 3] *= self.unit_scale[source]
+                mats.append(self.node_world(bnode) @ bp)
             mats = np.asarray(mats)
             index_arr = np.asarray(h.m_BoneIndices, dtype=np.int64).reshape(n, -1)
             if h.m_BoneWeights:
@@ -525,6 +549,7 @@ class Scene:
         props = mat.m_SavedProperties
         textures, tex_st = {}, {}
         for slot, env in props.m_TexEnvs:
+            slot = _prop_name(slot)
             tex = _safe_read(env.m_Texture)
             if tex is None or type(tex).__name__ != "Texture2D":
                 continue
@@ -533,8 +558,8 @@ class Scene:
                 textures[slot] = png
                 sc, off = env.m_Scale, env.m_Offset
                 tex_st[slot] = [float(sc.x), float(sc.y), float(off.x), float(off.y)]
-        mcolors = {k: _color(v) for k, v in props.m_Colors}
-        floats = {k: float(v) for k, v in props.m_Floats}
+        mcolors = {_prop_name(k): _color(v) for k, v in props.m_Colors}
+        floats = {_prop_name(k): float(v) for k, v in props.m_Floats}
         self.materials[key] = {
             "name": name, "source": source, "role": role,
             "shader": getattr(shader, "m_Name", "") if shader is not None else "",
@@ -599,6 +624,17 @@ def unpack_normal(img, fmt):
     out = np.stack([nx * 0.5 + 0.5, ny * 0.5 + 0.5, nz * 0.5 + 0.5], axis=-1)
     from PIL import Image
     return Image.fromarray((out * 255 + 0.5).astype(np.uint8), "RGB")
+
+
+def clothes_shown_paths(root_t, state="full"):
+    """GameObject path ids the game switches ON for the state worn (objTopDef / objBotDef for 'full', the Half ones
+    for 'half') - a mod may save them inactive in the prefab ([gyobobo] Gantz: the whole inner suit)."""
+    go = root_t.m_GameObject.read()
+    _cls, tree = _monobehaviour_tree(go, ("CmpClothes",))
+    if tree is None:
+        return set()
+    keys = ("objTopDef", "objBotDef") if state == "full" else ("objTopHalf", "objBotHalf")
+    return {(tree.get(k) or {}).get("m_PathID", 0) for k in keys} - {0}
 
 
 def clothes_hidden_paths(root_t, state="full"):

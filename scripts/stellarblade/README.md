@@ -234,6 +234,44 @@ python package_outfits.py --index                                             # 
   G 作粗糙度，`Emissive` 接 Principled 自发光（强度 2，战斗服上的蓝色光圈）。
 - XPS / PMX 与 Fiona 相同，对 `packages\Eve_Mod_GantzReika_A|B\*.blend` 各跑一次。
 
+### 只换一套衣服网格的 mod：`swap_mod_mesh.py`（2026-11-14：Gantz Sling suit）
+
+[Gantz Sling suit](https://www.patreon.com/posts/134367203)（Patreon「m.tsqn」，免费帖）是 IoStore 覆盖型 mod，四个包都只换一套原版衣服的骨骼网格和其中几个材质实例：
+
+| 包 | 换掉的原版 | 网格做在哪个骨架上 | 产物 |
+|---|---|---|---|
+| `gantz_sling_suit.zip` | `CH_P_EVE_15_V02_TypeB`（Orca Techie） | 15 号 | `Eve_Mod_GantzSling` |
+| `gantz_sling_suit_more_jiggle.zip` | 同上，网格逐字节相同，只是 `CH_P_EVE_62_AnimBP` 摇得更厉害 | — | 只出 PMX `Eve_Mod_GantzSling_MoreJiggle`（`--bust-spring 45 --bust-limits 24,8,18`） |
+| `breaks_zss_suit_gantz_sling_suit_red_keyhole_suit.zip` | `CH_P_EVE_29`（Keyhole Suit），连 29_03 那组贴图也换了 | 62 号（泳装） | `Eve_Mod_GantzSling_RedKeyholeSuit` |
+| `breaks_zss_suit_gantz_sling_keyhole_dress.zip` | `CH_P_EVE_29` | 62 号 | `Eve_Mod_GantzSling_KeyholeDress` |
+
+`validate_eve.py` 要的公共文件（FModel 导出的 Face_003 等）已经不在 D 盘，`build_standalone.py` 又会把 mod 没带的材质槽（原版皮肤）当代理藏掉，所以另写了这个脚本：
+
+```powershell
+# 1. UE Viewer 导出 mod（staging = mod 三件套 + 游戏的 global.utoc/ucas）
+umodel_stellar_blade_v6.exe -export -path=D:\sbm\st_<包> -game=ue4.26 -noanim -psk -png -out=D:\sbm\out_<包> "*"
+# 2. 材质槽的真名：UE Viewer 只看 mod 包，解析不到游戏里的材质，写成 material_1 / material_2；CUE4Parse 读得到引用名
+cue4parse.exe -i D:\sbm\st_<包> -g GAME_UE4_26 -m <StellarBlade.usmap> -f json -o D:\sbm\json_<包> -p SB/Content/Art/Character/PC/CH_P_EVE_15/CH_P_EVE_15_V02_TypeB.uasset
+# 3. 换进已归档的成品
+blender -b --factory-startup --python swap_mod_mesh.py -- --base E:\game_export\StellarBlade\Eve\blend\CH_P_EVE_15_V02_TypeB `
+  --psk <out>\...\CH_P_EVE_15_V02_TypeB.pskx --tex-root <out> --mesh-json <json> `
+  --material-from E:\game_export\StellarBlade\Eve\blend\CH_P_EVE_62\Eve_CH_P_EVE_62.blend `
+  --out D:\stellarblade_exports\packages --label Eve_Mod_GantzSling
+```
+
+- 把底板成品文件夹拷成 `packages\<label>\`，导入 mod 的 PSK，按同名骨骼求一个相似变换（旋转 + 平移 + 均匀缩放）对齐到 `Eve_Armature`，
+  报告残差：在同一个骨架上做的 mod 残差约 0.002 cm。两个 keyhole 包放到 29 号成品上残差 0.4 cm，还缺一根 `Ab-L-Pectro1`，
+  放到 62 号（泳装）成品上降到 0.002 cm，所以它们是在泳装骨架上做的（四个包都带 62 号的动画蓝图），用 62 号当底板。
+- 材质：mod 带了 `.mat` 的槽用 mod 的贴图新建（颜色、DirectX 法线翻绿、ORM = R 遮蔽 / G 粗糙 / B 金属、自发光 ×2，贴图拷进 `textures\mod\`）；
+  mod 没带、但贴图被 mod 换掉的游戏材质实例（红色 keyhole 的 `MI_CH_P_EVE_29_03`）按 `<名>_A/_N/_ORM/_E` 用 mod 的图；
+  其余槽沿用底板里同名的游戏材质，底板里没有的从 `--material-from` 的成品里搬（皮肤 `MI_CH_P_EVE_62_BaseBody_A` 来自泳装，所以身上有晒痕）。
+- 原来的衣服对象删掉，新网格接它的名字 `Eve_Body_Mesh_01`（PMX / XPS 那两步按这个名字找）；按脚尖方向渲正面和背面预览。
+- 之后照常：`blender2xps\tools\batch_export_blends.py --scale 0.01`、`export_pmx_blender.py`、`preview_pmx_blender.py --dance-views front,back`。
+- 没还原：游戏里两个 keyhole 版的节点会发红光 / 蓝光（游戏材质参数决定颜色），这里是白色节点。
+
+`export_pmx_blender.py` 的胸部物理参数可以在命令行改：`--bust-spring`（默认 120，越小越软）、`--bust-limits 弹跳,翻滚,摆动`（度，默认 15,5,12）。
+`preview_pmx_blender.py --dance-views front,side,back` 每个跳舞帧从这几面各拍一张（看头发、披风甩到哪里）。
+
 ## 导出 MMD（PMX）：`export_pmx_blender.py`（2026-09-25：Vindictus Fiona、Gantz Reika A / B）
 
 ```powershell

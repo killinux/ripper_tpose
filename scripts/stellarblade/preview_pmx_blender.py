@@ -36,6 +36,8 @@ ap.add_argument("--pmx", required=True)
 ap.add_argument("--vmd", default=r"E:\Downloads\mmd\来杯好茶摇一摇2026.6.14by小王动画\适配【原神】芙宁娜.vmd")
 ap.add_argument("--frames", type=int, nargs="*", default=[150, 400, 650, 900],
                 help="motion frame numbers (before the margin is added)")
+ap.add_argument("--dance-views", default="front",
+                help="comma list of front / side / back: each dance frame shot from these sides (hair, capes)")
 ap.add_argument("--margin", type=int, default=30,
                 help="frames of rest-to-first-pose blend before the motion (mmd_tools import_vmd margin)")
 ap.add_argument("--scale", type=float, default=0.08)
@@ -306,9 +308,11 @@ if report["vmd"]:
         if f in want:
             c = arm.matrix_world @ hips.head if hips else Vector((0, 0, height / 2))
             target = Vector((c.x, c.y, height * 0.52))
-            p = os.path.join(tmp, "d%02d.png" % len(dance))
-            shoot(p, target, height * 1.25, (600, 900))
-            dance.append(p)
+            for view in [v.strip() for v in args.dance_views.split(",") if v.strip()]:
+                d = {"front": (0.0, -1.0, 0.0), "side": (1.0, 0.0, 0.0), "back": (0.0, 1.0, 0.0)}.get(view, (0.0, -1.0, 0.0))
+                p = os.path.join(tmp, "d%02d.png" % len(dance))
+                shoot(p, target, height * 1.25, (600, 900), Vector(d))
+                dance.append(p)
             dyn = [o for o in scene.objects if getattr(o, "mmd_type", "") == "RIGID_BODY" and o.rigid_body
                    and o.rigid_body.type == "ACTIVE" and not o.rigid_body.kinematic]
             if dyn:

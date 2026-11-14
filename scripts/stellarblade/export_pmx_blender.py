@@ -908,7 +908,16 @@ def main():
                     help="CUE4Parse JSON of the character's M_EyeRefractive instance (the first one is also the "
                          "default for an eye material of another name); default: --hq-materials' eye, else Eve's")
     ap.add_argument("--keep-eye", action="store_true", help="leave the .blend's eye network as it is")
+    ap.add_argument("--bust-spring", type=float, default=None,
+                    help="breast joints' angular spring (default %g; lower = softer, more jiggle)" % BUST["spring"])
+    ap.add_argument("--bust-limits", default="",
+                    help="breast joints' limits in degrees 'bounce,roll,sway' (default %s)"
+                         % ",".join("%g" % v for v in BUST["limit_deg"]))
     args = ap.parse_args(argv)
+    if args.bust_spring is not None:
+        BUST["spring"] = args.bust_spring
+    if args.bust_limits:
+        BUST["limit_deg"] = tuple(float(v) for v in args.bust_limits.split(","))
     doc = json.load(open(args.hq_materials, encoding="utf-8")) if args.hq_materials else {}
     hq = doc.get("materials") or {}
     eyes, default_eye = dict(doc.get("eyes") or {}), doc.get("eye")

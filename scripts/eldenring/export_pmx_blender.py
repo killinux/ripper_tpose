@@ -134,6 +134,15 @@ def long_hair_side(arm, mesh, head_name="Bip001 Head"):
     return "front" if abs(mean) > 90 else "back"
 
 
+def needs_chains(arm, mesh):
+    """hair_chains.needs_chains, also when the hair rides Havok cloth proxies ([cloth]HR_A_0109_007: single bones, no
+    chain - the generated chains take their weight over the hanging part)."""
+    names = {vg.index: vg.name for vg in mesh.vertex_groups}
+    used = {names.get(g.group, "") for v in mesh.data.vertices for g in v.groups if g.weight > 1e-4}
+    return bool(used) and all(hair_chains.BIPED.match(n) or rig.CLOTH_PROXY.search(n) or rig.HAIR_CHAIN.match(n)
+                              for n in used if n in arm.data.bones)
+
+
 def add_hair_chains(arm, meshes, mode):
     """Chains for hair skinned to the body only (scripts/aion2/hair_chains.py).  That generator works in centimetres
     and spreads its strands around her BACK; it runs here with the armature scaled x100 and, when the long hair
@@ -141,8 +150,8 @@ def add_hair_chains(arm, meshes, mode):
     if mode == "off":
         return []
     out = []
-    hairy = [m for m in meshes if any(s.material and re.search(r"hair", s.material.name, re.I) for s in m.material_slots)]
-    hairy = [m for m in hairy if hair_chains.needs_chains(arm, m)]
+    hairy = [m for m in meshes if any(s.material and rig.HAIR_MATERIAL.search(s.material.name) for s in m.material_slots)]
+    hairy = [m for m in hairy if needs_chains(arm, m)]
     for m in hairy:
         side = long_hair_side(arm, m)
         if side is None:
@@ -165,6 +174,7 @@ def prepare(arm, meshes, hair_mode):
     stats = {"height_m": round(max((m.matrix_world @ Vector(c)).z for m in meshes for c in m.bound_box), 3)}
     stats["rig"] = rig.to_biped(arm, meshes)
     stats["dropped_far_bones"] = len(sb.drop_far_sockets(arm, meshes))
+    stats["bust_from_cloth"] = rig.split_bust_cloth(arm, meshes)
     stats["hair_chains"] = add_hair_chains(arm, meshes, hair_mode)
     stats["eye_bones"] = sb.add_eye_bones(arm, meshes)
     stats["eye_pivots"] = fix_eye_pivots(arm, meshes)

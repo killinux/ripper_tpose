@@ -79,6 +79,51 @@ python html\make_gallery.py        # 每批导出后重跑；打开 scripts\hone
 按「角色卡·穿好 / 角色卡·裸 / 底模 / 单件」分类、可搜索，卡片上有正面 / 3/4 / 脸部预览、组成物品、
 规格和 `.blend` 链接。
 
+## 服装卡 + zipmod：`coordinate_export.py`（2026-11-14：GGAdams 的 Gantz Suit）
+
+```powershell
+python coordinate_export.py --coordinate D:\hs_gantz\mods\GGAdams\GGA_Gantz_Full.png `
+  --zipmod "D:\hs_gantz\mods\GGAdams\[gyobobo] Gantz.zipmod" --chara HS2_ill_F_001 --name Gantz_Full_SakiKusano
+```
+
+服装卡（`UserData\coordinate\`，PNG 后面跟 `【AIS_Clothes】` 块）只有衣服和饰品，衣服常常来自 sideloader 的 zipmod。这个脚本：
+
+- **读服装卡**：产品号、标记、版本、语言、名字，然后 int32 总长 + 两段「int32 长度 + MessagePack」（衣服、饰品），后面是插件的扩展数据。
+- **zipmod**：第一次用时解到 `<out>\_zipmods\<guid>\`；它的 `abdata\` 排在游戏的前面查找（包装了 `hs2_data.abdata_path`），
+  列表 CSV（第 1 行类别、第 2 行发行号、第 3 行列表路径、第 4 行表头）并进游戏的物件列表。
+- **ID**：卡里存的是 sideloader 分配的 ID（≥ 100000000）。这里按类别对：zipmod 在这个类别里只有一件，就是它（gyobobo 的 Gantz 每个类别一件）；
+  一个类别有多件时停下来说明（要读卡里的 resolver 数据才能对）。不经 sideloader 存的卡（zipmod 作者自带的那张）用的是 zipmod 自己的 ID，也认。
+- **穿在谁身上**：`--chara` 的角色卡保留身体、脸和头发，衣服和饰品换成服装卡的（和游戏里读服装卡一样）。卡里的 MaterialEditor / ABMX 数据不套用。
+- 之后照常：`export_pmx_blender.py` 出 PMX，`blender2xps\tools\batch_export_blends.py --scale 1.0` 出 XPS。
+
+同时修了一处通用问题（`hs2_bundle.clothes_shown_paths` + `Scene.place(show_paths=)`）：衣服的 `CmpClothes` 里「完整状态」那组对象
+（`objTopDef` / `objBotDef`，半脱状态是 `*Half`）游戏会按穿着状态打开，可有的 mod 在预制体里存成未激活。原来照预制体的激活状态算，
+gyobobo 的 Gantz 内衬（全身连体衣：`o_bra_a` 上身加两条胳膊、`o_shorts_a` 两条腿）整件都没了，胳膊和腿是光的。
+
+产物：`E:\game_export\HoneySelect2\Saki Kusano\`，`Gantz_Full_SakiKusano`（全身连体衣 + 外套）、`Gantz_Swim_SakiKusano`（只有外套）。
+
+## Honey Select 一代的衣服穿到 HS2 角色上：`hs1_outfit_export.py`（2026-11-14：hankokoli 的 gantz suit）
+
+```powershell
+$S = "chara/hankokoli/gantz_female_suit.unity3d"
+python hs1_outfit_export.py --hs1 D:\hs_gantz\hs1_hankokoli --item "${S}:p_cf_top_Gantz" --item "${S}:p_cf_bot_Gantz" `
+  --item "${S}:p_cf_panst_Gantz_01" --item "${S}:p_cf_panst_Gantz_02" --item "${S}:p_cf_gloves_Gantz" --item "${S}:p_cf_Shoes_Gantz" `
+  --chara HS2_ill_F_001 --name Gantz_HS1_Full_SakiKusano --color "^(armor|armor2|skin)$=#3a3a40"
+```
+
+一代的物件列表是 `abdata\list\characustom\*.unity3d` 里的 TextAsset（制表符分隔：ID、类别、名字、bundle、预制体名……）。本机没有一代，衣服穿在 HS2 角色卡上：
+
+- **按骨骼重新绑定**：一代预制体用 `merge=True` 放进 HS2 场景，同名的 `cf_J_*` 骨（265 根里 228 根）就是 HS2 的骨；`hs2_bundle` 烘焙蒙皮顶点用的是
+  「HS2 骨骼世界矩阵 × 一代网格的绑定姿势」，衣服就按 HS2 的骨架摆好了。
+- **单位**：一代是米（髋部在 1.13），HS2 是十分之一米（11.3）。`Scene.unit_scale[来源] = 10` 把这件的顶点和绑定姿势的平移放大 10 倍再烘焙。
+- **老格式**：Unity 5.3 的 GameObject 组件列表是「(类型号, 引用)」对，UnityPy 的 `m_Components` 兼容层会报错，改用 `_component_pptrs`；材质属性名是
+  `FastPropertyName` 对象，不是字符串（`_prop_name`）。
+- **哪些对象不要**（`--hide`）：另一种穿着状态（`*_b`）、衣服带的身体副本（`O_body_*`）和 `cf_O_unc_*`。这个 mod 里叫 `skin` / `skin_arm` 的是紧身衣那一层，要留着。
+- **身体穿模**：HS2 的身体和一代默认身体形状不一样，肚子、大腿会从紧身衣里穿出来。建好 .blend 后用 `mask_covered_body.py` 删掉被衣服盖住的身体面
+  （从身体顶点沿法线向外、向内各打一条射线，3 cm 内碰到衣服就算盖住，三个顶点都盖住的面删掉），相当于游戏里的身体遮罩，然后才渲预览。
+- **颜色**：一代服装卡里的配色没读，`--color 材质正则=#RRGGBB` 乘到颜色贴图上（衣服读的是 `color1`）。hankokoli 的预览图里是黑色。
+- 只做了全身连体衣这一套。作者预览里的开胸上衣 + 比基尼 + 长袜几种穿法要按件选穿着状态（上衣用 `_b`、比基尼用 `_a`），长袜的筒身也没出来，没做。
+
 ## 转 PMX（`export_pmx_blender.py`，2026-10-31，样品 Akina Obata）
 
 ```powershell

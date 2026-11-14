@@ -145,8 +145,9 @@ class Builder:
         else:
             merge, place_anchor = not standalone, None
         tag = safe(role_name)
+        show = hs2_bundle.clothes_shown_paths(t, self.state) if group == "clothes" else set()
         mapping, rends = self.scene.place(t, tag, anchor=place_anchor, merge=merge,
-                                          local_override=override, hide_paths=hide)
+                                          local_override=override, hide_paths=hide, show_paths=show)
         role_fn = {"clothes": lambda n: "clothes", "accessory": lambda n: "accessory",
                    "hair": lambda n: "accessory" if "_acs" in n.lower() else "hair",
                    "head": lambda n: HEAD_ROLES.get(n.lower(), "face")}[group]

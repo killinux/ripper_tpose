@@ -680,6 +680,17 @@ def collect_hs2():
         src = j(HS2, "bodies", body)
         products.append(Product("BaseBody", "blend", body, src, main=body + ".blend", preview=body + "_preview.png",
                                 desc="基础身体", exclude=("parts",)))
+    # PMX / XPS made from a card's .blend (export_pmx_blender.py / blender2xps) go next to that card
+    for fmt in ("pmx", "xps"):
+        for name in subdirs(j(HS2, fmt)):
+            if name.startswith("_"):
+                continue
+            src = j(HS2, fmt, name)
+            char = load_json(j(HS2, "cards", name, "scene.json")).get("character") or "Other"
+            main = name + "." + fmt
+            products.append(Product(char, fmt, name, src, main=main if exists(j(src, main)) else None,
+                                    preview="preview.png" if exists(j(src, "preview.png")) else None,
+                                    desc="角色卡转 %s" % fmt.upper(), package=(fmt == "pmx")))
     for cat in subdirs(j(HS2, "items")):
         for item in subdirs(j(HS2, "items", cat)):
             src = j(HS2, "items", cat, item)
@@ -779,17 +790,25 @@ def er_character(name):
     return m.group(1) if m else "Other"
 
 
-def collect_eldenring():
-    products = []
-    for fmt in ("blend", "xps", "pmx"):
-        for name in subdirs(j(ELDENRING, fmt)):
-            src = j(ELDENRING, fmt, name)
-            main = name + "." + fmt
-            products.append(Product(er_character(name), fmt, name, src, main=main if exists(j(src, main)) else None,
-                                    preview="preview.png" if exists(j(src, "preview.png")) else None,
-                                    desc="Nexus mod（scripts/eldenring/export_mod.py）"))
-    metas = [Meta(j(ELDENRING, "mods"), "mod_sources"), Meta(j(ELDENRING, "logs"), "logs")]
-    return products, metas
+def fromsoft_collector(root):
+    """ELDEN RING / SEKIRO mods made by scripts/eldenring/export_mod.py: <root>\\{blend,xps,pmx}\\<name>\\."""
+    def collect():
+        products = []
+        for fmt in ("blend", "xps", "pmx"):
+            for name in subdirs(j(root, fmt)):
+                src = j(root, fmt, name)
+                main = name + "." + fmt
+                products.append(Product(er_character(name), fmt, name, src, main=main if exists(j(src, main)) else None,
+                                        preview="preview.png" if exists(j(src, "preview.png")) else None,
+                                        desc="Nexus mod（scripts/eldenring/export_mod.py）"))
+        metas = [Meta(j(root, "mods"), "mod_sources"), Meta(j(root, "logs"), "logs")]
+        return products, metas
+    return collect
+
+
+collect_eldenring = fromsoft_collector(ELDENRING)
+SEKIRO = r"D:\sekiro_exports"
+collect_sekiro = fromsoft_collector(SEKIRO)
 
 
 def roe_character(key):
@@ -953,6 +972,10 @@ GAMES = {g.key: g for g in [
          sources=[ELDENRING], collect=collect_eldenring,
          regenerable=[(j(ELDENRING, "work"), "work\\ = unpack_mod.py 的中间文件（model.json / model.npz / 贴图），"
                                              "scripts/eldenring/export_mod.py 可重新生成")]),
+    Game("sekiro", "Sekiro", "SEKIRO（Nexus 角色 mod）",
+         sources=[SEKIRO], collect=collect_sekiro,
+         regenerable=[(j(SEKIRO, "work"), "work\\ = unpack_mod.py 的中间文件（model.json / model.npz / 贴图），"
+                                          "scripts/eldenring/export_mod.py 可重新生成")]),
     Game("roe", "RiseOfEros", "Rise of Eros",
          sources=[ROE] + ROE_EXTRA, collect=collect_roe, regenerable=regen_roe,
          galleries=["scripts/riseoferos/html/index.html"],

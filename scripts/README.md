@@ -22,7 +22,7 @@
 | Taimanin Collection（対魔忍コレクション） | Unity 2018.4 玩家数据 `data.unity3d`（UnityFS，不加密，**没有类型树**；卡牌图片加密） | [`taimanincollection/`](taimanincollection/) | `taimanincollection\list_models.py` / `export_model.py` |
 | AION2（永恒之塔 2） | Unreal 5.3 IoStore（282 个容器，AES 加密，exe 带 NCGuard 壳；无版本属性，用 UE Viewer 特制版） | [`aion2/`](aion2/) | `aion2\list_models.py` / `export_model.py`；转 PMX / XPS：`export_pmx_blender.py` / `export_xps_blender.py`（Blender） |
 | Vindictus（洛奇英雄传）北美服 | Source 引擎改版，`.hfs` v4 包（加密压缩，用 Unicorn 跑游戏自己的 `FileSystem_Stdio.dll` 读） | [`vindictusna/`](vindictusna/) | `vindictusna\list_models.py` / `export_model.py` |
-| ELDEN RING（Nexus 角色 mod） | FromSoftware：DCX（DFLT / Oodle KRAK）、BND4、FLVER2、TPF（含 BC6H）、MATBIN；mod 自带模型贴图，不用装游戏 | [`eldenring/`](eldenring/) | `eldenring\export_mod.py <mod.zip>`：高清材质 `.blend` + XPS + PMX（+ `--variant` 去零件版） |
+| ELDEN RING / SEKIRO（Nexus 角色 mod） | FromSoftware：DCX（DFLT / Oodle KRAK）、BND4、FLVER2（0x20014 / 0x2001A）、TPF（含 BC6H）、MATBIN / MTD；mod 自带模型贴图，不用装游戏 | [`eldenring/`](eldenring/) | `eldenring\export_mod.py <mod .zip / .rar / .7z>`：高清材质 `.blend` + XPS + PMX（`--variant` 去零件版，`--set` 一包多套） |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
@@ -215,6 +215,7 @@ bug），G1M/G1T 经 Noesis64 + ProjectG1M 转 FBX+DDS。两游戏均可一键�
 `<游戏>\<角色>\<格式>\<造型>\` 归档到 `E:\game_export`：逐个 md5 校验，每个造型目录在 Blender 里打开自检（贴图外链的
 `.blend` 先把贴图收进目录再另存），账本记着哪些 D 盘文件已经归档，`E:\game_export\D盘可删除清单.md` 现算哪些 D 盘目录
 可以整个删（只拷不删，删由人来），画廊页里的 D 盘链接一并改到 E 盘。新导出了角色就再跑一次同样的命令。
+跨游戏的主题合集（如 `E:\game_export\_GANTZ合集`）用 `archive/make_collection.py <清单.json>`：硬链接归档里的成品，配注明出处的本地画廊。
 
 ## 开发辅助
 
