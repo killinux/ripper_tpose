@@ -53,6 +53,13 @@ def list_suits(game):
         m = re.match(r"accessory_components_pc_([a-z]\d+)_suit_(.+)\.ab$", name.lower())
         if m and m.group(2) not in SKIP_SUITS:
             out.append((m.group(1), m.group(2)))
+    # variants defined in suit_overrides.json ("from": another suit of the same id, e.g. e01:latex_v2)
+    if os.path.isfile(suit_bundle.OVERRIDES_PATH):
+        with open(suit_bundle.OVERRIDES_PATH, encoding="utf-8") as fh:
+            for key, entry in json.load(fh).items():
+                cid, _, suit = key.partition(":")
+                if isinstance(entry, dict) and entry.get("from") and (cid, entry["from"]) in out:
+                    out.append((cid, suit))
     return out
 
 

@@ -51,6 +51,7 @@ import math
 import os
 import re
 import sys
+import time
 
 import bmesh
 import bpy
@@ -109,6 +110,42 @@ LIMBS = (("Bip001 %s UpperArm", "Bip001 %s Forearm", "Bip001 %s Hand", "Bip001 %
 # Bip001 Xtra01Opp on the left and Bip001 Xtra01 on the right.  Breast roots may sit BREAST_DIST apart (Kart's
 # pc_b_halloween01 OPAI_L: 3.3 cm from the nude Breast_L; added as a second root, the exporter swung that one alone
 # and the cups stayed still); the other side's bone is 12 cm away, so a wrong side is still rejected.
+# The body follows the model's own skin first (follow_skin) when the model is not built on its family's body: i05
+# (Sera 5, 11-13 update) has the i01 face and skeleton, but breasts up to 6.5 cm fuller and hips / thighs 1-3 cm
+# wider - 12.7 % of her skin lies more than 1 cm off pc_i01_nk_bs, against 0 (a08) to 2.7 % (d07) for the models
+# completed before.  Without it her _nude had the base's small breasts and her _full's chest bandage floated.
+FOLLOW_FAR = 0.01        # --follow auto: a skin vertex this far off the nude body is the model's own shape ...
+FOLLOW_SHARE = 0.05      # ... and the body follows when this share of the skin slots' vertices is that far off
+FOLLOW_REACH = 0.08      # a nude vertex looks this far along its normal, both ways, for the model's skin
+FOLLOW_FACING = 0.5      # ... which must face the same way (cos of the two normals)
+# ... and lie on the same part of the body (body_region of the heaviest bone: torso, arm / leg left / right) - not
+#     the other thigh or the arm.  (Measuring instead whether the nude body's closest point to the hit is the vertex
+#     itself rejected the underside of i05's breasts, closer to the nude chest below, and bridged it flat.)
+FOLLOW_SNAP = 0.006      # relax rounds: a vertex whose smoothed place is this close to the skin goes onto it ...
+FOLLOW_RELAX = (10, 5, 2, 0)   # ... after smoothing the move field by these many sweeps (round by round; more
+                         #     shrank the breasts - 60 / 30 / 15 left i05's 46 mm out of 64):
+                         #     projecting along the normals alone crumpled a ring around i05's areolas and the fold
+                         #     under her breasts (the small breast's normals fan out over the big one)
+FOLLOW_SWEEPS = 2000     # Jacobi sweeps of the harmonic fill (no skin over a vertex: it moves with its neighbours)
+FOLLOW_EVEN = 40         # even-out rounds: each vertex slides half way along the surface to its neighbours' mean and
+                         #     goes back onto the skin (FOLLOW_SNAP_EVEN): the underside of i05's breasts has no
+                         #     counterpart on the small ones, and the nude chest pulled up into it made a roll
+FOLLOW_SNAP_EVEN = 0.01
+FOLLOW_EVEN_MOVED = 0.003     # ... only vertices follow_skin moved more than this (where the shape changed)
+FOLLOW_UNFOLD = 0.26     # last: vertices of triangles whose normal is this far off their corners' (cos 75 deg) - the
+FOLLOW_UNFOLD_RINGS = 2  # ... crease under i05's breasts folded - and this many rings around them are smoothed
+FOLLOW_UNFOLD_SWEEPS = 12    # ... (positions, Laplacian, this many sweeps, the rest held; 40 sweeps over 3 rings at
+                         #     cos 60 deg flattened the underside into a shelf)
+FOLLOW_SNAP_OUTFIT = 0.015   # ... where no skin is in reach, under the outfit (CLEAR inside it) when it lies this close:
+                         #     a tight outfit has the body's shape (the fill alone bridged the holes in i05's skin under
+                         #     her strap and chest bandage flat - boxy breasts)
+FOLLOW_ORTHO = 0.8       # ... a snap only straight onto the skin (|cos| of the move and the normal): over a hole in the
+                         #     skin (under i05's chest bandage) the closest point is its edge, and snapping there
+                         #     flattened the breast and pinched the cleavage into a crease
+# vertices mostly on these bones keep the nude shape: the seam with the kept head stays closed, and fingers / toes
+# the model holds otherwise (i03's hands are 5.7 cm off i01's) are not pulled about
+FOLLOW_KEEP = re.compile(r"hand|finger|foot|toe|head|neck|jaw|eye|tongue|teeth|chin|cheek|brow|lip|nose|ear\b",
+                         re.IGNORECASE)
 BREAST_DIST = 0.05
 ALIASES = [(re.compile(r"^Bip001 Breast_([LR])(\d*)$"), r"Bip001 chest_\1\2", BREAST_DIST),
            (re.compile(r"^Bip001 Breast_([LR])(\d*)$"), r"Bip001 OPAI_\1\2", BREAST_DIST),
@@ -124,6 +161,9 @@ def args_after_dashes():
     p.add_argument("--out", required=True)
     p.add_argument("--report", default="")
     p.add_argument("--name", default="", help="name of the new body object (default <model>_body)")
+    p.add_argument("--follow", choices=("auto", "yes", "no"), default="auto",
+                   help="the nude body takes the model's own skin shape first (follow_skin); auto: when the skin "
+                        "is off the nude body (FOLLOW_SHARE of it more than FOLLOW_FAR)")
     return p.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 
 
@@ -376,6 +416,764 @@ def tail_patch(obj, index, tail_groups):
     root = islands(touch, key, lambda f: me.polygons[f].vertices)
     good = {root[f] for f in seeds}
     return [f for f in touch if root[f] in good]
+
+
+def body_region(name):
+    """torso / arm_l / arm_r / leg_l / leg_r for a bone name (Bip001 L Thigh, Bip001 CalfSub_L, Bip001 LThigh,
+    Bip001 R ForeTwist, Bip001 Breast_L -> torso)."""
+    n = name.lower()
+    limb = r"(?=thigh|calf|foot|toe|upperarm|uparm|forearm|fore|hand|finger)"
+    side = ""
+    for letter in "lr":
+        if re.search(r"(^|[\s_.])%s([\s_.]|\d|$)|_%s\d*$|(^|\s)%s%s" % (letter, letter, letter, limb), n) \
+                or (letter == "l" and "left" in n) or (letter == "r" and "right" in n):
+            side = letter
+            break
+    if re.search(r"upperarm|uparm|forearm|fore|hand|finger|elbow", n):
+        return "arm_" + side
+    if re.search(r"thigh|calf|foot|toe|knee", n):
+        return "leg_" + side
+    return "torso"
+
+
+def regions_of(obj):
+    """Per vertex: body_region of its heaviest bone ("torso" when unweighted)."""
+    names = {g.index: g.name for g in obj.vertex_groups}
+    out = []
+    for v in obj.data.vertices:
+        g = max(v.groups, key=lambda g: g.weight) if v.groups else None
+        out.append(body_region(names.get(g.group, "")) if g is not None else "torso")
+    return np.array(out)
+
+
+def dominant_keep(obj):
+    """Per vertex: True when its heaviest bone is one FOLLOW_KEEP names (hands, feet, head, neck ...)."""
+    names = {g.index: g.name for g in obj.vertex_groups}
+    keep = np.zeros(len(obj.data.vertices), dtype=bool)
+    for v in obj.data.vertices:
+        if v.groups:
+            g = max(v.groups, key=lambda g: g.weight)
+            keep[v.index] = bool(FOLLOW_KEEP.search(names.get(g.group, "")))
+    return keep
+
+
+def vertex_normals(Q, tris):
+    """Area-weighted vertex normals of points Q over triangles tris (T, 3)."""
+    fn = np.cross(Q[tris[:, 1]] - Q[tris[:, 0]], Q[tris[:, 2]] - Q[tris[:, 0]])
+    vn = np.zeros_like(Q)
+    for c in range(3):
+        for j in range(3):
+            vn[:, c] += np.bincount(tris[:, j], weights=fn[:, c], minlength=len(Q))
+    return vn / np.maximum(np.linalg.norm(vn, axis=1, keepdims=True), 1e-20)
+
+
+def harmonic_fill(d, known, edges, sweeps):
+    """Values of the vertices not known: each the mean of its neighbours (Jacobi sweeps over the edges), so a move
+    known around a patch carries smoothly across it.  Starts from the known values spread by a few sweeps."""
+    n = len(d)
+    count = np.bincount(edges[:, 0], minlength=n) + np.bincount(edges[:, 1], minlength=n)
+    free = ~known & (count > 0)
+    count = np.maximum(count, 1)
+    for _ in range(sweeps):
+        mean = np.empty_like(d)
+        for c in range(d.shape[1]):
+            mean[:, c] = (np.bincount(edges[:, 0], weights=d[edges[:, 1], c], minlength=n)
+                          + np.bincount(edges[:, 1], weights=d[edges[:, 0], c], minlength=n)) / count
+        d[free] = mean[free]
+    return d
+
+
+def follow_skin(nude_body, nude_slot, skin, outfit, mode):
+    """Give the nude body the model's own shape where the model has skin, before it becomes the model's body.
+    skin = the slots the body follows: every slot lying on the body by shape (classify's skin, taken before
+    painted_skin turns painted ones into outfit - i05's bandages drawn on her body surface - so the nude and the full
+    variant follow the same skin; the texture transfer takes the skin slots left after painted_skin).
+    The completion took the family nude base's body as it is, which was right while every dressed model was built on
+    it (a08's skin lies on pc_a01_nk_bs within 0.1 mm); i05 is not: same face and skeleton as i01, but fuller breasts
+    (up to 6.5 cm out) and wider hips and thighs (1-3 cm) - her _nude had the base's small breasts, her _full's chest
+    bandage floated over them.  Here:
+      1. every nude vertex with the model's skin along its normal (FOLLOW_REACH, either way) moves onto it - the skin
+         facing the same way (FOLLOW_FACING) and on the same part of the body (body_region: torso, left / right arm,
+         left / right leg, by the heaviest bone), so a ray reaching the other thigh or the arm does not count;
+         vertices already on the skin (SKIN_DIST) just go onto it;
+      2. hands, feet, head and neck (FOLLOW_KEEP, by the vertex's heaviest bone) and the face slot keep the nude shape:
+         the seam with the kept head stays closed, fingers held otherwise are not pulled about;
+      3. the rest - under the outfit, where the model has no skin - moves with its neighbours (harmonic_fill on the
+         mesh welded at its UV seams), so a breast continues smoothly under a bandage;
+      4. relax rounds (FOLLOW_RELAX): the whole move field smoothed (the kept parts stay), then every vertex whose
+         new place has the skin within FOLLOW_SNAP (facing the same way by the deformed normals, straight over it:
+         FOLLOW_ORTHO) goes onto its closest point - or, with no skin in reach, CLEAR under the outfit when that lies
+         straight over it within FOLLOW_SNAP_OUTFIT (holes in the skin under straps: a tight outfit has the body's
+         shape); a vertex matched before that does not snap keeps its smoothed move (dropping it to the fill bridged
+         the underside of i05's breasts flat), the rest is filled again; the smoothing shrinks round by round, the
+         last round snaps only, so the body lies on the model's skin wherever it shows;
+      5. FOLLOW_EVEN even-out rounds: each vertex slides half way along the surface (the tangential part only) to the
+         mean of its neighbours and goes back onto the skin under it - the underside of i05's breasts has no
+         counterpart on i01's small ones, and the nude chest pulled up into it made a roll; the vertices spread
+         over it instead (the texture is taken by position afterwards, transfer_skin, so the sliding costs nothing).
+      6. unfold: vertices of triangles turned against their corners' normals (FOLLOW_UNFOLD) and FOLLOW_UNFOLD_RINGS
+         rings around them are smoothed in place - what the even-out left of the crease under the breasts.
+    UVs, texture, weights stay the nude base's; shape keys move with the mesh.  mode auto runs it only when
+    FOLLOW_SHARE of the skin slots' vertices (hands / feet / head / neck left out) lie more than FOLLOW_FAR off the
+    nude body.  Returns the report entry."""
+    out = {"mode": mode}
+    if mode == "no" or not skin:
+        return out
+    pts, tris, keep_pts, reg_pts, offset = [], [], [], [], 0
+    for obj, slots in skin.items():
+        t = triangles(obj, set(slots))
+        if len(t):
+            pts.append(world_co(obj))
+            tris.append(t + offset)
+            keep_pts.append(dominant_keep(obj))
+            reg_pts.append(regions_of(obj))
+            offset += len(pts[-1])
+    if not pts:
+        return out
+    pts, tris, keep_pts = np.vstack(pts), np.vstack(tris), np.concatenate(keep_pts)
+    tri_region = np.concatenate(reg_pts)[tris[:, 0]]           # a triangle's part of the body: its first corner's
+    target = bvh(pts, tris)
+    P, N = world_co(nude_body), world_normals(nude_body)
+    nude_tree = bvh(P, triangles(nude_body, {nude_slot}))
+    used = np.unique(tris)
+    used = used[~keep_pts[used]]
+    off = np.array([(Vector(pts[i]) - nude_tree.find_nearest(Vector(pts[i]))[0]).length for i in used])
+    out["skin_off_share"] = round(float((off > FOLLOW_FAR).mean()), 4) if len(off) else 0.0
+    out["skin_off_mm"] = {"p95": round(float(np.percentile(off, 95)) * 1000, 1),
+                          "max": round(float(off.max()) * 1000, 1)} if len(off) else {}
+    if mode == "auto" and out["skin_off_share"] < FOLLOW_SHARE:
+        out["followed"] = False
+        return out
+
+    me = nude_body.data
+    n = len(P)
+    rep = np.arange(n)
+    for group in coincident(P):                     # the mesh is split along its UV seams: one place, one move
+        rep[group] = group[0]
+    edges = np.empty(len(me.edges) * 2, dtype=np.int64)
+    me.edges.foreach_get("vertices", edges)
+    edges = rep[edges.reshape(-1, 2)]
+    edges = np.unique(np.sort(edges[edges[:, 0] != edges[:, 1]], axis=1), axis=0)
+    fixed = dominant_keep(nude_body)
+    region = regions_of(nude_body)
+    for p in me.polygons:
+        if p.material_index != nude_slot:
+            fixed[list(p.vertices)] = True
+    fixed_rep = np.zeros(n, dtype=bool)
+    np.logical_or.at(fixed_rep, rep, fixed)
+    reps = np.unique(rep)
+    d = np.zeros((n, 3))
+    known = np.zeros(n, dtype=bool)
+    known[reps[fixed_rep[reps]]] = True
+    matched = 0
+    for i in reps[~fixed_rep[reps]]:
+        p, nn = Vector(P[i]), Vector(N[i])
+        hit = None
+        loc, normal, f, _dist = target.find_nearest(p, SKIN_DIST)
+        if loc is not None and nn.dot(normal) > FOLLOW_FACING and tri_region[f] == region[i]:
+            hit = loc
+        else:
+            best = None
+            for s in (1.0, -1.0):
+                loc, normal, f, dist = target.ray_cast(p, nn * s, FOLLOW_REACH)
+                if loc is not None and nn.dot(normal) > FOLLOW_FACING and tri_region[f] == region[i] \
+                        and (best is None or dist < best[1]):
+                    best = (loc, dist)
+            if best is not None:
+                hit = best[0]
+        if hit is not None:
+            d[i] = np.array(hit) - P[i]
+            known[i] = True
+            matched += 1
+    d = harmonic_fill(d, known, edges, FOLLOW_SWEEPS)
+    tris_v = rep[triangles(nude_body, {nude_slot})]
+    movable = reps[~fixed_rep[reps]]
+    o_pts, o_tris, o_off = [], [], 0
+    for obj, sl in (outfit or {}).items():
+        t = triangles(obj, set(sl))
+        if len(t):
+            o_pts.append(world_co(obj))
+            o_tris.append(t + o_off)
+            o_off += len(o_pts[-1])
+    otarget = bvh(np.vstack(o_pts), np.vstack(o_tris)) if o_pts else None
+    under_outfit = 0
+    snapped = known
+    for sweeps in FOLLOW_RELAX:
+        if sweeps:
+            d = harmonic_fill(d, fixed_rep, edges, sweeps)       # smooth the moves (kept parts stay put)
+        Q = P + d
+        QN = vertex_normals(Q, tris_v)
+        held = snapped                    # matched before: keeps its (smoothed) move unless it snaps anew
+        snapped = fixed_rep.copy()
+        for i in movable:
+            q, qn = Vector(Q[i]), Vector(QN[i])
+            loc, normal, f, dist = target.find_nearest(q, FOLLOW_SNAP)
+            if loc is not None and qn.dot(normal) > FOLLOW_FACING and tri_region[f] == region[i] \
+                    and (dist < 1e-5 or abs(qn.dot(loc - q)) > FOLLOW_ORTHO * dist):
+                d[i] = np.array(loc) - P[i]
+                snapped[i] = True
+                continue
+            if otarget is None:
+                continue
+            loc, normal, _f, dist = otarget.find_nearest(q, FOLLOW_SNAP_OUTFIT)
+            if loc is not None and qn.dot(normal) > FOLLOW_FACING \
+                    and (dist < 1e-5 or abs(qn.dot(loc - q)) > FOLLOW_ORTHO * dist):
+                d[i] = np.array(loc - qn * CLEAR) - P[i]
+                snapped[i] = True
+                if sweeps == 0:
+                    under_outfit += 1
+        refined = int(snapped[movable].sum())
+        snapped = snapped | held
+        d = harmonic_fill(d, snapped, edges, FOLLOW_SWEEPS)
+    known = snapped
+    nbr_w = np.bincount(edges[:, 0], minlength=n) + np.bincount(edges[:, 1], minlength=n)
+    # only where the body changed shape: elsewhere sliding would smear the nude base's own details (genitals) that
+    # the texture keeps where the model shows no skin
+    spread = movable[np.linalg.norm(d[movable], axis=1) > FOLLOW_EVEN_MOVED]
+    for _round in range(FOLLOW_EVEN):
+        Q = P + d
+        QN = vertex_normals(Q, tris_v)
+        mean = np.empty_like(Q)
+        for c in range(3):
+            mean[:, c] = (np.bincount(edges[:, 0], weights=Q[edges[:, 1], c], minlength=n)
+                          + np.bincount(edges[:, 1], weights=Q[edges[:, 0], c], minlength=n)) / np.maximum(nbr_w, 1)
+        step = 0.5 * (mean - Q)
+        step -= QN * np.sum(step * QN, axis=1, keepdims=True)           # along the surface only
+        for i in spread:
+            if nbr_w[i] == 0:
+                continue
+            q = Vector(Q[i] + step[i])
+            loc, normal, f, dist = target.find_nearest(q, FOLLOW_SNAP_EVEN)
+            if loc is not None and Vector(QN[i]).dot(normal) > FOLLOW_FACING and tri_region[f] == region[i]:
+                d[i] = np.array(loc) - P[i]
+            elif not known[i]:
+                d[i] = np.array(q) - P[i]
+    # unfold: triangles turned against their corners' normals (the crease where a breast's underside meets the
+    # chest) - their vertices and FOLLOW_UNFOLD_RINGS rings around are smoothed in place, the rest held
+    Q = P + d
+    QN = vertex_normals(Q, tris_v)
+    fn = np.cross(Q[tris_v[:, 1]] - Q[tris_v[:, 0]], Q[tris_v[:, 2]] - Q[tris_v[:, 0]])
+    fn /= np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-20)
+    worst = np.min([np.sum(fn * QN[tris_v[:, j]], axis=1) for j in range(3)], axis=0)
+    bad = np.zeros(n, dtype=bool)
+    bad[tris_v[worst < FOLLOW_UNFOLD].ravel()] = True
+    for _ring in range(FOLLOW_UNFOLD_RINGS):
+        grow = bad.copy()
+        grow[edges[:, 0]] |= bad[edges[:, 1]]
+        grow[edges[:, 1]] |= bad[edges[:, 0]]
+        bad = grow
+    bad &= ~fixed_rep
+    unfolded = int(bad[reps].sum())
+    if unfolded:
+        Q = harmonic_fill(Q.copy(), ~bad, edges, FOLLOW_UNFOLD_SWEEPS)
+        d = Q - P
+    move = d[rep]                                    # every copy of a place moves as its representative
+    local = move @ np.array(nude_body.matrix_world.inverted().to_3x3()).T
+    co = np.empty(n * 3)
+    me.vertices.foreach_get("co", co)
+    me.vertices.foreach_set("co", (co.reshape(-1, 3) + local).ravel())
+    if me.shape_keys:
+        for kb in me.shape_keys.key_blocks:
+            k = np.empty(n * 3)
+            kb.data.foreach_get("co", k)
+            kb.data.foreach_set("co", (k.reshape(-1, 3) + local).ravel())
+    me.update()
+    length = np.linalg.norm(move, axis=1)
+    attr = me.attributes.get("roe_follow_move") or me.attributes.new("roe_follow_move", "FLOAT", "POINT")
+    attr.data.foreach_set("value", length.astype(np.float32))       # for transfer_skin (TRANSFER_PLAIN)
+    out.update(followed=True, matched=matched, snapped=refined, under_outfit=under_outfit, unfolded=unfolded, kept=int(fixed_rep[reps].sum()),
+               filled=int((~known[reps]).sum()),
+               moved_mm={"p50": round(float(np.percentile(length, 50)) * 1000, 1),
+                         "p95": round(float(np.percentile(length, 95)) * 1000, 1),
+                         "max": round(float(length.max()) * 1000, 1)})
+    return out
+
+
+TRANSFER_DIST = 0.002    # a followed body's texel takes the model's skin texture where the skin is this close
+TRANSFER_MAX = 4096      # ... the new maps get the larger size of the two materials' maps, at most this
+TRANSFER_COVER = 0.015   # ... not where the outfit lies this close outside the body (its shadow / paint is on the skin)
+TRANSFER_PAINT_C = 12.0  # ... nor where the model's colour is cloth: CIELAB chroma under this (white, grey, black)
+TRANSFER_DARK_L = 35.0   # ... or darker than this L (skin of i01 / i05 / i05_outfit1: L 45-72, chroma 19-30; i05's
+                         #     bandages L 72-100 chroma 3-6, i05_outfit1's L 0-35 chroma ~9)
+TRANSFER_PAINT_MIN = 12  # ... in patches: a morphological opening by this many texels (at 4096) keeps the bandages and
+                         #     drops thin dark lines - her tattoo, stitches - which stay hers
+TRANSFER_FEATHER = 6     # ... the border with the nude base's texture blended over this many texels (at 4096)
+TRANSFER_PAINT_GROW = 12  # ... and this many texels (at 4096) around it: the cloth's edges carry relief in the normal map
+TRANSFER_PLAIN = (0.005, 0.015)   # where the nude base's own texture shows on a part follow_skin moved more than the
+                         # first distance, its features (areolas, now in the wrong place) give way to plain skin pulled
+                         # in from around - fully past the second; genitals and the like (barely moved) stay the base's
+# (name, where, key, how): the AO maps stay the nude base's - the model's carries the outfit's contact shadows (i05:
+# a dark line along every bandage); the PMX diffuse (albedo x base x AO) is rebuilt from the new XPS diffuse x that AO
+TRANSFER_MAPS = (("albedo", "node", "hq_albedo", "colour"), ("mask", "node", "hq_mask", "mask"),
+                 ("normal", "node", "hq_normal_tex", "normal"), ("diffuse", "xps", "diffuse", "colour"),
+                 ("lightmap", "xps", "lightmap", "ao"), ("specular", "xps", "specular", "data"),
+                 ("bump", "xps", "bump", "bump"), ("pmx", "pmx", "pmx", "pmx"))
+
+
+def image_array(img):
+    """A Blender image's stored values as an (h, w, 4) float32 array, rows bottom-up (sRGB-encoded for byte images)."""
+    w, h = img.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)
+    if img.is_float:
+        px[:, :, :3] = linear_srgb(px[:, :, :3])
+    return px
+
+
+def resized(px, size):
+    """px (h, w, 4) bilinearly resampled to size x size (no-op when it already is)."""
+    h, w = px.shape[:2]
+    if (h, w) == (size, size):
+        return px
+    ys = (np.arange(size) + 0.5) / size
+    xs = (np.arange(size) + 0.5) / size
+    uv = np.stack(np.meshgrid(xs, ys), -1).reshape(-1, 2)
+    return bilinear(px, uv).reshape(size, size, px.shape[2])
+
+
+def bilinear(px, uv):
+    """Texture px (h, w, c), rows bottom-up, sampled at uv (n, 2) with bilinear filtering (wrapping)."""
+    h, w = px.shape[:2]
+    x = np.mod(uv[:, 0], 1.0) * w - 0.5
+    y = np.mod(uv[:, 1], 1.0) * h - 0.5
+    x0, y0 = np.floor(x).astype(np.int64), np.floor(y).astype(np.int64)
+    fx, fy = (x - x0)[:, None].astype(np.float32), (y - y0)[:, None].astype(np.float32)
+    x0, x1 = np.mod(x0, w), np.mod(x0 + 1, w)
+    y0, y1 = np.mod(y0, h), np.mod(y0 + 1, h)
+    return ((px[y0, x0] * (1 - fx) + px[y0, x1] * fx) * (1 - fy)
+            + (px[y1, x0] * (1 - fx) + px[y1, x1] * fx) * fy)
+
+
+def tri_frames(pos, uv):
+    """Per triangle - pos (T, 3, 3), uv (T, 3, 2) - the direction of UV u on the surface (T, 3, unit) and the UV
+    layout's handedness (T,): with a normal they give the frame a tangent-space normal map is written against."""
+    e1, e2 = pos[:, 1] - pos[:, 0], pos[:, 2] - pos[:, 0]
+    d1, d2 = uv[:, 1] - uv[:, 0], uv[:, 2] - uv[:, 0]
+    n = np.cross(e1, e2)
+    det = d1[:, 0] * d2[:, 1] - d2[:, 0] * d1[:, 1]
+    r = (1.0 / np.where(np.abs(det) > 1e-20, det, 1.0))[:, None]
+    t = (e1 * d2[:, 1:2] - e2 * d1[:, 1:2]) * r
+    bt = (e2 * d1[:, 0:1] - e1 * d2[:, 0:1]) * r
+    t /= np.maximum(np.linalg.norm(t, axis=1, keepdims=True), 1e-20)
+    hand = np.sign(np.sum(np.cross(n, t) * bt, axis=1))
+    hand[hand == 0] = 1.0
+    return t, hand
+
+
+def tangent_frame(t_face, hand, normal):
+    """Per texel: the face's u direction made perpendicular to the (smooth) normal, and the bitangent."""
+    t = t_face - normal * np.sum(t_face * normal, axis=1, keepdims=True)
+    t /= np.maximum(np.linalg.norm(t, axis=1, keepdims=True), 1e-20)
+    return t, np.cross(normal, t) * hand[:, None]
+
+
+def box_blur(img, radius):
+    """Mean over a (2 radius + 1)^2 square (zeros outside the image), via summed-area tables."""
+    if radius <= 0:
+        return img
+    k = 2 * radius + 1
+    pad = np.pad(img, radius + 1)
+    c = pad.cumsum(0).cumsum(1)
+    out = c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]
+    return out[:img.shape[0], :img.shape[1]] / float(k * k)
+
+
+def raster(uv, size):
+    """Texel centres inside UV triangles uv (T, 3, 2) at size x size (rows bottom-up, edges included):
+    (triangle index, flat texel index, barycentric (n, 3))."""
+    p = uv * size - 0.5
+    out_t, out_i, out_b = [], [], []
+    for k in range(len(p)):
+        a, b, c = p[k]
+        det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
+        if abs(det) < 1e-12:
+            continue
+        x0, x1 = max(int(np.ceil(min(a[0], b[0], c[0]))), 0), min(int(np.floor(max(a[0], b[0], c[0]))), size - 1)
+        y0, y1 = max(int(np.ceil(min(a[1], b[1], c[1]))), 0), min(int(np.floor(max(a[1], b[1], c[1]))), size - 1)
+        if x1 < x0 or y1 < y0:
+            continue
+        xs, ys = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
+        xs, ys = xs.ravel(), ys.ravel()
+        l0 = ((b[1] - c[1]) * (xs - c[0]) + (c[0] - b[0]) * (ys - c[1])) / det
+        l1 = ((c[1] - a[1]) * (xs - c[0]) + (a[0] - c[0]) * (ys - c[1])) / det
+        l2 = 1.0 - l0 - l1
+        inside = (l0 >= -1e-6) & (l1 >= -1e-6) & (l2 >= -1e-6)
+        if inside.any():
+            out_t.append(np.full(int(inside.sum()), k, dtype=np.int32))
+            out_i.append((ys[inside] * size + xs[inside]).astype(np.int64))
+            out_b.append(np.stack([l0[inside], l1[inside], l2[inside]], 1).astype(np.float32))
+    if not out_t:
+        return np.zeros(0, np.int32), np.zeros(0, np.int64), np.zeros((0, 3), np.float32)
+    return np.concatenate(out_t), np.concatenate(out_i), np.concatenate(out_b)
+
+
+def uv_islands(tri_v, tri_uv):
+    """Island id per triangle: triangles sharing an edge whose two ends have the same UVs on both sides."""
+    parent = list(range(len(tri_v)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    seen = {}
+    for k, (vs, uvs) in enumerate(zip(tri_v, tri_uv)):
+        for j in range(3):
+            a, b = int(vs[j]), int(vs[(j + 1) % 3])
+            ua, ub = tuple(np.round(uvs[j], 5)), tuple(np.round(uvs[(j + 1) % 3], 5))
+            key = (a, b) if a < b else (b, a)
+            side = (ua, ub) if a < b else (ub, ua)
+            other = seen.get(key)
+            if other is None:
+                seen[key] = (k, side)
+            elif other[1] == side:
+                ra, rb = find(k), find(other[0])
+                if ra != rb:
+                    parent[ra] = rb
+    return np.array([find(k) for k in range(len(tri_v))])
+
+
+def map_source(mat, kind, key):
+    """(h, w, 4) pixels of one of an HQ material's maps: a node image (the .blend) or a recorded XPS / PMX file."""
+    if mat is None:
+        return None
+    if kind == "node":
+        node = mat.node_tree.nodes.get(key) if mat.use_nodes and mat.node_tree else None
+        img = node.image if node is not None and node.type == "TEX_IMAGE" else None
+        return image_array(img) if img is not None and img.size[0] else None
+    path = recorded_map(mat, key)
+    return file_pixels(path) if path and os.path.isfile(path) else None
+
+
+def tint_of(mat):
+    node = mat.node_tree.nodes.get("hq_tint") if mat is not None and mat.use_nodes and mat.node_tree else None
+    return np.array(node.inputs["Color2"].default_value[:3], dtype=np.float32) if node is not None else np.ones(3, np.float32)
+
+
+def push_pull(img, known):
+    """img (h, w, c) filled where known (h, w) is 0 from the known texels around: masked means down a pyramid,
+    then each unknown texel takes the coarser level's value."""
+    levels = []
+    cur, mass = img * known[..., None], known.astype(np.float32)
+    while min(mass.shape) > 1:
+        levels.append((cur, mass))
+        h, w = mass.shape
+        cur = np.pad(cur, ((0, h % 2), (0, w % 2), (0, 0)))
+        mass = np.pad(mass, ((0, h % 2), (0, w % 2)))
+        cur = cur.reshape(cur.shape[0] // 2, 2, cur.shape[1] // 2, 2, -1).sum((1, 3))
+        mass = mass.reshape(mass.shape[0] // 2, 2, mass.shape[1] // 2, 2).sum((1, 3))
+    filled = cur / np.maximum(mass, 1e-8)[..., None]
+    for cur, mass in reversed(levels):
+        up = np.repeat(np.repeat(filled, 2, 0), 2, 1)[:mass.shape[0], :mass.shape[1]]
+        have = np.clip(mass, 0.0, 1.0)[..., None]
+        filled = cur / np.maximum(mass, 1e-8)[..., None] * have + up * (1.0 - have)
+    return filled
+
+
+def smooth_of(mat):
+    try:
+        return float(json.loads(mat.get("roe_hq_base", "{}")).get("smooth", 1.0)) if mat is not None else 1.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def transfer_skin(body, body_mat, skin, outfit, stem):
+    """A followed body (follow_skin) wears the nude base's texture over the model's shape: its small areolas came out
+    stretched over i05's fuller breasts, and her own skin (belly star, stitched arms) was gone.  Here every map of
+    the body material - the .blend's albedo / MGAC / normal, the XPS diffuse / lightmap / specular / bump, the PMX
+    diffuse - gets the model's own skin map where the model shows skin:
+      * each texel of the body's UV layout is put on the body (triangle + barycentric), the model's skin found there
+        (within TRANSFER_DIST; per triangle corner when all three land in one UV island of the model's skin, else
+        per texel) and its UV read;
+      * not where the outfit lies over the body (TRANSFER_COVER along the vertex normal, or touching it): the model's
+        skin there carries the outfit's shadow and often the outfit itself painted on (i05's skin atlas has her
+        bandages drawn over legs, arms, hips) - the nude base's texture stays; nor where the model's colour is
+        cloth, not skin (CIELAB chroma under TRANSFER_PAINT_C - white, grey, black - or darker than TRANSFER_DARK_L),
+        in patches (an opening by TRANSFER_PAINT_MIN: her tattoo lines and stitches are thin and stay);
+      * the border between the two is blended over TRANSFER_FEATHER texels; where the nude base's colour stays it is
+        tinted to the model's skin (median ratio over the texels that have both: i01 is paler than i05 - her bandage
+        panties left a pale band);
+      * colours copied (the .blend's albedo divided by the body material's tint and times the skin material's, its
+        MGAC gloss scaled by the two materials' smoothness, so the .blend shows the skin as the model does);
+        normal maps turned from the model's tangent frame into the body's around the body's smooth normal (the
+        XPS bump has green flipped).
+    New maps at the larger of the two sizes (TRANSFER_MAX) in <cache>\\skin\\<stem>\\ under the nude base's names; the
+    body gets its own copy of the material pointing at them.  Returns the report."""
+    t0 = time.time()
+    me = body.data
+    me.calc_loop_triangles()
+    slots = {i for i, s in enumerate(body.material_slots) if s.material == body_mat}
+    lt = [t for t in me.loop_triangles if t.material_index in slots]
+    if not lt or body_mat is None:
+        return {"skipped": "no body material"}
+    P, NV = world_co(body), world_normals(body)
+    buv = loop_uvs(body, uv_name(body_mat))
+    n_v = np.array([t.vertices[:] for t in lt], dtype=np.int64)
+    n_pos = P[n_v]
+    n_uv = buv[np.array([t.loops[:] for t in lt], dtype=np.int64)]
+    # the model's skin: triangles, UVs (each slot's material's UV map), material, UV island
+    m_pos, m_uv, m_mat, m_isle, mats, isle_base = [], [], [], [], [], 0
+    for obj, sl in skin.items():
+        obj.data.calc_loop_triangles()
+        co = world_co(obj)
+        for s in sl:
+            mat = obj.material_slots[s].material if s < len(obj.material_slots) else None
+            uvs = loop_uvs(obj, uv_name(mat))
+            tris = [t for t in obj.data.loop_triangles if t.material_index == s]
+            if not tris or uvs is None:
+                continue
+            tv = np.array([t.vertices[:] for t in tris], dtype=np.int64)
+            tu = uvs[np.array([t.loops[:] for t in tris], dtype=np.int64)]
+            if mat not in mats:
+                mats.append(mat)
+            m_pos.append(co[tv])
+            m_uv.append(tu)
+            m_mat.append(np.full(len(tv), mats.index(mat)))
+            isle = uv_islands(tv, tu)
+            m_isle.append(isle + isle_base)
+            isle_base += int(isle.max()) + 1
+    if not m_pos:
+        return {"skipped": "no model skin"}
+    m_pos, m_uv, m_mat, m_isle = np.vstack(m_pos), np.vstack(m_uv), np.concatenate(m_mat), np.concatenate(m_isle)
+    tree = BVHTree.FromPolygons([Vector(p) for p in m_pos.reshape(-1, 3)],
+                                np.arange(len(m_pos) * 3).reshape(-1, 3).tolist())
+
+    def nearest(points):
+        """Model triangle index and the model UV at the skin point closest to each point (-1: none in reach)."""
+        tri = np.full(len(points), -1, dtype=np.int64)
+        loc = np.zeros((len(points), 3))
+        for i, p in enumerate(points):
+            hit, _n, f, _d = tree.find_nearest(Vector(p), TRANSFER_DIST)
+            if hit is not None:
+                tri[i] = f
+                loc[i] = hit
+        ok = tri >= 0
+        uv = np.zeros((len(points), 2))
+        if ok.any():
+            a, b, c = m_pos[tri[ok], 0], m_pos[tri[ok], 1], m_pos[tri[ok], 2]
+            v0, v1, v2 = b - a, c - a, loc[ok] - a
+            d00, d01, d11 = (v0 * v0).sum(1), (v0 * v1).sum(1), (v1 * v1).sum(1)
+            d20, d21 = (v2 * v0).sum(1), (v2 * v1).sum(1)
+            den = np.where(np.abs(d00 * d11 - d01 * d01) > 1e-30, d00 * d11 - d01 * d01, 1.0)
+            w1 = (d11 * d20 - d01 * d21) / den
+            w2 = (d00 * d21 - d01 * d20) / den
+            w0 = 1.0 - w1 - w2
+            uvt = m_uv[tri[ok]]
+            uv[ok] = uvt[:, 0] * w0[:, None] + uvt[:, 1] * w1[:, None] + uvt[:, 2] * w2[:, None]
+        return tri, uv
+
+    used = np.unique(n_v)
+    vtri, vuv = np.full(len(P), -1, dtype=np.int64), np.zeros((len(P), 2))
+    vtri[used], vuv[used] = nearest(P[used])
+    # the outfit over the body: per body vertex, outfit within TRANSFER_COVER outside it along the normal, or touching it
+    covered = np.zeros(len(P), dtype=np.float32)
+    o_pts, o_tris, offset = [], [], 0
+    for obj, sl in outfit.items():
+        t = triangles(obj, set(sl))
+        if len(t):
+            o_pts.append(world_co(obj))
+            o_tris.append(t + offset)
+            offset += len(o_pts[-1])
+    if o_pts:
+        otree = bvh(np.vstack(o_pts), np.vstack(o_tris))
+        for i in used:
+            p, nn = Vector(P[i]), Vector(NV[i])
+            if otree.find_nearest(p, SKIN_DIST)[0] is not None \
+                    or otree.ray_cast(p + nn * 1e-4, nn, TRANSFER_COVER)[0] is not None:
+                covered[i] = 1.0
+    ct = vtri[n_v]                                            # (T, 3) model triangle per corner
+    whole = (ct >= 0).all(1)
+    one = np.zeros(len(lt), dtype=bool)
+    one[whole] = ((m_isle[ct[whole, 0]] == m_isle[ct[whole, 1]]) & (m_isle[ct[whole, 0]] == m_isle[ct[whole, 2]])
+                  & (m_mat[ct[whole, 0]] == m_mat[ct[whole, 1]]) & (m_mat[ct[whole, 0]] == m_mat[ct[whole, 2]]))
+    some = (ct >= 0).any(1)
+    m_tf, m_hand = tri_frames(m_pos, m_uv)
+    b_tf, b_hand = tri_frames(n_pos, n_uv)
+
+    sizes = []
+    for _name, kind, key, _how in TRANSFER_MAPS:
+        for mat in [body_mat] + mats:
+            px = map_source(mat, kind, key)
+            if px is not None:
+                sizes.append(px.shape[0])
+    size = min(max(sizes or [1024]), TRANSFER_MAX)
+    a_tri, a_pix, a_bary = raster(n_uv, size)                 # every texel of the body
+    moved = me.attributes.get("roe_follow_move")
+    if moved is not None:
+        mv = np.empty(len(me.vertices), dtype=np.float32)
+        moved.data.foreach_get("value", mv)
+        plain_share = np.clip(((mv[n_v[a_tri]] * a_bary).sum(1) - TRANSFER_PLAIN[0])
+                              / (TRANSFER_PLAIN[1] - TRANSFER_PLAIN[0]), 0.0, 1.0)
+    else:
+        plain_share = np.zeros(len(a_tri), dtype=np.float32)
+    sel_hit = some[a_tri]
+    tri, pix, bary = a_tri[sel_hit], a_pix[sel_hit], a_bary[sel_hit]
+    muv = np.zeros((len(tri), 2))
+    mt = np.full(len(tri), -1, dtype=np.int64)
+    fast = one[tri]
+    corner_uv = vuv[n_v]                                      # (T, 3, 2)
+    muv[fast] = (corner_uv[tri[fast]] * bary[fast][:, :, None]).sum(1)
+    mt[fast] = ct[tri[fast], 0]
+    slow = np.nonzero(~fast)[0]
+    if len(slow):
+        pts = (n_pos[tri[slow]] * bary[slow][:, :, None]).sum(1)
+        st, suv = nearest(pts)
+        muv[slow], mt[slow] = suv, st
+    hit = mt >= 0
+    tri, pix, bary, muv, mt = tri[hit], pix[hit], bary[hit], muv[hit], mt[hit]
+    which = m_mat[mt]
+
+    # weight of the model's skin per texel: not under the outfit, not cloth-coloured (grown); feathered
+    weight = 1.0 - (covered[n_v[tri]] * bary).sum(1)
+    painted = np.zeros(len(tri), dtype=bool)
+    for k, mat in enumerate(mats):
+        albedo = map_source(mat, "node", "hq_albedo")
+        sel = which == k
+        if albedo is None or not sel.any():
+            continue
+        lab = cielab(srgb_linear(np.clip(bilinear(albedo, muv[sel])[:, :3], 0.0, 1.0)))
+        painted[sel] = (np.hypot(lab[:, 1], lab[:, 2]) < TRANSFER_PAINT_C) | (lab[:, 0] < TRANSFER_DARK_L)
+    pimg = np.zeros(size * size, dtype=np.float32)
+    pimg[pix[painted]] = 1.0
+    pimg = pimg.reshape(size, size)
+    keep_r = max(1, int(round(TRANSFER_PAINT_MIN * size / 4096.0)))
+    core = (box_blur(pimg, keep_r) > 0.999).astype(np.float32)           # opening: patches only, not lines
+    pimg = (box_blur(core, keep_r) > 0.0).astype(np.float32)
+    grow = max(1, int(round(TRANSFER_PAINT_GROW * size / 4096.0)))
+    painted = box_blur(pimg, grow).ravel()[pix] > 0.0
+    weight[painted] = 0.0
+    wimg = np.zeros(size * size, dtype=np.float32)
+    wimg[pix] = np.clip(weight, 0.0, 1.0)
+    radius = max(1, int(round(TRANSFER_FEATHER * size / 4096.0)))
+    weight = np.minimum(box_blur(wimg.reshape(size, size), radius).ravel()[pix], wimg[pix])
+    full_w = np.zeros(size * size, dtype=np.float32)          # the model's weight on every texel (0 off the skin)
+    full_w[pix] = weight
+    normal = (NV[n_v[tri]] * bary[:, :, None]).sum(1)
+    normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-12)
+
+    cache = os.path.dirname(os.path.dirname(os.path.abspath(recorded_map(body_mat, "pmx") or bpy.data.filepath)))
+    folder = os.path.join(cache, "skin", stem)
+    os.makedirs(folder, exist_ok=True)
+    mine = body_mat.copy()
+    name = body_mat.name                       # the body's copy keeps the name the PMX steps look for (*_nk_body:
+    body_mat.name = name + "_nude_base"        # pmx_body_follows_cups.py); the nude base's original goes at the end
+    mine.name = name
+    for s in body.material_slots:
+        if s.material == body_mat:
+            s.material = mine
+    xps = json.loads(mine.get("roe_hq_xps", "{}") or "{}")
+    written, done, gains = {}, {}, {}
+    body_tint, body_smooth = tint_of(body_mat), smooth_of(body_mat)
+    flat = np.array([0.5, 0.5, 1.0, 1.0], dtype=np.float32)
+    for name, kind, key, how in TRANSFER_MAPS:
+        base_px = map_source(body_mat, kind, key)
+        if base_px is None:
+            continue
+        nude = resized(base_px, size).reshape(-1, 4)
+        if how == "ao":                                       # the nude base's, as it is (no new file)
+            done[name] = nude
+            continue
+        if how == "pmx":                                      # albedo x base x AO = the new XPS diffuse x the AO
+            if "diffuse" not in done or "lightmap" not in done:
+                continue
+            out = done["diffuse"].copy()
+            out[:, :3] = linear_srgb(srgb_linear(out[:, :3]) * done["lightmap"][:, :1])
+        else:
+            model = nude.copy()                               # the model's values in the body's layout
+            for k, mat in enumerate(mats):
+                src = map_source(mat, kind, key)
+                sel = np.nonzero(which == k)[0]
+                if src is None or not len(sel):
+                    continue
+                val = bilinear(src, muv[sel])
+                if how == "colour" and kind == "node":        # the .blend tints its albedo with hq_tint
+                    gain = tint_of(mat) / np.maximum(body_tint, 1e-6)
+                    val[:, :3] = linear_srgb(np.clip(srgb_linear(val[:, :3]) * gain, 0.0, 1.0))
+                if how == "mask":                             # MGAC: gloss x the materials' smoothness; AO stays
+                    val[:, 1] = np.clip(val[:, 1] * smooth_of(mat) / max(body_smooth, 1e-6), 0.0, 1.0)
+                    val[:, 2] = nude[pix[sel], 2]
+                if how in ("normal", "bump"):
+                    nn = normal[sel]
+                    tm, bm = tangent_frame(m_tf[mt[sel]], m_hand[mt[sel]], nn)
+                    tb, bb = tangent_frame(b_tf[tri[sel]], b_hand[tri[sel]], nn)
+                    vec = val[:, :3] * 2.0 - 1.0
+                    if how == "bump":
+                        vec[:, 1] = -vec[:, 1]
+                    wv = vec[:, 0:1] * tm + vec[:, 1:2] * bm + vec[:, 2:3] * nn
+                    vec = np.stack([(wv * tb).sum(1), (wv * bb).sum(1), (wv * nn).sum(1)], 1)
+                    if how == "bump":
+                        vec[:, 1] = -vec[:, 1]
+                    val[:, :3] = vec * 0.5 + 0.5
+                    val[:, 3] = nude[pix[sel], 3]
+                model[pix[sel]] = val
+            if how in ("normal", "bump"):
+                plain = np.broadcast_to(flat, nude.shape)
+            else:                                             # plain skin: the model's around, pulled in
+                plain = push_pull(model.reshape(size, size, 4), (full_w > 0.5).reshape(size, size)).reshape(-1, 4)
+            out = nude.copy()
+            both = pix[weight > 0.9]
+            if how in ("colour", "data", "mask") and len(both) > 1000:
+                # the nude base's values where they stay, matched to the model's skin (median ratio over the texels
+                # with both): colour in linear RGB; gloss / metal / A of the MGAC and the XPS specular as they are
+                # (the AO channel stays the base's)
+                chans = [0, 1, 3] if how == "mask" else [0, 1, 2]
+                if how == "colour":
+                    ratio = np.median(srgb_linear(np.clip(model[both][:, chans], 1e-4, 1.0))
+                                      / np.maximum(srgb_linear(np.clip(nude[both][:, chans], 1e-4, 1.0)), 1e-4), axis=0)
+                    out[:, chans] = linear_srgb(np.clip(srgb_linear(out[:, chans]) * ratio, 0.0, 1.0))
+                else:
+                    ratio = np.median(np.clip(model[both][:, chans], 1e-3, 1.0)
+                                      / np.maximum(np.clip(nude[both][:, chans], 1e-3, 1.0), 1e-3), axis=0)
+                    ratio = np.clip(ratio, 0.25, 4.0)
+                    out[:, chans] = np.clip(out[:, chans] * ratio, 0.0, 1.0)
+                gains[name] = [round(float(g), 3) for g in ratio]
+            ps = plain_share[:, None].astype(np.float32)
+            out[a_pix] = out[a_pix] * (1.0 - ps) + plain[a_pix] * ps
+            w = full_w[a_pix][:, None]
+            out[a_pix] = model[a_pix] * w + out[a_pix] * (1.0 - w)
+            if how in ("normal", "bump"):
+                vec = out[a_pix, :3] * 2.0 - 1.0
+                vec /= np.maximum(np.linalg.norm(vec, axis=1, keepdims=True), 1e-12)
+                out[a_pix, :3] = vec * 0.5 + 0.5
+        if name in ("diffuse", "lightmap"):
+            done[name] = out
+        if kind == "node":
+            node = mine.node_tree.nodes.get(key)
+            fname = (bpy.path.basename(node.image.filepath) or node.image.name) if node.image else name + ".png"
+        else:
+            fname = os.path.basename(recorded_map(body_mat, key))
+        fname = re.sub(r"\.png(\.\d{3})?$", "", fname, flags=re.IGNORECASE) + ".png"
+        dst = os.path.join(folder, fname)
+        img = bpy.data.images.new("roe_skin_tmp", size, size, alpha=True)
+        try:
+            img.pixels.foreach_set(np.clip(out, 0.0, 1.0).ravel())
+            img.filepath_raw = dst
+            img.file_format = "PNG"
+            img.save()
+        finally:
+            bpy.data.images.remove(img)
+        if kind == "node":
+            new_img = bpy.data.images.load(dst, check_existing=False)
+            new_img.colorspace_settings.name = node.image.colorspace_settings.name if node.image else "sRGB"
+            node.image = new_img
+        elif kind == "xps":
+            xps[key] = dst
+        else:
+            mine["roe_hq_pmx"] = dst
+        written[name] = dst
+    if moved is not None and not DEBUG_ATTR:
+        me.attributes.remove(moved)
+    if xps:
+        mine["roe_hq_xps"] = json.dumps(xps)
+    mine["roe_skin_from"] = ", ".join(m.name for m in mats if m is not None)
+    return {"texels": int(len(pix)), "body_texels": int(len(a_pix)), "own_skin": round(float((weight > 0.5).mean()), 3),
+            "plain": round(float((plain_share * (1.0 - full_w[a_pix]) > 0.5).mean()), 3),
+            "under_outfit": round(float(((covered[n_v[tri]] * bary).sum(1) > 0.5).mean()), 3),
+            "cloth_coloured": round(float(painted.mean()), 3), "nude_tint": gains, "size": size,
+            "per_corner": int(one.sum()),
+            "per_texel_tris": int((~one & some).sum()), "material": mine.name, "maps": sorted(written),
+            "folder": folder, "seconds": round(time.time() - t0, 1)}
 
 
 def classify(model_arm, nude_tree):
@@ -1750,6 +2548,14 @@ def main():
 
     c = classify(model_arm, bvh(world_co(nude_body), triangles(nude_body, {nude_slot})))
     head, hair, weapons, kinds = c["head"], c["hair"], c["weapons"], c["slots"]
+    # the model's own shape first (i05): every slot lying on the body by shape - before painted_skin turns painted
+    # ones (her bandages drawn on the body surface) or, in the full variant, painted patches into outfit, so both
+    # variants follow the same skin
+    shape_skin = {o: [i for i, k in sl.items() if k == "skin"] for o, sl in kinds.items() if "skin" in sl.values()}
+    slot_count = {o: len(o.material_slots) for o in kinds}
+    report["follow"] = follow_skin(nude_body, nude_slot, shape_skin,
+                                   {o: [i for i, k in sl.items() if k == "outfit"] for o, sl in kinds.items()},
+                                   a.follow)
     report["painted"] = painted_skin(kinds, nude_body, nude_slot, a.variant)
     skin = {o: [i for i, k in s.items() if k == "skin"] for o, s in kinds.items() if "skin" in s.values()}
     report.update(armature=model_arm.name, head=head.name if head else None, hair=[o.name for o in hair],
@@ -1806,6 +2612,19 @@ def main():
     body.parent = model_arm
     body.matrix_world = world
 
+    if (report.get("follow") or {}).get("followed"):            # its own skin texture too, before it is deleted
+        # outfit over the body - not the full variant's paint patches (they lie on the skin; colour finds them)
+        outfit_slots = {o: [i for i, k in sl.items() if k == "outfit" and i < slot_count.get(o, i + 1)]
+                        for o, sl in kinds.items()}
+        # the skin by shape too (both variants the same texture; painted texels are left out by colour), maps per
+        # variant (<cache>\skin\<out stem>)
+        report["skin_transfer"] = transfer_skin(body, nude_body.material_slots[nude_slot].material,
+                                                {o: sl + [i for i, k in kinds[o].items()      # + the full
+                                                          if i >= slot_count[o] and k == "outfit"]  # variant's patches
+                                                 for o, sl in shape_skin.items()},
+                                                {o: sl for o, sl in outfit_slots.items() if sl},
+                                                re.sub(r"\.blend$", "", os.path.basename(a.out)))
+
     outfit_objs, kept_objs = [], [o for o in [head] + hair + weapons if o is not None]
     for obj, s in kinds.items():
         gone = [i for i, k in s.items() if k == "skin" or (a.variant == "nude" and k == "outfit")]
@@ -1841,8 +2660,11 @@ def main():
         if not obj.get("roe_xps_optional"):
             obj["roe_xps_optional"] = "+weapon"
 
-    report["tone"] = tone_match(head, body, nude_body.material_slots[nude_slot].material, seam, nude_body, nude_slot,
-                                face_slot, stem)
+    if (report.get("skin_transfer") or {}).get("texels"):
+        report["tone"] = {"skipped": "the body wears the model's own skin (transfer_skin)"}
+    else:
+        report["tone"] = tone_match(head, body, nude_body.material_slots[nude_slot].material, seam, nude_body,
+                                    nude_slot, face_slot, stem)
     for obj in (nude_body, nude_arm):
         data = obj.data
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -1879,7 +2701,8 @@ def main():
             json.dump(report, handle, ensure_ascii=False, indent=1, default=str)
     print("ROE_COMPLETE_NUDE=" + json.dumps({k: report.get(k) for k in ("variant", "body", "weights", "seam",
                                                                          "neck_from_nude", "fit", "outfit",
-                                                                         "weapons", "aliases", "pack", "tone")},
+                                                                         "weapons", "aliases", "pack", "tone",
+                                                                         "follow", "skin_transfer")},
                                             ensure_ascii=True, default=str))
 
 

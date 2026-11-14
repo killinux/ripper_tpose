@@ -84,13 +84,15 @@ def one_version(stem, variant, info, base_blend, args, logs, dump, result):
     if "blend" in args.formats:
         code, data = hq.blender_step(args, info["blend"], "complete_nude_body_blender.py",
                                      ["--nude", base_blend, "--variant", variant, "--out", blend,
-                                      "--report", os.path.join(logs, "complete_%s.json" % variant)],
+                                      "--report", os.path.join(logs, "complete_%s.json" % variant),
+                                      "--follow", args.follow],
                                      os.path.join(logs, "complete_%s.log" % variant), "ROE_COMPLETE_NUDE")
         if not args.dry_run:
             if code != 0 or data is None:
                 res["error"] = "body step failed (exit %d), see %s" % (code, logs)
                 return False
-            res.update({k: data.get(k) for k in ("body", "weights", "fit", "outfit", "weapons", "aliases", "tone")})
+            res.update({k: data.get(k) for k in ("body", "weights", "fit", "outfit", "weapons", "aliases", "tone",
+                                                 "follow", "skin_transfer")})
         # the model's own weapon (g04's fan) or one added earlier (inherited from its .blend) stays as it is
         has_weapon = bool((data or {}).get("weapons")) and not args.dry_run
         if dump and (args.weapon == "yes" or not has_weapon):
@@ -180,6 +182,9 @@ def main():
     ap.add_argument("--formats", default=",".join(hq.FORMATS), help="blend,pmx,xps (default all three)")
     ap.add_argument("--weapon", choices=("auto", "yes", "no"), default="auto",
                     help="auto: add the battle weapon when the model has no wp_* mesh of its own")
+    ap.add_argument("--follow", choices=("auto", "yes", "no"), default="auto",
+                    help="the nude body takes the model's own skin shape first (i05: fuller breasts, wider hips "
+                         "than her family's nude base); auto: only when the skin is that far off the nude body")
     ap.add_argument("--pmx-morphs", choices=("vertex", "bone"), default=None,
                     help="PMX expressions as vertex morphs (default) or bone morphs (env ROE_PMX_MORPHS)")
     ap.add_argument("--archive", action="store_true", help="afterwards: gallery + copy these models to E:")

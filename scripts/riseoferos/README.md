@@ -43,7 +43,8 @@ FBX + 贴图 PNG  （D:\roe_exports\<角色>\）
 | `assemble_suit_blender.py` | Blender 无头 | 把裸模 + 头发 + suit 部件拼成一个带材质、绑到底模骨架的 .blend | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
 | `suit_bundle.py` | 任意 Python 3（需 UnityPy） | 直接从 bundle 读一套 suit：部件网格 / 蒙皮 / 放置 / 材质贴图 → `_suits\<id>\<suit>\`，并算「穿好」状态 | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
 | `export_suits.py` | 任意 Python 3（需 UnityPy，调 Blender） | 批量把全部 suit 拼成 `.blend`（`--list` / `--only` / `--exclude` / `--force` / `--lanes`），清单 + 预览拼图 | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
-| `suit_overrides.json` | 数据 | 「穿好」规则的人工覆盖表（按 `<id>:<suit>` include / exclude 部件） | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
+| `suit_overrides.json` | 数据 | 「穿好」规则的人工覆盖表（按 `<id>:<suit>` include / exclude 部件；`"from"` 定义变体套装，如 `e01:latex_v2`） | [roe-suit-assembly.md](../../docs/roe-suit-assembly.md) |
+| `export_new.py` | 任意 Python 3（调 PowerShell / Blender） | 游戏更新后：`--list` 看新出的模型 / 套装，按编号或名字一条命令导出高清 .blend / PMX / XPS（+ `_nude` / `_full`）并归档、加画廊卡片 | 本页 §2 |
 
 产物用的是 `a01`/`g11` 这类代号——字母是角色、数字是服装变体，
 字母与角色名的对照见 [character-roster.md](character-roster.md)。
@@ -89,6 +90,45 @@ Blender 侧插件（装进 **被调用的那个** Blender 3.6）：
 ---
 
 ## 2. 快速开始
+
+### 游戏更新后：看有什么新的，按名字一条命令导出高清版（`export_new.py`，2026-11-14）
+
+```powershell
+cd E:\code\othercode\ripper_tpose\scripts\riseoferos
+python export_new.py --list                  # 游戏里有、E 盘还没有的：模型（含觉醒配色 outfit）、套装
+python export_new.py i05                     # 按编号：i05 和它的 outfit（i05_outfit1）一起
+python export_new.py "Sera 5" "Alana 13"     # 按名字 + 编号（Alana = 游戏里 f 家族的名字，我们的文件夹叫 Rana）
+python export_new.py f01:oni e01:latex_v2    # 套装
+python export_new.py i05 --detach            # 放到单独的进程里跑（打印日志路径），关掉终端也不停
+```
+
+一个模型依次做：
+1. 提取（安装目录 + 运行时缓存，更新的新文件常常只在缓存里）；
+2. 导出高清 `.blend` / PMX / XPS；
+3. PMX 补表情（头没有表情骨骼时从家族的 `pc_<字母>01_hd.pmx` 复制）和胸部物理（+ `_bustB.pmx`）；
+4. 准备家族裸模；
+5. `_nude` / `_full`（§8.6，身形和家族裸模不一样时自动跟随模型自己的皮肤）；
+6. 它们的表情、胸部，以及带衣服版的身体跟着罩杯动；
+7. 只把这几个模型复制到 E 盘、加画廊卡片、检查画廊每个链接。
+
+套装：没提取过底模先提取，然后 `export_hq.py <编号>:<套装>`，最后归档。
+- 一个模型 20–40 分钟，套装 3–5 分钟。
+- 日志和结果在 `D:\roe_exports\_new_runs\<名字>\`。
+- 中途停了用 `--from <步骤>` 接着做，步骤：extract、export、post、nude、complete、variants、archive。
+
+| 选项 | 作用 |
+|---|---|
+| `--no-nude` | 不做 `_nude` / `_full` |
+| `--no-archive` | 都留在 D 盘，不进 E 盘和画廊 |
+| `--dry-run` | 只打印要跑的命令 |
+
+- 家族裸模（`pc_<字母>01_nk_bs`）只在 `D:\roe_exports\nude_materials` 里用（没有就从 E 盘复制一份，再按游戏材质重建），
+  **不会复制回 E 盘**：h / i 家族在 E 盘上保持非高清（2026-10-02 的约定）。
+- 画廊只更新这次的卡片（`make_gallery.py --only`）。全量重建会把 D 盘上的裸模也做成卡片，而它们不进 E 盘。
+- 套装的变体（同一套衣服换了零件）写在 `suit_overrides.json` 的 `"from"` 里：`e01:latex_v2` 是 latex 套装把粉色
+  紧身衣换成 11-13 更新的 v2（黑色网格纹）。
+
+### 单独的步骤
 
 ```powershell
 cd E:\code\othercode\ripper_tpose\scripts\riseoferos
@@ -944,7 +984,10 @@ python export_suits.py --sheet                     # 只重拼预览总图
 产物 `D:\roe_exports\<id>\blend\pc_<id>_<suit>.blend` + `_preview.png`，中间数据 `D:\roe_exports\_suits\<id>\<suit>\`，
 清单 `_suits\manifest.json`，拼图 `_suits\_contact.png`。前提只有底模已提取（`extract_character.ps1 <id>`，
 要 `pc_<id>_nk` 的 FBX 和 `_textures\`）。规则判错的穿法在 `suit_overrides.json` 里按 `<id>:<suit>` 改，
-然后 `--only <id>:<suit> --force`。拼完 `python html\make_gallery.py` 重生成画廊，套装卡片都在页面下方
+然后 `--only <id>:<suit> --force`。同一套衣服的另一版写成变体：`"e01:latex_v2": {"from": "latex", "exclude": [...]}`
+读 latex 的包，排除列表换一个，`--list` 里也会列出来（2026-11-14：11-13 更新给 latex 加了一件 v2 紧身衣，同一个
+网格、黑色网格纹贴图，贴图只在 `chara_tex_components_pc_e01_suit_latex_update_1.ab` 里，套装的贴图包现在连
+`_update_N` 一起读）。拼完 `python html\make_gallery.py` 重生成画廊，套装卡片都在页面下方
 的「套装」区，按编号排（2026-10-25 起；工具栏「套装区 ↓」跳过去，「套装」筛选照旧）。部件坐标系的五种情况、「穿好」规则、验证见
 [ROE 套装拼装](../../docs/roe-suit-assembly.md)。
 
@@ -1068,7 +1111,13 @@ python complete_nude.py g04 --variants full --formats pmx   # 只重出带衣服
 python complete_nude.py a08 --archive-only   # 不导出，只归档 + 画廊
 python complete_nude.py a08 --weapon no      # 不加战斗武器（默认：模型自己没有 wp_* 网格才加）
 python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs --dry-run   # 指定裸模；只打印要跑的命令
+python complete_nude.py i05 --follow yes     # 身体先变成模型自己的样子、用她自己的皮肤（默认 auto：需要时才做）
 ```
+
+- **体型和家族裸模不一样的模型**（i05，2026-11-14）：模型的皮肤（手、脚、头、脖子不算）有 5% 以上离裸模超过 1 cm 时，
+  裸模身体先跟着模型的皮肤变形（`follow_skin`：胸、胯、腿），再把模型自己的皮肤贴图按位置搬过去（`transfer_skin`：
+  纹身、乳晕；衣服盖着的、画着衣服的地方还是裸模的贴图）。`--follow no` 关掉，`yes` 强制。做法和走过的弯路在
+  [roe-complete-nude.md](../../docs/roe-complete-nude.md) 第 20 节。
 
 | 产物（`D:\roe_exports\<id>\blend\` 下） | 是什么 |
 |---|---|

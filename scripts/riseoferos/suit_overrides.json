@@ -32,9 +32,20 @@
     "exclude": [
       "LatexNoBreast_obj001",
       "LatexOpenBreast_obj001",
-      "LatexsuitOpen_obj001"
+      "LatexsuitOpen_obj001",
+      "LatexLeotardOpen_obj001_v2"
     ],
-    "_why": "four states of one garment; LatexLeotardOpen is the fully closed leotard (compared all three renders)"
+    "_why": "four states of one garment; LatexLeotardOpen is the fully closed leotard (compared all three renders). The 11-13 update added LatexLeotardOpen_obj001_v2 (same mesh, black grid texture): it is e01:latex_v2, not worn over the pink one"
+  },
+  "e01:latex_v2": {
+    "from": "latex",
+    "exclude": [
+      "LatexNoBreast_obj001",
+      "LatexOpenBreast_obj001",
+      "LatexsuitOpen_obj001",
+      "LatexLeotardOpen_obj001"
+    ],
+    "_why": "the latex suit with the v2 leotard of the 11-13 update (Miriam_LatexLeotard_obj001_v2_*, black latex with a grid instead of pink; its textures only in chara_tex_components_pc_e01_suit_latex_update_1.ab)"
   },
   "j01:stewardess": {
     "exclude": [

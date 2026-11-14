@@ -306,11 +306,21 @@ def stub_files(env, stub_path):
     return out
 
 
+def stub_suit(cid, suit):
+    """The game suit a suit is read from: itself, or for a variant defined in suit_overrides.json ("from": e01:latex_v2
+    is e01:latex with the v2 leotard of the 11-13 update) the suit it varies."""
+    return load_overrides(cid, suit).get("from") or suit
+
+
 def bundle_paths(game, cid, suit):
+    suit = stub_suit(cid, suit)
     stub = bundle(game, "accessory_components_pc_%s_suit_%s.ab" % (cid, suit))
     extra = [bundle(game, "chara_components_pc_%s.ab" % cid),
-             bundle(game, "chara_components_common.ab"),
-             bundle(game, "chara_tex_components_pc_%s_suit_%s.ab" % (cid, suit))]
+             bundle(game, "chara_components_common.ab")]
+    # the suit's textures, and those an update added beside them (e01 latex: chara_tex_components_pc_e01_suit_latex
+    # _update_1.ab holds only the v2 leotard's)
+    extra += [bundle(game, f) for f in bundle_names(game)
+              if re.match(r"chara_tex_components_pc_%s_suit_%s(_update_\d+)?\.ab$" % (cid, re.escape(suit)), f.lower())]
     if suit == "fm":
         # the demon-form ("fm") props come from the shared accessory pool: their
         # materials sit in one tiny accessory_components_common_common_<x>.ab each,

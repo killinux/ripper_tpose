@@ -262,3 +262,19 @@ b01、d01 等也一样，旧版就是这样。
 `fix_suit_slots_blender.fix_fm_body_textures` 把还挂着家族贴图的脸、头发和魔化耳朵换成魔化贴图，
 游戏材质那一步就按贴图名选中魔化材质。g01 的魔化身体只有自己的头发，没有自己的脸，脸不换。
 f01 的魔化套里，配件池的羊角和身体自带的角形状、位置完全重合，两层叠在一起，换对贴图以后看不出来。
+
+## 2026-11-14：同一套衣服的另一版（变体套装 `"from"`）
+
+11-13 的更新给 Miri 的乳胶套装（e01:latex）加了一件 `LatexLeotardOpen_obj001_v2`：存根里多了一个根节点，网格和
+原来的 `LatexLeotardOpen_obj001` 是同一个（5,849 个顶点），材质换成黑色网格纹（`Miriam_LatexLeotard_obj001_v2_*`）。
+这套贴图只在新的 `chara_tex_components_pc_e01_suit_latex_update_1.ab` 里。
+
+- 「穿好」规则会把两件都穿上（v2 的名字里没有状态词），粉色、黑色叠在一起。所以 `e01:latex` 的排除表加上 v2，
+  保持原来的样子。
+- 黑色那版写成变体：`suit_overrides.json` 里 `"e01:latex_v2": {"from": "latex", "exclude": [...]}`。
+  - `suit_bundle.stub_suit()` 让它读 latex 的存根和贴图包；
+  - `export_suits.list_suits()` 把这类变体也列出来，`export_hq.py e01:latex_v2`、`export_new.py e01:latex_v2`
+    都认它；
+  - 产物叫 `pc_e01_latex_v2`。
+- 套装的贴图包现在连 `chara_tex_components_pc_<id>_suit_<suit>_update_N.ab` 一起读：更新常常只把新贴图放进这种
+  补丁包。
