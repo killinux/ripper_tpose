@@ -859,8 +859,34 @@ td code, li code {{ font-family: Consolas, monospace; }}
 
   <section class="appendix">
     <h2>附录 · 导出脚本用法</h2>
-    <p>脚本都在 <code>scripts\\riseoferos\\</code>，需在装有游戏的机器上运行。整个流程分两步：
-      先从 AssetBundle 提取白模，再无头重建材质。</p>
+    <p>脚本都在 <code>scripts\\riseoferos\\</code>，需在装有游戏的机器上运行。</p>
+
+    <h3>游戏更新后：一条命令导出新模型 · export_new.py（最短的路）</h3>
+    <pre>cd E:\\code\\othercode\\ripper_tpose\\scripts\\riseoferos
+python export_new.py --list                     # 游戏里有、E 盘还没有的：模型、觉醒配色（outfit）、套装
+python export_new.py i05 "Alana 13" f01:oni     # 按编号 / 名字 + 编号 / 套装，一条命令导出高清并归档到 E 盘
+python export_new.py i05 --detach               # 放到单独的进程里跑（打印日志路径），关掉终端也不停</pre>
+    <p>名字的写法：
+      编号 <code>i05</code>（连同它的觉醒配色 <code>i05_outfit1</code>）、只要配色写 <code>i05_outfit1</code>、
+      套装 <code>f01:oni</code>，也可以写家族名 + 编号 <code>"Sera 5"</code>。
+      游戏里 f 家族叫 Alana，本页叫 Rana，两种写法都认。</p>
+    <p>一个模型依次做下面七步：</p>
+    <ol>
+      <li>提取：安装目录 + 运行时缓存，更新的新文件常常只在缓存里。</li>
+      <li>导出游戏原始材质的 <code>.blend</code> / PMX / XPS。</li>
+      <li>PMX 补表情和胸部物理（+ <code>_bustB.pmx</code>）。</li>
+      <li>准备同家族的裸模（只放 D 盘，不进 E 盘）。</li>
+      <li>补全身体：<code>_nude</code> / <code>_full</code>。</li>
+      <li>补全版的表情、胸部；带衣服版的身体跟着罩杯动。</li>
+      <li>只把这几个复制到 E 盘、只加它们的卡片，再检查本页每个链接。</li>
+    </ol>
+    <p>套装：没提取过底模先提取，再走 <code>export_hq.py</code>，最后归档。耗时：一个模型 20–40 分钟，一套服装 3–5 分钟。
+      日志在 <code>D:\\roe_exports\\_new_runs\\&lt;名字&gt;\\</code>，中途停了用
+      <code>--from &lt;步骤&gt;</code> 接着做（extract / export / post / nude / complete / variants / archive）。
+      <code>--no-nude</code> 不做补全，<code>--no-archive</code> 留在 D 盘，<code>--dry-run</code> 只打印命令。
+      2026-11-14 的 i05、i05_outfit1、f13 和 f01:oni、e01:latex_v2 两套服装就是这样出来的。</p>
+
+    <p>下面是它串起来的各个步骤，单独用时：先从 AssetBundle 提取白模，再无头重建材质。</p>
 
     <h3>第一步 · 提取（extract_character.ps1）</h3>
     <pre>cd E:\\code\\othercode\\ripper_tpose\\scripts\\riseoferos
@@ -943,7 +969,10 @@ python export_hq.py --todo --skip h,i --lanes 4    # 没做全的全部做（h�
 python complete_nude.py a08 g04 --archive          # 做完归档到 E 盘、刷新本页
 python complete_nude.py g04 --variants full --formats pmx   # 只重出带衣服版的 PMX
 python complete_nude.py pc_g04_hd --nude pc_g01_nk_bs      # 裸模默认是同字母的 01，也可以指定</pre>
-    <p>原理和坑见 <code>docs\\roe-complete-nude.md</code>，日志在 <code>D:\\roe_exports\\_hq_runs\\&lt;stem&gt;_nude\\</code>。</p>
+    <p>身材和家族裸模不一样的模型会先变形，再用自己的皮肤：
+      i05 的胸、胯、腿都比 i01 的裸模大，身体先跟着她露出来的皮肤变形，再把她自己的皮肤贴图（纹身、乳晕）搬过去；
+      衣服盖着的、画着衣服的地方仍用裸模的贴图。这是自动的（<code>--follow auto</code>），<code>--follow no</code> 关掉。</p>
+    <p>原理和坑见 <code>docs\\roe-complete-nude.md</code>（第 20 节是身形跟随），日志在 <code>D:\\roe_exports\\_hq_runs\\&lt;stem&gt;_nude\\</code>。</p>
 
     <h3>重新生成本页</h3>
     <pre>python scripts\\riseoferos\\html\\make_gallery.py                        # D 盘上有的模型合并进本页

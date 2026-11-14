@@ -135,6 +135,14 @@ python complete_nude.py a02 --follow no          # 补全照旧做法
   - 之后 `--list`：模型 0 / 137、套装 0 / 70 没进 E 盘。
 - 名字解析和步骤用 `--dry-run` 核对过：`"Sera 5"` → i05 + i05_outfit1，`"alana 13"` → f13。
 - 鬼族套装刘海里的一缕橙红是游戏的设计：家族发色贴图 × 底色 (1, 0.2, 0)。
+- **画廊**（用户：「补到 scripts/riseoferos 的画廊里」）：
+  - 新卡片已在页面上；
+  - 附录「导出脚本用法」最前面加了「游戏更新后：一条命令导出新模型 · export_new.py」（命令、名字的写法、七个步骤、
+    选项），「补全身体」一节加了身形跟随的说明；
+  - 页面用 `make_gallery.py --relayout` 按现有卡片重排（不需要 D 盘）：360 张卡片、2,230 个链接全部存在，附录用
+    headless Edge 截图看过。
+- 之后 `D:\roe_exports` 按用户的意思删掉（7.77 GB）。没归档的 75 个运行日志 / 清单先复制到
+  `E:\game_export\RiseOfEros\_meta\roe_exports_leftovers_20261114\`；下次 `export_new.py` 会重建这个目录。
 
 ## 2026-11-01 — ELDEN RING 角色 mod → 高清材质 Blender / XPS / PMX（`scripts/eldenring/`，一条命令）；第一个：Nexus 11065「Reika Hardsuit - Gantz」（GANTZ 玲花，带外骨骼 / 不带外骨骼两版）
 
