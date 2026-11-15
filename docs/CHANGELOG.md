@@ -14,6 +14,26 @@
 
 ---
 
+## 2026-11-15 — 女毒液模型调研页进仓库：`scripts/venom` + `html/venom_female_models.html`
+
+用户收尾时说「该提交的都提交吧」。这一页（女性毒液模型在哪能下到）一直是临时目录里的脚本生成的，没进仓库。
+
+- 页面生成脚本 `make_venom_page.py`、两个抓取脚本搬进 `scripts/venom/`。
+  - `nexus_venom.py`：Nexus 公开 v2 GraphQL，不用密钥；
+  - `br_crawl_venom.py`：BetterRepack 的 HS2 / AI 少女 zipmod 公开库。
+- 数据放在 `data/`。Nexus 只留页面列出的 64 个女性角色 mod（全量 1,891 个，要的话重新抓）。临时目录被清掉也能重新生成。
+- 页面内容更新到现状：
+  - 漫威争锋已经装了，能转，但游戏本体的贴图要新版映射文件；
+  - 生化危机 2 / 3 重制版有流程，不用游戏本体；
+  - 蜘蛛侠 2 的新版 `.model` 试过，没有工具能读；
+  - 加了毒液合集画廊的链接；
+  - 「已导出」标记只算 blend / PMX / XPS 都在的。
+- BetterRepack 抓取脚本的说明原来还写着 GANTZ（从上一次的抓取脚本改来的），改正。
+
+**用户怎么用**：浏览器打开 `html\venom_female_models.html`；重新生成：`python -I scripts\venom\make_venom_page.py`。
+
+---
+
 ## 2026-11-15 — 毒液合集画廊：`E:\game_export\_毒液合集`
 
 用户：「这些毒液导出的模型也做成画廊」。照 GANTZ 合集的做法，用 `scripts/archive/make_collection.py` 加一份清单

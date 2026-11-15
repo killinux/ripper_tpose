@@ -31,6 +31,8 @@
 Rise of Eros / Stellar Blade PMX 链和 blender2xps；新游戏只要写一个骨骼映射（`rigs\*.py`）。HS2 的 Studio 道具 zipmod 见
 [`honeyselect2/studio_item_export.py`](honeyselect2/README.md)。
 
+女性毒液模型能从哪里拿到（Nexus / Sketchfab / HS2 zipmod / 付费）的调研页 `html/venom_female_models.html` 由 [`venom/`](venom/README.md) 生成；已经转好的在毒液合集画廊（`archive/collections/venom.json`，`E:\game_export\_毒液合集`）。
+
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。
 
