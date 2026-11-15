@@ -1,0 +1,12 @@
+{
+  "material": "crystal_pink",
+  "texture": "crystal_pink.png",
+  "kind": "pink",
+  "seed": 11,
+  "edge": true,
+  "clusters": [
+    {"name": "chest_gem", "mats": ["san_pc_female_darknight_onepiece_metal_上半身"],
+     "point_cm": [0, 140, -8], "dir": [0, 0.15, -1], "count": 1, "len_cm": [3.5, 4], "r_cm": [1.2, 1.4],
+     "spread_deg": 0, "radius_cm": 0, "sink_cm": 1.5, "mirror": false}
+  ]
+}

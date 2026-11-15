@@ -12,7 +12,7 @@ UI: 3D viewport sidebar > MMD tab > 换装（服装移植） and 挑零件.  Hea
 bl_info = {
     "name": "PMX Outfit Transfer",
     "author": "ripper_tpose",
-    "version": (0, 4, 0),
+    "version": (0, 4, 1),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > 换装（服装移植）",
     "description": "把一个 PMX 模型的衣服贴身穿到另一个 PMX 模型的裸体上（骨骼重定向 + 按身体形状拟合），"

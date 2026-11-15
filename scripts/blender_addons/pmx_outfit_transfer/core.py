@@ -47,6 +47,7 @@ FOLLOW_FADE_CM = 2.0      # ... and fade back to their own weights over this muc
 HIDE_MORPH = "衣服非表示"  # the material morph made when the target has none to add the clothes to
 MIN_GAP_MM = 1.0          # clearance: garment vertices closer to the target's skin than this are pushed out
 FOOT = re.compile(r"足首|つま先|足先|toe|foot|ankle|ball", re.IGNORECASE)   # footwear: no clearance push (below)
+TWIST = re.compile(r"^(左|右)(腕|手)捩\d*$")                    # arm / wrist twist: placed by its share of the segment
 PUSH_DEPTH_CM = 1.0       # ... but not cloth deeper in the skin than this, nor skin further through the cloth: that is
                           # a pose difference (Stellar Blade's wedge sneakers on ROE's heel-ready feet) or the other
                           # side's skin, and pushing it blows the piece up
@@ -475,6 +476,10 @@ class Transfer:
                     continue
                 if i in self.d_dyn and not BUST.search(dn[i]):
                     continue
+                # ... nor rides one of the target's own physics bones (2026-11-14: MHW Velkhana's crown pieces matched
+                # a08's earring and Eve's braid bone within 4 cm and would have swung with them)
+                if cands[k] in self.t_dyn and not BUST.search(T.bones[cands[k]].name):
+                    continue
                 bmap[i] = cands[k]
                 used.add(cands[k])
                 notes[i] = "matched by position to %s (%.1f cm)" % (T.bones[cands[k]].name, d[k] * UNIT_CM)
@@ -510,6 +515,17 @@ class Transfer:
                 break
         order = sorted(range(n), key=lambda i: self.depth(i))
         for i in order:
+            seg = self.twist_segment(i)
+            if seg is not None:
+                # a twist bone keeps its place along its segment (2026-11-14): Skyrim puts the upper-arm twist on the
+                # shoulder joint, ROE 80 % down the arm - head-to-head moved the pauldron weighted to it to the elbow
+                pd, cd, pt, ct = seg
+                ab = self.d_head[cd] - self.d_head[pd]
+                f = float(np.clip(np.dot(self.d_head[i] - self.d_head[pd], ab) / max(np.dot(ab, ab), 1e-12), 0.0, 1.0))
+                off = self.d_head[i] - (self.d_head[pd] + f * ab)
+                R[i] = R[pd]
+                new_head[i] = self.t_head[pt] + f * (self.t_head[ct] - self.t_head[pt]) + R[pd] @ off
+                continue
             if i in self.bmap:
                 t = self.bmap[i]
                 new_head[i] = self.t_head[t]
@@ -529,6 +545,21 @@ class Transfer:
             new_head[i] = R[p] @ (self.d_head[i] - self.d_head[p]) + new_head[p]
         self.R, self.new_head = R, new_head
         return R, new_head
+
+    def twist_segment(self, i):
+        """(donor parent, donor child, target parent, target child) of an arm / wrist twist bone (左腕捩, 右手捩1 ...)
+        whose segment ends are matched on both sides, else None."""
+        m = TWIST.match(self.dn[i])
+        if not m:
+            return None
+        side, kind = m.group(1), m.group(2)
+        a, b = (side + "腕", side + "ひじ") if kind == "腕" else (side + "ひじ", side + "手首")
+        if a not in self.dn or b not in self.dn:
+            return None
+        pd, cd = self.dn.index(a), self.dn.index(b)
+        if pd not in self.bmap or cd not in self.bmap:
+            return None
+        return pd, cd, self.bmap[pd], self.bmap[cd]
 
     def depth(self, i):
         d, j = 0, i
@@ -597,12 +628,19 @@ def transfer(donor_path, target_path, out_path, materials=None, donor_body=None,
         for b, w in gv_weights[v]:
             if w >= 0.3:
                 garment_bones.add(b)
-    # physics chains under garment bones (a chain's lower links may carry little weight but hold the bodies)
+    # physics chains under garment bones (a chain's lower links may carry little weight but hold the bodies) - only
+    # chains the clothes hang on somewhere, or continuing a garment chain: a crown weighted to 頭 must not drag the
+    # donor's hair chains along (2026-11-14: grafting MHW Velkhana's crown copied Eve's braids and side hair, 17 bodies)
+    touched = {b for v in garment_verts for b, w in gv_weights[v] if w > 0}
+
+    def chain_touched(c, depth=0):
+        return c in touched or (depth < 64 and any(chain_touched(k, depth + 1) for k in tr.kids_d[c]))
+
     stack = list(garment_bones)
     while stack:
         k = stack.pop()
         for c in tr.kids_d[k]:
-            if c in tr.d_dyn and c not in garment_bones:
+            if c in tr.d_dyn and c not in garment_bones and (k in tr.d_dyn or chain_touched(c)):
                 garment_bones.add(c)
                 stack.append(c)
     bmap, bring = tr.map_bones(garment_bones)

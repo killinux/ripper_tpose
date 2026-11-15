@@ -1,0 +1,273 @@
+{
+ "material": "crystals",
+ "texture": "crystal_orange.png",
+ "kind": "orange",
+ "style": "sharp",
+ "seed": 37,
+ "edge": true,
+ "clusters": [
+  {
+   "name": "shoulder_top_L",
+   "mats": [
+    "miri_pc_female_dragon_rises_upper_metal_Bip001LShoulder"
+   ],
+   "mats_mirror": [
+    "miri_pc_female_dragon_rises_upper_metal_Bip001RShoulder"
+   ],
+   "point_cm": [
+    18,
+    149,
+    3
+   ],
+   "count": 4,
+   "len_cm": [
+    7.8,
+    14.3
+   ],
+   "r_cm": [
+    1.04,
+    1.69
+   ],
+   "spread_deg": 28,
+   "radius_cm": 2.8,
+   "sink_cm": 1.6,
+   "up_bias": 0.5,
+   "mirror": true
+  },
+  {
+   "name": "shoulder_outer_L",
+   "mats": [
+    "miri_pc_female_dragon_rises_upper_metal_Bip001LShoulder"
+   ],
+   "mats_mirror": [
+    "miri_pc_female_dragon_rises_upper_metal_Bip001RShoulder"
+   ],
+   "point_cm": [
+    34,
+    141,
+    3
+   ],
+   "count": 3,
+   "len_cm": [
+    5.2,
+    9.1
+   ],
+   "r_cm": [
+    0.78,
+    1.23
+   ],
+   "spread_deg": 32,
+   "radius_cm": 2.0,
+   "sink_cm": 1.2,
+   "up_bias": 0.25,
+   "mirror": true
+  },
+  {
+   "name": "shoulder_back_L",
+   "mats": [
+    "miri_pc_female_dragon_rises_upper_metal_Bip001LShoulder"
+   ],
+   "mats_mirror": [
+    "miri_pc_female_dragon_rises_upper_metal_Bip001RShoulder"
+   ],
+   "point_cm": [
+    20,
+    139,
+    13
+   ],
+   "count": 2,
+   "len_cm": [
+    3.9,
+    6.5
+   ],
+   "r_cm": [
+    0.65,
+    0.98
+   ],
+   "spread_deg": 30,
+   "radius_cm": 1.6,
+   "sink_cm": 1.0,
+   "up_bias": 0.3,
+   "mirror": true
+  },
+  {
+   "name": "claw_forearm_R",
+   "mats": [
+    "miul_pc_female_devilhunter_hand_metal"
+   ],
+   "mats_mirror": [
+    "miul_pc_female_devilhunter_hand_metal_mirror"
+   ],
+   "point_cm": [
+    -40,
+    126,
+    3
+   ],
+   "count": 3,
+   "len_cm": [
+    5.2,
+    9.1
+   ],
+   "r_cm": [
+    0.78,
+    1.17
+   ],
+   "spread_deg": 28,
+   "radius_cm": 2.0,
+   "sink_cm": 1.2,
+   "up_bias": 0.3,
+   "mirror": true
+  },
+  {
+   "name": "claw_elbow_R",
+   "mats": [
+    "miul_pc_female_devilhunter_hand_metal"
+   ],
+   "mats_mirror": [
+    "miul_pc_female_devilhunter_hand_metal_mirror"
+   ],
+   "point_cm": [
+    -31,
+    131,
+    8
+   ],
+   "count": 2,
+   "len_cm": [
+    3.9,
+    5.9
+   ],
+   "r_cm": [
+    0.65,
+    0.91
+   ],
+   "spread_deg": 30,
+   "radius_cm": 1.2,
+   "sink_cm": 1.0,
+   "up_bias": 0.3,
+   "mirror": true
+  },
+  {
+   "name": "hip_L",
+   "mats": [
+    "miri_pc_female_dragon_rises_upper_下半身"
+   ],
+   "point_cm": [
+    19,
+    101,
+    1
+   ],
+   "count": 3,
+   "len_cm": [
+    4.5,
+    7.8
+   ],
+   "r_cm": [
+    0.72,
+    1.1
+   ],
+   "spread_deg": 32,
+   "radius_cm": 2.0,
+   "sink_cm": 1.2,
+   "up_bias": 0.15,
+   "mirror": true,
+   "mats_mirror": [
+    "miri_pc_female_dragon_rises_upper_下半身"
+   ]
+  },
+  {
+   "name": "knee_L",
+   "mats": [
+    "vdf_4_Foot_0.1_0_0"
+   ],
+   "point_cm": [
+    9,
+    60,
+    -11
+   ],
+   "dir": [
+    0,
+    0.5,
+    -1
+   ],
+   "count": 2,
+   "len_cm": [
+    3.2,
+    5.2
+   ],
+   "r_cm": [
+    0.52,
+    0.78
+   ],
+   "spread_deg": 28,
+   "radius_cm": 1.2,
+   "sink_cm": 0.8,
+   "mirror": true,
+   "mats_mirror": [
+    "vdf_4_Foot_0.1_0_0"
+   ]
+  },
+  {
+   "name": "crown_horn_L",
+   "mats": [
+    "a08_body2_00_body_mat_頭"
+   ],
+   "bone": "頭",
+   "point_cm": [
+    10,
+    175,
+    1.5
+   ],
+   "dir": [
+    0.35,
+    1,
+    -0.15
+   ],
+   "count": 3,
+   "len_cm": [
+    8.5,
+    13.7
+   ],
+   "r_cm": [
+    0.91,
+    1.43
+   ],
+   "spread_deg": 18,
+   "radius_cm": 1.4,
+   "sink_cm": 1.6,
+   "mirror": true,
+   "mats_mirror": [
+    "a08_body2_00_body_mat_頭"
+   ]
+  },
+  {
+   "name": "crown_front",
+   "mats": [
+    "a08_body2_00_body_mat_頭"
+   ],
+   "bone": "頭",
+   "point_cm": [
+    0,
+    163,
+    -10
+   ],
+   "dir": [
+    0,
+    0.6,
+    -1
+   ],
+   "count": 1,
+   "len_cm": [
+    3.9,
+    4.5
+   ],
+   "r_cm": [
+    0.78,
+    0.91
+   ],
+   "spread_deg": 0,
+   "radius_cm": 0.0,
+   "sink_cm": 1.2,
+   "mirror": false
+  }
+ ]
+}

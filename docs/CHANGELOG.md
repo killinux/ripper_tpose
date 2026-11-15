@@ -771,6 +771,48 @@ python complete_nude.py a02 --follow no          # 补全照旧做法
 - 之后 `D:\roe_exports` 按用户的意思删掉（7.77 GB）。没归档的 75 个运行日志 / 清单先复制到
   `E:\game_export\RiseOfEros\_meta\roe_exports_leftovers_20261114\`；下次 `export_new.py` 会重建这个目录。
 
+## 2026-11-14 — 花木兰·水晶猎龙者 v10：两个 Nexus mod 的零件拼进木兰（黑底橙晶）；mod 转换器的骨架修正；换装插件 0.4.1
+
+**新增**
+
+- v10 = v9 + 怪物猎人世界 Velkhana（Nexus #3318）的水晶头冠、护臂、大腿甲、护腿 / 靴、领口 + 上古卷轴 SE COCO Mulan（#89916）的带角肩甲，
+  全部改成游戏里的黑底橙晶（`scripts/pmx_tools/mulan_dragon_hunter/v2/recolor10.py`：深蓝 V 纹 → 橙色火焰或橙线，冰晶 → 橙晶渐变，白甲 → 黑紫甲 + 细橙边）。
+  成品 `E:\game_export\RiseOfEros\_混搭\仿制_王者荣耀_花木兰_水晶猎龙者\花木兰_水晶猎龙者_仿制v10.pmx` + `textures_v10\` + `v10_preview*.png`
+  + `参考对比_v10.jpg` + 手势舞 mp4。做法：两个 mod 先整套「按体形贴合」搬到 a08 的完整裸体，挑零件后用换装插件
+  `--no-fit --no-rotation --no-follow-body --min-gap 0` 原样移植进 v9（同一副骨架 = 恒等变换）。
+  新脚本 `recolor10.py`、`cut_bone.py`（按挂的骨删面：头冠两侧的长耳坠）、`mat_flags.py`、`mat_shots.py`（一次导入渲多组特写，可隐藏材质比方案）、
+  `probe_mats.py`、`probe_weights.py`。
+
+**修正**
+
+- `scripts/pmx_tools/mod_import/mod3_to_pmx.py`：MHW 骨盆根骨（function 13）原来叫センター、腰甲权重挂在它上面——别的模型的センター不在骨盆
+  （a08 在 43 cm），按骨名搬过去腰甲掉到小腿；脊椎 / 头错一节，胸甲、头冠低 5–27 cm。改成标准 MMD 树（全ての親在地面、新センター无权重、
+  13 → 下半身、1 → 上半身、2 → 上半身2、3 → 首、4 → 頭，关节上的辅助骨把权重交给关节的骨）。
+- `nif_to_pmx.py`：Skyrim 的辅助骨原来全挂センター，改成编号链的上一节或最近的标准骨段；没蒙皮的形状节点不再建骨。
+- 两个转换器的骨都没有尾端，换装插件比不了方向，T 字姿势衣服的手臂零件只被逐段平移：`mod_import/pmxlib.connect_tails()` 补上。
+  归档的 Velkhana / COCO Mulan 的 PMX 和高清 .blend 用修好的转换器重新生成。
+- 换装插件 0.4.1（`scripts/blender_addons/pmx_outfit_transfer/core.py`）：扭转骨按它在臂段上的比例对位（Skyrim 的上臂扭转骨在肩关节、
+  ROE 的在上臂 80 %，COCO 的肩甲被拉到肘部）；不带物理的衣服骨不再按位置吸附到目标的物理骨；挂在「頭」这类标准骨上的衣服不再把供体头发的
+  物理链复制一份。回归：ROE g05 → a08 full 默认设置，0.4 和 0.4.1 的输出顶点 / 面 / 骨 / 刚体 / 关节 / 表情数都相同，165 个顶点（g05 的披帛）挪了不到 1.3 mm，刚体不到 0.24 mm。
+
+## 2026-11-01 — Nexus mod 转 PMX / 高清材质 .blend：怪物猎人世界 .mod3/.tex（Velkhana）和上古卷轴 SE .nif（COCO Mulan），工具 `scripts/pmx_tools/mod_import/`
+
+**新增**
+
+- 用户下了两个 mod（E:\Downloads）要「转成高清材质的 blender，然后衣服加入到木兰的改造中」。`scripts/pmx_tools/mod_import/`：
+  `mhw_tex2dds.py`（MHW .tex → DDS → PNG，头格式和格式号见 README）、`mod3_to_pmx.py`（在 Blender 的 Python 里跑，用 Mod3-MHW-Importer 的
+  解析器读 mod3/mrl3，按 bone function 起 MMD 骨名、按肩 / 脚踝高度缩放、Z 取反、面按法线重定绕向）、`nif_to_pmx.py`（PyNifly 的 pyn 库在普通
+  Python 里读 Skyrim NIF，NPC 骨名 → MMD 名、按髋 / 脚踝缩放）、`pmx_to_hq_blend.py`（mmd_tools 导入 + Principled：NM / RMT / EM、_n / _m，打包、预览）。
+- 归档：`E:\game_export\MonsterHunterWorld\Velkhana_SkimpyER\{pmx,blend}\…`、`E:\game_export\SkyrimSE\COCO_Mulan\{pmx,blend}\…`（各带 preview.png）。
+- 木兰改造（v10）：Velkhana 整套试搬到 a08 上（scratch build10\v4_velk.pmx），贴合只对了一半（胸甲、腰裙没贴上），下次按件 `--no-fit` 搬再改色；
+  COCO Mulan 的金属肩甲 / 领、裙还没搬。
+
+**坑**
+
+- GitHub release zip 用 curl 三次都截断（7z 打不开、zipfile 只能列目录）：换 ghproxy 镜像，下完 `zipfile.testzip()`。
+- Blender 自带 Python 没 PIL、PyPI mathutils 在 3.13 装不上：MHW 解析在 Blender 里跑，贴图转换在外面跑。
+- mmd_tools 导入 PMX 后场景输出格式是动画格式，渲染单帧前要设回 PNG。
+
 ## 2026-11-01 — ELDEN RING 角色 mod → 高清材质 Blender / XPS / PMX（`scripts/eldenring/`，一条命令）；第一个：Nexus 11065「Reika Hardsuit - Gantz」（GANTZ 玲花，带外骨骼 / 不带外骨骼两版）
 
 **新增**
@@ -791,6 +833,90 @@ python complete_nude.py a02 --follow no          # 补全照旧做法
 - 头发贴图几乎是黑的，游戏的毛发着色器把它染成铜橘色：按作者展示动图量出的颜色 `#a95e37` 重新上色（`--tint`）；外骨骼的蓝灯发光也是着色器做的，从贴图的青蓝色区域做自发光。
 - 胸前的长发：`scripts/aion2/hair_chains.py` 只处理垂在背后的头发，生成时把骨架临时转 180°（并放大 100 倍，它按厘米算）。
 - 武器没有游戏的握持数据：刀身沿小指根 → 食指根，刀柄在掌心。
+
+## 2026-11-01 — 仿王者荣耀 花木兰·水晶猎龙者：用手头零件拼的 PMX（v1：Inase 盔甲 + 翼冠、Eve 高马尾、a08 大剑斜背、贴图改色；v2：Vindictus 四套零件补上护胸 / 龙爪 / 鳞甲短裤 / 肩甲，程序生成水晶和水晶剑刃）；配方脚本 `scripts/pmx_tools/mulan_dragon_hunter/`
+
+**新增**
+
+- 用户要一个王者荣耀花木兰·水晶猎龙者的模型。网上没有它的 PMX（模之屋上花木兰只有剑舞者一款，见配方 README 末尾的接口笔记），
+  按用户的话「盔甲可以用 Inase 的，头也可以用 Inase 的」拼了一个：
+  `E:\game_export\RiseOfEros\_混搭\仿制_王者荣耀_花木兰_水晶猎龙者\花木兰_水晶猎龙者_仿制v1.pmx`。
+  - 身体、脸、盔甲、翼冠（当龙角头冠）、裙子物理：Inase `pc_a08_outfit1_hd_裙子碰撞修正`；
+  - 高马尾：星刃 Eve 的两个头发材质，带 37 节头发物理，换装插件按骨骼搬过来；
+  - 大剑：Inase a08 的插地大剑取一把，斜背在背上（`place_sword.py`，骨骼挂到 上半身2）；
+  - 改色（`recolor.py`）：头发黑 → 铂金，盔甲金边 → 橙色水晶色、深色布 → 黑紫、灰板甲 → 深紫，大剑 → 黑紫 + 橙，眼睛 → 粉紫；
+  - `assemble.py`：改过色的贴图顶替原名写进成品，PMX 贴图路径不变。
+  - 附 `参考对比.jpg`（原画 | 正面 | 侧面 | 背面 | 头部）、预览图、手势舞视频；`_混搭\说明.md` 第 0i 节。
+- `scripts/pmx_tools/mulan_dragon_hunter/README.md`：整条配方的命令、改色规则、踩过的坑、和原画的差距。
+
+- **v2（同日下午，用户看过 v1 后「123456都继续改」）**：`花木兰_水晶猎龙者_仿制v2.pmx`（同文件夹，贴图 `textures_v2\`）。
+  - 底座改成 a08 的裸体版 `pc_a08_hd_nude_bustB`（outfit1 的皮肤贴图上画着链子和黑手套，露腰穿帮），翼冠 / 耳饰从 outfit1 按骨骼拆出来搬回去；
+  - 护胸：Vindictus Sanyaa（Dark Knight）黑马甲，`cut_collar.py` 切掉蓝披肩领（离皮肤 > 2 cm 的高处面 + 贴图是蓝色的面）；马甲是镂空网格，
+    `under_plate.py` 从皮肤复制覆盖范围内的面、外推 4 mm 做黑底板（皮肤权重，随胸部物理）；
+  - 龙爪：右手 Vindictus Miul（Devil Hunter）`hand_metal`，左手 Bel（White Shark）刺护腕；裙 / 腿：Bel 刺甲短裤、靴、膝甲；
+    肩甲：Miri（Dragon Rises）`upper_metal` 按骨骼拆开只取肩臂 6 块。四个供体都走换装插件默认贴合（`--donor-body miri_skin_body01 --target-body pc_a01_nk_body`）；
+  - 水晶：`add_crystals.py`，JSON 里每簇一个材质 + 大概位置，吸附到最近顶点、沿法线长六棱碎晶，BDEF1 到该顶点最重的骨骼，可镜像；
+    长在肩甲（顶 / 外缘 / 后缘）、龙爪小臂和肘、护腕、胯、膝、头冠角、额前，胸口一颗粉晶；
+  - 大剑：`crystal_blade.py` 把 a08 剑护手以外的旧刃（PCA 主轴上护手是刃侧最宽的一段）换成渐细的六角水晶刃 + 6 颗碎晶；
+    `place_sword.py` 改成多个材质一起搬；
+  - `recolor2.py`：头发更白的铂金，Miri 金色里最亮的 1/4 → 橙其余 → 黑紫，Bel 白 → 黑紫 / 藏青 → 紫 / 青 → 橙，Sanyaa 蓝花纹 → 暗紫、吊坠 → 粉；
+  - `assemble2.py` 贴图路径存成相对 PMX 的 `textures\`；`参考对比_v2.jpg`、`v2_preview*.png`、v2 手势舞视频；说明.md 0i 加段；
+    配方 `scripts/pmx_tools/mulan_dragon_hunter/v2/README.md`。
+- **v3（同日傍晚，用户「左手也换成龙爪；短裤换成鳞甲裙；水晶做成原画那种不规则大块；龙头剑柄；肩甲的紫色深浅」）**：
+  `花木兰_水晶猎龙者_仿制v3.pmx`（贴图 `textures_v3\`）。左手龙爪 = `mirror_material.py` 在供体上镜像 Miul 的 `hand_metal`
+  （x 取反、绕向翻转、权重换到左右对应骨骼）后两只一起贴合；鳞甲裙 = Miri 连衣裙的裙摆（按骨骼拆开后散在 上半身 / 下半身 / 左足D 三块里，
+  `cut_y.py` 各取 y ≤ 106 cm 的面），下面垫 Sanyaa 的黑短裤；水晶 = `add_crystals.py` 的 `"style": "chunk"`（不等边、鼓肚、错开双顶点的凿形尖，
+  肩 11–19 cm）；龙头 = `crystal_blade.py --remove-guard` 删掉护手，`dragon_hilt.py` 在刃根放样一个低模龙头（头骨 / 上下颌 / 颊鳍 / 双角，
+  眼 / 牙 / 刺是水晶），刃从嘴里出来；肩甲金色暗部 → 黑紫的明度 ×0.36 → ×0.26。`mat_views2.py` 加相机偏移看剑柄
+  （`--cdepth`，不叫 `--cy`：Blender 的 Cycles 启动脚本也 argparse `--` 后面的参数，`--cy` 和 `--cycles-*` 撞成 ambiguous）。
+- **v4（同日晚，用户「继续优化」）**：`花木兰_水晶猎龙者_仿制v4.pmx`（贴图 `textures_v4\`）。剑刃不再是一整块橙板：`crystal_blade.py` 给六角刃画
+  专用贴图（两个宽面 = 发光橙色晶芯、两侧渐暗成晶边，四个斜面黑紫带橙纹），碎晶另成材质；龙头换成真雕刻的：Miri 肩甲顶上有个 4 cm 的龙首装饰，
+  `uv_part.py` 按 UV 矩形把它的 922 个面从肩甲材质里抠出来（`--largest` 只留最大连通块），`place_prop.py` 放大 7 倍按「吻部 = 刃向、头顶 = 刃宽向」
+  摆到刃根，贴图和肩甲同一张所以改色自动跟着；靴子换成 Vindictus（Defying Fate）Fiona PCF_067 的全板甲护胫 + 龙翼膝甲 + 尖头铁靴（供体没身体，
+  `--donor-body-pmx` 指到 Fiona 的裸体 PMX 贴合）；`place_sword.py --centre-x -12` 整把剑右挪 12 cm 让龙头从马尾后露出来；Sanyaa 吊坠在脖子后面
+  那截（像纹身）`cut_y.py --axis z` 切掉；头发再白一点。
+- **v5（同日晚，用户「盔甲还是锐利一点，不要像石头」）**：`花木兰_水晶猎龙者_仿制v5.pmx`（贴图 `textures_v5\`）。像石头的原因：肩甲改色用阈值把
+  带划痕的金鳞切成花斑状橙 / 紫，水晶又是鼓肚的不规则块。改法：`recolor2.metal_smooth` —— 底色暗紫金属、明度跟着模糊后的原亮度走（鳞片形体留下、花斑
+  没了），只有高通超过阈值的鳞片边缘变成橙色亮线（Miri 肩甲 / 龙头、PCF_067 板甲靴都用它）；水晶改 `"style": "sharp"`（细长六棱柱，长 / 半径 ≈ 8，
+  干净的六面尖，贴图加面间明暗差）；`sharpen_materials.py` 给盔甲 / 水晶材质开描边、提高光、加脚本生成的加算球面贴图（第一版太亮整套像塑料，
+  改成只留一个小硬高光）。
+- **v6（同日晚，用户「大小也看看，太大了」）**：`花木兰_水晶猎龙者_仿制v6.pmx`（贴图 `textures_v6\`）。水晶全部缩到 0.65 倍（肩上 8–14 cm、
+  头冠角 9–14 cm、簇半径和埋深 0.8 倍，`crystals_orange6.json` / `crystals_pink6.json`），龙头 7 倍 → 5.5 倍（15 × 22 × 11 cm）。
+- **v7（同日晚，用户给了游戏内 3D 展示视频 BV1iqKTepEDC：「3d效果是这样的，还原成这样的，和图片还是有差别的」）**：
+  `花木兰_水晶猎龙者_仿制v7.pmx`（贴图 `textures_v7\`）。视频下载：yt-dlp 能解析但视频流在 upos-sz-mirrorcosov / akamai 两个 CDN 上都回 HTTP 567
+  （B 站风控页），音频流能下；换成 `upos-sz-mirrorali.bilivideo.com` 同路径 + Referer 视频页 + Range 头，curl 拿到 206（`bili\`）。游戏里的 3D 和原画的差别：
+  全身黑甲（手臂肩到手全包、腿到脚全板甲，只露腰）、肩甲是黑色尖刺款尖端带橙晶、胯部一圈黑板甲裙衬橙色火焰板片、领口橙晶、整体接近黑色。
+  改法：手臂 = Miul `upper_metal` 尖刺臂甲（`mirror_material.py` 镜像到左臂）+ 双龙爪，去掉 Miri 金鳞肩甲（龙头仍从 Miri 肩甲抠）；腿 = PCF_067
+  `4_Lower` 黑板甲裤和板甲靴一起贴合（Fiona 裸体 PMX 做供体身体），Sanyaa 短裤不要了；胸口粉晶换成三颗橙晶；水晶簇改吸附到 Miul 臂甲的刺尖
+  （`crystals_orange7.json`）；Miri 裙摆压得更黑；`recolor2` 的金属底色更暗更灰（base_s 0.38，v 0.07–0.27）。交付里附 `参考_游戏内3D模型.jpg`（视频截帧）。
+- **v8（同日晚，用户「要完全一样，继续改」）**：`花木兰_水晶猎龙者_仿制v8.pmx`（贴图 `textures_v8\`）。按游戏帧放大后的细节：
+  胯部板甲裙 = `tassets.py` 程序生成的 8 片黑板片，每片内嵌橙→黄渐变的火焰形面板，沿腰线皮肤轮廓排一圈、向下外张 12°，前后片挂 下半身、侧片
+  BDEF2 混到 左足D / 右足D（Miri 裙子不要了）；板甲裤 + 板甲靴改成 `--no-fit --min-gap 2` 搬（贴合的皮肤包裹会把膝甲的小片拉碎），a08 比 Fiona 腿粗、
+  脚长会从甲里顶出来 → `hide_skin.py` 把皮肤材质 y < 99 cm（腿和脚）的面删掉，全身甲不需要腿；小腿加橙晶条（`crystals_orange8.json`，膝下两簇）；
+  Eve 马尾 `cut_hair.py` 在 y 92 cm 附近按发丝错落（±8 cm）剪短到腰；Sanyaa 马甲的花纹改成橙色滚边。
+- **v9（同日晚，用户「肩甲也改成黑底橙晶片的样子，继续」）**：`花木兰_水晶猎龙者_仿制v9.pmx`（贴图 `textures_v9\`）。`add_crystals.py` 新样式
+  `"style": "plate"`：六棱柱截面压扁成 2.2 × 0.3 的扁晶片，宽面贴着甲面（薄轴 = 吸附点法线去掉生长方向分量，宽轴 = 两者叉积），尖端朝外上；
+  Miul 黑臂甲上四排晶片（顶 4、中 4、下 3、后 2，`crystals_orange9.json`）叠成鳞状，头冠的角也改成 3 片晶翼。其余同 v8。
+
+**用法**
+
+- 配方 README 里 7 条命令，换零件、换配色改参数即可；三个脚本都是普通 Python。
+
+**原理与兼容**
+
+- 只用了现成工具（挑零件、换装插件）加两个小脚本，没有改插件。换装插件搬头发时要 `--no-fit --no-rotation --no-follow-body --min-gap 0`：
+  身体贴合会把头发按体型差拉变形，朝向对齐会把刘海转到脑后。
+- a08 的「武器」是两把 158 cm 的插地大剑，顶点集中在剑柄：摆放要用包围盒中点当转轴。
+- **mmd_tools 保存 PMX 时用 `os.path.relpath(Texture.path, PMX 所在目录)` 写贴图路径：`Texture.path` 若本身是相对路径，relpath 按当前工作目录算，
+  结果指到别的文件夹，整个模型洋红。要给 `Texture.path` 赋绝对路径再保存。**
+- Sanyaa 马甲的镂空是网格的洞（贴图 alpha 全是 1），补 alpha 没用，要垫底板。
+
+**验证**
+
+- 三个视角和头部近景与原画并排看过：轮廓、发色、配色对得上；静止落体测试最大漂移 2.3 cm，没有超过 3 cm 的链；手势舞头发、裙子、大剑没有炸开。
+- 和原画的差距写在 README 和 说明.md 里：链甲比基尼 vs 板甲护胸、没有龙爪手甲、长布裙 vs 鳞甲短裙、水晶只是颜色。
+- v2：正 / 侧 / 背 / 头部和原画并排（参考对比_v2.jpg）；cloth_check_pmx 49 个动态刚体 0 个歪的盒子、0 个无布料关节；手势舞里头发、
+  鳍、肩甲、龙爪、剑都跟着动没有炸开；preview 四图正常。
 
 ## 2026-10-31 — PMX Head Swap 0.3：脸只是一块面具的头（Genesis 8）也能换，高领身体的脖子不再穿模，骨骼表情修正；例子：星刃 Eve 的 Cooling Suit 换上 Tifa（FF7 AC 18）的头
 
