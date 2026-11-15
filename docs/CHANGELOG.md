@@ -123,7 +123,7 @@ mod 只带了短上衣和丁字裤，头、身体、腿用游戏原版 Venom 的
 | Skin Suit Undressed（#3929） | 1 | 等贴图文件「Bigger Areola」 |
 
 每套：`.blend`（PMX / XPS 由它导出）、`_HQ.blend`（游戏参数的材质）、PMX（26 个 MMD 表情、物理）、XPS、`插件效果_游戏材质对比.jpg`、
-`README.txt`；mod 原件在 `_meta\mod_sources\<mod>\`。画廊 `E:\game_export\StellarBlade\_mod画廊\index.html`（56 张卡片，含之前导过的 8 套）。
+`README.txt`；mod 原件在 `_meta\mod_sources\<mod>\`。画廊 `scripts/stellarblade/nexus_batch/index.html`（链接指向 E 盘存档，和 `scripts/stellarblade/html/index.html` 一样；存档里另有一份 `E:\game_export\StellarBlade\_mod画廊\index.html`），48 套 + 之前导过的 8 套。
 
 **怎么用**：`scripts/stellarblade/nexus_batch/README.md`（`batch.py` → `finish.py archive / sources / registry / hq / addon / readme /
 gallery`；依赖下好后 `add_dep.py`）。

@@ -3,13 +3,16 @@ downloaded to E:\Downloads\eve_mod_download, plus the earlier mod exports) ->
 E:\game_export\StellarBlade\_mod画廊\index.html (+ thumbs\).  Reads the archive only; one card per look with its
 previews, the four formats (Blender, HQ Blender, PMX, XPS), the add-on sheet, the Nexus page and notes.
 
-    python mod_gallery.py --looks <looks.json>      (written by the export batch: label, mod, title, nexus, author,
-                                                    file, notes, waiting)
-Links are relative to the page, so the page works from E: directly (file://) and moves with the archive."""
+    python mod_gallery.py --looks <looks.json> [--out <page>]   (looks.json: written by nexus_batch/finish.py gallery -
+                                                                label, mod, title, nexus, author, file, notes, waiting)
+A page inside the archive links relatively (it moves with the archive); one elsewhere - the repo's
+scripts/stellarblade/nexus_batch/index.html - links by file:///E:/ URLs, as scripts/stellarblade/html/index.html does.
+Thumbnails are written to the archive's _mod画廊\thumbs\ either way (no images in the repo)."""
 import argparse
 import html
 import json
 import os
+import urllib.parse
 
 from PIL import Image
 
@@ -18,7 +21,13 @@ OUT = os.path.join(ARCHIVE, "_mod画廊")
 THUMB_W = 360
 
 
+ABSOLUTE = False       # --out outside the archive (the repo copy, scripts/stellarblade/nexus_batch/index.html): every
+                       # link a file:///E:/... URL, as scripts/stellarblade/html/index.html does; thumbnails stay in the archive
+
+
 def rel(path):
+    if ABSOLUTE:
+        return "file:///" + urllib.parse.quote(os.path.abspath(path).replace("\\", "/"), safe="/:._-()~!$&'*+,;=@")
     return os.path.relpath(path, OUT).replace("\\", "/")
 
 
@@ -29,7 +38,7 @@ def thumb(src, name):
         im = Image.open(src).convert("RGB")
         h = int(im.height * THUMB_W / im.width)
         im.resize((THUMB_W, h), Image.LANCZOS).save(dst, quality=86)
-    return "thumbs/" + name + ".jpg"
+    return rel(dst) if ABSOLUTE else "thumbs/" + name + ".jpg"
 
 
 def card(lk):
@@ -140,36 +149,52 @@ document.getElementById('q').oninput = e => { q = e.target.value.trim().toLowerC
 
 
 def main():
+    global ABSOLUTE
     ap = argparse.ArgumentParser()
     ap.add_argument("--looks", required=True)
     ap.add_argument("--date", default="")
+    ap.add_argument("--out", default=os.path.join(OUT, "index.html"),
+                    help="the page; outside the archive its links are absolute file:///E:/ URLs")
     a = ap.parse_args()
+    page_path = os.path.abspath(a.out)
+    ABSOLUTE = not page_path.lower().startswith(os.path.abspath(ARCHIVE).lower() + os.sep)
     doc = json.load(open(a.looks, encoding="utf-8"))
     os.makedirs(OUT, exist_ok=True)
-    sections, buttons, n_done, n_all = [], [], 0, 0
+    sections, buttons, n_done, n_all, n_mods, n_earlier = [], [], 0, 0, 0, 0
     for mod in doc["mods"]:
         cards = []
         for lk in [x for x in doc["looks"] if x["mod"] == mod["key"]]:
             c, done = card(lk)
             cards.append(c)
-            n_done += done
-            n_all += 1
+            if mod["nexus"]:
+                n_done += done
+                n_all += 1
+            else:
+                n_earlier += 1
         if not cards:
             continue
+        n_mods += bool(mod["nexus"])
         buttons.append('<button data-f="%s">%s</button>' % (html.escape(mod["key"]), html.escape(mod["short"])))
-        sections.append('<section><h2>%s</h2><div class="meta">Nexus <a href="https://www.nexusmods.com/stellarblade/mods/%d">#%d</a>'
-                        ' · 作者 %s · 文件「%s」%s</div><div class="grid">%s</div></section>' % (
-                            html.escape(mod["title"]), mod["nexus"], mod["nexus"], html.escape(mod["author"]),
-                            html.escape(mod["file"]), (" · " + html.escape(mod["note"])) if mod.get("note") else "",
-                            "\n".join(cards)))
+        if mod["nexus"]:
+            meta = 'Nexus <a href="https://www.nexusmods.com/stellarblade/mods/%d">#%d</a> · 作者 %s · 文件「%s」%s' % (
+                mod["nexus"], mod["nexus"], html.escape(mod["author"]), html.escape(mod["file"]),
+                (" · " + html.escape(mod["note"])) if mod.get("note") else "")
+        else:                                       # a group of earlier exports, several mods
+            meta = html.escape(mod.get("note") or "")
+        sections.append('<section><h2>%s</h2><div class="meta">%s</div><div class="grid">%s</div></section>' % (
+            html.escape(mod["title"]), meta, "\n".join(cards)))
+    summary = "%d 个 mod，%d 套造型，已导出 %d 套（灰色的在等下载或还没导）" % (n_mods, n_all, n_done)
+    if n_earlier:
+        summary += "；另有之前导过的 %d 套" % n_earlier
     page = PAGE
-    for k, v in (("summary", html.escape("%d 个 mod，%d 套造型，已导出 %d 套（灰色的在等下载或还没导）" % (
-            len(buttons), n_all, n_done))), ("buttons", "".join(buttons)), ("sections", "\n".join(sections)),
+    for k, v in (("summary", html.escape(summary)), ("buttons", "".join(buttons)), ("sections", "\n".join(sections)),
                  ("date", html.escape(a.date))):
         page = page.replace("%%(%s)s" % k, v)          # not the % operator: the CSS has its own % signs
-    with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as fh:
+    os.makedirs(os.path.dirname(page_path), exist_ok=True)
+    with open(page_path, "w", encoding="utf-8") as fh:
         fh.write(page)
-    print("gallery: %s (%d looks, %d done)" % (os.path.join(OUT, "index.html"), n_all, n_done))
+    print("gallery: %s (%d looks, %d done, %s links)" % (page_path, n_all, n_done,
+                                                         "file:///E:" if ABSOLUTE else "relative"))
 
 
 if __name__ == "__main__":

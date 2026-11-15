@@ -3,6 +3,10 @@
 用户下载的 12 个剑星 mod（`E:\Downloads\eve_mod_download`，只读）→ 48 套造型（每种网格一份）的 Blender、高清 Blender、PMX、XPS，
 外加画廊。做法和踩过的坑见 [`../README.md`](../README.md)「一批 Nexus mod」一节；这里是脚本怎么用。
 
+**画廊**：[`index.html`](index.html)（本文件夹，链接都是 `file:///E:/game_export/...`，和 `../html/index.html` 一样；缩略图在存档的
+`_mod画廊\thumbs\`）。存档里另有一份 `E:\game_export\StellarBlade\_mod画廊\index.html`（相对链接，跟着存档走）。两份都由
+`finish.py gallery ALL_READY` 生成，每导完一批重跑一次。
+
 | 脚本 | 做什么 |
 |---|---|
 | `looks.py` | 48 套的清单：每套的 mod、要放进 staging 的 `.pak/.utoc/.ucas` 文件夹、网格的虚拟路径、换进哪个已归档的原版成品、显示名。缺依赖的套标 `needs`；依赖下好、用 `add_dep.py` 解进 `unzipped\_dep_*\` 后自动并进来 |

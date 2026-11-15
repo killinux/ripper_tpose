@@ -263,10 +263,13 @@ def do_gallery(looks):
     path = os.path.join(ARCHIVE, "_mod画廊", "looks.json")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     json.dump({"mods": mods, "looks": items}, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    r = subprocess.run([sys.executable, os.path.join(SB, "mod_gallery.py"), "--looks", path, "--date",
-                        time.strftime("%Y-%m-%d %H:%M")], capture_output=True, text=True, encoding="utf-8",
-                       errors="replace")
-    print(r.stdout + r.stderr)
+    # two copies: the repo's (this folder's index.html, file:///E:/ links, like scripts/stellarblade/html/index.html)
+    # and the archive's (_mod画廊\index.html, relative links: it moves with the archive); thumbnails in the archive
+    for out in (os.path.join(HERE, "index.html"), os.path.join(ARCHIVE, "_mod画廊", "index.html")):
+        r = subprocess.run([sys.executable, os.path.join(SB, "mod_gallery.py"), "--looks", path, "--out", out,
+                            "--date", time.strftime("%Y-%m-%d %H:%M")], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        print((r.stdout + r.stderr).strip())
 
 
 def main():
