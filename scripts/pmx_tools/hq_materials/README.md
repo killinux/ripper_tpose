@@ -7,6 +7,22 @@
 | `make_hq_materials.py` | 入口：给 PMX 写第一步的 `<名字>_材质.pmx`，和第二步的 ray-mmd 版 |
 | `extract_pbr_blender.py` | 在 Blender 里读 PMX 的源 .blend，找出每个材质的法线 / 粗糙度 / 金属度 / 高光 / 自发光（入口自动调用） |
 | `mmd_drive.py` | 用脚本驱动 MMD 本体：载入模型、ray-mmd、.emm，出图，存 .pmm，记录 MMD / MME 弹出的每个对话框 |
+| `batch_all.py` | 整个归档（`E:\game_export`）的 PMX 一次做完：后台、一次一个、能接着跑，不开 MMD |
+
+## 整批（batch_all.py）
+
+```powershell
+python scripts\pmx_tools\hq_materials\batch_all.py [--games EldenRing,Sekiro] [--skip-games RiseOfEros] [--dry-run] [--limit N]
+```
+
+- 处理归档里所有 PMX，跳过：任何一层以 `_` 开头的文件夹（主题合集的硬链接、`_meta` 备份、`_混搭` 试验、
+  别的窗口管的 `_18系列_ウィンク修正`、输出目录 `_raymmd` 本身）、我们自己的输出（`*_材质.pmx`、`*_raymmd.pmx`）。
+- 一次一个模型，正常优先级（低优先级时会被别的窗口的渲染饿住，像卡死）；模型少的游戏先做。
+- 记账 `E:\game_export\_raymmd\_batch\ledger.jsonl`：每做完一个记一行（带 `make_hq_materials.VERSION`）。
+  中途停了再跑一遍就接着做；改了输出就把 `VERSION` 改掉，旧版本做的会重做。出错的下次重试。
+- 日志在同一个文件夹的 `run_<日期_时间>.log`。
+- 同一个源 .blend 的几个变体（ROE 的 `_bustB`、`_裙子碰撞修正` 等）只读一次 .blend：结果缓存在
+  `E:\game_export\_raymmd\_cache\`。
 
 ## 用法
 

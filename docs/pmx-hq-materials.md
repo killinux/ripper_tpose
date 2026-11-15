@@ -20,7 +20,7 @@ pmx-todo 第 2 项「MMD 里的材质」。2026-11-14 用户选了「两步都�
 
 | 类别 | 高光 / shininess | toon 阴影色 | sphere（加算） | 描边 |
 |---|---|---|---|---|
-| skin 皮肤 | 0.15 / 4 | 偏暖 (0.88, 0.76, 0.73)，过渡最软 | 边缘微光 | 0.4 |
+| skin 皮肤 | 0.15 / 4 | 偏暖 (0.90, 0.81, 0.80)，过渡最软（第一版 (0.88, 0.76, 0.73) 让 TFD 的脸颊发红） | 边缘微光 | 0.4 |
 | hair 头发 | 0.25 / 20 | 偏冷灰 | 上方一条柔光带 | 0.4 |
 | cloth 布 | 0.15 / 4 | 中性灰 | 无 | 0.4 |
 | mixed 半金属 | 0.5 / 8 | 中性灰 | 无（见下面的坑） | 0.4 |
@@ -52,6 +52,9 @@ pmx-todo 第 2 项「MMD 里的材质」。2026-11-14 用户选了「两步都�
    - 名字说是金属、金属度贴图却 < 0.2 → 不当金属（HS2 的战斗服材质叫 `cf_m_bra_meka`，「meka」不是金属）；
    - 有次表面散射 → skin；
    - 粗糙度贴图平均 ≤ 0.3 → glossy。
+   - 名字说是皮肤、贴图里皮肤色却不到 35% → 不当皮肤（皮肤色：色相 0–50° 或 ≥ 340°，饱和度 0.10–0.68，明度 ≥ 0.22，
+     深浅肤色都算，灰黑紧身衣和高饱和的红色乳胶不算）。CCFF7R 的 Aerith 叫「bodyA」的材质是连衣裙加四肢，
+     皮肤色只占 3%，第一版当皮肤，暖色阴影把裙子压暗了，还出了一块白斑（11-14 样品）。
    - **贴图算强证据，节点树里的常数只算弱证据**：好几个转换流程把所有材质的 Metallic 都留成 0，
      那不代表「不是金属」。
 
@@ -89,17 +92,36 @@ sphere 图本身保持不透明 RGB。
 PMX 的源 .blend 里保留着游戏的节点树。我们的 PMX 导出脚本会在 PMX 旁边留下 `*_converted.blend`：mmd_tools 把输出接到
 自己的 MMD shader 上，但原来的 Principled BSDF 还在节点树里。Rise of Eros 的归档 .blend 用的是高清游戏材质。
 
+源 .blend 按顺序试：先试 PMX 旁边的 `*_converted.blend`；如果一半以上的材质在里面找不到 Principled BSDF，就换归档里同角色的
+`blend\<造型>\*.blend`，用找到游戏材质更多的那个。Vindictus: Defying Fate 的 `_converted.blend` 里只剩 MMD 材质，
+第一次整批时 41 个模型全部只能按名字分类，Shiningwill 板甲也被分成了布。改成这样以后，Fiona 的 19 个材质全部从
+`Fiona.blend` 读到了游戏材质，盔甲的金属度是 0.6–0.93（11-15）。
+
 对每个 PMX 材质：
 
-1. 找到它来自哪个 Blender 材质：先比同名；再去掉前缀比（ROE 的 `HQ_`）；最后看哪个材质用了这个 PMX 贴图。
+1. 找到它来自哪个 Blender 材质：先比同名；再去掉前缀比（ROE 的 `HQ_`）；再看哪个材质用了这个 PMX 贴图；
+   最后按贴图名反推：Vindictus 的 PMX 贴图叫 `<游戏材质>_baked.png`（一个材质被两个网格共用时拆成了 `<名字>_<部件>`），
+   去掉 `_baked`，再一段段去掉末尾的 `_词`，直到对上一个游戏材质（和 `scripts/vindictus/pmx_materials.py` 同一个办法）。
 2. 读 Principled BSDF 的 Normal、Roughness、Metallic、Specular、Emission（颜色 × 强度），
    顺带记下 Subsurface、Sheen、Clearcoat、Transmission、Alpha 这几个提示。每个输入分三种情况：
    - 常数 → 直接写数；
    - 一张图通过 PMX 自己的 UV 直接读出来 → 直接引用原图。这张图可以只取一个通道（Separate RGB），
      可以是 1 − x，法线图可以经过「拆通道 → 1 − G → 合通道」把绿通道反过来；
-   - 别的（几张图做运算、Mapping 节点、另一套 UV、节点组、Bump）→ 用 Cycles 在这个材质的 UV 上烘焙一张：
+   - 一张图的一个通道，后面接着几个带常数的逐像素运算（Math 的加减乘除、乘加、乘方、最小最大，Invert，Clamp，
+     线性的 Map Range）→ 记下运算链，在 Python 里照 Blender 的公式算出一张图（`maps\`）。
+     Rise of Eros 就是这样：粗糙度 = 1 − 0.892 × G，金属度 = 0.914 × R，高光 = 0.5 × (0.7 × B + 0.3)。
+     第一版只认 1 − x 和 ×1，ROE 的这三个通道全走了烘焙，一个模型要 4 分钟；现在 20 秒左右，一张都不用烘焙（11-15）。
+   - 法线是「主法线 + 平铺的细节法线」用 Vector Math 混起来的（ROE 的皮肤：身体法线 + 毛孔）：
+     用 PMX 自己 UV 的那张当主法线；经过 Mapping 节点、缩放均匀的那张当 ray-mmd 的子法线（`NORMAL_SUB_MAP`，
+     平铺次数 = 缩放）。混合公式不照搬，ray-mmd 用它自己的方法（reoriented normal mapping）混。
+   - 别的（几张图做运算、另一套 UV、节点组、Bump）→ 用 Cycles 在这个材质的 UV 上烘焙一张：
      标量和颜色接到 Emission 上烘 EMIT，法线烘 NORMAL（切线空间）。
+   - 「PMX 自己的 UV」按材质算：用这个材质的每个物体的当前 UV 名字都算数。ROE 头发的 UV 和身体的名字不一样，
+     第一版只认第一个物体的 UV 名，头发法线就被当成「另一套 UV」去烘焙了。
 3. 打包在 .blend 里的图先写出来（`baked\packed_*`）。
+4. 同一个 .blend 问同样的问题（ROE 的 `_bustB`、`_裙子碰撞修正` 等变体）只问一次：结果按
+   「.blend 路径 + 修改时间 + 材质列表」缓存在 `E:\game_export\_raymmd\_cache\`，图都在第一个变体的文件夹里，
+   别的变体硬链接过去。
 
 ### 换算
 

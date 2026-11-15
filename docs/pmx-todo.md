@@ -7,7 +7,7 @@
 | # | 方向 | 状态 |
 |---|---|---|
 | 1 | 在 MMD 本体里验证 | 待挑 |
-| 2 | MMD 里的材质 | **11-14 开始做**（用户选「两步都做」：按材质类别配 toon / 高光 / sphere / 描边，再加 ray-mmd 高清材质；每个游戏先做一个样品给用户看） |
+| 2 | MMD 里的材质 | **11-15 只做了 Vindictus**（用户定）：Defying Fate 41 个 PMX 两步都做完（`_材质.pmx` + `E:\game_export\_raymmd\Vindictus`）；工具能做整个归档（`batch_all.py`），别的游戏等用户点名 |
 | 3 | 换装 / 换头的后半程 | **10-31 做完**：挑零件、拆开；跨游戏换装（星刃 Eve 的套装 → a08）；跨游戏换头（Eve ↔ a08）。没做：脸只到下巴的模型 |
 | 4 | PMX 覆盖面 | 待挑 |
 | 5 | 表情 | **10-25 做了「表情移植」插件 + FF7 第一批 2 个，等用户看效果** |
@@ -48,6 +48,10 @@
   - 15 个游戏各一个样品，都在 MMD 本体里渲染过：第二步每个样品的所有材质都用上了游戏贴图，MME 零报错。
     本地页 `scripts/pmx_tools/hq_materials/html/MMD材质样品.html`。
   - 用户点头后整批（约 2,000 个 PMX）：两步都在后台跑，不开 MMD；`scene.pmm` 要开 MMD，一个会话连续做。
+- **11-15 只做 Vindictus**：全量整批跑到 51/1911 时用户问清用途后叫停，「只做 Vindictus 的」。
+  Defying Fate 41 个 PMX 全部完成，0 出错（`batch_all.py --games Vindictus`）。
+  这一轮工具补上了 ROE 免烘焙、Vindictus 改读归档里的游戏 .blend、裙子不当皮肤等，见 CHANGELOG 11-15。
+  待用户定：VindictusNA（49 个）做不做；别的游戏已生成的文件留不留；在 MMD 里抽查要等用户方便时开。
 
 ## 3. 换装 / 换头的后半程
 

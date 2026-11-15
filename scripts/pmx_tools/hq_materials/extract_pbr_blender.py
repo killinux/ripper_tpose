@@ -96,6 +96,18 @@ def match_materials(request):
             hits = [mm for mm in used.values() if tex in material_images(mm)]
             if len(hits) == 1:
                 m, how = hits[0], "texture"
+        if m is None and tex:
+            # the PMX texture is "<game material>_baked.png" (Vindictus' build_blend bakes one per material; a
+            # material shared by two meshes was split into "<name>_<part>"): strip the suffix, then trailing words
+            base = re.sub(r"_?baked$", "", os.path.splitext(tex)[0], flags=re.I)
+            while base and m is None:
+                m = by_norm.get(norm(base)) or by_norm.get(norm(base + "_"))
+                if m is None:
+                    if not re.search(r"_[A-Za-z0-9]+$", base):
+                        break
+                    base = base.rsplit("_", 1)[0]
+            if m is not None:
+                how = "texture name"
         out[item["index"]] = (m, how if m is not None else "none")
     return out
 
@@ -113,7 +125,11 @@ def find_principled(tree):
 
 
 def default_uv(tex_node, uv_name):
-    """True when an image node samples the PMX's UV map (no mapping)."""
+    """True when an image node samples the PMX's UV map (no mapping).  ``uv_name`` is the set of UV map names that
+    count as "the" UV of this material: the active UV of every object using it (objects of one model can name it
+    differently - Rise of Eros hair vs body, 11-15) plus ""."""
+    if isinstance(uv_name, str):
+        uv_name = {uv_name, ""}
     v = tex_node.inputs.get("Vector")
     if v is None or not v.is_linked:
         return True
@@ -125,7 +141,7 @@ def default_uv(tex_node, uv_name):
         link = src.inputs[0].links[0]
         src = link.from_node
     if src.type == "UVMAP":
-        return src.uv_map in ("", uv_name)
+        return src.uv_map in uv_name
     if src.type == "TEX_COORD":
         return link.from_socket.name == "UV"
     if src.type == "GROUP" and src.node_tree and "MMDTexUV" in src.node_tree.name:
@@ -169,8 +185,25 @@ def is_one(sock):
     return not sock.is_linked and abs(float(sock.default_value) - 1.0) < 1e-6
 
 
+MATH_OPS = {"ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "MULTIPLY_ADD", "POWER", "MINIMUM", "MAXIMUM"}
+
+
+def _math_step(n):
+    """One Math node with exactly one linked input among the ones its operation uses ->
+    (op tuple, linked socket) or None.  The op is applied by make_hq_materials.apply_ops."""
+    used = n.inputs[:3] if n.operation == "MULTIPLY_ADD" else n.inputs[:2]
+    linked = [k for k, sock in enumerate(used) if sock.is_linked]
+    if len(linked) != 1:
+        return None
+    consts = [0.0 if sock.is_linked else float(sock.default_value) for sock in used]
+    return ("math", n.operation, linked[0], consts, bool(n.use_clamp)), used[linked[0]]
+
+
 def trace_scalar(sock, uv_name, bake_dir):
-    """A float input -> {"kind": "const"|"file", ...} or None (needs a bake)."""
+    """A float input -> {"kind": "const"|"file", ...} or None (needs a bake).  Besides the image channel, a chain of
+    simple per-pixel operations with constants is recorded (Math add / subtract / multiply / divide / multiply-add /
+    power / min / max, Invert, Clamp, linear Map Range) - Rise of Eros writes roughness as 1 - 0.892 x G and
+    metallic as R x 0.914, which needed no Cycles bake (11-15).  ops run from the image outward."""
     if not sock.is_linked:
         v = sock.default_value
         try:
@@ -179,22 +212,27 @@ def trace_scalar(sock, uv_name, bake_dir):
             pass
         return {"kind": "const", "value": float(v)}
     n, out = follow(sock)
-    invert = False
-    for _ in range(8):
-        if n.type == "MATH" and n.operation == "SUBTRACT" and is_one(n.inputs[0]) and n.inputs[1].is_linked:
-            invert = not invert
-            n, out = follow(n.inputs[1])
-        elif n.type == "INVERT" and is_one(n.inputs["Fac"]) and n.inputs["Color"].is_linked:
-            invert = not invert
+    ops = []
+    for _ in range(12):
+        if n.type == "MATH" and n.operation in MATH_OPS:
+            step = _math_step(n)
+            if step is None:
+                return None
+            ops.append(step[0])
+            n, out = follow(step[1])
+        elif n.type == "INVERT" and not n.inputs["Fac"].is_linked and n.inputs["Color"].is_linked:
+            ops.append(("invert", float(n.inputs["Fac"].default_value)))
             n, out = follow(n.inputs["Color"])
-        elif n.type == "MATH" and n.operation == "MULTIPLY" and (is_one(n.inputs[0]) or is_one(n.inputs[1])):
-            other = n.inputs[1] if is_one(n.inputs[0]) else n.inputs[0]
-            if not other.is_linked:
-                break
-            n, out = follow(other)
         elif n.type == "CLAMP" and n.inputs["Value"].is_linked and not n.inputs["Min"].is_linked \
-                and not n.inputs["Max"].is_linked and n.inputs["Min"].default_value <= 0 \
-                and n.inputs["Max"].default_value >= 1:
+                and not n.inputs["Max"].is_linked:
+            ops.append(("clamp", float(n.inputs["Min"].default_value), float(n.inputs["Max"].default_value)))
+            n, out = follow(n.inputs["Value"])
+        elif n.type == "MAP_RANGE" and getattr(n, "data_type", "FLOAT") == "FLOAT" \
+                and n.interpolation_type == "LINEAR" and n.inputs["Value"].is_linked \
+                and not any(n.inputs[k].is_linked for k in ("From Min", "From Max", "To Min", "To Max")):
+            ops.append(("maprange", float(n.inputs["From Min"].default_value),
+                        float(n.inputs["From Max"].default_value), float(n.inputs["To Min"].default_value),
+                        float(n.inputs["To Max"].default_value), bool(n.clamp)))
             n, out = follow(n.inputs["Value"])
         else:
             break
@@ -216,7 +254,14 @@ def trace_scalar(sock, uv_name, bake_dir):
     path = image_file(n.image, bake_dir)
     if not path:
         return None
-    return {"kind": "file", "path": path, "channel": channel, "invert": invert,
+    ops.reverse()
+    invert = False
+    if ops in ([("math", "SUBTRACT", 1, [1.0, 0.0], False)], [("invert", 1.0)],
+               [("math", "MULTIPLY_ADD", 0, [0.0, -1.0, 1.0], False)]):
+        ops, invert = [], True                         # plain 1 - x: the map can still be used as it is
+    elif all(o[0] == "math" and o[1] == "MULTIPLY" and o[3][1 - o[2]] == 1.0 for o in ops):
+        ops = []                                       # x 1
+    return {"kind": "file", "path": path, "channel": channel, "invert": invert, "ops": ops,
             "colorspace": n.image.colorspace_settings.name, "size": list(n.image.size)}
 
 
@@ -236,7 +281,8 @@ def trace_normal(sock, uv_name, bake_dir):
     if not sock.is_linked:
         return {"kind": "none"}
     n, out = follow(sock)
-    if n.type != "NORMAL_MAP" or n.space != "TANGENT" or n.uv_map not in ("", uv_name):
+    uvs = {uv_name, ""} if isinstance(uv_name, str) else uv_name
+    if n.type != "NORMAL_MAP" or n.space != "TANGENT" or n.uv_map not in uvs:
         return None
     strength = n.inputs["Strength"]
     if strength.is_linked or not n.inputs["Color"].is_linked:
@@ -264,6 +310,8 @@ def trace_normal(sock, uv_name, bake_dir):
         if not sep.inputs[0].is_linked:
             return None
         c, cout = follow(sep.inputs[0])
+    if c.type in ("VECT_MATH", "MIX_RGB") or c.bl_idname == "ShaderNodeMix":
+        return detail_blend(c, uv_name, bake_dir, float(strength.default_value))
     if c.type != "TEX_IMAGE" or c.image is None or cout != "Color" or not default_uv(c, uv_name):
         return None
     path = image_file(c.image, bake_dir)
@@ -271,6 +319,55 @@ def trace_normal(sock, uv_name, bake_dir):
         return None
     return {"kind": "file", "path": path, "flip_g": flip, "strength": float(strength.default_value),
             "size": list(c.image.size)}
+
+
+def detail_blend(node, uv_name, bake_dir, strength):
+    """A normal map blended with a tiling detail normal map through Vector Math / Mix nodes (Rise of Eros skin:
+    the body map + a pore map).  Of the images upstream, the one read through the PMX's UV is the main normal map;
+    one read through a Mapping node with a uniform scale becomes ray-mmd's sub normal (NORMAL_SUB_MAP, loop = scale).
+    The blend formula itself is not reproduced - ray-mmd blends the two its own way (reoriented normal mapping)."""
+    seen, queue, mains, details = set(), [node], [], []
+    while queue:
+        n = queue.pop(0)
+        if n.as_pointer() in seen:
+            continue
+        seen.add(n.as_pointer())
+        if n.type == "TEX_IMAGE":
+            if n.image is not None:
+                if default_uv(n, uv_name):
+                    mains.append(n)
+                else:
+                    scale = _mapping_scale(n)
+                    if scale:
+                        details.append((n, scale))
+            continue
+        for sock in n.inputs:
+            if sock.is_linked:
+                queue.append(follow(sock)[0])
+    if not mains:
+        return None
+    main = image_file(mains[0].image, bake_dir)
+    if not main:
+        return None
+    out = {"kind": "file", "path": main, "flip_g": False, "strength": strength, "size": list(mains[0].image.size),
+           "approx": "detail normal blend: main map%s" % (" + sub normal" if details else "")}
+    if details:
+        sub = image_file(details[0][0].image, bake_dir)
+        if sub:
+            out["sub"] = {"path": sub, "loop": details[0][1]}
+    return out
+
+
+def _mapping_scale(tex):
+    """The uniform scale of a Mapping node feeding an image node's vector, else None."""
+    v = tex.inputs.get("Vector")
+    if v is None or not v.is_linked:
+        return None
+    n, _o = follow(v)
+    if n.type != "MAPPING" or n.inputs["Scale"].is_linked:
+        return None
+    sx, sy = n.inputs["Scale"].default_value[0], n.inputs["Scale"].default_value[1]
+    return float(sx) if abs(sx - sy) < 1e-4 and sx > 0 else None
 
 
 def trace_emission(p, uv_name, bake_dir):
@@ -459,11 +556,13 @@ def main():
             continue
         row["hints"] = hints(p)
         ch = row["channels"]
-        ch["normal"] = trace_normal(p.inputs["Normal"], uv_name, bake_dir)
+        uvs = {"", uv_name} | {o.data.uv_layers.active.name for o in meshes
+                               if any(sl.material == mat for sl in o.material_slots) and o.data.uv_layers.active}
+        ch["normal"] = trace_normal(p.inputs["Normal"], uvs, bake_dir)
         for s in SCALARS:
             if s in p.inputs:
-                ch[s.lower()] = trace_scalar(p.inputs[s], uv_name, bake_dir)
-        ch["emission"] = trace_emission(p, uv_name, bake_dir)
+                ch[s.lower()] = trace_scalar(p.inputs[s], uvs, bake_dir)
+        ch["emission"] = trace_emission(p, uvs, bake_dir)
         for k, v in list(ch.items()):
             if v is None:
                 if args["no_bake"]:

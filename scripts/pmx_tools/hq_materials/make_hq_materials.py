@@ -49,13 +49,16 @@ SHARED = "mmd_materials"
 PACK = "ray_mmd"
 D3DX_EXT = (".png", ".jpg", ".jpeg", ".bmp", ".tga", ".dds")
 MARK = "MMD materials by kind + ray-mmd pack (pmx_tools/hq_materials)"
+# bump when the outputs change (batch_all.py redoes files written by an older version)
+VERSION = "2026-11-15b"
 
 # ------------------------------------------------------------------ per-kind values
 # specular / shininess: MMD's Phong highlight (colour added on top); toon: shadow colour of the generated toon ramp
 # (top white -> this colour below the terminator, soft = width of the step); sphere: generated map + mode;
 # edge: edge size (0 = off), the colour is the material's average texture colour darkened.
 DEFAULT_VALUES = {
-    "skin": {"specular": 0.15, "shininess": 4.0, "toon": [0.88, 0.76, 0.73], "soft": 0.24,
+    # skin shadow (0.90, 0.81, 0.80): the first (0.88, 0.76, 0.73) made TFD Viessa's cheeks look flushed (11-14)
+    "skin": {"specular": 0.15, "shininess": 4.0, "toon": [0.90, 0.81, 0.80], "soft": 0.24,
              "sphere": ["skin", "add"], "edge": 0.4},
     "hair": {"specular": 0.25, "shininess": 20.0, "toon": [0.78, 0.76, 0.80], "soft": 0.18,
              "sphere": ["hair", "add"], "edge": 0.4},
@@ -120,6 +123,7 @@ KEYWORDS = [
 # "<mesh file>.fbx_<material>" (Chinese mod packs name materials after the mesh file): only the part after it counts
 MESH_PREFIX = re.compile(r"^.*\.(fbx|obj|dae|pmx|xps|mesh)[_ ]", re.I)
 NAME_ONLY = ("eye_overlay", "lash_brow", "eye", "mouth", "hair", "glass")    # the maps do not overrule these
+SKIN_SHARE_MIN = 0.35      # a material named like skin whose texture is mostly not skin-coloured is not skin
 
 
 # ------------------------------------------------------------------ PMX module
@@ -182,6 +186,47 @@ def srgb_to_linear(v):
     return np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4)
 
 
+def apply_ops(v, ops):
+    """The per-pixel operations extract_pbr_blender recorded between the image and the input (from the image
+    outward): ("math", operation, linked input, constants, clamp), ("invert", fac), ("clamp", lo, hi),
+    ("maprange", from_min, from_max, to_min, to_max, clamp) - Blender's own formulas."""
+    for op in ops or []:
+        kind = op[0]
+        if kind == "math":
+            _k, operation, k, consts, clamp = op
+            args = [np.full_like(v, c) for c in consts]
+            args[k] = v
+            a0, a1 = args[0], args[1]
+            if operation == "ADD":
+                v = a0 + a1
+            elif operation == "SUBTRACT":
+                v = a0 - a1
+            elif operation == "MULTIPLY":
+                v = a0 * a1
+            elif operation == "DIVIDE":
+                v = np.where(a1 != 0, a0 / np.where(a1 != 0, a1, 1), 0)
+            elif operation == "MULTIPLY_ADD":
+                v = a0 * a1 + args[2]
+            elif operation == "POWER":
+                v = np.power(np.maximum(a0, 0), a1)
+            elif operation == "MINIMUM":
+                v = np.minimum(a0, a1)
+            elif operation == "MAXIMUM":
+                v = np.maximum(a0, a1)
+            if clamp:
+                v = np.clip(v, 0, 1)
+        elif kind == "invert":
+            v = v * (1 - op[1]) + (1 - v) * op[1]
+        elif kind == "clamp":
+            v = np.clip(v, op[1], op[2])
+        elif kind == "maprange":
+            fmin, fmax, tmin, tmax, clamp = op[1:]
+            v = tmin + (v - fmin) / ((fmax - fmin) or 1e-9) * (tmax - tmin)
+            if clamp:
+                v = np.clip(v, min(tmin, tmax), max(tmin, tmax))
+    return v
+
+
 def channel_array(desc, size):
     """A channel descriptor from extract_pbr_blender -> float array (size[1], size[0]) as Blender reads it."""
     im = read_image(desc.get("path"))
@@ -197,6 +242,7 @@ def channel_array(desc, size):
         v = a[..., int(ch)]
     if desc.get("colorspace") == "sRGB" and ch != 3:
         v = srgb_to_linear(v)
+    v = apply_ops(v, desc.get("ops"))
     if desc.get("invert"):
         v = 1.0 - v
     return v
@@ -236,6 +282,11 @@ def classify(name, texture, stats, hints):
     if by_name in NAME_ONLY:
         return by_name, reasons
     st = stats or {}
+    share = st.get("skin_share")
+    if by_name == "skin" and share is not None and share < SKIN_SHARE_MIN:
+        # CCFF7R Aerith's "bodyA" is her dress and limbs on one texture: the skin toon darkened the dress (11-14)
+        by_name = None
+        reasons.append("名字是皮肤，但贴图里皮肤色只占 %.0f%%" % (100 * share))
     src = st.get("source", {})
     if st.get("emission_share", 0) >= 0.5:
         return "emissive", reasons + ["emission over %.0f%% of it" % (100 * st["emission_share"])]
@@ -340,8 +391,25 @@ def shared_images(folder, values):
 # ------------------------------------------------------------------ source .blend
 
 def find_source_blend(path, explicit=None):
+    c = source_blends(path, explicit)
+    return c[0] if c else None
+
+
+def source_blends(path, explicit=None):
+    """Candidate source .blend files, best first: the exporter's <stem>_converted.blend next to the PMX, then the
+    archive's <Game>/<Character>/blend/<model>/*.blend.  The first one whose materials still hold the game's
+    Principled BSDF wins (process() tries the next when most materials have none - Vindictus: Defying Fate's
+    converted .blend only has MMD materials, its game materials are in the archive .blend, 11-15)."""
     if explicit:
-        return explicit
+        return [explicit]
+    out = []
+    for c in (_converted_blend(path), _archive_blend(path)):
+        if c and c not in out:
+            out.append(c)
+    return out
+
+
+def _converted_blend(path):
     folder, stem = os.path.dirname(path), os.path.splitext(os.path.basename(path))[0]
     s = stem
     while True:
@@ -354,6 +422,11 @@ def find_source_blend(path, explicit=None):
     hits = sorted(glob.glob(os.path.join(folder, "*_converted.blend")))
     if len(hits) == 1:
         return hits[0]
+    return None
+
+
+def _archive_blend(path):
+    folder = os.path.dirname(os.path.abspath(path))
     parts = os.path.normpath(folder).split(os.sep)
     if len(parts) >= 3 and parts[-2].lower() == "pmx":
         blend_dir = os.path.join(os.sep.join(parts[:-2]), "blend", parts[-1])
@@ -364,11 +437,23 @@ def find_source_blend(path, explicit=None):
     return None
 
 
-def run_extract(blend, model, work, bake_dir, blender, log):
+def run_extract(blend, model, work, bake_dir, blender, log, cache_dir=None):
     request = {"materials": [{"index": i, "name": m.name,
                               "texture": os.path.basename(tex_path(model, m.texture) or "")}
                              for i, m in enumerate(model.materials)],
                "strip_prefixes": ["HQ_"]}
+    # variants of one model (ROE _bustB / _裙子碰撞修正 ...) ask the same .blend the same question: answer once
+    key = hashlib.sha1(json.dumps([os.path.abspath(blend), os.path.getmtime(blend), request],
+                                  ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
+    cached = os.path.join(cache_dir, key + ".json") if cache_dir else None
+    if cached and os.path.isfile(cached):
+        result = json.load(open(cached, encoding="utf-8"))
+        paths = [v.get("path") for r in result["materials"] for v in r["channels"].values() if v.get("path")]
+        if all(os.path.isfile(x) for x in paths):
+            shutil.copyfile(cached, os.path.join(work, "extract.json"))
+            with open(log, "w", encoding="utf-8") as f:
+                f.write("from cache %s\n" % cached)
+            return result
     req = os.path.join(work, "request.json")
     out = os.path.join(work, "extract.json")
     with open(req, "w", encoding="utf-8") as f:
@@ -381,6 +466,9 @@ def run_extract(blend, model, work, bake_dir, blender, log):
         f.write(text)
     if not os.path.isfile(out):
         raise RuntimeError("extract_pbr_blender failed (see %s)" % log)
+    if cached:
+        os.makedirs(cache_dir, exist_ok=True)
+        shutil.copyfile(out, cached)
     return json.load(open(out, encoding="utf-8"))
 
 
@@ -423,6 +511,21 @@ def measure(model, extract, size=512):
         out[i] = st
         start += n
     return out
+
+
+def skin_share(model, mat, start, n, size=256):
+    """Share of the material's UV area whose texture colour looks like skin (hue 0-50 deg or >= 340, saturation
+    0.10-0.68, value >= 0.22: light to dark skin, not grey / black suits, not saturated red latex)."""
+    im = read_image(tex_path(model, mat.texture))
+    if im is None:
+        return None
+    hsv = np.asarray(im.convert("RGB").resize((size, size)).convert("HSV"), dtype=np.float32) / 255.0
+    mask = coverage(model, start, n, (size, size))
+    if not mask.any():
+        return None
+    h, sat, val = hsv[..., 0] * 360, hsv[..., 1], hsv[..., 2]
+    skin = ((h <= 50) | (h >= 340)) & (sat >= 0.10) & (sat <= 0.68) & (val >= 0.22)
+    return float(skin[mask].mean())
 
 
 def cutout_share(model, mat, start, n, size=256):
@@ -592,7 +695,7 @@ class Pack:
             a = np.asarray(im.convert("RGB"), dtype=np.int16)
             grey = np.abs(a[..., 0] - a[..., 1]).max() <= 2 and np.abs(a[..., 0] - a[..., 2]).max() <= 2
             ch = 0 if grey else None
-        if ch is not None and ok_format and d.get("colorspace") != "sRGB":
+        if ch is not None and ok_format and d.get("colorspace") != "sRGB" and not d.get("ops"):
             return self.link(path), int(ch), bool(d.get("invert"))
         key = "%s_%s_%s" % (ascii_slug(os.path.splitext(os.path.basename(path))[0]), kind,
                             hashlib.md5(json.dumps(d, sort_keys=True).encode()).hexdigest()[:6])
@@ -649,6 +752,13 @@ class Pack:
         ch = (row or {}).get("channels") or {}
         # normal
         nm = self.normal_map(ch.get("normal") or {})
+        sub = (ch.get("normal") or {}).get("sub")
+        if nm and sub and os.path.isfile(sub["path"]):
+            # a detail normal map tiled over the main one (extract_pbr_blender.detail_blend)
+            t = set_define(t, "NORMAL_SUB_MAP_FROM", 1)
+            t = set_define(t, "NORMAL_SUB_MAP_FILE", '"%s"' % self.link(sub["path"]))
+            t = set_const(t, "normalSubMapLoopNum", "%.3f" % float(sub["loop"]))
+            notes.append("sub normal x%g" % float(sub["loop"]))
         if nm:
             t = set_define(t, "NORMAL_MAP_FROM", 1)
             t = set_define(t, "NORMAL_MAP_FILE", '"%s"' % nm[0])
@@ -834,12 +944,33 @@ In MMD (MME + ray-mmd installed):
 
 # ------------------------------------------------------------------ main
 
+def is_done(path, args):
+    """Both layers written after the PMX last changed (for resuming a batch)."""
+    t = os.path.getmtime(path)
+    stem = os.path.splitext(path)[0]
+    ok = True
+    if "1" in args.steps:
+        out = stem + args.suffix + ".pmx"
+        ok = ok and os.path.isfile(out) and os.path.getmtime(out) >= t
+    if "2" in args.steps:
+        try:
+            emm = os.path.join(raymmd_dir(path, args.raymmd_root), "scene.emm")
+        except RuntimeError:
+            return False
+        ok = ok and os.path.isfile(emm) and os.path.getmtime(emm) >= t
+    return ok
+
+
 def process(path, args, values):
     folder = os.path.dirname(os.path.abspath(path))
     stem = os.path.splitext(os.path.basename(path))[0]
     res = {"file": path}
+    if args.skip_done and is_done(path, args):
+        res["skipped"] = "done before"
+        return res
     model = pmx.load(path)
-    blend = find_source_blend(path, args.blend)
+    blends = source_blends(path, args.blend)
+    blend = blends[0] if blends else None
     res["blend"] = blend
     work = tempfile.mkdtemp(prefix="hqmat_")
     mirror = raymmd_dir(path, args.raymmd_root) if "2" in args.steps else None
@@ -850,11 +981,40 @@ def process(path, args, values):
             res["extract"] = "dry run"
         else:
             os.makedirs(os.path.join(pack_dir, "baked"), exist_ok=True)
-            extract = run_extract(blend, model, work, os.path.join(pack_dir, "baked"), args.blender,
-                                  os.path.join(work, "extract.log"))
+            cache_dir = os.path.join(os.path.dirname(os.path.dirname(mirror)), "_cache") if mirror else None
+
+            def score(ex):
+                return sum(1 for r in ex["materials"] if r.get("blend_material")
+                           and "no Principled" not in (r.get("match") or ""))
+            tries = []
+            for k, cand in enumerate(blends):
+                wk = os.path.join(work, "try%d" % k)
+                os.makedirs(wk, exist_ok=True)
+                ex = run_extract(cand, model, wk, os.path.join(pack_dir, "baked"), args.blender,
+                                 os.path.join(wk, "extract.log"), cache_dir)
+                tries.append((score(ex), k, cand, ex, wk))
+                if score(ex) >= 0.5 * len(model.materials):
+                    break
+            best = max(tries, key=lambda t: (t[0], -t[1]))
+            extract, blend = best[3], best[2]
+            for name in ("extract.json", "extract.log"):
+                if os.path.isfile(os.path.join(best[4], name)):
+                    shutil.copyfile(os.path.join(best[4], name), os.path.join(work, name))
+            res["blend"] = blend
+            if len(tries) > 1:
+                res["blend_tries"] = [{"blend": t[2], "game_materials": t[0]} for t in tries]
             res["extract"] = {"matched": sum(1 for r in extract["materials"] if r.get("blend_material")),
                               "materials": len(extract["materials"])}
     stats = measure(model, extract)
+    start = 0
+    for i, mat in enumerate(model.materials):                     # skin-coloured share for materials named skin
+        n = mat.vertex_count // 3
+        nm = MESH_PREFIX.sub("", mat.name).lower() + " " + os.path.basename(tex_path(model, mat.texture) or "").lower()
+        if re.search(dict(KEYWORDS)["skin"], nm):
+            share = skin_share(model, mat, start, n)
+            if share is not None:
+                stats.setdefault(i, {})["skin_share"] = share
+        start += n
     rows = {r["index"]: r for r in (extract or {}).get("materials", [])}
     classes = []
     for i, mat in enumerate(model.materials):
@@ -891,7 +1051,7 @@ def process(path, args, values):
         with open(os.path.join(mirror, "README.txt"), "w", encoding="utf-8-sig", newline="\r\n") as f:
             f.write(README_TXT.format(source=os.path.abspath(path), how=how))
         with open(os.path.join(pack_dir, "pack.json"), "w", encoding="utf-8") as f:
-            json.dump({"source": os.path.abspath(path), "materials": [m.name for m in model.materials],
+            json.dump({"version": VERSION, "source": os.path.abspath(path), "materials": [m.name for m in model.materials],
                        "classes": [c["class"] for c in classes], "blend": blend, "fx": fx_names, "notes": notes,
                        "ray_mmd": args.ray_mmd, "model": how}, f, ensure_ascii=False, indent=1)
         res["raymmd_dir"] = mirror
@@ -905,9 +1065,20 @@ def process(path, args, values):
     return res
 
 
-def main():
+def parse_args(argv=None):
+    """(args, values) - used by main() and by batch_all.py."""
+    ap = build_parser()
+    args = ap.parse_args(argv)
+    values = json.loads(json.dumps(DEFAULT_VALUES))
+    if args.values:
+        for cls, over in json.load(open(args.values, encoding="utf-8")).items():
+            values.setdefault(cls, {}).update(over)
+    return args, values
+
+
+def build_parser():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("inputs", nargs="+")
+    ap.add_argument("inputs", nargs="*")
     ap.add_argument("--blend", help="the PMX's source .blend (default: found next to it)")
     ap.add_argument("--suffix", default=SUFFIX)
     ap.add_argument("--steps", default="1,2", help="1 = MMD toon / sphere / specular / edge, 2 = ray-mmd pack")
@@ -919,12 +1090,16 @@ def main():
     ap.add_argument("--ray-mmd", default=RAY_MMD)
     ap.add_argument("--raymmd-root", help="ASCII folder for the ray-mmd versions (default: <archive>\\_raymmd\\<Game>)")
     ap.add_argument("--report")
-    args = ap.parse_args()
-    values = json.loads(json.dumps(DEFAULT_VALUES))
-    if args.values:
-        for cls, over in json.load(open(args.values, encoding="utf-8")).items():
-            values.setdefault(cls, {}).update(over)
+    ap.add_argument("--skip-done", action="store_true", help="skip PMX whose outputs are newer than the PMX")
+    ap.add_argument("--list", help="a text file with one PMX path per line (instead of / besides the inputs)")
+    return ap
+
+
+def main():
+    args, values = parse_args()
     files = []
+    if args.list:
+        files += [l.strip() for l in open(args.list, encoding="utf-8-sig") if l.strip()]
     for p in args.inputs:
         if os.path.isdir(p):
             files += [f for f in sorted(glob.glob(os.path.join(p, "**", "*.pmx"), recursive=True))
@@ -940,6 +1115,9 @@ def main():
         results.append(r)
         if "error" in r:
             print("ERROR %s: %s" % (f, r["error"]), flush=True)
+            continue
+        if r.get("skipped"):
+            print("skip %s (%s)" % (f, r["skipped"]), flush=True)
             continue
         kinds = {}
         for m in r["materials"]:

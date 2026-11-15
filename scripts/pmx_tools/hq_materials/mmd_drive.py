@@ -320,6 +320,49 @@ def compare(original, prefix, step1=None, raymmd_dir=None, size=(1200, 1800), bg
     return outs, m.events, info
 
 
+def compare_many(items, size=(1200, 1800), bg=None, exe=MMD_EXE, ray_mmd=RAY_MMD):
+    """compare() for many models in ONE MMD session (the window pops up once; the user asked why every sample
+    opened its own MMD, 11-14): first the plain-MMD renders of every model (load, render, delete), then ray.x and
+    the skybox once and every ray-mmd version (load, scene.emm, render, delete).
+    items: [(prefix, original, step1 or None, raymmd_dir or None)] -> ({prefix: {variant: png}}, {prefix: info},
+    {prefix: [events]})."""
+    outs, info, events = {}, {}, {}
+    m = MMD(exe)
+    try:
+        m.screen_size(*size)
+        if bg:
+            m.background(bg)
+        for prefix, original, step1, _rd in items:
+            outs.setdefault(prefix, {})
+            for key, pmx in (("original", original), ("step1", step1)):
+                if pmx:
+                    n0 = len(m.events)
+                    m.load_model(pmx)
+                    m.idle(settle=4, label="settle " + key)
+                    if m.render_picture("%s_%s.png" % (prefix, key)):
+                        outs[prefix][key] = os.path.abspath("%s_%s.png" % (prefix, key))
+                    m.delete_model()
+                    events.setdefault(prefix, []).extend(m.events[n0:])
+        if any(rd for *_x, rd in items):
+            m.ray(ray_mmd)
+            for prefix, _o, _s, rd in items:
+                if not rd:
+                    continue
+                n0 = len(m.events)
+                m.load_model(os.path.join(rd, "model.pmx"))
+                rows = m.load_emm(os.path.join(rd, "scene.emm"))
+                info[prefix] = {"subsets_assigned": assigned(rows, os.path.join(rd, "fx")),
+                                "subsets": sum(1 for name, _fx in rows if name.strip().startswith("|--"))}
+                m.idle(settle=8, label="settle ray")
+                if m.render_picture(prefix + "_raymmd.png"):
+                    outs[prefix]["raymmd"] = os.path.abspath(prefix + "_raymmd.png")
+                m.delete_model()
+                events.setdefault(prefix, []).extend(m.events[n0:])
+    finally:
+        m.close()
+    return outs, info, events
+
+
 def save_scenes(raymmd_dirs, exe=MMD_EXE, ray_mmd=RAY_MMD):
     """<dir>\\scene.pmm for every dir, in ONE MMD session: ray.x + Helipad skybox loaded once, then per model
     load model.pmx, open scene.emm, File > Save As scene.pmm (MME writes the matching scene.emm next to it and reads

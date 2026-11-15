@@ -14,6 +14,40 @@
 
 ---
 
+## 2026-11-15 — 高清材质：按用户决定只做 Vindictus（Defying Fate 41 个 PMX 完成）；工具补上 ROE 免烘焙、Vindictus 读游戏 .blend、整批脚本
+
+接 11-14 的 pmx-todo 第 2 项（`docs/pmx-hq-materials.md`）。
+
+**用户的决定**：全量整批（1,911 个 PMX）跑到第 51 个时，用户问清用途后叫停，改成只做 Vindictus。
+`E:\game_export\Vindictus` 的 41 个 PMX 全部完成，0 个出错，用时 29 分钟，全程没开 MMD：
+每个模型旁边一个 `_材质.pmx`，`E:\game_export\_raymmd\Vindictus\` 下 41 个 ray-mmd 文件夹（`scene.emm`）。
+VindictusNA 要不要做、别的游戏已经生成的文件留不留，等用户定。
+
+**改进（都写进了工具和文档）**
+
+- 贴图通道后面接着带常数的运算（Math 的加减乘除、乘加、乘方、最小最大，Invert，Clamp，线性 Map Range）时，
+  记下运算链在 Python 里算成图，不再走 Cycles 烘焙。ROE 的粗糙度 = 1 − 0.892 × G、金属度 = 0.914 × R、
+  高光 = 0.5 × (0.7 × B + 0.3) 都是这种，一个模型从 251 秒降到 22 秒，一张不烘。
+- 「主法线 + 平铺细节法线」的混合：主法线照用，细节那张写成 ray-mmd 的子法线（`NORMAL_SUB_MAP`，平铺次数 = Mapping 缩放）。
+- 「PMX 自己的 UV」按材质算：ROE 头发的 UV 名和身体不同，之前头发法线被误送去烘焙。
+- 源 .blend 依次试：`_converted.blend` 里一半以上材质没有 Principled BSDF 时，换归档 `blend\<造型>\*.blend`。
+  Vindictus DF 就是这种：`_converted.blend` 里只剩 MMD 材质，第一次整批 41 个模型全按名字分类，板甲也成了布。
+  PMX 贴图叫 `<游戏材质>_baked.png`，按名字反推游戏材质。现在 Fiona 19/19 个材质读到游戏材质，盔甲金属度 0.6–0.93。
+- 名字是皮肤、贴图里皮肤色却不到 35% 的不当皮肤（CCFF7R Aerith 的「bodyA」是连衣裙 + 四肢，皮肤色 3%）。
+- 皮肤 toon 阴影改成 (0.90, 0.81, 0.80)：原来的 (0.88, 0.76, 0.73) 让 TFD Viessa 脸颊发红。
+- 同一个 .blend 的变体（ROE `_bustB` 等）只提取一次，结果缓存在 `E:\game_export\_raymmd\_cache\`。
+- 新 `batch_all.py`：整个归档一次做完，后台、一次一个、正常优先级。跳过所有 `_` 开头的文件夹
+  （合集、`_meta` 备份、`_混搭`、别的窗口管的 `_18系列`）。记账 `E:\game_export\_raymmd\_batch\ledger.jsonl`，
+  中断后接着做，换了 `VERSION` 就重做。`--games` 只做某几个游戏。
+- `mmd_drive.py`：`compare_many` 在一个 MMD 里连续出多个模型的对比图（用户问为什么每个都开一次 MMD）。
+  出图尺寸对话框按标题等待，有一次被别的框抢了，出了 640×360。新增 `open_pmm`，先处理「change point not preserved」确认框。
+
+**验证**：Vindictus 41/41 完成；分类合计金属 108、布 104、皮肤 144、光泽 20、半金属 16。
+CCFF7R、TFD 的修正已用工具重算确认（bodyA 皮肤色 3% → 布；TFD 脸仍是皮肤）。
+这一轮的改动还没在 MMD 里看：用户要求先别开 MMD，等用户方便时在一个 MMD 里抽查。
+
+---
+
 ## 2026-11-14 — 剑星：Vindictus Demon Maiden（Nexus 1807，CNS 服装）样品：Blender / XPS / PMX / 高清 .blend，「剑星游戏材质」插件 20 个材质全部换得上；mod 高清脚本支持 swap_mod_mesh 成品（`_mod` 材质名）、根目录放文件的 zip，父材质的皮肤遮罩按法线相关性判断能不能直接用
 
 **新增 / 修复**
