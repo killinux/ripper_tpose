@@ -14,6 +14,38 @@
 
 ---
 
+## 2026-11-15 — 毒液合集画廊：`E:\game_export\_毒液合集`
+
+用户：「这些毒液导出的模型也做成画廊」。照 GANTZ 合集的做法，用 `scripts/archive/make_collection.py` 加一份清单
+`collections/venom.json`。
+
+**内容**：5 个来源、6 个模型，都有 blend / XPS / PMX。
+
+| 来源 | 模型 |
+|---|---|
+| Marvel Heroes Omega #369 | Gwenom |
+| 生化危机 3 重制版 #1424 | 蓝色 She-Venom Jill |
+| 生化危机 3 重制版 #1561 | 黑色版 + Damage 版 |
+| Marvel Rivals #6188 | She-Venom，替身版 |
+| HS2 Studio 道具 | Fouetty 的 Venom |
+
+- 227 个文件硬链接进合集，1.16 GB，不占额外空间；
+- 每节写游戏、作者、发布日期、下载的文件、怎么转的、缺什么（发帽、替身颜色、成人向）；
+- Nexus 的 4 张作者预览图放在 `D:\venom_collection_src\nexus\`，是公开地址，不用登录。
+
+**`make_collection.py` 两个新功能**（GANTZ 合集重跑也能用）：
+
+- `"thumb_top": f`：预览图下面还有一排特写的（marvelrivals / re_engine / marvelheroes 的预览是上排 4 个全身、下排 4 个头部特写，
+  2640×1560），缩略图只留上面 f 的高度；
+- 目录里的检查视频（`*.mp4`，比如 PMX 的 `_check\dance.mp4`）在卡片上加「▶ 舞蹈」链接。
+
+**用户怎么用**：浏览器打开 `E:\game_export\_毒液合集\index.html`；以后再导了毒液 mod，在 `collections/venom.json` 加一节，重跑
+`python scripts\archive\make_collection.py collections\venom.json`。
+
+**验证**：无头 Edge 截图检查过页面：缩略图是正面全身，6 个模型各有 PMX / XPS / BLEND 和舞蹈链接，来源图和说明都在。
+
+---
+
 ## 2026-11-15 — She-Venom（Marvel Rivals）先出替身版；`ue_mannequin` 修脚趾和胸骨；SDEF 前后对比视频
 
 用户打开 `E:\game_export\MarvelRivals\Venom\blend\She-Venom_6188`，说「没有材质」。那是半成品测试：

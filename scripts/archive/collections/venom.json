@@ -1,0 +1,94 @@
+{
+ "title": "毒液合集",
+ "out": "E:/game_export/_毒液合集",
+ "root": "E:/game_export",
+ "source_images": "D:/venom_collection_src",
+ "intro": "几个游戏里毒液（共生体）主题的 mod 转成的 Blender（.blend）、XPS、MMD（.pmx）。每个来源一个文件夹，里面按 blend / xps / pmx 分开；文件和游戏归档目录（E:\\game_export\\<游戏>\\）里的是同一个文件（硬链接），不占额外空间——在这里改文件，就是在改归档里那一份。卡片上的「▶ 舞蹈」是用默认测试动作（瓦雷莎手势舞）渲的 PMX 检查视频。",
+ "footer": "由 scripts/archive/make_collection.py collections/venom.json 生成。mod 的版权归原作者，只供个人使用，转发请注明原作者和出处。",
+ "sections": [
+  {
+   "dir": "01_MarvelHeroes_Gwenom_mod369",
+   "short": "MHO Gwenom #369",
+   "game": "Marvel Heroes Omega",
+   "title": "Gwenom - Contest of Champions",
+   "source": {
+    "site": "Nexus Mods #369",
+    "url": "https://www.nexusmods.com/marvelheroesomega/mods/369",
+    "author": "MysticalBlock55",
+    "date": "2026-09-10",
+    "files": ["Gwenom Contest Of Champions 369 1.1 2026-09-10T17-12Z cFcgERS9L.zip"],
+    "picture": "nexus/369-1789060064-1012401530.png"
+   },
+   "converted": "2026-11-15，scripts/marvelheroes：本机没有游戏本体，mod 的 .upk 自带模型和贴图，用自己写的 UE3 读取器转（UE Viewer 不支持这个游戏）；PMX / XPS 用 scripts/pmx_tools/biped_pmx（骨骼映射 mho）。当晚修正过骨骼旋转后重新导出。",
+   "notes": "把 Marvel Contest of Champions 的 Gwenom 移植进游戏，替换 Spider-Gwen 的服装。两只手背上的白色贴片是贴图本身的图案。包里 Spider-Gwen 的 354 个游戏动作没转。归档里另有 PSK（psk\\ 目录，不在合集里）。",
+   "models": [{"glob": "MarvelHeroesOmega/Gwenom/*/Gwenom", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "02_生化危机3_Jill_mod1424",
+   "short": "RE3 Jill #1424",
+   "game": "生化危机 3 重制版（Resident Evil 3, 2020）",
+   "title": "She Venom Lethal and Sex Jill (Non RT)",
+   "source": {
+    "site": "Nexus Mods #1424",
+    "url": "https://www.nexusmods.com/residentevil32020/mods/1424",
+    "author": "GeminiAspros",
+    "date": "2026-10-03（更新身体的版本）",
+    "files": ["She Venom Sex And Lethal Jill Update body version 1424 1 2026-10-03T23-12Z lc5DoLk5D.zip"],
+    "picture": "nexus/1424-1791068871-1457296749.png"
+   },
+   "converted": "2026-11-15，scripts/re_engine：本机没有游戏本体，转的是 mod 自带的部分（RE Mesh Editor 在 Blender 4.5 导入，Blender 3.6 按 RE 的贴图绑定重建材质）；PMX / XPS 用 biped_pmx（骨骼映射 re_engine）。",
+   "notes": "蓝色共生体身体，脸上有共生体纹路（成人向）。头发贴图在游戏的 pak 里，mod 没带，头发是纯色的棕色发帽；作者压成隐藏三角形的装备已去掉；脸上的表情骨并进了头，PMX 没有表情。",
+   "models": [{"glob": "ResidentEvil3/Jill/*/SheVenom_Jill_1424", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "03_生化危机3_Jill_mod1561",
+   "short": "RE3 Jill Black #1561",
+   "game": "生化危机 3 重制版（Resident Evil 3, 2020）",
+   "title": "She Venom Lethal and Sex Jill Black Version (NON RT)",
+   "source": {
+    "site": "Nexus Mods #1561",
+    "url": "https://www.nexusmods.com/residentevil32020/mods/1561",
+    "author": "GeminiAspros",
+    "date": "2026-09-25",
+    "files": ["She Venom Sex And Lethal Jill Black 1561 1 2026-09-25T14-37Z rx9SyBwf6.zip"],
+    "picture": "nexus/1561-1790346965-1559277161.png"
+   },
+   "converted": "2026-11-15，scripts/re_engine，同上。压缩包里有两个 mod 文件夹，各出一套。",
+   "notes": "黑色毒液战衣加白色蜘蛛标志；Damage 版是破损的共生体，露出皮肤（成人向）。作者说这一版还没有毒液的面具 / 脸。头发同样是纯色发帽。",
+   "models": [{"glob": "ResidentEvil3/Jill/*/SheVenom_Jill_Black_1561*", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "04_漫威争锋_SheVenom_mod6188",
+   "short": "Marvel Rivals She-Venom #6188",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "She Venom Minitop",
+   "source": {
+    "site": "Nexus Mods #6188",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/6188",
+    "author": "Chewie（上传者 ScrumpChewie）",
+    "date": "2026-01-25",
+    "files": ["She-Venom-6188-1-0-1769253670.rar"],
+    "picture": "nexus/6188-1769253529-600711065.png"
+   },
+   "converted": "2026-11-15，scripts/marvelrivals：CUE4Parse 读 mod 和装好的游戏；PMX / XPS 用 biped_pmx（骨骼映射 ue_mannequin）。",
+   "notes": "现在是替身版：mod 只带了短上衣和丁字裤的贴图，头、身体、腿用的是游戏原版 Venom 的材质，而公开的映射文件（第 1 赛季）读不出现在游戏本体的贴图。头用 HS2 移植版（本页第 5 个）里带的游戏原版头部贴图（同一个网格）；身体和腿照作者预览图用深藏青黑替身颜色，没有肌理，后脑和脖子交界有色差。下载 Nexus #13477 Variant Skin Studio 带的新版映射文件后重新导出，就是全原版。身高 2.5 m。",
+   "models": [{"glob": "MarvelRivals/Venom/*/She-Venom_6188", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "05_HS2_Venom_Fouetty",
+   "short": "HS2 Venom（Fouetty）",
+   "game": "HoneySelect 2（Studio 道具）",
+   "title": "Venom Marvel Rivals v1.0",
+   "source": {
+    "site": "BetterRepack Sideloader Modpack - Studio",
+    "url": "https://sideload.betterrepack.com/download/AISHS2/Sideloader%20Modpack%20-%20Studio/Fouetty/",
+    "author": "Fouetty",
+    "date": "",
+    "files": ["[Fouetty] Venom Marvel Rivals v1.0.zipmod"]
+   },
+   "converted": "2026-11-15，scripts/honeyselect2/studio_item_export.py（AssetStudio 导 FBX，UnityPy 导贴图）；PMX / XPS 用 biped_pmx（骨骼映射 rigify_twk），手指已拉直。",
+   "notes": "把 Marvel Rivals 的 Venom 移植成 HS2 Studio 道具：男性 Venom，带一个成人向的附加网格（DAZ G9 部件），原样保留。张开手时长爪子像一根根棍子，是模型本来的比例（指尖离手腕 45 cm）。它带的头部贴图就是游戏原版的，She-Venom 的替身版借用了它。",
+   "models": [{"glob": "HoneySelect2/Venom/*/Venom_MarvelRivals_Fouetty", "thumb_panels": 4, "thumb_top": 0.577}]
+  }
+ ]
+}

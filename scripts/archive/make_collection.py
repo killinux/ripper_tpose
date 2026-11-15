@@ -11,7 +11,9 @@ converted and what it lacks, and which archived folders belong to it ("glob" und
   * hard-links every file of those folders into <out>/<section dir>/<format>/<model>/ (same volume as the archive:
     no extra space; editing a file there edits the archived one - the gallery says so);
   * makes a thumbnail per model (_thumbs/, from the folder's preview image or a "thumb_from" pattern; an item's
-    "thumb_panels": n says that preview is n views side by side, front first - the thumbnail keeps the front one);
+    "thumb_panels": n says that preview is n views side by side, front first - the thumbnail keeps the front one;
+    "thumb_top": f keeps the top fraction f of it, for sheets with a row of close-ups under the body views);
+  * links the check videos it finds in the folders (*.mp4, e.g. pmx/<model>/_check/dance.mp4) on the model's card;
   * copies the source's own picture (the mod page's image) into _thumbs/source/.
 Then writes <out>/index.html (the gallery, local files only) and <out>/说明.md.  Re-running replaces the links;
 folders the spec no longer names are left alone (listed in the run's output).
@@ -67,13 +69,15 @@ def find_preview(folder, model):
     return None
 
 
-def thumb(src, dst, height=420, panels=1):
+def thumb(src, dst, height=420, panels=1, top=1.0):
     if Image is None or not src or not os.path.isfile(src):
         return False
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     im = Image.open(src).convert("RGB")
     if panels > 1 and im.width > 1.5 * im.height:     # front / side / back strip: keep the front view
         im = im.crop((0, 0, im.width // panels, im.height))
+    if top < 1.0:                                     # a sheet with close-ups below the body row: keep the body
+        im = im.crop((0, 0, im.width, max(1, round(im.height * top))))
     if im.height > height:
         im = im.resize((max(1, round(im.width * height / im.height)), height), Image.LANCZOS)
     im.save(dst, quality=86)
@@ -110,6 +114,11 @@ def build(spec, dry):
                 mf = main_file(folder, fmt)
                 m["formats"][fmt] = {"dir": os.path.relpath(dst, out).replace("\\", "/"),
                                      "main": mf, "src": folder}
+                # check videos inside the folder (e.g. pmx/<model>/_check/dance.mp4 from render_pmx_dance.py)
+                for v in sorted(glob.glob(os.path.join(glob.escape(folder), "**", "*.mp4"), recursive=True)):
+                    rel = os.path.relpath(os.path.join(dst, os.path.relpath(v, folder)), out).replace("\\", "/")
+                    if rel not in m.setdefault("videos", []):
+                        m["videos"].append(rel)
                 prev = None
                 if item.get("thumb_from"):
                     prev = item["thumb_from"].replace("{name}", name)
@@ -117,7 +126,7 @@ def build(spec, dry):
                     prev = find_preview(folder, name)
                 if prev and (m["thumb"] is None or fmt == "blend"):
                     t = os.path.join(out, "_thumbs", sec["dir"], name + ".jpg")
-                    if dry or thumb(prev, t, panels=item.get("thumb_panels", 1)):
+                    if dry or thumb(prev, t, panels=item.get("thumb_panels", 1), top=item.get("thumb_top", 1.0)):
                         m["thumb"] = os.path.relpath(t, out).replace("\\", "/")
         pic = sec.get("source", {}).get("picture")
         pic_rel = None
@@ -220,6 +229,10 @@ def write_html(spec, sections, out):
                 target = f["dir"] + "/" + f["main"] if f["main"] else f["dir"] + "/"
                 chips.append("<a href=\"%s\">%s</a>" % (href(target), fmt.upper()))
                 chips.append("<a href=\"%s/\" title=\"打开文件夹\">📁</a>" % href(f["dir"]))
+            for v in m.get("videos", []):
+                stem = os.path.splitext(os.path.basename(v))[0]
+                chips.append("<a href=\"%s\" title=\"%s\">▶ %s</a>" % (
+                    href(v), esc(v), "舞蹈" if stem.lower().endswith("dance") else esc(stem)))
             parts.append("<div class=\"m\"><div class=\"ph\">%s</div><div class=\"t\">%s%s<div class=\"chips\">%s</div>"
                          "</div></div>" % (ph, esc(m["name"]), (" · " + esc(m["label"])) if m["label"] else "",
                                            "".join(chips)))

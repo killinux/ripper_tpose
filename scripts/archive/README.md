@@ -155,6 +155,7 @@ python delete_archived.py --delete-all --keep D:\roe_exports
 
 ```powershell
 python make_collection.py collections\gantz.json        # → E:\game_export\_GANTZ合集\
+python make_collection.py collections\venom.json        # → E:\game_export\_毒液合集\（2026-11-15，5 个来源 6 个模型）
 ```
 
 把好几个游戏里同一个主题的成品放到一个目录下，再配一个注明出处的画廊。清单是 JSON（`collections\gantz.json`）：输出目录、归档根目录，
@@ -166,6 +167,9 @@ python make_collection.py collections\gantz.json        # → E:\game_export\_GA
 - 每个造型一张缩略图（`_thumbs\`，从预览图来，或者用 `thumb_from` 指定）；来源的宣传图（mod 页面的图）放 `_thumbs\source\`。
   预览图是正面 / 侧面 / 背面拼成一长条的（ELDEN RING / 只狼的 .blend 预览，2700×1200），在那一项写 `"thumb_panels": 3`，
   缩略图只取最左边的正面；不写的话整条缩进竖卡片，人很小。
+  预览图下面还有一排特写的（`scripts/marvelrivals`、`re_engine`、`marvelheroes` 的预览：上排 4 个全身、下排 4 个头部特写，
+  2640×1560），再写 `"thumb_top": 0.577`，只留上排（900 / 1560）。
+- 目录里的检查视频（`*.mp4`，比如 `pmx\<造型>\_check\dance.mp4`）在卡片上加一个「▶ 舞蹈」链接。
 - 写 `index.html`（本地画廊，只引用本地文件）和 `说明.md`。
 
 归档目录下划线开头的文件夹不进总表，`_GANTZ合集` 不会被当成游戏。
