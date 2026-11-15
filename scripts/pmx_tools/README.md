@@ -6,6 +6,31 @@
 
 保存时沿用原文件的附加 UV 数（`add_uv_count=model.header.additional_uvs`），贴图路径照原样相对于 PMX 所在文件夹。
 
+例外是 `pmx_textures.py`。它只改文件里的贴图表，就地改（先备份），不经过 mmd_tools，其余字节原样保留，见下一节。
+
+## pmx_textures.py：只改贴图表（绝对路径改相对、给没贴图的材质接上贴图）
+
+```
+python pmx_textures.py list <文件.pmx>
+python pmx_textures.py relative <文件.pmx | 文件夹 | @清单.txt> ... [--backup 文件夹] [--dry-run]
+python pmx_textures.py set <文件.pmx> <材质名> <贴图（相对 PMX）> [--backup 文件夹] [--dry-run]
+```
+
+- `relative`：把写成绝对路径的贴图（`E:\game_export\...\textures\x.png`）改成相对 PMX 所在文件夹（`textures\x.png`）。
+  这样整个文件夹拷到哪里都能用。文件夹会递归找 PMX；`@清单.txt` 是一行一个 PMX。
+  - 在别的盘上、或者文件不存在的路径不改，只列出来。
+  - 起因：ROE 的 310 个「裙子碰撞修正」PMX 都是绝对路径。`mmd_physics/cloth_batch_fix.py` 在工作文件夹里导出，
+    再拷到原文件旁边，工作文件夹和归档不在一个盘，mmd_tools 算不出相对路径，就写了绝对路径。
+  - 2026-11-15 已全部改好，原文件在 `E:\game_export\RiseOfEros\_meta\backup_替换前_20261115`。
+    `cloth_batch_fix.py` 拷完也会调这个工具，以后新写的不会再是绝对路径。
+- `set`：给一个材质换颜色贴图，贴图表里没有就加一条。
+  - 用于导出时漏了贴图的材质。2026-11-15 修了两处，用的都是它们全套版文件夹里同一材质的贴图：
+    - ROE e10 的透明小部件（172 面）；
+    - j06 的武器。
+- 每次写之前都检查：新文件重新解析一遍，贴图表以外（`set` 再除去改的那个贴图编号）必须和原文件逐字节相同。
+  - 先写 `.part`，再替换原文件；
+  - `--backup` 把原文件按去掉盘符的路径拷进备份文件夹，已有的备份不覆盖。
+
 ## fix_wink_sides.py：ウィンク 左右对调
 
 MMD 的惯例：`ウィンク`（和 `ウィンク２`）闭的是**模型自己的左眼**（左腕那一侧，PMX 里 +X），`ウィンク右` 闭右眼。

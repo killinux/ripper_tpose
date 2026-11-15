@@ -287,6 +287,35 @@ def infer_cid(stem, albedos=()):
     return max(found, key=found.get) if found else ""
 
 
+def other_cid(albedo):
+    """The character whose data a slot's colour texture points at (apply()'s in-place lookup elsewhere):
+    pc_b01_nk_body__pmx_diffuse -> b01.  The j / k / l / m nude bases name their body for the family alone
+    (pc_j_nk_body), defined in the family's base character's bundles (chara_mat_bare_pc_j01_nk_*): -> j01.
+    Without that the j / k / m full / nude PMX kept the nude body MMD-shaded (2026-11-15 check: 38 PMX).
+    Only a name that can match a material (an export texture or an albedo); eyes / brows / lashes never do."""
+    cid = infer_cid("", [albedo])
+    if cid:
+        return cid
+    m = re.match(r"pc_([a-z])_nk_(?!eye).+?(__pmx_diffuse|__xps_diffuse|_rgbx_albedo)$", (albedo or "").lower())
+    return m.group(1) + "01" if m else ""
+
+
+def piece_albedos(albedos):
+    """A PMX / XPS export names a shared accessory piece's texture after its material
+    (Common_Legs_LegsArea_FMLlegring_obj001__pmx_diffuse); hq_material_data.py finds the piece's bundle
+    (accessory_<hash>_common_fmllegring_obj001) from the piece's albedo name, Common_FMLlegring_obj001_rgbx_Albedo
+    (shared_pieces).  Those albedo names, so load_data() asks for the pieces: without them the fm suits' rings and
+    arm hair stayed MMD-shaded in the add-on (2026-11-15 check: 9 fm suits)."""
+    out = set()
+    for name in albedos:
+        for suffix in EXPORT_SUFFIXES:
+            if name.lower().endswith(suffix) and name.lower().startswith("common_"):
+                parts = name[:-len(suffix)].split("_")
+                if len(parts) >= 3:
+                    out.add("Common_%s_rgbx_Albedo" % "_".join(parts[-2:]))
+    return sorted(out)
+
+
 # --- game data ---------------------------------------------------------------------------------------
 def linear(color):
     """Unity stores material colours in sRGB and hands the shader linear values (linear colour
@@ -965,7 +994,8 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
         raise RuntimeError("cannot tell the character id (pc_<letter><digits>) from %r or the textures" % stem)
     cache = cache or hq_cache.default_cache(export_root)
     names = sorted({s[4] for s in slots if s[4]})
-    plain = [a for a in albedos if not a.lower().endswith(EXPORT_SUFFIXES)]
+    # + a shared piece's albedo name for each export texture of one (Common_*__pmx_diffuse): its bundle is read then
+    plain = [a for a in albedos if not a.lower().endswith(EXPORT_SUFFIXES)] + piece_albedos(albedos)
     data, summary = load_data(cid, cache, names, plain, python, log, game)
     suit = re.match(r"pc_%s_(.+)$" % cid, (stem or "").lower())
     suit = suit.group(1) if suit else None       # pc_g01_yoga -> yoga (accessory_components_pc_g01_suit_yoga)
@@ -980,12 +1010,13 @@ def apply(meshes, stem="", export_root=None, cache=None, python=None, log=print,
     # in place (the ROE Game Materials add-on on an imported model): a slot this character's data does not know, whose
     # colour texture names another character, is looked up in that character's data - clothes put on by
     # pmx_outfit_transfer (2026-10-25: Luf g05's outfit on Inase a08 full, pc_g05_hd_body_1__pmx_diffuse - the 37 g05
-    # slots stayed MMD-shaded) and a complete_nude full / nude body, the family base's (pc_a01_nk_body under a08).
-    # The batch export keeps its own rules (no lookups elsewhere)
+    # slots stayed MMD-shaded) and a complete_nude full / nude body, the family base's (pc_a01_nk_body under a08;
+    # the j / k / l / m bases' pc_j_nk_body is j01's, other_cid).  The batch export keeps its own rules (no lookups
+    # elsewhere)
     datas, slot_cid, errors = {cid: data}, [cid] * len(slots), []
     others = {}
     for k, ((_obj, _index, _old, albedo, _source), game_mat) in enumerate(zip(slots, picks)):
-        other = infer_cid("", [albedo]) if in_place and game_mat is None and albedo else ""
+        other = other_cid(albedo) if in_place and game_mat is None and albedo else ""
         if other and other != cid:
             others.setdefault(other, []).append(k)
     for other, ks in sorted(others.items()):

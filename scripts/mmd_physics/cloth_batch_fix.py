@@ -42,6 +42,9 @@ import sys
 import time
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(TOOLS), "pmx_tools"))
+import pmx_textures  # noqa: E402  (side files name their textures relative to their own folder)
+
 ap = argparse.ArgumentParser()
 ap.add_argument("scan")
 ap.add_argument("--work", required=True, help="folder for results.json and the per-model logs / meters")
@@ -323,6 +326,11 @@ for r in todo:
             entry.setdefault("kept_existing", []).append(dst)
             continue
         shutil.copyfile(path, dst)
+        # exported in the work folder, the scratch PMX names the archive's textures by absolute path (the 310 side
+        # files of 10-24/25 had E:\game_export\...\textures\..., fixed 2026-11-15): relative to the side file's folder
+        _changed, problems = pmx_textures.make_relative(dst)
+        for p in problems:
+            log("%s: texture path left as it is (%s)" % (os.path.basename(dst), p))
         written.append(dst)
     entry["written"], entry["seconds"] = written, round(time.time() - t0)
     results[stem] = entry
