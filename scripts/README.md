@@ -23,6 +23,7 @@
 | AION2（永恒之塔 2） | Unreal 5.3 IoStore（282 个容器，AES 加密，exe 带 NCGuard 壳；无版本属性，用 UE Viewer 特制版） | [`aion2/`](aion2/) | `aion2\list_models.py` / `export_model.py`；转 PMX / XPS：`export_pmx_blender.py` / `export_xps_blender.py`（Blender） |
 | Vindictus（洛奇英雄传）北美服 | Source 引擎改版，`.hfs` v4 包（加密压缩，用 Unicorn 跑游戏自己的 `FileSystem_Stdio.dll` 读） | [`vindictusna/`](vindictusna/) | `vindictusna\list_models.py` / `export_model.py` |
 | ELDEN RING / SEKIRO（Nexus 角色 mod） | FromSoftware：DCX（DFLT / Oodle KRAK）、BND4、FLVER2（0x20014 / 0x2001A）、TPF（含 BC6H）、MATBIN / MTD；mod 自带模型贴图，不用装游戏 | [`eldenring/`](eldenring/) | `eldenring\export_mod.py <mod .zip / .rar / .7z>`：高清材质 `.blend` + XPS + PMX（`--variant` 去零件版，`--set` 一包多套） |
+| Marvel Heroes Omega（Nexus 服装 mod） | Unreal 3（`.upk` 版本 868/3，不压缩；UE Viewer 不支持这个游戏，包、模型、贴图自己读）；mod 自带模型贴图，不用装游戏 | [`marvelheroes/`](marvelheroes/) | `marvelheroes\export_upk.py <mod .zip / .upk> --out <目录>`：`.blend` + PSK + PNG 贴图（`--list` 先看包里有什么） |
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。

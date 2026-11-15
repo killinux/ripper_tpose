@@ -14,6 +14,72 @@
 
 ---
 
+## 2026-11-15 — Marvel Heroes Omega 的 mod 不用游戏本体转 Blender：`scripts/marvelheroes`（第一个：Gwenom，Nexus #369）
+
+用户问：`E:\Downloads\Venom` 下的 Gwenom mod 没有游戏本体，能不能转成 Blender。这个 mod 是 Marvel Heroes Omega 的
+Nexus #369「Gwenom - Contest of Champions」（MysticalBlock55，1.1 版）。
+
+**新增**
+
+- `scripts/marvelheroes/`：
+  - `export_upk.py`：一条命令把 mod 的 .zip（或 .upk）转成 `.blend`，同时出 PSK、PNG 贴图、材质参数和预览图；`--list` 先看包里有什么。
+  - 各步骤也能单独跑：`upk.py`（包表和属性标签）、`skelmesh.py`（骨骼模型）、`materials.py`（材质实例参数）、
+    `textures.py`（包里的贴图 → DDS → PNG）、`write_psk.py`（按 UE Viewer 的写法出 PSK）、`build_blend.py`（Blender 3.6 后台）。
+- 成品：`E:\game_export\MarvelHeroesOmega\Gwenom\`。
+  - `blend\Gwenom\Gwenom.blend`：109 根骨头，17,947 个三角形，4 个材质，高 1.685 m，面朝 -Y；
+  - `blend\Gwenom\preview.png`：预览图；
+  - `psk\Gwenom\`：PSK 和贴图；
+  - `_meta\`：报告和 mod 自带的说明、图标；
+  - `说明.md`。
+- 女毒液列表页 `html/venom_female_models.html`（照例不进仓库）：
+  - 按导出报告把 #369 标成「已导出 Blender」，带路径；
+  - 其他 Marvel Heroes Omega 的 mod 标成「不用游戏本体」，比如 #397 Marvel Rivals 共生体 Storm。
+
+**用户怎么用**
+
+```powershell
+python -I scripts\marvelheroes\export_upk.py "<mod.zip>" --out E:\game_export\MarvelHeroesOmega\<角色> --name <名字>
+```
+
+然后用 Blender 打开 `blend\<名字>\<名字>.blend`，切到「材质预览」。参数见 `scripts/marvelheroes/README.md`：
+`--scale` 比例，`--spec-scale` 高光强度，`--keep-dummy` 保留占位三角形。
+
+**原理与兼容性**
+
+- **UE Viewer 不支持这个游戏**，四种对象都报错：
+  - AnimSet：621 unread bytes；
+  - 父材质：SerializeFMaterialResource 里 wrong export index；
+  - 骨骼模型：wrong export index；
+  - 贴图：Serializing behind stopper。
+
+  拿十六进制对过：包表、属性标签和模型 / 贴图的原生数据都是标准 UE3（版本 868）的布局，只是名字全小写。
+  所以自己读，每步都核对（索引数、顶点数、权重和 255、骨骼表）。对不上就停，不会出坏模型。
+- **PSK 按 UE Viewer 的写法**：Y 镜像，骨骼四元数 Y、W 取反，三角形前两角对调。位置、法线、权重相同的顶点合成一个点。
+  用 `io_scene_psk_psa` 导入后左右是对的。缩放 0.018，转到面朝 -Y，并应用变换。
+- **材质**：照游戏的角色着色器 `chbasematerial_v2` 的参数建。
+  - 原理化 BSDF 管漫反射，法线贴图的绿通道翻转；
+  - 光泽 BSDF 管游戏的彩色高光，颜色 = 高光贴图 × `speccolorvalue` × 遮罩（R 通道）× `specmult` × 0.025；
+  - 自发光是眼睛。
+
+  游戏的 Blinn-Phong 不归一化，照搬数值时面罩整片发蓝白。和 mod 自带的商店图对过以后定的 0.025。
+- **mod 的小动作**：
+  - 一个三角形的占位分段，用原版 Spider-Gwen 材质，藏在头里，默认丢掉；
+  - 左半身 UV 的 u 加了 1，是镜像 UV，贴图重复寻址，不要截到 0–1。
+- **不用游戏本体的前提**：贴图在 mod 包里。游戏自己的贴图大图在 `.tfc` 缓存里，`--list` 会标出来。
+- **没做**：包里 Spider-Gwen 的 354 个动作（UE3 压缩动画，UE Viewer 也读不了）、物理资产、挂点、转 PMX / XPS。
+
+**验证**
+
+- 网格：11,670 个 GPU 顶点合成 11,366 个点，17,947 个三角形，所有检查通过。分开跑的脚本重新出的 PSK 和贴图，与归档里的逐字节相同。
+- 后台独立打开归档里的 .blend：
+  - 10 张贴图都是相对路径，都在；
+  - 网格有骨架修改器，72 个顶点组，4 个材质。
+- 摆了几个姿势（手臂、肘、膝盖、头、腰）渲图，皮肤跟着骨骼走，没有撕裂。
+- 和 mod 自带的商店图对照：黑紧身衣，黑面罩、白眼睛，粉色触手和兜帽边，背后白色蜘蛛标志。
+- 一个误判：起初以为右手腕的白色贴片是左右 UV 不对称造成的。查下来两只手背都有，两边取到的颜色一样，是贴图本身的图案。
+
+---
+
 ## 2026-11-15 — 新插件「模型细节」0.1.0：眼睛发亮有神（ROE、剑星、Vindictus 的 PMX 通用）
 
 **新增**
