@@ -187,6 +187,126 @@ def smooth_pinned(values, faces, pinned, iterations=12, lam=0.5):
     return out
 
 
+COLLAR_MIN_CM = 0.5      # the body material rising this far above the ring around the neck = a collar
+COLLAR_REACH_CM = 2.5    # ... counted within this distance outside the ring
+COLLAR_MARGIN_CM = 0.3   # the old neck's shape is kept this far above the collar's rim
+COLLAR_FADE_CM = 2.0     # ... and fades back to the new neck's own shape over this much
+
+
+def _ray_triangles(o, d, A, E1, E2):
+    """First crossing (t > 0) of the ray o + t d with the triangles (A, A + E1, A + E2): (t, triangle, u, v) or None."""
+    p = np.cross(d, E2)
+    det = (E1 * p).sum(1)
+    ok = np.abs(det) > 1e-12
+    inv = np.zeros_like(det)
+    inv[ok] = 1.0 / det[ok]
+    s = o - A
+    u = (s * p).sum(1) * inv
+    q = np.cross(s, E1)
+    v = (q @ d) * inv
+    t = (E2 * q).sum(1) * inv
+    m = ok & (u >= -1e-6) & (v >= -1e-6) & (u + v <= 1 + 1e-6) & (t > 1e-6)
+    if not m.any():
+        return None
+    k = np.where(m)[0][np.argmin(t[m])]
+    return t[k], k, u[k], v[k]
+
+
+def collar_fit(T, ring_mat, remove_mats, t_ring, co_t, frame, P2, is_face, log):
+    """A neck ring inside a collar (Stellar Blade's turtleneck: the head meets the suit 3-4 cm under the visible rim)
+    lets a thicker new neck poke out through the collar above the ring.  There the new neck takes the target's OLD
+    neck shape (the removed material whose open edge is the ring - it fitted inside the collar): per vertex the radius
+    of the old neck at its angle and height, up to the collar's rim + COLLAR_MARGIN_CM, fading back to its own over
+    COLLAR_FADE_CM.  Returns (P2, w, normals of the old neck there, report); without a collar w is all 0."""
+    tc, taxis, tfront, tside = frame
+    w = np.zeros(len(P2))
+    n_t = np.zeros_like(P2)
+    r_ang = angle_of(co_t[t_ring], tc, taxis, tfront, tside)
+    o = np.argsort(r_ang)
+    ang_s = r_ang[o]
+    rel = co_t[t_ring] - tc
+    r_h = (rel @ taxis)[o]
+    r_r = np.linalg.norm(rel - np.outer(rel @ taxis, taxis), axis=1)[o]
+    mf = oc.material_faces(T)
+    names = [mt.name for mt in T.materials]
+    # the collar's rim: how far the ring material rises above the ring close round the neck, per 10-degree sector
+    bv = sorted({v for f in mf[names.index(ring_mat)] for v in T.faces[f]})
+    Q = co_t[bv]
+    qa = angle_of(Q, tc, taxis, tfront, tside)
+    qrel = Q - tc
+    qh = qrel @ taxis - interp_ring(ang_s, r_h, qa)
+    qr = np.linalg.norm(qrel - np.outer(qrel @ taxis, taxis), axis=1) - interp_ring(ang_s, r_r, qa)
+    close = (qr < COLLAR_REACH_CM / UNIT_CM) & (qh > 0)
+    bins = 36
+    rim = np.zeros(bins)
+    if close.any():
+        kb = ((qa[close] + np.pi) / (2 * np.pi) * bins).astype(int) % bins
+        np.maximum.at(rim, kb, qh[close])
+    rim = np.maximum(rim, np.maximum(np.roll(rim, 1), np.roll(rim, -1)))     # a sector's rim also covers its edges
+    if rim.max() * UNIT_CM < COLLAR_MIN_CM:
+        return P2, w, n_t, None
+    # the old neck: the removed material whose open edge runs along the ring (Eve's head edge lies 2 mm under the
+    # suit's, not on it: within 8 mm all round)
+    ring_pts = co_t[t_ring]
+    old = None
+    for n in remove_mats:
+        if n not in names:
+            continue
+        loops, _canon = boundary_loops(T, [n], co_t)
+        for l in loops:
+            if len(l) >= 12 and np.mean([np.linalg.norm(ring_pts - co_t[v], axis=1).min() * UNIT_CM < 0.8
+                                         for v in l]) > 0.9:
+                old = n
+        if old:
+            break
+    if old is None:
+        log("  collar: rim %.1f cm above the ring, but no removed material ends at the ring - neck left as is" % (
+            rim.max() * UNIT_CM))
+        return P2, w, n_t, {"rim_cm": round(float(rim.max() * UNIT_CM), 2), "fitted": 0}
+    tris = np.array([T.faces[f] for f in mf[names.index(old)]], np.int64)
+    cen = co_t[tris].mean(1) - tc
+    top = (rim.max() + (COLLAR_MARGIN_CM + COLLAR_FADE_CM + 1.0) / UNIT_CM) + r_h.max()
+    keep = (cen @ taxis > r_h.min() - 1.0 / UNIT_CM) & (cen @ taxis < top)
+    tris = tris[keep]
+    A = co_t[tris[:, 0]]
+    E1, E2 = co_t[tris[:, 1]] - A, co_t[tris[:, 2]] - A
+    NT = np.array([T.vertices[v].normal for v in range(len(T.vertices))], float)
+    # the new neck's vertices: height above the ring at their angle, against the rim there
+    pa = angle_of(P2, tc, taxis, tfront, tside)
+    prel = P2 - tc
+    axial = prel @ taxis
+    ph = axial - interp_ring(ang_s, r_h, pa)
+    prim = rim[((pa + np.pi) / (2 * np.pi) * bins).astype(int) % bins]
+    reach = prim + COLLAR_MARGIN_CM / UNIT_CM
+    want = is_face & (ph > 0) & (ph < reach + COLLAR_FADE_CM / UNIT_CM)
+    out = P2.copy()
+    moved = []
+    for k in np.where(want)[0]:
+        base = tc + taxis * axial[k]
+        d = P2[k] - base
+        r = np.linalg.norm(d)
+        if r < 1e-9:
+            continue
+        d /= r
+        hit = _ray_triangles(base, d, A, E1, E2)
+        if hit is None:
+            continue
+        t, j, u, v = hit
+        wk = 1.0 if ph[k] <= reach[k] else float(smoothstep(1.0 - (ph[k] - reach[k]) / (COLLAR_FADE_CM / UNIT_CM)))
+        out[k] = base + d * (r + (t - r) * wk)
+        a_, b_, c_ = tris[j]
+        nn = NT[a_] * (1 - u - v) + NT[b_] * u + NT[c_] * v
+        n_t[k] = nn / (np.linalg.norm(nn) + 1e-12)
+        w[k] = wk
+        moved.append(abs(t - r))
+    rep = {"rim_cm": [round(float(rim.min() * UNIT_CM), 2), round(float(rim.max() * UNIT_CM), 2)], "old_neck": old,
+           "fitted": len(moved), "max_move_cm": round(float(max(moved) * UNIT_CM), 2) if moved else 0.0}
+    log("  collar: the ring sits %.1f-%.1f cm under the collar's rim; %d neck vertices take the old neck's (%s) shape "
+        "up to it (moved %.2f cm at most)" % (rep["rim_cm"][0], rep["rim_cm"][1], rep["fitted"], old,
+                                             rep["max_move_cm"]))
+    return out, w, n_t, rep
+
+
 def blend_weights(wa, wb, t):
     """[(bone, w)] lists -> blended, <= 4 bones."""
     acc = defaultdict(float)
@@ -304,12 +424,167 @@ def rasterize_factor(img, tris_uv, tri_factors):
     return out
 
 
+# -- a donor whose face is only a mask: cut its neck out of the body material ------------------------------------------
+def _eye_centre(M):
+    names = [b.name for b in M.bones]
+    if "左目" in names and "右目" in names:
+        return (np.array(M.bones[names.index("左目")].location, float) +
+                np.array(M.bones[names.index("右目")].location, float)) / 2
+    return np.array(M.bones[names.index("頭")].location, float)
+
+
+def _neck_path(D, mi, c, n, axis=None, centre=None, band_cm=1.5, alpha=4.0, min_step_deg=0.5):
+    """Faces of material mi above a closed EDGE PATH once round the neck near the plane (c, n): a shortest path in
+    the graph of edges whose angle about ``axis`` (from ``centre``) grows by min_step_deg..30 degrees, edges near the
+    plane cheaper - so the cut follows the mesh, has no zigzag folds, and its order by angle is its order along the
+    edge (what the ring pairing needs).  UV-seam twins count as one vertex."""
+    co = np.array([v.co for v in D.vertices], float)
+    faces = oc.material_faces(D)[mi]
+    keys, cid = {}, {}
+    for f in faces:
+        for v in D.faces[f]:
+            if v not in cid:
+                cid[v] = keys.setdefault(tuple(np.round(co[v], 4)), len(keys))
+    pos = np.zeros((len(keys), 3))
+    for v, k in cid.items():
+        pos[k] = co[v]
+    edges, face_edges = defaultdict(set), []
+    for f in faces:
+        a, b, cc = (cid[v] for v in D.faces[f])
+        fe = []
+        for x, y in ((a, b), (b, cc), (cc, a)):
+            if x != y:
+                edges[x].add(y)
+                edges[y].add(x)
+                fe.append((min(x, y), max(x, y)))
+        face_edges.append(fe)
+    d = (pos - c) @ n * UNIT_CM                          # cm above the plane
+    ax = n if axis is None else axis / np.linalg.norm(axis)
+    o = c if centre is None else centre
+    e1 = np.array([0.0, 0.0, -1.0]) - (np.array([0.0, 0.0, -1.0]) @ ax) * ax
+    e1 /= np.linalg.norm(e1)
+    e2 = np.cross(ax, e1)
+    theta = np.arctan2((pos - o) @ e2, (pos - o) @ e1)
+    radial = np.linalg.norm((pos - c) - np.outer((pos - c) @ n, n), axis=1) * UNIT_CM
+    region = np.where((np.abs(d) < band_cm) & (radial < 9.0))[0]
+    in_region = np.zeros(len(pos), bool)
+    in_region[region] = True
+    near_front = [k for k in region if abs(theta[k]) < np.radians(8)]
+    if not near_front:
+        raise RuntimeError("neck cut: no %s vertices near the cut plane in front" % D.materials[mi].name)
+    s = min(near_front, key=lambda k: abs(d[k]))
+    phi = np.mod(theta - theta[s], 2 * np.pi)
+    dist, prev = {k: np.inf for k in region}, {}
+    dist[s] = 0.0
+    best, last = np.inf, None
+
+    def cost(u, w):
+        return np.linalg.norm(pos[u] - pos[w]) * UNIT_CM * (1.0 + alpha * (abs(d[u]) + abs(d[w])) / 2)
+    for u in sorted(region, key=lambda k: phi[k]):
+        if not np.isfinite(dist[u]):
+            continue
+        for w in edges[u]:
+            if w == s:
+                if phi[u] > 1.5 * np.pi and dist[u] + cost(u, w) < best:
+                    best, last = dist[u] + cost(u, w), u
+                continue
+            if in_region[w] and np.radians(min_step_deg) < phi[w] - phi[u] < np.pi / 6 \
+                    and dist[u] + cost(u, w) < dist[w]:
+                dist[w], prev[w] = dist[u] + cost(u, w), u
+    if last is None:
+        raise RuntimeError("neck cut: no edge path once round the neck in %s" % D.materials[mi].name)
+    path = [last]
+    while path[-1] != s:
+        path.append(prev[path[-1]])
+    cut = {(min(x, y), max(x, y)) for x, y in zip(path, path[-1:] + path[:-1])}
+    by_edge = defaultdict(list)
+    for fi, fe in enumerate(face_edges):
+        for e in fe:
+            by_edge[e].append(fi)
+    top = int(np.argmax([co[list(D.faces[f])].mean(0) @ n for f in faces]))
+    seen, stack = {top}, [top]
+    while stack:
+        fi = stack.pop()
+        for e in face_edges[fi]:
+            if e not in cut:
+                for g in by_edge[e]:
+                    if g not in seen:
+                        seen.add(g)
+                        stack.append(g)
+    return sorted(faces[fi] for fi in seen), {"path_vertices": len(path),
+                                              "path_off_plane_cm": [round(float(d[path].min()), 2),
+                                                                    round(float(d[path].max()), 2)]}
+
+
+def _split_material(D, mi, part_faces, new_name):
+    """The faces part_faces of material mi become a copy of it right after it (drawn where it was, before the hair);
+    material morph indices after it shift by one."""
+    mf = oc.material_faces(D)
+    part = set(part_faces)
+    faces = []
+    for i, mt in enumerate(D.materials):
+        if i == mi:
+            rest = [D.faces[f] for f in mf[i] if f not in part]
+            faces.extend(rest)
+            faces.extend(D.faces[f] for f in part_faces)
+            mt.vertex_count = 3 * len(rest)
+        else:
+            faces.extend(D.faces[f] for f in mf[i])
+    nm = copy.deepcopy(D.materials[mi])
+    nm.name = nm.name_e = new_name
+    nm.vertex_count = 3 * len(part_faces)
+    D.faces = faces
+    D.materials.insert(mi + 1, nm)
+    for mo in D.morphs:
+        for o in mo.offsets:
+            if hasattr(o, "offset_type") and o.index is not None and o.index > mi:
+                o.index += 1
+    return nm
+
+
+def cut_donor_neck(D, ring_pts, eye_t, neck_from, log=print):
+    """A donor whose face is only a mask (Genesis 8 / Daz: the neck and the back of the head are in the body
+    material) has no neck ring of its own.  Cut ``neck_from`` once round the neck along mesh edges where the target's
+    neck ring would sit on it - the target's ring moved by the eye-centre offset (both heads level at the eyes, so the
+    head keeps the target's neck length) - and the part above becomes "<neck_from>_head": the face material of the
+    swap (in place on D; returns its name and a report)."""
+    names = [mt.name for mt in D.materials]
+    if neck_from not in names:
+        raise RuntimeError("neck cut: no material %s in the donor" % neck_from)
+    mi = names.index(neck_from)
+    P = ring_pts + (_eye_centre(D) - eye_t)
+    c = P.mean(0)
+    _u, _s, vt = np.linalg.svd(P - c)
+    n = vt[2] if vt[2][1] > 0 else -vt[2]                 # the plane's normal points up the neck
+    head_bone = np.array(D.bones[[b.name for b in D.bones].index("頭")].location, float)
+    neck_bone = np.array(D.bones[[b.name for b in D.bones].index("首")].location, float)
+    # pass 1 orders by angle about the plane's normal; pass 2 about ring centre -> 頭, as the ring pairing does
+    faces, rep = _neck_path(D, mi, c, n)
+    Dt = copy.deepcopy(D)
+    nm = _split_material(Dt, mi, faces, neck_from + "_head")
+    cot = np.array([v.co for v in Dt.vertices], float)
+    loops, _canon = boundary_loops(Dt, [nm.name], cot)
+    loops = [l for l in loops if len(l) >= 12 and np.linalg.norm(cot[l].mean(0) - neck_bone) < 1.2]
+    if loops:
+        rc = cot[max(loops, key=len)].mean(0)
+        faces, rep = _neck_path(D, mi, c, n, axis=head_bone - rc, centre=rc)
+    nm = _split_material(D, mi, faces, neck_from + "_head")
+    rep.update({"material": nm.name, "faces": len(faces),
+                "tilt_deg": round(float(np.degrees(np.arccos(np.clip(n[1], -1, 1)))), 1)})
+    log("neck cut: %s cut once round the neck at the target's ring height (tilt %.1f deg, %d edges, %.2f..%.2f cm off "
+        "the plane) - %d faces above it are %s" % (neck_from, rep["tilt_deg"], rep["path_vertices"],
+                                                   rep["path_off_plane_cm"][0], rep["path_off_plane_cm"][1],
+                                                   len(faces), nm.name))
+    return nm.name, rep
+
+
 # -- the swap ---------------------------------------------------------------------------------------------------------
 def swap_head(donor_path, target_path, out_path, head_materials=None, remove_materials=None, blend_cm=4.0,
-              tone="seam", scale=1.0, prefix=None, face=None, body=None, log=print):
+              tone="seam", scale=1.0, prefix=None, face=None, body=None, neck_from=None, log=print):
     """face: the donor's face material (the one whose open edge is the neck ring; default: by name, else the first
     head material); body: the target's body material(s), comma-separated (default ROE *_nk_body, else the outfit
-    transfer's body guess - another game's model)."""
+    transfer's body guess - another game's model); neck_from: a donor whose face is only a mask - the material that
+    holds its neck (Genesis 8: Body), cut at the target's ring height and used as the face (cut_donor_neck)."""
     pmx = oc.pmx_module()
     D, T = pmx.load(donor_path), pmx.load(target_path)
     if os.path.exists(out_path):
@@ -325,23 +600,19 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
     head_mats = head_materials or auto_head_materials(D)
     remove_mats = remove_materials if remove_materials is not None else auto_head_materials(T, with_nude=True)
     face_mat = face or face_material(D, head_mats)
-    if face_mat is None:
+    if face_mat is None and not neck_from:
         raise RuntimeError("no face material among %s" % head_mats)
     t_body = [n.strip() for n in body.split(",") if n.strip()] if body else body_materials(T)
     if not t_body and oc.auto_body(T, nude=False):
         t_body = [oc.auto_body(T, nude=False)]           # another game: SkinEve, *-body05 ...
     if not t_body:
         raise RuntimeError("no body material in the target (ROE *_nk_body; else name it: body=...)")
-    log("head: %s (face %s); removed from the target: %s; body ring on %s" % (
-        ", ".join(head_mats), face_mat, ", ".join(remove_mats) or "-", t_body[0]))
 
-    co_d = np.array([v.co for v in D.vertices], float)
     co_t = np.array([v.co for v in T.vertices], float)
     d_neck, d_head = np.array(D.bones[dn.index("首")].location), np.array(D.bones[dn.index("頭")].location)
     t_neck, t_head = np.array(T.bones[tidx["首"]].location), np.array(T.bones[tidx["頭"]].location)
 
     # -- rings ------------------------------------------------------------------------------------------------------
-    d_ring = neck_ring(D, [face_mat], co_d, d_neck, log)
     t_face = [n for n in remove_mats if FACE_MAT.search(n) and not n.endswith("_nude")]
     near = None
     if t_face:
@@ -350,6 +621,14 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
         except RuntimeError:
             near = None
     t_ring = neck_ring(T, t_body[:1], co_t, t_neck, log, near=near)
+    if neck_from:
+        # a face that is only a mask: the neck is cut out of the material that holds it, at the target's ring height
+        face_mat, report["neck_cut"] = cut_donor_neck(D, co_t[t_ring], _eye_centre(T), neck_from, log)
+        head_mats = [face_mat] + [n for n in head_mats if n != face_mat]
+    log("head: %s (face %s); removed from the target: %s; body ring on %s" % (
+        ", ".join(head_mats), face_mat, ", ".join(remove_mats) or "-", t_body[0]))
+    co_d = np.array([v.co for v in D.vertices], float)
+    d_ring = neck_ring(D, [face_mat], co_d, d_neck, log)
     log("neck ring: donor %d vertices, target %d vertices" % (len(d_ring), len(t_ring)))
 
     # -- rigid placement of the head: ring centre onto ring centre, neck axis onto neck axis, optional scale ----------
@@ -469,6 +748,11 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
     band = (w > 0) & (w < 1)
     report["band"] = {"vertices": int(band.sum()), "blend_cm": blend_cm}
     log("  band: %d face vertices blend over %.1f cm" % (band.sum(), blend_cm))
+    # a ring inside a collar: the new neck takes the old neck's shape up to the collar's rim (nothing without a collar)
+    P2, w_collar, n_collar, rep_collar = collar_fit(T, t_body[0], remove_mats, t_ring, co_t,
+                                                    (tc, taxis, tfront, tside), P2, is_face & ~on_ring, log)
+    if rep_collar:
+        report["collar"] = rep_collar
 
     # normals: the ring takes the body's; the band turns its normals by the ring's turn, fading out
     ring_rot = []
@@ -494,6 +778,8 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
     for k, rv in enumerate(ring_of):
         if rv >= 0:
             N2[k] = pair_nrm[rv]
+    fitted = w_collar > 0                              # in the collar: the old neck's normals, fading out with the shape
+    N2[fitted] = N2[fitted] * (1 - w_collar[fitted, None]) + n_collar[fitted] * w_collar[fitted, None]
     N2 /= np.linalg.norm(N2, axis=1, keepdims=True) + 1e-12
 
     # -- bones: map the donor's to the target's (name / position / bring), head-subtree bones take the donor's places --
@@ -503,6 +789,19 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
             if x >= 0.3:
                 head_bone_set.add(b)
     tr = oc.Transfer(pmx, D, T, log)
+    # under the donor's 頭 also the bones with small head weights only (Tifa's eyelid helpers QQ6, < 0.3) and the bones
+    # its bone morphs move: the expressions keep every bone they had
+    d_head_sub, stack = set(), [dn.index("頭")]
+    while stack:
+        for c in tr.kids_d[stack.pop()]:
+            d_head_sub.add(c)
+            stack.append(c)
+    for v in head_verts:
+        for b, x in oc.weights_of(pmx, D.vertices[v]):
+            if b in d_head_sub:
+                head_bone_set.add(b)
+    morph_bones = {o.index for mo in D.morphs for o in mo.offsets if hasattr(o, "location_offset")}
+    head_bone_set |= morph_bones & d_head_sub
     stack = list(head_bone_set)
     while stack:
         k = stack.pop()
@@ -511,6 +810,23 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
                 head_bone_set.add(c)
                 stack.append(c)
     bmap, bring = tr.map_bones(head_bone_set)
+    # the outfit rule also matches bones BY POSITION under a matched parent (ROE a08's lip / brow bones onto g05's,
+    # 0.4-1.5 cm); a bone the donor's BONE morphs move stays the donor's own, though - its expressions were made with
+    # its name and axes (Tifa's Jaw Bone would have become Eve's Hair_Root, 3.2 cm off)
+    pos_only = [i for i in bmap if i in d_head_sub and i in morph_bones and dn[i] != tn[bmap[i]]]
+    if pos_only:
+        for i in pos_only:
+            del bmap[i]
+        bring = set()
+        for i in head_bone_set:
+            j = i
+            while j is not None and j >= 0 and j not in bmap and j not in bring:
+                bring.add(j)
+                j = D.bones[j].parent
+        bring = sorted(bring)
+        tr.bmap, tr.bring = bmap, bring
+        log("  %d head bones the outfit rule paired by position come along as the donor's own (%s)" % (
+            len(pos_only), ", ".join(dn[i] for i in pos_only[:5]) + (" ..." if len(pos_only) > 5 else "")))
     new_index = {i: len(T.bones) + k for k, i in enumerate(bring)}
 
     def map_bone(i):
@@ -735,14 +1051,27 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
         T.vertices.append(nv)
         return new_v[v]
 
-    # split donor boundary edges where the target ring has vertices (different ring sampling only)
+    # split donor boundary edges where the target ring has vertices (different ring sampling only).  The ring keeps one
+    # vertex per position; the face may use its UV-seam twin (Genesis 8 necks: 41 of 101), so match by position
     split_faces = {}
-    for a, b, t, v_t in splits:
+    if splits:
+        def pkey(v):
+            return tuple(np.round(co_d[v], 4))
+        faces_at = defaultdict(list)
         for f in face_faces:
-            tri = D.faces[f]
-            if a in tri and b in tri:
-                split_faces.setdefault(f, []).append((a, b, t, v_t))
-                break
+            for v in D.faces[f]:
+                faces_at[pkey(v)].append(f)
+        for a, b, t, v_t in splits:
+            ka, kb = pkey(a), pkey(b)
+            for f in faces_at[ka]:
+                tri = D.faces[f]
+                ta = [x for x in tri if pkey(x) == ka]
+                tb = [x for x in tri if pkey(x) == kb]
+                if ta and tb:
+                    if any((e[0], e[1]) != (ta[0], tb[0]) for e in split_faces.get(f, [])):
+                        warn("a head face has target ring vertices on two of its edges - only the first is cut")
+                    split_faces.setdefault(f, []).append((ta[0], tb[0], t, v_t))
+                    break
     if splits:
         cut = sum(len(x) for x in split_faces.values())
         log("  %d of %d target ring vertices cut into the head's edge" % (cut, len(splits)))
@@ -814,10 +1143,17 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
             nm.offsets = [o for o in nm.offsets if o.morph in donor_morph_index]
             for o in nm.offsets:
                 o.morph = donor_morph_index[o.morph]
-        elif hasattr(offs[0], "location"):             # bone morph
-            nm.offsets = [o for o in nm.offsets if o.index in bmap or o.index in new_index]
+        elif hasattr(offs[0], "location_offset"):      # bone morph (mmd_tools: location_offset / rotation_offset)
+            # bones of the head (matched or brought along); a bone without head weights (両目) by its name
+            nm.offsets = [o for o in nm.offsets if o.index in bmap or o.index in new_index or
+                          (0 <= o.index < len(dn) and dn[o.index] in tidx)]
             for o in nm.offsets:
-                o.index = map_bone(o.index)
+                o.index = map_bone(o.index) if (o.index in bmap or o.index in new_index) else tidx[dn[o.index]]
+                # the head was turned by R and scaled by S: the offsets (model axes) turn with it - a quaternion's
+                # vector part turns with R, its scalar part stays
+                o.location_offset = [float(x) for x in (R @ np.asarray(o.location_offset, float)) * S]
+                q = np.asarray(o.rotation_offset, float)
+                o.rotation_offset = [float(x) for x in R @ q[:3]] + [float(q[3])]
         if not nm.offsets:
             continue
         if nm.name in t_names:
@@ -842,6 +1178,35 @@ def swap_head(donor_path, target_path, out_path, head_materials=None, remove_mat
         fr.name = fr.name_e = "%s头" % prefix
         fr.data = [(0, new_index[i]) for i in bring]
         T.display.append(fr)
+
+    # -- head colliders: the donor's static bodies on 頭 replace the target's - the head has the donor's shape now (Eve's
+    # sphere, r 6.1 cm about her jaw, left Tifa's forehead and the second segments of her bangs 7-8 cm outside it) ------
+    d_head_i, t_head_i = dn.index("頭"), tidx["頭"]
+    d_head_col = [r for r in D.rigids if r.mode == 0 and r.bone == d_head_i]
+    t_head_col = {i for i, r in enumerate(T.rigids) if r.mode == 0 and r.bone == t_head_i}
+    if d_head_col and t_head_col:
+        tmpl = T.rigids[min(t_head_col)]
+        keep = [i for i in range(len(T.rigids)) if i not in t_head_col]
+        rmap_h = {old: k for k, old in enumerate(keep)}
+        T.rigids = [T.rigids[i] for i in keep]
+        T.joints = [j for j in T.joints if j.src_rigid in rmap_h and j.dest_rigid in rmap_h]
+        for j in T.joints:
+            j.src_rigid, j.dest_rigid = rmap_h[j.src_rigid], rmap_h[j.dest_rigid]
+        for r in d_head_col:
+            nr = copy.deepcopy(r)
+            nr.bone = t_head_i
+            nr.location = [float(x) for x in place(np.array(r.location)[None])[0]]
+            nr.rotation = oc.euler_of(R @ oc.rot_matrix(r.rotation))
+            nr.size = [float(x) * S for x in r.size]
+            nr.collision_group_number = tmpl.collision_group_number      # collide as the target's head did
+            nr.collision_group_mask = tmpl.collision_group_mask
+            if nr.name in {x.name for x in T.rigids}:
+                nr.name = "%s:%s" % (prefix, nr.name)
+            T.rigids.append(nr)
+        report["head_colliders"] = {"removed": len(t_head_col), "added": len(d_head_col),
+                                    "group": tmpl.collision_group_number}
+        log("head colliders: the target's %d on 頭 replaced by the donor's %d (group %d, as the target's)" % (
+            len(t_head_col), len(d_head_col), tmpl.collision_group_number))
 
     # -- physics: the donor's hair chains -----------------------------------------------------------------------------
     t_body_on_bone = {}

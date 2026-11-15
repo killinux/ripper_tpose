@@ -12,6 +12,8 @@ Options: --head "a,b"      the donor's head materials (default: face / eyes / la
          --prefix a08
          --face M          the donor's face material (its open edge is the neck ring)
          --body "a,b"      the target's body material(s) (default: ROE *_nk_body, else a body / skin material)
+         --neck-from M     a donor whose face is only a mask (Genesis 8: neck and back of the head in "Body"): cut M
+                           round the neck at the target's ring height; the part above is the face material
 Prints the report as JSON on the last line (REPORT {...})."""
 import argparse
 import json
@@ -35,12 +37,13 @@ def main(argv):
     ap.add_argument("--prefix", default=None)
     ap.add_argument("--face", default=None)
     ap.add_argument("--body", default=None)
+    ap.add_argument("--neck-from", default=None)
     args = ap.parse_args(argv)
     head = [s.strip() for s in args.head.split(",") if s.strip()] or None
     remove = None if args.remove is None else [s.strip() for s in args.remove.split(",") if s.strip()]
     report = core.swap_head(args.donor, args.target, args.out, head_materials=head, remove_materials=remove,
                             blend_cm=args.blend, tone=args.tone, scale=args.scale, prefix=args.prefix,
-                            face=args.face, body=args.body,
+                            face=args.face, body=args.body, neck_from=args.neck_from,
                             log=lambda s: print(s, flush=True))
     print("REPORT " + json.dumps(report, ensure_ascii=False), flush=True)
 

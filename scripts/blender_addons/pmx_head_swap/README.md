@@ -45,7 +45,7 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 ```powershell
 & "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b --factory-startup --python scripts\blender_addons\pmx_head_swap\cli.py -- `
     头.pmx 身体.pmx 输出.pmx [--head "pc_a_nk_face,eye_portable,..."] [--remove "pc_g_nk_face,..."] [--blend 4] `
-    [--tone seam|whole|none] [--scale 1.0] [--prefix a08]
+    [--tone seam|whole|none] [--scale 1.0] [--prefix a08] [--face 材质] [--body 材质] [--neck-from Body]
 ```
 
 普通 Python（numpy + Pillow）也能跑：`python cli.py …`。
@@ -73,9 +73,23 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
   「源的脸材质」「目标的身体材质」可以手填（命令行 `--face`、`--body`），留空时身体按 body / skin 认。
 - 两边脖子接缝的顶点数不同时（Eve 44、a08 60）走「投影 + 切边」，2026-10-31 修好了这条路接缝上的小洞（见 docs/pmx-head-swap.md「跨游戏」）。
 
+## 面具脸、高领（0.3，2026-10-31）
+
+例子：星刃 Eve 的 Cooling Suit 换上 Tifa（FF7 AC 18，Genesis 8 身体）的头，成品 `E:\game_export\RiseOfEros\_混搭\跨游戏换头_Eve_CoolingSuit换Tifa头\`。
+- **「源的脖子材质」**（`--neck-from Body`）：源的脸只是一块面具、脖子和后脑在身体材质里时填。按目标脖子接缝的高度
+  （两人眼睛对齐）在这个材质上沿网格边切一圈，切下的上半截（`Body_head`）当脸材质；切口绕脖子的角度一直增加，焊接时一个不漏。
+- **高领**（自动）：目标的接缝藏在领子里（Eve 的高领比接缝高 3.8–5.2 cm）时，新脖子在领口上沿以下取目标原来那段脖子的形状，
+  上沿以上 2 cm 渐变回自己的，不会从领子里穿出来。没有领子（ROE）不动。
+- **骨骼表情**：0.2 以前骨骼表情的骨号没换（会动目标身上不相干的骨头），改了；表情驱动的骨保留源自己的，小权重的辅助骨也带。
+- **头的碰撞体跟头走**（自动）：源「頭」上的碰撞体替换目标的（碰撞组、遮罩照抄目标原来那个）。Eve 的碰撞球只盖住 Tifa 的下半张脸，
+  刘海会垂到眼睛上；换成 Tifa 自己的两个胶囊后刘海贴在额头上。ROE 之间换头也会换（a08 的头 → a08 的碰撞球）。
+- UV 接缝上的双胞胎顶点按位置配对，接缝圈上的目标顶点全部切进去。
+- 接缝在衣服底下时「肤色」选「不动」。
+
 ## 做不了 / 注意
 
-- 两边都要有带脖子的脸网格和在脖子根开口的身体（ROE 的导出都是这样）。脸只到下巴、脖子在身体上的模型，接缝会在下巴，还没处理。
-- 两圈顶点数不同的「投影 + 切边」路径写了，还没有实例验证过。
+- 两边都要有带脖子的脸网格和在脖子根开口的身体（ROE 的导出都是这样）。脖子在身体材质里的，填「源的脖子材质」；
+  脸只到下巴、身体里也切不出脖子的模型，还没处理。
+- 「投影 + 切边」（两圈顶点数不同）已经在 Eve ↔ a08、Eve ↔ Tifa 上验证过。
 - 源的材质表情（换贴图之类）不搬；IK 骨不带 IK。
 - 头发很长的模型，头发不参与脖子过渡，接缝附近可能有一两毫米的悬空，自己挪一下。

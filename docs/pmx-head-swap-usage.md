@@ -95,7 +95,9 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 ## 六、常见问题
 
 - **「both models need the bones 首 and 頭」**：不是 MMD 标准骨名的模型先改骨名（首、頭 至少要有）。
-- **「no neck ring found」**：脸网格在脖子根没有开放边（脸只到下巴、脖子长在身体上的模型）。这种还没处理，接缝在下巴那一圈。
+- **「no neck ring found」**：脸网格在脖子根没有开放边。脖子在身体材质里的（Genesis 8 一类，脸只是面具），
+  填「源的脖子材质」（见第八节）；身体里也切不出脖子的还没处理。
+- **领子正面露出一块皮肤**：0.3 起领口自动贴合（第八节）。还露的话看报告里有没有 `collar`，没有就是没认出领子。
 - **「no body material (*_nk_body) in the target」**：目标的身体材质不叫 `*_nk_body`。目前按 ROE 的命名找身体，别的游戏的模型先把身体材质改成这个名字。
 - **脖子根有一圈颜色不一样**：看面板有没有「skin tone … texture left alone」的警告——身体材质没有贴图文件时肤色匹配会跳过。
   或者选了「不动」。
@@ -113,7 +115,35 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 3. 目标是别家模型时（把 ROE 的头换到 Eve 身上），「目标去掉的材质」手填 Eve 的那些头部材质；「目标的身体材质」留空会认成 `SkinEve`。
 4. 两边脖子接缝的顶点数不同也能焊（Eve 44 个、a08 60 个）。长发可能穿到肩前，开物理会落下来。
 
-## 八、它怎么做的（一句话版）
+## 八、脸只是面具的头、领子很高的身体（2026-10-31 起，0.3）
+
+例子：星刃 Eve 的 Cooling Suit 换上 Tifa（FF7 AC 18）的头，成品 `E:\game_export\RiseOfEros\_混搭\跨游戏换头_Eve_CoolingSuit换Tifa头\`。
+1. 头来自 `E:\Downloads\tifa_good\Tifa Lockhart FFVII Advent Children 18-2\Tifa Lockhart FFVII Advent Children 18 V2 头发细分.pmx`，
+   换到 `E:\game_export\StellarBlade\Eve\pmx\CH_P_EVE_Nikke_06\Eve_CH_P_EVE_Nikke_06.pmx`。
+2. 勾头部材质：`Face`、`Inners`、`Mouth`、`Eyes`、`Eyelashes`、三个眉毛、两个牙齿、`HairAC`。**不勾 `Body`**。
+3. **「源的脖子材质」填 `Body`**：Tifa 是 Genesis 8 身体，脸只是前面一块，脖子和后脑在 `Body` 里。
+   插件按 Eve 脖子接缝的高度在 `Body` 上切一圈，切下的上半截（`Body_head`）当脸，自动加进头部材质。
+4. 「目标去掉的材质」填 Eve 的头部材质：`MI_EVE_Head_V02`、眼睛、眉毛、牙齿、口腔、两个头发、`NewMaterial`（眼睛前面那层，透明）等。
+   「目标的身体材质」填 `MI_CH_P_EVE_Nikke_06_UV1_gloss`：紧身衣在脖子上的上沿就是接缝。
+5. 「肤色」选「不动」：接缝在高领里面，下面是衣服，没有皮肤可比。
+6. 领子不用管：接缝藏在高领里时，插件自动让新脖子在领子里取 Eve 原来脖子的形状，不会从领子里穿出来。
+7. 头的碰撞体也不用管：Tifa「頭」上的两个碰撞胶囊自动替换 Eve 的碰撞球（Eve 的球只到眼睛，Tifa 的刘海会垂到眼睛上）。
+   胸部物理、衣服物理还是 Eve 原来的，一点没动。
+
+命令行：
+
+```powershell
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b --factory-startup --python scripts\blender_addons\pmx_head_swap\cli.py -- `
+    Tifa.pmx Eve_CH_P_EVE_Nikke_06.pmx 输出.pmx --head "Face,Inners,Mouth,Eyes,Eyelashes,+Brows|Default,-Brows|Teen,-Brows|Young,+Teeth (Default/Vampire),-Teeth (Default/Vampire),HairAC" `
+    --remove "MI_EVE_Head_V02,MI_EyeRefractive1,MI_EyeBrow1,EyeLight_Inst,MI_Teeth,MA_TeethOcculusion_Inst1,MA_MouthInner_Inst,M_MikeEyeBlend_Inst,M_lacrimal_fluid,MI_EVE_Eyeshadow_Occlusion,NewMaterial,MI_Hair_New_Ponytail_4,MI_EVE_HR_01_TypeA" `
+    --tone none --prefix Tifa --body MI_CH_P_EVE_Nikke_06_UV1_gloss --neck-from Body
+```
+
+Tifa 的表情是骨骼表情（19 个），跟着她的脸骨一起搬过来。在 Blender 里预览时如果 Tifa 的皮肤是洋红色，
+是 mmd_tools 没找到 MMD 的共用 toon：偏好设置 → 插件 → mmd_tools → Shared Toon Texture Folder 填
+`E:\tools\MikuMikuDanceE_v932x64\Data`。MMD 里打开没有这个问题。
+
+## 九、它怎么做的（一句话版）
 
 头按脖子那一圈刚性摆好 → 接缝顶点直接挪到身体对应顶点上 → 位移在脖子上 4 cm 里衰减、在脸上平滑 → 接缝处用身体的法线和权重 →
 脸贴图按接缝两侧肤色乘增益、剩余差别烘成渐变 → 旧头删掉、新头的骨骼 / 物理 / 表情接上。细节见 [pmx-head-swap.md](pmx-head-swap.md)。

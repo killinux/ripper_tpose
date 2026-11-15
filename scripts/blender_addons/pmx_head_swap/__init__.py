@@ -9,7 +9,7 @@ Needs the pmx_outfit_transfer add-on folder next to this one (shared helpers).
 bl_info = {
     "name": "PMX Head Swap",
     "author": "ripper_tpose",
-    "version": (0, 2, 0),
+    "version": (0, 3, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar > MMD > 换头",
     "description": "把一个 PMX 模型的头（脸、眼睛、睫毛、眉毛、头发、表情、头发物理）换到另一个 PMX 模型的身体上，"
@@ -57,6 +57,9 @@ class PHS_Settings(bpy.types.PropertyGroup):
                                    description="开口边就是脖子接缝的那个材质；留空按名字认（ROE _nk_face），认不出取勾选的第一个")
     body: bpy.props.StringProperty(name="目标的身体材质",
                                    description="脖子接缝在这个材质上；留空用 ROE 的 *_nk_body，没有就按 body / skin 认；几个用逗号隔开")
+    neck_from: bpy.props.StringProperty(name="源的脖子材质",
+                                        description="源的脸只是一块面具、脖子和后脑在身体材质里（Genesis 8 / Daz 一类）时填这个"
+                                                    "材质：按目标脖子接缝的高度在它上面沿网格切一圈，切下的上半截当脸材质；ROE 留空")
     import_result: bpy.props.BoolProperty(name="做完导入场景", default=True)
     report: bpy.props.StringProperty()
 
@@ -132,7 +135,8 @@ class PHS_OT_swap(bpy.types.Operator):
         try:
             report = core.swap_head(donor, target, out, head_materials=head, remove_materials=remove,
                                     blend_cm=s.blend_cm, tone=s.tone, scale=s.scale, prefix=prefix,
-                                    face=s.face or None, body=s.body or None, log=print)
+                                    face=s.face or None, body=s.body or None, neck_from=s.neck_from or None,
+                                    log=print)
         except Exception as exc:                                    # noqa: BLE001
             traceback.print_exc()
             self.report({"ERROR"}, str(exc))
@@ -184,6 +188,7 @@ class PHS_PT_panel(bpy.types.Panel):
         box.prop(s, "prefix")
         box.prop(s, "face")
         box.prop(s, "body")
+        box.prop(s, "neck_from")
         box.prop(s, "import_result")
         layout.operator("pmx_head_swap.swap", icon="USER")
         if s.report:
