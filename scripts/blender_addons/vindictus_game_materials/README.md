@@ -54,6 +54,10 @@ New-Item -ItemType Junction -Path "$env:APPDATA\Blender Foundation\Blender\3.6\s
 
 - 存档里 Fiona 的全部 PMX：`Fiona`、`Fiona_BaseBody`、`PCF_001` … `PCF_067`、`Shiningwill_legacy`，以及手臂 / 肘部修正版；
   19 个都试过，材质全部找到。
+  2026-11-15 把存档里全部 41 个 PMX（含 12 套衣服和各种修正版）在后台各导入一遍：595 个材质全部找到。
+  其中 `Shiningwill_legacy` 原来有 7 个对不上：Blender2XPS 的名字长度限制正好截在部件名中间
+  （`4_Onepiece-T-pc-female-shiningwill-lower-01-MI-One`，原本是 `…-MI` 加部件 `-Onepiece`）。
+  现在名字末尾是部件名的开头时，会把这一截去掉再找。对比图在 `E:\game_export\Vindictus\_游戏材质插件\`。
 - 爆衣插件的 `Fiona_full` / `Fiona_burst`（两个身体）：
   - 衣服、脸、头发从 `Fiona.blend` 来，裸体从 `Fiona_BaseBody.blend` 来（那份修过脖子和肤色）；
   - 裸体平时是隐藏的，「衣服非表示」这类表情把它显示出来，换上游戏材质以后也一样。

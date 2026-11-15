@@ -14,6 +14,24 @@
 
 ---
 
+## 2026-11-15 — Vindictus 游戏材质插件：存档里 41 个 PMX 全部能在 Blender 里还原高清材质（Shiningwill_legacy 的截断名修好）
+
+用户问：Vindictus: Defying Fate 是不是都有高清材质，在 Blender 里导入 PMX 能不能还原。
+插件 `vindictus_game_materials`（10-11 做的）就是干这个的：mmd_tools 导入 PMX 以后，侧栏 MMD →「Vindictus 游戏材质」→
+「换上游戏原始材质」。它从归档 .blend 搬来游戏的完整材质：颜色、法线、ARM 粗糙度 / 金属度、皮肤透光、头发三色和透明、眼睛。
+
+**修复**：Blender2XPS 的材质名有长度上限，正好截在部件名中间时插件对不上。
+例如 `4_Onepiece-T-pc-female-shiningwill-lower-01-MI-One`，原本是游戏材质 `T_pc_female_shiningwill_lower_01_MI` 加部件 `-Onepiece`。
+现在名字末尾是部件名的开头时，把那一截去掉再找（`scripts/vindictus/game_materials_blender.py` 的 `match`）。
+
+**验证**：用插件核心的命令行（`blender -b --factory-startup --python game_materials_blender.py -- <pmx>`，不开窗口），
+把 `E:\game_export\Vindictus` 的 41 个 PMX 各导入一遍。修复前 40 个 100%、`Shiningwill_legacy` 22/29；
+修复后它也是 29/29，合计 595/595 个材质。还渲了它的「MMD 着色 / 游戏材质」对比
+（`E:\game_export\Vindictus\_游戏材质插件\Shiningwill_legacy_左MMD着色_右游戏材质.jpg`）：盔甲金属反光、锁子甲凹凸、丝巾光泽都回来了。
+插件以目录联接装在 Blender 3.6，重开 Blender 后生效。
+
+---
+
 ## 2026-11-15 — 高清材质：按用户决定只做 Vindictus（Defying Fate 41 个 PMX 完成）；工具补上 ROE 免烘焙、Vindictus 读游戏 .blend、整批脚本
 
 接 11-14 的 pmx-todo 第 2 项（`docs/pmx-hq-materials.md`）。

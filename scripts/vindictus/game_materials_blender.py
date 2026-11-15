@@ -191,6 +191,15 @@ def match(names, index, hint="", parts_of=None):
                 longer = [k for k in by_key if k.startswith(mkey)]
                 if len(longer) == 1:
                     hits = by_key[longer[0]]
+            if not hits and part:
+                # the limit cut INSIDE the "-<part>" a shared material got: Shiningwill_legacy's
+                # "4_Onepiece-T-pc-female-shiningwill-lower-01-MI-One" = T_pc_female_shiningwill_lower_01_MI on part
+                # Onepiece (7 of its 29 materials were unmatched, 11-15)
+                tail = "-" + key(part)
+                for cut in range(len(tail) - 1, 1, -1):
+                    if mkey.endswith(tail[:cut]) and by_key.get(mkey[:-cut]):
+                        hits = by_key[mkey[:-cut]]
+                        break
         found[sig] = hits
     votes = collections.Counter()
     for hits in found.values():
