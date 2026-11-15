@@ -124,6 +124,32 @@ python hs1_outfit_export.py --hs1 D:\hs_gantz\hs1_hankokoli --item "${S}:p_cf_to
 - **颜色**：一代服装卡里的配色没读，`--color 材质正则=#RRGGBB` 乘到颜色贴图上（衣服读的是 `color1`）。hankokoli 的预览图里是黑色。
 - 只做了全身连体衣这一套。作者预览里的开胸上衣 + 比基尼 + 长袜几种穿法要按件选穿着状态（上衣用 `_b`、比基尼用 `_a`），长袜的筒身也没出来，没做。
 
+## Studio 道具 zipmod：`studio_item_export.py`（2026-11-15：Fouetty 的 Marvel Rivals Venom）
+
+Studio 道具不在角色定制的物品列表里，而是在 `abdata\studio\info\<mod>\ItemList_*.csv`，表里的 `Bundle` / `Object` 两列给出包和 Prefab。
+把别的游戏的整个角色移植进来的 mod 就是这种，例如 `[Fouetty] Venom Marvel Rivals`：一个 450 MB 的包，148 根骨头，9 个蒙皮网格，22 张贴图。
+
+```powershell
+python -I scripts\honeyselect2\studio_item_export.py "<x.zipmod>" --character Venom --name Venom_MarvelRivals_Fouetty
+# PMX / XPS 用通用的 biped_pmx（这个移植用的是 Rigify 风格的 .twk 骨链）
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b <blend> --python scripts\pmx_tools\biped_pmx\export_pmx_blender.py -- --rig rigify_twk --out <dir> --name <名字>
+```
+
+- **模型**：AssetStudioModCLI（`-m splitObjects`）导 FBX。
+- **贴图**：用 UnityPy 按材质槽一张张导，文件名带 path id，因为两张贴图可能同名。
+- **材质**：用 `scripts\marvelrivals\build_blend.py`，FBX 输入。
+- **输出**：`E:\game_export\HoneySelect2\<角色>\{blend,pmx,xps}\<名字>\`。
+
+坑：
+
+1. **骨骼和皮肤单位不一致**：AssetStudio 把 Prefab 的 ×0.01 放在骨架物体上、×100 放在网格上。皮肤位置看着对，骨骼却小了 100 倍，一摆姿势就绕错的点转。
+   导入后骨架缩放改回 1，网格保持原来的世界位置；建模脚本的 `joint check` 会确认（Venom 平均 5 cm）。
+2. **Unity 的 DXT5nm 法线**：红通道全是 1，X 在 alpha、Y 在绿。当普通 RGB 法线用，全身是一块块的明暗斑。
+   现在红通道接近 1、alpha 有变化就按 DXT5nm 解，alpha 设成 `CHANNEL_PACKED`。
+3. **UV 分格**：身体、手臂、腿、指甲分在 1–5 号 UV 格（原游戏的 UDIM）。渲染时贴图重复所以看着正常，
+   但 PMX / XPS 的颜色烘焙只填 0–1 这一格，结果全透明，跳舞视频里只剩头。烘焙前把这些面整格挪回 0–1。
+4. 这个 mod 带一个成人向的附加网格（DAZ G9 的部件），原样保留。舞蹈里手张开时爪子很长，是模型本来的比例（指尖离手腕 45 cm），不是变形。
+
 ## 转 PMX（`export_pmx_blender.py`，2026-10-31，样品 Akina Obata）
 
 ```powershell

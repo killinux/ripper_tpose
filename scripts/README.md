@@ -24,6 +24,12 @@
 | Vindictus（洛奇英雄传）北美服 | Source 引擎改版，`.hfs` v4 包（加密压缩，用 Unicorn 跑游戏自己的 `FileSystem_Stdio.dll` 读） | [`vindictusna/`](vindictusna/) | `vindictusna\list_models.py` / `export_model.py` |
 | ELDEN RING / SEKIRO（Nexus 角色 mod） | FromSoftware：DCX（DFLT / Oodle KRAK）、BND4、FLVER2（0x20014 / 0x2001A）、TPF（含 BC6H）、MATBIN / MTD；mod 自带模型贴图，不用装游戏 | [`eldenring/`](eldenring/) | `eldenring\export_mod.py <mod .zip / .rar / .7z>`：高清材质 `.blend` + XPS + PMX（`--variant` 去零件版，`--set` 一包多套） |
 | Marvel Heroes Omega（Nexus 服装 mod） | Unreal 3（`.upk` 版本 868/3，不压缩；UE Viewer 不支持这个游戏，包、模型、贴图自己读）；mod 自带模型贴图，不用装游戏 | [`marvelheroes/`](marvelheroes/) | `marvelheroes\export_upk.py <mod .zip / .upk> --out <目录>`：`.blend` + PSK + PNG 贴图（`--list` 先看包里有什么） |
+| Marvel Rivals（Nexus 皮肤 mod） | Unreal 5.3 IoStore（mod 的 `_P.pak/.utoc/.ucas`；CUE4Parse + 公开的 usmap / 密钥；mod 没带的基础材质贴图要装好的游戏，且要新版 usmap） | [`marvelrivals/`](marvelrivals/) | `marvelrivals\export_mod.py <mod .zip / .rar>`：每个变体一套高清 `.blend` + PMX + XPS（`--list` 先看） |
+| 生化危机 2 / 3 重制版（RE Engine 角色 mod） | `natives\...\*.mesh / .mdf2 / .tex`，经 Blender 4.5 的 RE Mesh Editor 导入（工具在仓库外）；不用装游戏，mod 没带的贴图（头发、道具）是纯色 | [`re_engine/`](re_engine/) | `re_engine\export_mod.py <mod .zip> --game ResidentEvil3 --character Jill`：高清 `.blend` + PMX + XPS |
+
+上面几个新流程的 PMX / XPS 都用 [`pmx_tools/biped_pmx/`](pmx_tools/biped_pmx/README.md)：把游戏骨骼映射成 3ds Max Biped 名字，接仓库现有的
+Rise of Eros / Stellar Blade PMX 链和 blender2xps；新游戏只要写一个骨骼映射（`rigs\*.py`）。HS2 的 Studio 道具 zipmod 见
+[`honeyselect2/studio_item_export.py`](honeyselect2/README.md)。
 
 旧命令 `scripts\extract_character.ps1` 仍然可用，它只转发到
 `scripts\riseoferos\extract_character.ps1`，因此原有 ROE 自动提取逻辑不变。

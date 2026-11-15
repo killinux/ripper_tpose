@@ -14,6 +14,70 @@
 
 ---
 
+## 2026-11-15 — 女毒液 mod 批量转换：生化危机 3 / HS2 / Marvel Heroes 出高清 .blend + PMX + XPS；新增通用 PMX 骨骼映射、RE Engine 和 Marvel Rivals 流程；修正 Marvel Heroes 的骨骼旋转
+
+用户在 `E:\Downloads\Venom_mod` 下了 14 个 mod，要求都转成高清 Blender、PMX 和 XPS。这些 mod 分属 5 个游戏。
+
+**结果**（成品在 `E:\game_export\`）
+
+| 游戏 | mod | 结果 |
+|---|---|---|
+| Marvel Heroes Omega | #369 Gwenom | `MarvelHeroesOmega\Gwenom\{blend,psk,pmx,xps}`：骨骼修正后重新导出 |
+| 生化危机 3 重制版 | #1424 She-Venom Jill（蓝）、#1561 Black / Black Damage | `ResidentEvil3\Jill\{blend,pmx,xps}\`，3 套；头发贴图在游戏本体里，是纯色发帽 |
+| HoneySelect 2 | [Fouetty] Venom Marvel Rivals（Studio 道具） | `HoneySelect2\Venom\{blend,pmx,xps}\Venom_MarvelRivals_Fouetty` |
+| Marvel Rivals | 8 个（She-Venom、Storm、Sue Storm、黑寡妇） | 流程写好了；游戏本体的材质要新版 usmap，等用户下载 |
+| 蜘蛛侠 2 | 2 个 Gwenom | 没做：新版 `.model` 的顶点格式没有工具能读（ALERT 只支持到 Rift Apart） |
+
+**新增**
+
+- `scripts/pmx_tools/biped_pmx/`：任意游戏的 .blend → PMX / XPS。
+  - 把游戏骨骼映射成 3ds Max Biped 名字（`rigs/*.py`：`mho`、`ue_mannequin`、`re_engine`、`rigify_twk`），再接仓库现有的 Rise of Eros / Stellar Blade PMX 链和 blender2xps；
+  - `rigtools.py` 提供改名、换父骨、去空骨、删无皮肤骨、合并表情骨、按左右拆胸骨；
+  - 烘焙前把其他 UV 格的面挪回 0–1；
+  - 可选把弯着绑定的手指拉直（`--straighten-fingers`）。
+- `scripts/re_engine/`：生化危机 2 / 3 重制版的角色 mod → 高清 .blend + PMX + XPS。
+  - RE Mesh Editor（Blender 4.5，工具在仓库外）导入，只在这次会话启用；
+  - Blender 3.6 按 RE 贴图绑定（ALBM / NRMR / ATOS）重建材质；
+  - 一个压缩包里有几个 mod 文件夹时，每个出一套。
+- `scripts/marvelrivals/`：Marvel Rivals 皮肤 mod → 高清 .blend + PMX + XPS。
+  - CUE4Parse 加公开的 usmap / 密钥，游戏容器用硬链接；
+  - 材质实例连同父材质一代代读；读不出贴图参数时按名字到同一套皮肤里找贴图；
+  - `fix_utoc.py` 修「标了加密、索引却是明文」的容器（#10647 黑寡妇）。
+- `scripts/honeyselect2/studio_item_export.py`：HS2 的 Studio 道具 zipmod → .blend（AssetStudio FBX + UnityPy 贴图）。
+- `scripts/marvelheroes`：加 PMX / XPS 说明；`write_psk.py` / `build_blend.py` 加关节检查（每个关节离它带动的皮肤多远）。
+
+**修正**
+
+- **Marvel Heroes 的骨骼旋转**（18117ae 里是错的）：包里存的是真正的局部旋转，PSK 的子骨要存共轭。原来子骨也按根骨的写法写，
+  手臂链越往下越偏（手腕偏 0.65 m）。静止图看不出来；PMX 一跳舞，手指就甩出尖刺。
+  现在子骨写 (x, -y, z, w)，根骨写 (x, -y, z, -w)；关节离皮肤平均 2.9 个游戏单位。之前用错误约定算是 20 以上。
+
+**原理与坑**（细节在各 README）
+
+- RE Mesh Editor 的「显示控制台」会让后台 Blender 崩溃，要关掉；
+- 它按游戏路径缓存贴图，第二个 Jill 会拿到第一个的蓝色贴图，所以每次重新转；
+- ALBM / NRMR / ATOS 的 alpha 是数据，要设 `CHANNEL_PACKED`，不然 PMX 的脸是黑的；
+- AssetStudio 的 FBX 骨骼和皮肤差 100 倍，要统一单位；
+- Unity 的 DXT5nm 法线要按「X 在 alpha、Y 在绿」解；
+- UDIM 式 UV 分格会让颜色烘焙为空；
+- Marvel Rivals 的公开 usmap 是第 1 赛季的：mod 的资源读得出，游戏本体的材质和贴图读不出，要新版（Nexus #13477 Variant Skin Studio 带的 `Marvel.usmap`）。
+
+**用户怎么用**
+
+- 打开 `E:\game_export\<游戏>\<角色>\blend\<名字>\<名字>.blend`；
+- PMX 在 `pmx\<名字>\`，XPS 在 `xps\<名字>\`，每套都有 `preview.png`；
+- 重新导出的命令见各个 README。
+
+**验证**
+
+- 每个 PMX 都用默认测试舞蹈（瓦雷莎手势舞）渲了视频，按每秒 2 帧检查；
+- PMX 撕裂 0，Jill 最大拉伸 8.8 mm，Gwenom 1.2 mm；
+- XPS 没有缺权重的顶点；
+- .blend 用相对路径，单独打开没有缺失贴图（Gwenom 自检）；
+- 预览和 mod 作者的截图对照：Gwenom 的商店图、Jill 的 mod 截图。
+
+---
+
 ## 2026-11-15 — Marvel Heroes Omega 的 mod 不用游戏本体转 Blender：`scripts/marvelheroes`（第一个：Gwenom，Nexus #369）
 
 用户问：`E:\Downloads\Venom` 下的 Gwenom mod 没有游戏本体，能不能转成 Blender。这个 mod 是 Marvel Heroes Omega 的

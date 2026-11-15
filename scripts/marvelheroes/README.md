@@ -71,8 +71,10 @@ UE Viewer 的游戏列表里没有 Marvel Heroes。它能读包头（`Ver: 868/3
    每一步都有检查：三角形数对得上索引数，索引不超过顶点数，每个顶点权重和 255，骨骼编号都在 chunk 的骨骼表里。对不上就报错停下，不会出一个坏模型。
 3. **材质**（`materials.py`）：每个 MaterialInstanceConstant 的父材质和贴图 / 标量 / 颜色参数。
 4. **贴图**（`textures.py`）：包里那一层最大的 mip → DDS → texconv 转 PNG。这个 mod 的 10 张都是 DXT5，2048² 或 1024² 或 512²。
-5. **写 PSK**（`write_psk.py`）：写法和 UE Viewer 一模一样，所以 Blender 的 `io_scene_psk_psa` 导入后左右是对的：
-   - Y 取反：位置、法线、骨骼；骨骼四元数是 Y 和 W 取反；
+5. **写 PSK**（`write_psk.py`）：按 UE Viewer 的写法，Blender 的 `io_scene_psk_psa` 导入后左右和关节位置都是对的：
+   - Y 取反：位置、法线、骨骼位置；
+   - 骨骼旋转：包里存的是**真正的局部旋转**，而 PSK（ActorX）的子骨要存共轭（导入器会再共轭回来）。
+     所以根骨写镜像后的旋转 (x, -y, z, -w)，子骨写它的共轭 (x, -y, z, w)。见「坑」10；
    - 三角形前两个角对调；
    - 位置、法线、权重都相同的顶点合成一个点，UV 缝两边仍然是平滑着色；
    - 法线写在 `VTXNORMS`，权重写在 `RAWWEIGHTS`。
@@ -128,6 +130,13 @@ Gwenom 的 4 个材质：
    跳过时用后面紧跟的骨骼表核对长度，对不上会自动试 40–119 字节，还不行就报错。
 8. **比例和朝向**：游戏单位不是厘米（人物约 93 单位高），0.018 是按身高 1.68 m 定的。导入后已经应用了缩放和旋转，骨架和网格的变换都是 1。
 9. Windows 的 GBK 控制台打印模型路径会出编码错误，脚本里把输出改成了 UTF-8。
+10. **骨骼旋转的约定**：2026-11-15 第一版写错了，已推送的 18117ae 里就是错的。
+    - **错在哪**：起初根骨和子骨都按 (x, -y, z, -w) 写，导入器又把子骨共轭一次。结果手臂链越往下越偏，手腕离它带动的皮肤 0.65 m。
+    - **为什么静止时看不出来**：骨架修改器在静止姿势下不动顶点。一跳舞、一弯手指，顶点就被甩成一根根尖刺。
+    - **怎么确认的**：拿游戏原始数据按两种约定各算一遍。按「父 × 局部，局部就是真旋转」，每个关节离自己皮肤的重心平均 2.9 个游戏单位；
+      按 ActorX 的约定（子骨存共轭），平均 20 以上。
+    - **现在的检查**：`write_psk.py` 每次导出都做这个检查（`joint check`），`build_blend.py` 在 Blender 里再按米制查一遍，差得多就打印 WARNING。
+      Gwenom 平均 5 cm，最远是右胯 13 cm（那是整条大腿皮肤的重心）。
 
 ## 没做的
 
@@ -135,7 +144,19 @@ Gwenom 的 4 个材质：
   UE Viewer 读这些 AnimSet 也报错。要转的话，得按 UE3 的压缩动画格式自己解，再转成 Blender 动作或 VMD。
 - 只取 LOD 0（这个 mod 只有一个 LOD）。顶点色和 morph 没处理，这个 mod 也没有。
 - 物理资产（`female_l_physics_v2`）和 63 个挂点（socket）没导。
-- 转 PMX / XPS：用仓库里现有的 PMX 流程，需要的话再做。
+
+## 转 PMX / XPS
+
+用通用的 `scripts\pmx_tools\biped_pmx`，骨骼映射 `mho`。这套骨架的腿挂在根骨上、胸部只有一根骨，映射里都整理好了，详见那边的 README。
+
+```powershell
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b E:\game_export\MarvelHeroesOmega\Gwenom\blend\Gwenom\Gwenom.blend `
+    --python scripts\pmx_tools\biped_pmx\export_pmx_blender.py -- --rig mho --out E:\game_export\MarvelHeroesOmega\Gwenom\pmx\Gwenom --name Gwenom
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b E:\game_export\MarvelHeroesOmega\Gwenom\blend\Gwenom\Gwenom.blend --factory-startup `
+    --python scripts\pmx_tools\biped_pmx\export_xps_blender.py -- --rig mho --out E:\game_export\MarvelHeroesOmega\Gwenom\xps\Gwenom --name Gwenom
+```
+
+Gwenom 的 PMX：18 个刚体，左右胸部物理，撕裂 0，最大拉伸 1.2 mm。用默认测试舞蹈跑过，手、手指、抬腿都正常。
 
 ## 验证（Gwenom）
 

@@ -85,6 +85,35 @@ lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)
 hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
 log("bounds %s .. %s, height %.3f m" % (tuple(round(c, 3) for c in lo), tuple(round(c, 3) for c in hi), hi.z - lo.z))
 
+
+def joint_check():
+    """Each skinned bone's head vs the weighted centre of its own skin (metres).  A skeleton that does not match the
+    bind pose shows here at once (the first Gwenom export had the wrist 0.65 m off and posed fingers as spikes)."""
+    acc = {}
+    names = {g.index: g.name for g in mesh.vertex_groups}
+    for v, p in zip(mesh.data.vertices, pts):
+        for g in v.groups:
+            a = acc.setdefault(names[g.group], [Vector(), 0.0])
+            a[0] += p * g.weight
+            a[1] += g.weight
+    errs = {}
+    for name, (s, w) in acc.items():
+        b = arm.data.bones.get(name)
+        if b is None or w < 50:
+            continue
+        errs[name] = ((arm.matrix_world @ b.head_local) - s / w).length
+    if not errs:
+        return {}
+    worst = max(errs, key=errs.get)
+    return {"joints": len(errs), "mean_m": round(sum(errs.values()) / len(errs), 3), "worst": worst,
+            "worst_m": round(errs[worst], 3)}
+
+
+JOINTS = joint_check()
+log("joint check: %s" % JOINTS)
+if JOINTS.get("mean_m", 0) > 0.2:
+    log("WARNING: the bones sit far from the skin they move - posing will tear the mesh")
+
 # ---- textures, copied next to the .blend (relative paths)
 out_dir = os.path.dirname(OUT)
 tex_out = os.path.join(out_dir, "textures")
@@ -299,5 +328,6 @@ def render_views(folder):
 previews = render_views(os.path.abspath(PREVIEW)) if PREVIEW else []
 print("BUILD_DONE=" + json.dumps({"blend": OUT, "vertices": len(mesh.data.vertices), "faces": len(mesh.data.polygons),
                                   "bones": len(arm.data.bones), "height_m": round(hi.z - lo.z, 3),
-                                  "materials": done, "missing_textures": missing, "previews": previews},
+                                  "joint_check": JOINTS, "materials": done, "missing_textures": missing,
+                                  "previews": previews},
                                  ensure_ascii=False))
