@@ -46,6 +46,10 @@ Blender 插件也彼此独立：
   - 导入 PMX（或 XPS / FBX）后一键换上游戏自己的完整材质：法线、金属度 / 光滑度 / AO、皮肤透光和毛孔、发色；
   - 参数实时可调，能切回 MMD 着色，不影响再导出 PMX；
   - 数据用 `riseoferos\hq_material_data.py` 从游戏包读取。说明见插件 README 和 [`docs/roe-hq-materials.md`](../docs/roe-hq-materials.md)。
+- 模型细节（跨游戏）：`scripts\blender_addons\model_details`，侧边栏 **细节** —— 导入模型以后的细节修饰，一个面板一项，以后的细节功能都加在这里。
+  第一项「眼睛发亮有神」：虹膜透光、角膜湿润反光、跟着镜头方向的眼神光；ROE、剑星、Vindictus 的 PMX 都能用，
+  叠在原来的着色上（MMD 着色，或各游戏材质插件的游戏眼睛），可调、可去掉。说明见插件 README 和
+  [`docs/model-details-eyes.md`](../docs/model-details-eyes.md)。
 - 布料撕裂（通用）：`scripts\blender_addons\cloth_tear`，侧边栏 **布料撕裂** —— B 站教程的两个布料修改器做法做成按钮：
   布料沿裂缝按帧从一边撕到另一边，附一键示例；也能撕角色的衣服（衣服跟随身体、身体碰撞和地面、推力场、按模型尺寸调快）。
   1.2 起套成圈的布（腰带、筒裙）自动补裂缝切开，项链、臂甲这类饰品不挡碎片，撕完整件掉到地上；「全部清理」一键撤掉插件加的所有东西。
