@@ -49,10 +49,12 @@ ap.add_argument("--physics", choices=("blender", "mmd"), default="blender",
                 help="blender (default): the joints as mmd_tools leaves them.  mmd: the way MMD's Bullet runs them "
                      "(see scripts/mmd_physics): no 0.5 damping on every joint axis, rotation springs in PMX units, "
                      "gravity 98 - and bodies masked against every group really collide with nothing")
+ap.add_argument("--morphs", nargs="*", default=None,
+                help="morphs for preview_morphs.png (default: まばたき 笑い ウィンク あ い う お にやり 困る 怒り びっくり)")
 args = ap.parse_args(argv)
 
 OUT = os.path.dirname(os.path.abspath(args.pmx))
-MORPHS = ["まばたき", "笑い", "ウィンク", "あ", "い", "う", "お", "にやり", "困る", "怒り", "びっくり"]
+MORPHS = args.morphs or ["まばたき", "笑い", "ウィンク", "あ", "い", "う", "お", "にやり", "困る", "怒り", "びっくり"]
 report = {"pmx": args.pmx, "vmd": args.vmd if os.path.isfile(args.vmd) else None}
 
 bpy.ops.wm.read_homefile(use_empty=True)

@@ -990,6 +990,79 @@ python fill_standard_morphs.py E:\game_export\TaimaninSquad
 - HS2：29 个表情的一览图逐个看过；刘海三角形中心有头发的比例从 6% 升到 47%，后发 82% → 98%；没有撕裂的边（`torn 0`）。
 - Squad 抽一个（Yuzuriha）渲了表情一览；「18」系列修好的副本抽 6 个检查贴图全部能找到。
 
+## 2026-10-31 — NARAKA：转 PMX（`export_pmx_blender.py`），样品宁红夜默认外观；眼部表情由眼皮骨生成；拼音名的骨链不再被并掉
+
+**新增**
+
+- PMX 覆盖面（`docs/pmx-todo.md` 第 4 项）做到第二个游戏。`scripts/naraka/export_pmx_blender.py`：把存档里的 NARAKA
+  `.blend` 转成 PMX。和 TFD、星刃走同一条链（Convert_to_MMD5、mmd_cloth_physics、blender2xps 烘焙、mmd_tools 导出），
+  只补 NARAKA 的差别：
+  - 骨名：`gMan ` / `MotionRoot` 改成 `Bip001 ` / `Bip001`，ROE 的骨骼对照直接能用；
+  - 游戏运行用的节点（碰撞体，武器、瞄准、镜头挂点等）不带蒙皮，删掉；
+  - 眼球骨 `Face_*_Yanqiu` → 左目 / 右目 + 両目；`L_breast` / `R_breast` → 左胸 / 右胸 + 胸部物理；
+  - 表情：战斗脸没有形态键，也没有嘴和眉毛的骨骼，只有上下眼皮骨。按睁眼时上下眼睑边缘的夹角转眼皮骨，生成
+    eyeBlink / eyeWide / eyeSquint（左右各一）形态键，再混出 9 个 MMD 眼部表情；
+  - 骨链保住：Convert_to_MMD5 会把挂在脊柱上、在中线上、名字不像布料或头发的骨并掉。NARAKA 用拼音命名的链
+    （`belt_`、`piaodai_`、`daizi_` ……）都会这样丢；脚本里改成链上的骨一律保留。
+  - 睫毛染黑：游戏的睫毛着色器用 `_EyelashColorL` / `_R`（战斗脸是纯黑）给睫毛上色，`_MainTex` 里的睫毛丝本身是纯白的。
+    存档 `.blend` 直接拿 `_MainTex` 当颜色，所以上下睫毛都是白的。导出前按 mrav 红通道（睫毛遮罩）把
+    `scene.json` 里的睫毛颜色混进去，再烘焙。
+- `scripts/stellarblade/preview_pmx_blender.py` 新选项 `--morphs`：指定表情预览图里放哪些表情，默认不变。
+- `scripts/stellarblade/export_pmx_blender.py` 新函数 `opaque_materials` / `fill_opaque_alpha`：导出后，把只给不透明材质用的
+  贴图的 alpha 填成 1。MMD 会把贴图的 alpha 乘进材质，而游戏贴图的 alpha 常放遮罩（高光、SSS），原样写出 PMX 会半透明。
+  NARAKA 和 TFD 的导出都调用；星刃自己的导出流程不变。
+- 同一脚本里再加两个函数，烘焙前调用：
+  - `join_meshes_sharing_materials`：`bake_node_colours` 只按第一个用到某材质的网格烘，其余网格采到空白。
+    胡桃的百褶裙因此看不见，迦南的腰布、披布填 alpha 后成了纯黑。现在共用材质的网格先合并。
+  - `wrap_uv_tiles`：烘焙只填 0–1 那一格。胡桃的头皮 UV 在 v 1.13–1.93，烘成全透明后被隐藏。
+    现在先把格子外的面整格挪回来（贴图重复平铺，颜色不变）。
+  另有 `transparent_at_faces`：导出后、填 alpha 前，量每个材质在贴图上 alpha < 0.5 的三角形占比，
+  报告里的 `opaque_holes` 列出不透明材质上烘空的地方。
+- 用户点名的另外两个样品：胡桃、迦南的默认外观（`E:\game_export\NARAKA\胡桃|迦南\pmx\`），各带预览图和手势舞视频；
+  宁红夜也按最终脚本重导了一遍。
+- 样品 `E:\game_export\NARAKA\宁红夜\pmx\ch_f_ming_mangjianke_lv_a0\`：PMX、贴图、报告、4 张预览图、手势舞视频。
+
+**用户如何操作**
+
+```powershell
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b E:\game_export\NARAKA\宁红夜\blend\ch_f_ming_mangjianke_lv_a0\ch_f_ming_mangjianke_lv_a0.blend `
+  --factory-startup --python scripts\naraka\export_pmx_blender.py -- --out E:\game_export\NARAKA\宁红夜\pmx --model-name 宁红夜_lv_a0
+```
+
+在 MMD 或 Blender（mmd_tools）里打开 `ch_f_ming_mangjianke_lv_a0.pmx`。
+
+**实现原理与兼容性**
+
+- 星刃、ROE 的脚本按模块载入（一份实现，不复制）。以下改动都只影响这次运行：
+  - `sb.BUST` / `sb.EYE_MAT_RE` / `sb.RECIPES` 载入后按 NARAKA 改；
+  - Convert_to_MMD5 的辅助骨分类函数换成保留骨链的版本。
+- 眼皮绕眼球中心、沿两眼连线的轴转。闭眼时上眼皮走 3/4、下眼皮走 1/4，再多转 0.5° 合严。
+  笑い、ウィンク、はぅ 里的眯眼成分减少，免得上下眼皮互相穿过。
+- 所有女英雄共用一张战斗脸，眼皮骨的名字都一样，其余外观可以直接用这个脚本。
+
+**已执行的验证**
+
+- 宁红夜 lv_a0 导出约 3 分钟：
+  - 26,931 顶点、179 骨；9 个 MMD 眼部表情 + 6 个 ARKit 眼部形态键；
+  - 62 刚体 / 44 关节：裙摆 6 条、腰前带子、头发 3 条、胸；
+  - 撕裂 0，零权重洞 0，`stray_recipients` 为空，付与顺序检查通过。
+- 填 alpha：宁红夜 5 张贴图（外套、裙片、眼睛、脸、身体）只改了 alpha（RGB 最大差 0），头发、睫毛、头皮不动；
+  PMX 本体逐字节不变。
+- 睫毛：贴图里睫毛丝 RGB 全是 255、mrav 红通道 255；睫毛下的眼窝阴影圈红通道约 20。眼部特写对比
+  （存档 `.blend` / 之前的 PMX / 修好的 PMX）放在 PMX 旁边 `睫毛修复对比.jpg`。PMX 本体逐字节不变，只换了睫毛贴图。
+- 合并 / 挪 UV 之后，三个样品的 `opaque_holes` 都为空，没有材质被当成空壳：
+  - 胡桃：百褶裙回来了，头皮正常；
+  - 迦南：腰布和披布恢复白底、蓝底金纹；
+  - 宁红夜：外套接缝处的 alpha 0 采样点没了。
+  三人的预览图都和存档 `.blend` 的预览对照过，手势舞视频每秒 2 帧看过：没有撕裂，物理没有炸开。
+- 原 `.blend` 和 PMX 从正面、侧面、背面同角度渲染对比，外形一致。
+- `preview_pmx_blender.py`：
+  - 正面、9 个眼部表情、视线 5 个方向都对，ウィンク 闭的是模型的左眼；
+  - 静止 150 帧，链根最大位移 4.9 cm（腰前带子的结）。
+- 手势舞视频（MMD 式物理，11.2 s）每秒 2 帧看完：没有撕裂，物理没有炸开。
+- 495 套女性外观的 `scene.json` 骨名都扫过，链名有 hair、skirt、ribbon、piaodai、daizi、belt、sleeve、xiuzi、
+  pifeng、qunzi 等。所以脚本按结构判断骨链，不按名字。
+
 ## 2026-10-31 — 挑零件能「拆开」一个材质（只留 a08 的头饰）；e01 / f01 魔化套耳朵重出；游戏材质缓存搬家后旧 .blend 重出丢贴图的 bug
 
 **新增 / 修复**
@@ -1089,6 +1162,96 @@ python fill_standard_morphs.py E:\game_export\TaimaninSquad
   - 手势舞 304 帧，飘带、披帛的物理和 v2 一样正常。
 
 ---
+
+## 2026-10-31 — The First Descendant：转 PMX（`export_pmx_blender.py`），样品 Viessa；PMX 待做清单第 4 项（PMX 覆盖面）开始
+
+**新增**
+
+- 用户从 PMX 待做清单（`docs/pmx-todo.md`）选了第 4 项「PMX 覆盖面」：7 个游戏的存档里只有 `.blend`。先摸底，按难度排了
+  表（写进 `docs/pmx-todo.md`），从最容易的 TFD 开始，每个游戏先做一个样品给用户看。
+- `scripts/firstdescendant/export_pmx_blender.py`：TFD 的 `.blend` → PMX。复用星刃 / ROE 那条链（Convert_to_MMD5、
+  mmd_cloth_physics、ARKit 表情配方、blender2xps 烘焙、mmd_tools 导出），只补 TFD 的差别：
+  - 眼球骨 `Bn_FEye_L1` / `_R1`（按眼球材质的权重选）→ 左目 / 右目 + 両目；
+  - `Bn_Shape_Chest_L/R` → 左胸 / 右胸 + 胸部物理；
+  - 整个角色一个网格带 ARKit 形态键：借 ROE 的 `keep_shape_keys_in_rest_bakes`，A 姿势连形态键一起烘；
+  - 表情配方去掉 TFD 没有的 `TeethLowerDown`（否则あいうえお 整个被跳过）；
+  - `Bn_Shape_*` / `Bn_Twist_*` / `Pt_*` / 挂点不当布料；挂在骨骼上的头盔改成蒙皮；预览用的 `Cube` 不导出。
+- 样品 `E:\game_export\TheFirstDescendant\Viessa\pmx\Viessa\`：PMX + 贴图 + 报告 + 4 张预览图 + 手势舞视频。
+- 同日下午修：牙齿在 MMD 里半透明。牙齿贴图 `PC_003_A0101_T_Mouth_C.png` 的 alpha 是遮罩，在牙齿 UV 上平均 0.75；
+  MMD 会把贴图 alpha 乘进材质，Blender 的预览里只看得出一点颗粒。导出脚本现在把只给不透明材质用的贴图 alpha 填成 1
+  （星刃脚本里新加的 `fill_opaque_alpha`），Viessa 已按新脚本重导，对比图 `牙齿修复对比.jpg` 放在 PMX 旁边。
+
+**用户如何操作**
+
+```powershell
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b E:\game_export\TheFirstDescendant\Viessa\blend\Viessa\Viessa.blend `
+  --factory-startup --python scripts\firstdescendant\export_pmx_blender.py -- --out E:\game_export\TheFirstDescendant\Viessa\pmx
+```
+
+在 MMD / Blender（mmd_tools）里打开 `Viessa.pmx`。
+
+**实现原理与兼容性**
+
+- 星刃、ROE 的脚本按模块载入（一份实现，不复制）；`sb.EYE_MAT_RE` / `sb.RECIPES` / `sb.BUST` 在载入后按 TFD 改，
+  mmd_cloth_physics 的 `LIMB_HELPER` 加上 TFD 的辅助骨前缀，只影响这次运行。
+- 扭转骨和带皮肤的修形骨由 ROE 的辅助骨规划按皮肤位置分到肢体上（Viessa 19 根，例如 `Bn_Shape_Hip_L` 跟 左足 转 53 %）。
+- 已知限制：Gley、Harris、Nell 没有胸部骨，没有胸部物理；`Bunny_CMN_001`（三个网格）和 Monster 没试；Blender 里打方向光
+  时皮肤 / 头发上有零星小白点——是 MMD 材质的高光（黑背景、无灯光、纯白材质三种渲染对比过：不是破洞，关掉高光就没了），
+  星刃转出的 Eve 的 PMX 预览里也有。
+
+**已执行的验证**
+
+- Viessa：约 5 分钟导出；98,530 顶点、739 骨、26 个 MMD 表情 + 111 个 ARKit、42 刚体 / 26 关节，零权重洞 0，
+  没有骨骼权重被交给不相干的骨（`stray_recipients` 空），撕裂 1 条边，付与顺序检查通过。
+- `preview_pmx_blender.py`：正面、12 个表情（眨眼、笑、单眼眨、あいうお、にやり、困る、怒り、びっくり）、视线、跳舞 4 帧都对。
+- 手势舞视频（MMD 式物理，11.2 s）每秒 2 帧看完：没有撕裂、物理没有炸开。
+- 法线检查：反向的 366 个顶点大多在睫毛 / 头发片上（游戏模型本来如此），脸上 4 个在鼻孔里。
+- 填 alpha 后重导：PMX 本体和之前逐字节相同；4 张贴图（牙齿、眼睛、两块服装）只改了 alpha，RGB 最大差 0；
+  头发、眉毛、睫毛的贴图不动。重出的表情预览里，あ / お 的嘴里不再有半透明颗粒。
+
+## 2026-10-31 — Vindictus：其余 12 套 UE 身体服装也有了「手臂修正_肩部辅助骨」PMX；批量脚本 `arm_fix_batch.py`；今天的布料物理比 10-17 的好
+
+**新增**
+
+- 用户（PMX 待做清单之外的旧事项）：「Vindictus 剩下的 12 套服装」。PCF_001、PCF_001_Temp、PCF_002、003、004、006、007、
+  008、009、010、012、067 照 PCF_005 / Fiona 的试验文件做了 `<id>_手臂修正_肩部辅助骨.pmx`（抬臂 40°、手指拉直、肘部和肩部
+  辅助骨、不做腋窝平滑），放在 `E:\game_export\Vindictus\Fiona\pmx\<id>\` 原文件旁边；存档的 `<id>.pmx` 没动。
+- `scripts/vindictus/arm_fix_batch.py`：一套一套跑 `export_pmx.py` → `cloth_collision_pmx.py`（Fiona_full 的碰撞体）→
+  `pmx_elbow.py` → `pmx_shoulder.py`，再和存档的 `<id>.pmx` 对比（顶点 / 面 / 材质 / 贴图文件 / 骨骼只多 10 根辅助骨 /
+  手臂以外的顶点 / 表情偏移 / 刚体数），`--stand` 加站立物理检查，`--copy` 全部通过才放进存档（同名文件不覆盖，复制后核对
+  md5）。10-11、10-17 用的是临时脚本，这次收进仓库。
+
+**用户如何操作**
+
+```powershell
+cd scripts\vindictus
+python .\arm_fix_batch.py PCF_001 PCF_002 --stand --copy        # 每套 3–8 分钟
+```
+
+在 MMD / Blender 里打开 `<id>_手臂修正_肩部辅助骨.pmx` 就是新版；`<id>.pmx` 还是原来的。
+
+**实现原理与兼容性**
+
+- 和 10-17 PCF_005 的流程一样，几何、权重、骨骼、表情逐字节相同；不同的是头发和布料的物理：
+  - Blender 3.6 里的 `mmd_cloth_physics` 是指向本仓库工作区的链接，10-24 / 10-25 升到了 0.2.4（链与链在网格相连处系住，
+    关节变多：PCF_001 246 → 259，PCF_008 169 → 223）；
+  - 装在 Blender 里的 `Convert_to_MMD5` 10-24 换了 `convert/skirt.py`（布箱坐标架原来是镜像，箱子绕骨乱转）。
+  - 先在 PCF_005 上新旧各导一份比过：站立 150 帧裙摆最多 12.0 → 8.7 cm、头发 5.2 → 5.5 cm；手势舞里每帧穿进身体的顶点
+    118 → 39（裙子 100 → 21），头发两边都约等于 0。新的更好，所以 12 套用今天的工具；PCF_005、Fiona 的两份试验文件没动。
+  - 从 10-17 的提交 `git archive` 出来跑并不能复现旧文件：Blender 不加 `--factory-startup` 时先按用户设置加载工作区的
+    `mmd_cloth_physics`，旧代码没被用上。逐字节复现要 `--factory-startup` + 旧仓库代码 + `skirt.py` 为 10-24 之前版本的
+    `Convert_to_MMD5` 副本（README 写了）。
+- PCF_010 多 7 个刚体：跟骨的身体碰撞体（上半身4/5、腕捩、足D、頭2），别的服装都有，它的存档版没有（`--accept-rigids PCF_010`）。
+
+**已执行的验证**
+
+- 12 套全部导出，每套 153–370 s（同时有别的窗口 10 个 Blender 在跑）。对比存档：贴图 10–16 张全部逐字节一样；顶点、面、
+  材质、表情数一样；多 10 根辅助骨；手臂以外顶点最多移动 0.09 cm、表情偏移差 0.02 cm（重新烘焙的误差）；刚体数一样
+  （PCF_010 见上）。
+- 站立物理（`checks/physics_standing.py`，MMD 单位）：12 套都没炸开，头发最多 5.5 cm，裙摆最多 6.5–9.0 cm。
+- `arm_fix_batch.py` 在做好的文件上重跑（步骤跳过、只检查）：PCF_001 / PCF_010 / PCF_067 检查通过，`--copy` 认出存档里
+  已是同一文件；不给 `--accept-rigids` 时 PCF_010 被拦下。
+- 12 个文件复制进存档后 md5 和工作目录一致。
 
 ## 2026-10-31 — AION2：转 PMX / XPS（7 位有名字的女角色）；表情用游戏自己的 ARKit 姿势；没骨骼的长发生成骨骼链；Satia（幽灵）、Snotra、Urd、Siel 的特殊处理
 

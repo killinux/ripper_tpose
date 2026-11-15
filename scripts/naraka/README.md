@@ -17,6 +17,7 @@ bundle 改过文件头但没加密，脚本自己解包，只用 UnityPy + numpy
 | `naraka_catalog.py` | 库 | 清单 → 分组（outfit / hair / full_body / weapon …），外观 ↔ 配套发型 |
 | `naraka_mesh.py` | 库 | 直接从 typetree 解 Mesh 顶点流（UnityPy 的 Mesh 类在这个游戏上会报错） |
 | `naraka_scene.py` | 库 | 把外观、发型、脸挂到同一套骨架上（路径 CRC32、bindpose 反推父骨），烘眼睛/眉毛，写 `scene.json` |
+| `export_pmx_blender.py` | Blender 3.6 无头 | 存档里的 `.blend` → MMD 的 `.pmx`（眼部表情、视线、胸 / 裙 / 发 / 飘带物理），见「导出 PMX」 |
 
 默认路径：游戏 `E:\SteamLibrary\steamapps\common\NARAKA BLADEPOINT`（改 `naraka_env.py` 或
 `--game-data <StreamingAssets>`），导出 `D:\naraka_exports`（`--out` 或环境变量 `NARAKA_OUT`），
@@ -127,6 +128,77 @@ python batch_export.py --sex f --out E:\game_export\NARAKA --dry-run    # 只看
 在全部结束后写一次（各批进程带 `--no-html`，免得同时写一个文件）。`--fbx`、`--no-preview`、`--keep-fx`、
 `--force` 原样传给 `export_model.py`。
 
+## 导出 PMX（MMD，2026-10-31 起，样品：宁红夜默认外观）
+
+```powershell
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b `
+  E:\game_export\NARAKA\宁红夜\blend\ch_f_ming_mangjianke_lv_a0\ch_f_ming_mangjianke_lv_a0.blend `
+  --factory-startup --python scripts\naraka\export_pmx_blender.py -- `
+  --out E:\game_export\NARAKA\宁红夜\pmx --model-name 宁红夜_lv_a0
+```
+
+写出 `<out>\<外观>\<外观>.pmx` + `textures\` + `<外观>.report.json`（每一步做了什么）+ `<外观>_converted.blend`
+（转换后的场景）。`--model-name` 是 MMD 里显示的名字，`--comment` 是模型备注。要加 `--factory-startup`：
+不加的话 Blender 会按偏好设置载入布料插件的开发版，物理结果跟着别的窗口的改动变。看效果：
+
+```powershell
+# 正面、眼部表情、视线、跳舞 4 帧 -> PMX 旁边的 preview*.png
+blender -b --factory-startup --python scripts\stellarblade\preview_pmx_blender.py -- --pmx <PMX> --vmd <VMD> `
+  --morphs まばたき 笑い ウィンク ウィンク右 ウィンク２ びっくり じと目 はぅ
+# 跳舞视频（MMD 式物理）
+blender -b --factory-startup --python scripts\riseoferos\render_pmx_dance.py -- <PMX> <VMD> <WAV> <out.mp4> 0 full mmd
+```
+
+**做法**：和 TFD、星刃同一条链（`scripts/stellarblade/export_pmx_blender.py` → ROE 的
+`export_character_model_blender.py`：Convert_to_MMD5 建 MMD 骨架和身体碰撞体，mmd_cloth_physics 给头发、裙摆、
+飘带做物理，blender2xps 把节点算出来的颜色烘成一张贴图，mmd_tools 按 12.5 倍写 PMX）。NARAKA 的不同之处：
+
+- **骨名**：3ds Max Biped，前缀 `gMan `，挂在 Unity 的 `MotionRoot` 下。改成 `Bip001 ` / `Bip001` 后，
+  ROE 的骨骼对照直接能用。
+- **游戏运行用的节点**：受击 / 环境碰撞体、武器 / 瞄准 / 镜头 / 锁定挂点、`body_dummy`、`UpAnchor` 都不带蒙皮，
+  连同下面没蒙皮的子骨一起删掉（宁红夜删了 34 根）。
+- **眼睛**：`Face_L_Yanqiu` / `Face_R_Yanqiu` → 左目 / 右目 + 両目；它们的父骨 `Face_*_YanZ`（空挂点）去掉。
+- **胸**：`L_breast` / `R_breast` → 左胸 / 右胸 + 胸部物理（和星刃 Eve 一样的球形刚体）。
+- **表情**：所有女英雄共用的战斗脸（`ch_f_face_battle`）没有形态键，也没有嘴和眉毛的骨骼，只有上、下眼皮骨
+  （`Face_*_Shangyanpi01` / `Face_*_Xiayanpi`，转轴都在眼球中心）。脚本先量出睁眼时上下眼睑边缘的夹角
+  （宁红夜 35.5°），按比例转眼皮骨，存成 ARKit 名字的形态键（`eyeBlink` / `eyeWide` / `eyeSquint`，左右各一），
+  再用星刃的配方混出 9 个 MMD 眼部表情：まばたき、笑い、ウィンク、ウィンク右、ウィンク２、ｳｨﾝｸ２右、びっくり、
+  じと目、はぅ。闭眼时上眼皮走 3/4、下眼皮走 1/4，再多 0.5° 合严。睫毛跟着眼皮动，先并进脸的网格。
+  笑い / ウィンク / はぅ 里的「眯眼」成分比星刃少：眼皮只能绕一根轴转，混多了上下眼皮会互相穿过去。
+- **骨链保住**：Convert_to_MMD5 会把「挂在脊柱上、在中线上、名字不像布料或头发」的骨当成脊柱中段并掉。
+  NARAKA 的链多用拼音命名（`belt_`、`piaodai_`（飘带）、`daizi_`（带子）、`M_ribbon_` ……，495 套女性外观里都有）。
+  宁红夜腰前的带子 `belt_01-04` 第一次导出时就这样并进了上半身，没了物理。脚本里改成：链上的骨（有子骨，
+  或父骨不是标准骨）一律保留。
+- **睫毛染黑**：游戏的睫毛着色器（`LX22_Standard_Charactor_Eyelash`）用 `_EyelashColorL` / `_R`（战斗脸是纯黑，
+  捏脸里可以改）给睫毛上色。哪里算睫毛，由 `_SpecGlossMap`（mrav）的红通道标出，而 `_MainTex` 里的睫毛丝本身是纯白的。
+  存档的 `.blend` 直接拿 `_MainTex` 当颜色，所以上下睫毛都是白的。导出前按红通道把 `scene.json` 里的睫毛颜色混进去，
+  再烘焙；睫毛下面那圈眼窝阴影（红通道约 0.08）保持原色。对比图 `睫毛修复对比.jpg` 放在 PMX 旁边。
+- **共用一个材质的网格先合并再烘焙**：星刃脚本的 `bake_node_colours` 只按第一个用到该材质的网格烘
+  （blender2xps 一次只烘一个物体的 UV 岛），其余网格在那张贴图上采到的是空白。胡桃 lv_a0 的百褶裙
+  （`body02_1` 和 `cloth01` 共用一个材质）因此整条看不见；迦南 lv_a0 的腰布和披布（3 个网格共用一个材质）
+  在填满 alpha 后变成纯黑。现在烘焙前，把没有形态键、又共用材质的网格合并成一个（PMX 本来就是一整个网格）。
+  报告里新增 `opaque_holes`：不透明材质上贴图 alpha < 0.5 的三角形占比，在填 alpha 之前量；不为空就是烘空了。
+- **跨格的 UV 先挪回 0–1**：烘焙只填 0–1 那一格。胡桃的头皮 UV 在 v 1.13–1.93，烘出来全透明，被当成空壳隐藏；
+  宁红夜的外套有 6,014 个面在格子外面。贴图是重复平铺的，所以烘焙前把 UV 中心不在 0–1 的面整格平移回来，
+  颜色不变（报告 `uv_tiles_wrapped`）。
+- **不透明材质的贴图 alpha 填满**：MMD 会把贴图的 alpha 乘进材质。游戏贴图的 alpha 常放遮罩（高光、SSS），
+  原样写出的话，PMX 在 MMD 里会半透明，而 Blender 的预览看不出来。导出后，凡是只给不透明材质
+  （原 `.blend` 里 `OPAQUE`）用的贴图，alpha 一律填成 1，颜色不动；头发、睫毛、头皮这些本来就透明的不碰。
+  宁红夜填了 5 张：外套接缝处原有 0.2% 的采样点 alpha 为 0，身体和脸是 254。
+
+**样品**（`E:\game_export\NARAKA\宁红夜\pmx\ch_f_ming_mangjianke_lv_a0\`，32 MB）：
+- 导出约 3 分钟；26,931 顶点、179 骨，9 个 MMD 眼部表情 + 6 个 ARKit 眼部形态键；
+- 62 刚体 / 44 关节：裙摆 6 条、腰前带子、头发 3 条（马尾 10 节）、胸；
+- 撕裂 0、零权重洞 0、没有权重被转给不相干的骨，付与顺序检查通过；
+- 预览：正面、9 个表情、视线 5 个方向都对；
+- 手势舞视频（MMD 式物理，11.2 s）每秒 2 帧看过，没有撕裂，物理没有炸开。
+
+**另外两个样品**（10-31 晚，用户点名）：都是默认外观，各带预览图和手势舞视频，撕裂 0、零权重洞 0、不透明材质无烘空。
+- 胡桃 `E:\game_export\NARAKA\胡桃\pmx\ch_f_japan_onmyoji_lv_a0\`：42 刚体 / 24 关节，长袖摆 2 条、头发 3 条、胸。
+  百褶裙没有骨链，靠蒙皮跟着腿动。游戏把袖摆骨的左右名字起反了（`R_sleeve_*` 挂在左臂上），层级本身没错，物理照常。
+- 迦南 `E:\game_export\NARAKA\迦南\pmx\ch_f_hanhaimomin_lv_a0\`：26 刚体 / 10 关节，头发 1 条（8 节）、胸。
+  腰布和吊坠没有骨链，靠蒙皮跟着动。
+
 ## 已知限制
 
 - 发色取发型 `hair_custom_data` 里的默认色（和游戏图标对得上），是平涂色加发丝明暗，不是游戏的各向异性头发着色。
@@ -137,6 +209,15 @@ python batch_export.py --sex f --out E:\game_export\NARAKA --dry-run    # 只看
   迦南 s19、季莹莹 ss1、沈妙 s24、魏轻 ss1、顾清寒 ss1、殷紫萍 ss1、玉玲珑 ss1、jiantianshi s6）的颜色在游戏里由每件
   物品的 8 位编号按规则抽出（`Mutatable/*` 着色器，`_pm` 分区），导出的是没按编号上色的底色。
 - 外观和发型是分开的物品，游戏里可以自由搭配；这里给外观配的是「同款」发型，想换用 `--hair`。
+- **PMX**：
+  - 没有口型和眉毛表情，因为战斗脸本来就没有这些骨骼和形态键；
+  - 站着不动时，腰前带子的结会往下坠约 5 cm（链根是动态的）；
+  - 在 Blender 里打方向光时，外套上有零星小白点：这是 MMD 材质的高光，TFD、星刃转出来的也有；
+  - 金属和丝绸看着更平、更暗：迦南的银色袖套成了深灰，金饰成了浅黄。MMD 材质没有金属和光泽，
+    烘出来的只是底色（以后可以用 sphere 贴图补，属于待做清单第 2 项）；
+  - 目前只做了宁红夜一套样品，其余 494 套等用户看过样品再批量。
+- 存档里 495 套 `.blend` 的睫毛都是白的（`build_blend.py` 没用睫毛着色器的颜色参数）；PMX 导出时已经修正，
+  `.blend` 本身还没改。
 
 ## 验证
 

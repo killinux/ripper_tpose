@@ -677,6 +677,156 @@ def fix_pmx_materials(meshes, baked, tex_dir):
     return report
 
 
+def join_meshes_sharing_materials(meshes):
+    """bake_node_colours bakes a material with the first object that uses it (blender2xps bakes one object's UV
+    islands), so the faces of every other object on that material sample texels nothing was baked into: NARAKA
+    Kurumi's pleated skirt (body02_1 + cloth01 on one material) came out invisible, Matari's loincloth and cape (three
+    objects) black once fill_opaque_alpha made the empty texels opaque.  Objects without shape keys that share a
+    material are joined into one before the bake (the PMX is one mesh anyway).  Returns (meshes, 'a + b' lines)."""
+    parent = {o.name: o.name for o in meshes}
+
+    def find(n):
+        while parent[n] != n:
+            parent[n] = parent[parent[n]]
+            n = parent[n]
+        return n
+
+    owner = {}
+    for obj in meshes:
+        if obj.data.shape_keys:
+            continue
+        for slot in obj.material_slots:
+            if slot.material:
+                first = owner.setdefault(slot.material.name, obj.name)
+                parent[find(obj.name)] = find(first)
+    order = [o.name for o in meshes]                  # names now: the joined-away objects are freed below
+    groups = {}
+    for obj in meshes:
+        groups.setdefault(find(obj.name), []).append(obj)
+    joined, kept = [], set()
+    for members in groups.values():
+        kept.add(members[0].name)                     # the active object of a join keeps its name
+        if len(members) < 2:
+            continue
+        joined.append(" + ".join(o.name for o in members))
+        if bpy.context.object and bpy.context.object.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in members:
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = members[0]
+        bpy.ops.object.join()
+    return [bpy.data.objects[n] for n in order if n in kept], joined
+
+
+def wrap_uv_tiles(meshes):
+    """A bake fills the 0..1 UV square only, so faces whose UVs sit in another tile bake empty and the material then
+    counts as a fully transparent shell and is hidden (NARAKA Kurumi's scalp: v 1.13 - 1.93).  Textures repeat, so on
+    the UV layer the materials render with (the active render one) every face whose UV centre lies outside 0..1 is
+    moved by whole tiles into it - colour unchanged.  Returns {object: faces moved}."""
+    moved = {}
+    for obj in meshes:
+        me = obj.data
+        layer = me.uv_layers.get(next((u.name for u in me.uv_layers if u.active_render), "")) if me.uv_layers else None
+        if layer is None:
+            continue
+        data, count = layer.data, 0
+        for poly in me.polygons:
+            idx = list(poly.loop_indices)
+            du = math.floor(sum(data[i].uv[0] for i in idx) / len(idx))
+            dv = math.floor(sum(data[i].uv[1] for i in idx) / len(idx))
+            if du or dv:
+                for i in idx:
+                    u, v = data[i].uv
+                    data[i].uv = (u - du, v - dv)
+                count += 1
+        if count:
+            moved[obj.name] = count
+    return moved
+
+
+def transparent_at_faces(pmx_path, threshold=0.5):
+    """Per material of a written PMX: the share of its triangles whose texture alpha at the centroid is below
+    ``threshold``.  On an opaque material that is a bake hole (texels nothing was baked into), not transparency."""
+    import numpy as np
+    from mmd_tools.core import pmx
+
+    model = pmx.load(pmx_path)
+    root = os.path.dirname(pmx_path)
+    uv = np.array([v.uv for v in model.vertices], dtype=np.float64)
+    faces = np.array(model.faces, dtype=np.int64)
+    alphas, out, start = {}, {}, 0
+    for mat in model.materials:
+        n = mat.vertex_count // 3
+        tris, start = faces[start:start + n], start + n
+        if mat.texture < 0 or not n:
+            continue
+        tex = model.textures[mat.texture].path
+        path = tex if os.path.isabs(tex) else os.path.join(root, tex)
+        if path not in alphas:
+            image = bpy.data.images.load(path)
+            try:
+                w, h = image.size
+                px = np.empty(len(image.pixels), dtype=np.float32)
+                image.pixels.foreach_get(px)
+                alphas[path] = px.reshape(h, w, image.channels)[:, :, 3] if image.channels == 4 else None
+            finally:
+                bpy.data.images.remove(image)
+        a = alphas[path]
+        if a is None:
+            continue
+        cen = uv[tris].mean(axis=1)
+        h, w = a.shape
+        x = np.clip((cen[:, 0] % 1.0) * w, 0, w - 1).astype(int)
+        y = np.clip((1.0 - cen[:, 1] % 1.0) * h, 0, h - 1).astype(int)     # PMX v runs down, Blender rows up
+        out[mat.name] = round(float((a[y, x] < threshold).mean()), 4)
+    return out
+
+
+def opaque_materials(meshes):
+    """Names of the materials the source draws opaque (blend_method OPAQUE): whatever their textures keep in
+    alpha is a mask (spec / SSS / AO in the game), not transparency.  Read before the conversion."""
+    opaque, see = set(), set()
+    for obj in meshes:
+        for slot in obj.material_slots:
+            if slot.material:
+                (opaque if slot.material.blend_method == "OPAQUE" else see).add(slot.material.name)
+    return opaque - see
+
+
+def fill_opaque_alpha(pmx_path, opaque):
+    """MMD multiplies a texture's alpha into its material, so a mask kept in alpha makes the part see-through
+    (TFD Viessa's teeth texture: alpha 0.75 on average; Vindictus NA's bodies).  Every texture of the written
+    PMX that only opaque materials use gets alpha 1, colour untouched.  Returns the file names changed."""
+    import numpy as np
+    from mmd_tools.core import pmx
+
+    model = pmx.load(pmx_path)
+    root = os.path.dirname(pmx_path)
+    users = {}
+    for mat in model.materials:
+        if mat.texture >= 0:
+            users.setdefault(model.textures[mat.texture].path, set()).add(mat.name)
+    changed = []
+    for tex, names in sorted(users.items()):
+        if not names <= opaque:
+            continue
+        path = tex if os.path.isabs(tex) else os.path.join(root, tex)
+        image = bpy.data.images.load(path)
+        try:
+            if image.channels == 4:
+                px = np.empty(len(image.pixels), dtype=np.float32)
+                image.pixels.foreach_get(px)
+                if px[3::4].min() < 1.0:
+                    px[3::4] = 1.0
+                    image.pixels.foreach_set(px)
+                    image.save()
+                    changed.append(os.path.basename(path))
+        finally:
+            bpy.data.images.remove(image)
+    return changed
+
+
 def add_breast_physics(root, arm, meshes):
     """One dynamic sphere + spring joint per breast bone.  Returns a report per side."""
     from mmd_tools.core.model import Model

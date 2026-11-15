@@ -159,8 +159,59 @@ MediaFire 文件 `Mappings.usmap`（1.46 MB）。**它是发售版的映射，�
   `Bip001-Head`）。不这么做它会掉在脚边。
 - 部件自己的骨和底模同名骨位置不一致时，用最靠根的共享骨算刚体差把部件挪过去（同骨架时为恒等）。
 
+## 导出 PMX（MMD，2026-10-31 起，样品 Viessa）
+
+```powershell
+& "D:\Program Files\blender-3.6.15-windows-x64\blender.exe" -b E:\game_export\TheFirstDescendant\Viessa\blend\Viessa\Viessa.blend `
+  --factory-startup --python scripts\firstdescendant\export_pmx_blender.py -- --out E:\game_export\TheFirstDescendant\Viessa\pmx
+```
+
+写出 `<out>\<名字>\<名字>.pmx` + `textures\` + `<名字>.report.json` + `<名字>_converted.blend`（`--name` / `--model-name` /
+`--comment` 可改名字和说明）。Viessa 约 5 分钟（大部分在烘焙材质颜色）。看效果：
+
+```powershell
+# 正面、12 个表情、视线、跳舞 4 帧 -> PMX 旁边的 preview*.png
+blender -b --factory-startup --python scripts\stellarblade\preview_pmx_blender.py -- --pmx <PMX> --vmd <VMD>
+# 跳舞视频（MMD 式物理）
+blender -b --factory-startup --python scripts\riseoferos\render_pmx_dance.py -- <PMX> <VMD> <WAV> <out.mp4> 0 full mmd
+```
+
+**做法**：和星刃 / FF7 / CCFF7R 同一条链（`scripts/stellarblade/export_pmx_blender.py` → ROE 的
+`export_character_model_blender.py`：Convert_to_MMD5 建 MMD 骨架和身体碰撞，mmd_cloth_physics 建头发 / 布料链，ARKit 形态键混成
+MMD 标准表情，blender2xps 把节点算出来的颜色烘成一张贴图，mmd_tools 按 12.5 写 PMX）。TFD 的继承者也是带连字符的 3ds Max
+Biped（`Bip001-L-Clavicle`），这个脚本只补 TFD 自己的：
+
+- **眼睛**：眼球挂在 `Bn_FEye_L1` / `Bn_FEye_R1`（不是 `Bn_FEye_L`），按哪根骨带着眼球材质（`*_Eyes_MI`）的权重来选 →
+  左目 / 右目 + 両目；没有这两根骨的模型按眼球材质给它补眼骨（星刃的做法）。
+- **胸部**：`Bn_Shape_Chest_L` / `_R` → 左胸 / 右胸 + 星刃那种球形刚体和弹簧关节。
+- **整个角色是一个网格**，带 52 个 ARKit 形态键（共 111 个）。Convert_to_MMD5 摆 A 姿势时会跳过带形态键的网格——
+  骨架放下手臂、网格还是原样——所以借用 ROE 的 `keep_shape_keys_in_rest_bakes`（`scripts/riseoferos/export_suit_pmx_blender.py`）
+  连形态键一起烘进 A 姿势。
+- **表情**：没有 MetaHuman 的 `TeethLowerDown`（牙齿在同一个网格里，`jawOpen` 自己会带动），配方里去掉这一项，
+  否则あいうえお 会整个被跳过。
+- **不是布料的辅助骨**：`Bn_Shape_*`（游戏按姿势驱动的修形骨）、`Bn_Twist_*`、`Bn_Pos_*`、护甲的 `Pt_*`、挂点
+  （`Bn_Socket_*`、`Bn_Weapon_*`、`Bn_Acc_Hang*`）不让 mmd_cloth_physics 当布料；扭转骨和带皮肤的修形骨由 ROE 的辅助骨规划按
+  皮肤位置分到肢体上（Viessa：19 根，例如 `Bn_Shape_Hip_L` 跟 左足 转 53 %）。
+- 骨骼上挂的刚性部件（头盔挂在 `Bn_Socket_Head`）改成 100 % 蒙皮到那根骨；`.blend` 里预览用的 `Cube` 等非角色网格不导出。
+- 厘米 → 米；按两只脚的朝向转成面向 -Y（TFD 的 `.blend` 本来就是）。
+- **不透明材质的贴图 alpha 填满**（10-31 下午补的）：MMD 会把贴图的 alpha 乘进材质，游戏贴图的 alpha 常放遮罩。
+  Viessa 牙齿的 `PC_003_A0101_T_Mouth_C.png` 在牙齿的 UV 上 alpha 平均只有 0.75，MMD 里张嘴时牙齿是半透明的，
+  而 Blender 的预览看不出来。导出后，凡是只给不透明材质（原 `.blend` 里 `OPAQUE`）用的贴图，alpha 一律填成 1，
+  颜色不动（星刃脚本里的 `opaque_materials` / `fill_opaque_alpha`）。
+- **共用一个材质的网格先合并再烘焙**（同日，NARAKA 上发现的）：`bake_node_colours` 只按第一个用到该材质的网格烘，
+  其余网格采到空白。烘焙前把共用材质的网格合并（`join_meshes_sharing_materials`），报告里的 `opaque_holes` 列出
+  不透明材质上烘空的三角形占比。Viessa 整个人是一个网格，不受影响；其余继承者批量时会自动处理。
+
+**样品 Viessa**（`E:\game_export\TheFirstDescendant\Viessa\pmx\Viessa\`）：98,530 顶点，739 骨，26 个 MMD 表情 + 111 个
+ARKit，42 刚体 / 26 关节（头发 6 条链、腰带、锁骨挂件、胸部），零权重洞 0，A 姿势 37°，Spine3 并进 Spine2（MMD 的 上半身3
+已用 Spine2），撕裂 1 条边。预览、表情、视线、手势舞视频都看过，动作里没有撕裂或物理炸开。
+
 ## 已知限制
 
+- PMX：Gley、Harris、Nell 没有 `Bn_Shape_Chest_*`，这三个没有胸部物理；`Bunny_CMN_001`（身体 / 脸 / 头分开的三个网格）和
+  Monster 没试过。金属护甲在 MMD 里偏白（MMD 没有金属质感）。Blender 里打方向光时皮肤、头发上会有零星小白点：是
+  MMD 材质的高光（高光关掉就没了，星刃 / FF7 转出的 PMX 一样），不是破洞。`_converted.blend` 里的贴图是绝对路径，直接
+  导到存档目录（`--out E:\game_export\...\pmx`）就不会指向临时文件夹。
 - 虹膜颜色是近似值（游戏用 `IrisColor1U/V` 去 `iris_color_picker` 取色，图已解出来在
   `cue4_exports\M1\Content\BaseMaterials\Character\Material\Eyes\Texture\`，还没接采样）。
 - 染色系统（`_ID` + `ID_A..F_col`）没接；默认外观就是 `_C` 的颜色。

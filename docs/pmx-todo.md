@@ -9,7 +9,7 @@
 | 1 | 在 MMD 本体里验证 | 待挑 |
 | 2 | MMD 里的材质 | **11-15 只做了 Vindictus**（用户定）：Defying Fate 41 个 PMX 两步都做完（`_材质.pmx` + `E:\game_export\_raymmd\Vindictus`）；工具能做整个归档（`batch_all.py`），别的游戏等用户点名 |
 | 3 | 换装 / 换头的后半程 | **10-31 做完**：挑零件、拆开；跨游戏换装（星刃 Eve 的套装 → a08）；跨游戏换头（Eve ↔ a08）。没做：脸只到下巴的模型 |
-| 4 | PMX 覆盖面 | 待挑 |
+| 4 | PMX 覆盖面 | **10-31 开始做**：每个游戏先做一个样品给用户看，点头了再整批；TFD 样品 Viessa、NARAKA 样品宁红夜已做，等用户看；星刃 NPC、HS2 由另一个窗口做 |
 | 5 | 表情 | **10-25 做了「表情移植」插件 + FF7 第一批 2 个，等用户看效果** |
 | 6 | 手肘、膝盖的变形（SDEF） | **11-15 用户挑了，做了样品**：新工具 `scripts/pmx_tools/pmx_sdef_rings.py`（辅助骨归边 + 半角修正骨按比例），Black Sling 样品 + 对比图在存档里，等用户看效果再定铺开范围 |
 | 7 | 动作适配体型 | 待挑 |
@@ -76,10 +76,34 @@
 ## 4. PMX 覆盖面
 
 - **现状**：7 家游戏的归档里一个 PMX 都没有，只有 .blend：
-  TFD 13、NARAKA 34、HoneySelect 2 17、DOA6 21、DOA5LR 19、VVP 7、Throne of Desire 15。
+  TFD 13、NARAKA 495（女性外观，34 个英雄文件夹）、HoneySelect 2 17、DOA6 21、DOA5LR 19、VVP 7、Throne of Desire 15。
   星刃 19 个角色里只有 3 个有 PMX；Action Taimanin 918 套里只有 1 套。
 - 这些模型现在用不上换装、换头、爆衣、物理这一整套。
 - TFD 是 Biped 骨名（和 ROE 一样），ROE 的转换链可能直接能用；HS2（cf_J_）、DOA（KTGL）、NARAKA 要先做骨骼对照。
+- **10-31 开始做**（用户选了这一项）。先摸底（存档的 `.blend` + 仓库脚本）：
+
+  | 难度 | 游戏 | 情况 |
+  |---|---|---|
+  | 容易 | TFD | 带连字符的 Biped，一个网格带 52 个 ARKit 形态键，走星刃那条链 |
+  | 容易 | 星刃 Eve 其余 146 套 | 现成的 `scripts/stellarblade/export_pmx_blender.py`，只差跑批量（每套约 100 MB） |
+  | 容易 | Action Taimanin 其余 917 套 | `export_model.py --pmx` 已经能用，只差跑批量（每套约 12 MB） |
+  | 中等 | NARAKA | Biped 骨名前缀是 `gMan`，改名后能走 ROE 那条链；脸上只有眼球和上下眼皮骨（能眨眼、看方向，没有口型） |
+  | 中等 | HS2 | `cf_J_*` 骨架，要写骨骼对照，61 根 `_s` 辅助骨要并；Unity 10 单位 = 1 m |
+  | 中等 | 星刃 16 个 NPC | 身体、脸、头发三副骨架要并；脸有游戏自己的 180 个形态键（不是 ARKit 名字），10-31 Raven 核实 |
+  | 难 | DOA6、VVP | 骨骼只有编号（`bone_<id>`），一个模型 3–4 副骨架，链的顺序只在物理数据里 |
+  | 难 | DOA5LR | 存档的 `.blend` 里根本没有骨架，要回 TMC 源文件重新提取 |
+  | 难 | ToD | 网格没有蒙皮（权重没解），要先解权重 |
+
+  - **TFD 样品 Viessa 做完，等用户看**：新脚本 `scripts/firstdescendant/export_pmx_blender.py`（用法和做法见
+    `scripts/firstdescendant/README.md`「导出 PMX」），成品 `E:\game_export\TheFirstDescendant\Viessa\pmx\Viessa\`
+    （PMX + 预览图 + 手势舞视频）。用户点头后再批量做其余 11 个继承者。
+  - **NARAKA 样品宁红夜（默认外观）做完，等用户看**：新脚本 `scripts/naraka/export_pmx_blender.py`（用法和做法见
+    `scripts/naraka/README.md`「导出 PMX」），成品 `E:\game_export\NARAKA\宁红夜\pmx\ch_f_ming_mangjianke_lv_a0\`
+    （PMX + 预览图 + 手势舞视频）。表情只有眼部的 9 个：战斗脸没有嘴和眉毛的骨骼。用户点头后再批量做其余 494 套。
+    同晚用户又点名胡桃、迦南：各转了默认外观（`E:\game_export\NARAKA\胡桃|迦南\pmx\`），顺带修了共用材质烘空、
+    UV 跨格烘空两个问题（星刃脚本里的共用函数），三个样品都按最终脚本重导过。
+  - **分工（10-31）**：星刃 16 个 NPC、HS2 由另一个窗口做；TFD、NARAKA、星刃 Eve 146 套、Action Taimanin 917 套、
+    DOA6 / VVP / DOA5LR / ToD 在这边。
 
 - **10-31，ROE_pmx 窗口做的部分**（分工里归这边）：
   - **星刃 NPC 样品 Raven 做完，等用户看**：新脚本 `scripts/stellarblade/npc/export_npc_pmx.py`（做法见
@@ -168,5 +192,7 @@
 ## 其他等用户拍板的
 
 - 胸部跟随工具（`pmx_body_follows_cups.py`）要不要铺到另外约 116 个 ROE 模型；
-- Vindictus 剩下 12 套服装；
+- Vindictus 剩下 12 套服装：**10-31 做完**，12 套都有了 `<id>_手臂修正_肩部辅助骨.pmx`（`scripts/vindictus/arm_fix_batch.py`，
+  在原文件旁边，存档原件不动），检查和站立物理全过；头发、布料物理用的是今天的工具，比 PCF_005 / Fiona 那两份试验文件的好
+  （手势舞每帧穿进身体的顶点 118 → 39），那两份要不要也换成新物理等用户定；
 - ROE 舞蹈视频 117 个 + 画廊。
