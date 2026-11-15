@@ -53,14 +53,19 @@ def build_map(names):
                             ("calf", "CalfTwist")):
             for k in (1, 2, 3):
                 m["%s_twist_0%d_%s" % (game, k, s)] = "Bip001 %s %s%s" % (S, biped, "" if k == 1 else k - 1)
-    for n in names:
+    # sorted, and never the *_end leaf markers: R_Chest_Muscle_01_Jnt_end (no skin) once won over the real bone in set
+    # order and She-Venom's right breast got no physics
+    for n in sorted(names):
         b = BREAST_RE.search(n)
-        if b:
+        if b and not n.lower().endswith("_end"):
             side = (b.group(2) or b.group(3)).upper()
             target = "Bip001 %s Pectoral" % side
             if target not in m.values():
                 m[n] = target
     return {k: v for k, v in m.items() if k in names}
+
+
+TOE_RE = re.compile(r"^(bigtoe|index|middle|ring|pinky)_(proximal|middle|distal)_phalange_([lr])$", re.IGNORECASE)
 
 
 def to_biped(arm, meshes):
@@ -71,6 +76,16 @@ def to_biped(arm, meshes):
     mapping = build_map(names)
     missing = [k for k in ("pelvis", "thigh_l", "thigh_r", "upperarm_l", "upperarm_r", "head") if k not in mapping]
     out = {"missing": missing}
+    # Separate toes (Marvel Rivals Venom: big toe + 4, two phalanges each, under ball_l / ball_r): MMD has one toe bone,
+    # and five short chains under the toe were taken for a cloth sheet - 20 physics bodies that flap the toes.
+    # Their weights go to the ball bone (-> 足先EX).
+    toes = {}
+    for n in names:
+        t = TOE_RE.match(n)
+        if t and "ball_%s" % t.group(3).lower() in names:
+            toes.setdefault("ball_%s" % t.group(3).lower(), []).append(n)
+    out["toes_merged"] = sum(rt.merge_into(arm, meshes, sorted(v), k) for k, v in toes.items())
+    names = {b.name for b in arm.data.bones}
     out["dropped"] = len(rt.drop_unweighted(arm, meshes, keep=set(mapping)))
     out["renamed"] = rt.rename_bones(arm, meshes, mapping)
     return out

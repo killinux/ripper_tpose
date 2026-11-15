@@ -292,6 +292,29 @@ def guess_textures(mi_obj_path, listing):
     return out
 
 
+def find_extra_texture(obj_path, dirs):
+    """A game texture that CUE4Parse could not decode, found by name in folders of textures got elsewhere (--extra-
+    textures: e.g. another mod that ships the game's own maps, like the HS2 port of Venom with T_1035001_Head_D/N/ORM).
+    File stems may carry a numeric path-id suffix (UnityPy / AssetStudio exports: T_1035001_Head_D_3133077305.png)."""
+    want = obj_path.split("/")[-1].split(".")[0].lower()
+    for d in dirs or ():
+        for f in sorted(glob.glob(os.path.join(d, "**", "*.*"), recursive=True)):
+            stem, ext = os.path.splitext(os.path.basename(f))
+            if ext.lower() in (".png", ".tga", ".jpg", ".jpeg") and re.sub(r"_\d{5,}$", "", stem).lower() == want:
+                return f
+    return None
+
+
+def flat_colour(names, rules):
+    """--colour REGEX=r,g,b[,roughness] (sRGB 0-1): the stand-in colour for a material that still has no colour map."""
+    for rule in rules or ():
+        pat, _, vals = rule.rpartition("=")
+        if pat and any(n and re.search(pat, n, re.I) for n in names):
+            v = [float(x) for x in vals.split(",")]
+            return v[:3] + [v[3] if len(v) > 3 else 0.5]
+    return None
+
+
 def export_variant(label, variant_dir, args, paks, global_dir, work):
     pkgs = mod_packages(variant_dir, global_dir, work)
     meshes = [p for p in pkgs if re.search(r"/SK_[^/]+\.uasset$", p, re.I)
@@ -339,16 +362,32 @@ def export_variant(label, variant_dir, args, paks, global_dir, work):
             tex_pkgs.add(obj_to_package(t))
     if tex_pkgs:
         cli(stage_dir, sorted(tex_pkgs), exp, fmt="png")
-    for info in mats.values():
-        resolved = {}
+    names_of = {}                     # mats holds each info under its instance name AND its slot name: resolve once
+    for k, v in mats.items():
+        names_of.setdefault(id(v), (v, []))[1].append(k)
+    for info, names in names_of.values():
+        resolved, extra = {}, {}
         for param, t in info["textures"].items():
             png = os.path.join(exp, *obj_to_package(t)[:-len(".uasset")].split("/")) + ".png"
             if not os.path.isfile(png):
                 c = glob.glob(os.path.join(exp, "**", os.path.basename(png)), recursive=True)
                 png = c[0] if c else png
+            if not os.path.isfile(png):
+                # not decodable from the game (old mappings): the same texture from another source, by name
+                f = find_extra_texture(t, args.extra_textures)
+                if f:
+                    png = f
+                    extra[param] = f
             if os.path.isfile(png):
                 resolved[param] = png
         info["textures"] = resolved
+        if extra:
+            info["from_extra"] = extra
+        has_colour = any(re.search(r"base_?colou?r|diffuse|albedo", p, re.I) for p in resolved)
+        if not has_colour:
+            flat = flat_colour(names, args.colour)
+            if flat:
+                info["flat"] = flat
     blend_dir = os.path.join(args.out_root, hero, "blend", label)
     os.makedirs(blend_dir, exist_ok=True)
     spec = {"name": label, "psk": psks[0], "scale": 0.01, "materials": mats}
@@ -374,7 +413,8 @@ def export_variant(label, variant_dir, args, paks, global_dir, work):
         contact_sheet(built["previews"], os.path.join(blend_dir, "preview.png"))
     rep = {"label": label, "hero": hero, "mesh": mesh, "other_meshes": [m for m in meshes if m != mesh],
            "fixed_containers": fixed, "game_installed": bool(paks), "blend": blend, "built": built,
-           "materials": {k: {"chain": v.get("chain"), "found": v.get("found"), "textures": sorted(v["textures"])}
+           "materials": {k: {"chain": v.get("chain"), "found": v.get("found"), "textures": sorted(v["textures"]),
+                             "from_extra": v.get("from_extra", {}), "flat": v.get("flat")}
                          for k, v in mats.items()}}
     formats = args.formats.split(",")
     biped = os.path.join(REPO, "scripts", "pmx_tools", "biped_pmx")
@@ -430,6 +470,12 @@ def main():
     ap.add_argument("--formats", default="blend,pmx,xps")
     ap.add_argument("--no-preview", action="store_true")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--extra-textures", action="append", default=[], metavar="DIR",
+                    help="folder of game textures got elsewhere, searched by name for maps the game cannot give "
+                         "(old mappings); repeatable")
+    ap.add_argument("--colour", action="append", default=[], metavar="REGEX=r,g,b[,roughness]",
+                    help="stand-in sRGB colour (0-1) for materials matching REGEX that still have no colour map; "
+                         "repeatable")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     paks, global_dir = game_paks()

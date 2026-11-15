@@ -99,6 +99,33 @@ MMD 会把贴图的透明度乘进材质。导出脚本在写 PMX 之前用 `sou
 （`E:\game_export\_raymmd\<游戏>\<模型>\`，带 `scene.emm` / `scene.pmm`）；还有用脚本驱动 MMD 本体出图的 `mmd_drive.py`。
 用法见 [hq_materials/README.md](hq_materials/README.md)，做法见 [docs/pmx-hq-materials.md](../../docs/pmx-hq-materials.md)。
 
+## sdef_compare_video.py + compose_sdef_video.py：SDEF 前后对比视频
+
+`pmx_sdef_rings.py`（PMX 待做清单第 6 项）把手肘、膝盖一圈的顶点改成 SDEF，写一份旁边的 `*_SDEF.pmx`。
+这两个脚本让人**亲眼看**改前改后的差别：同一个动作，原版和 SDEF 版并排；每帧再量一次关节塌了多少。
+
+```powershell
+$B = "D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
+# 1) 渲染（Blender 3.6 后台，要 mmd_tools）：舞蹈，或者 --bend 弯曲测试（右手肘 0→140°、左膝 0→130°）
+& $B -b --python scripts\pmx_tools\sdef_compare_video.py -- <原版.pmx> <SDEF.pmx> <工作目录> --vmd <动作.vmd>
+& $B -b --python scripts\pmx_tools\sdef_compare_video.py -- <原版.pmx> <SDEF.pmx> <工作目录2> --bend
+# 2) 拼视频（系统 Python + Pillow + ffmpeg）：上排原版、下排 SDEF；三栏是全身、右手肘、左膝
+python -I scripts\pmx_tools\compose_sdef_video.py <工作目录> <输出.mp4> --bgm <音乐.wav>
+python -I scripts\pmx_tools\compose_sdef_video.py <工作目录> <对比图.jpg> --sheet     # 只出塌得最厉害的两帧
+```
+
+- **特写镜头**每帧都正对关节的弯曲平面（上臂 × 前臂的法线），正交相机，只渲关节前后 ±11 cm 的一片，躯干、另一条腿不挡。
+  关节伸直（弯曲小于 15°）时没有弯曲平面，镜头保持上一帧的方向；平时做平滑，不会乱转。
+- **数字**：`距离比` = 关节一圈的 SDEF 顶点到关节中心的距离 ÷ 静止时。1.00 是不塌，越小塌得越多。画面下方标红的是小于 0.8 的。
+  Black Sling 的静止图：手肘弯 120° 时原版平均 0.90、最塌 0.51，SDEF 1.00。
+  2026-11-15 的视频（样品旁边的 `SDEF对比_舞蹈.mp4`、`SDEF对比_弯曲.mp4`）：
+  - 手肘弯到 130–140° 时原版最塌 0.33–0.37，膝盖弯到约 100° 时 0.28；SDEF 都是 1.00；
+  - SDEF 也有自己的痕迹：大弯时肘尖鼓出一个带棱角的包，膝盖后面的折痕更深；
+  - 默认测试舞里膝盖最多弯约 50°，两版几乎一样。
+- **Blender 里的 SDEF**：mmd_tools 把 SDEF 做成一个形态键，由脚本驱动器每帧重算（`FnSDEF.bind`）。后台 Blender 默认不执行脚本驱动器，
+  所以这里绑定后把驱动器去掉，每帧自己调一次 `FnSDEF.driver_function`。MMD 本体自己会算 SDEF，不需要这些。
+- 不开物理：比的是关节，头发和布料不动。
+
 ## 跑过的批次
 
 - **2026-10-31 Taimanin Squad**（`E:\game_export\TaimaninSquad`，151 个 PMX）：写出 142 个 `*_表情补全.pmx`，0 个出错。

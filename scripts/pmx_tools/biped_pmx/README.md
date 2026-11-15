@@ -24,7 +24,7 @@ PMX 打印 `BIPED_PMX={json}`，写 `<out>\<名字>.pmx`、`textures\`、`<名�
 | 映射 | 用于 | 要点 |
 |---|---|---|
 | `mho` | Marvel Heroes Omega（`g_*`） | 腿挂在根骨上、脊椎之间夹着 `*_offset` 空骨：骨盆改成枢纽（脊椎和两条腿都挂上去），空骨去掉；一根 `g_breast` 带两边胸部，按左右拆成 `L / R Pectoral` |
-| `ue_mannequin` | Marvel Rivals 等 UE4 / UE5 小白人命名 | `spine_01..05` 取头、中、尾三根做 Spine / Spine1 / Spine2；`*_Fix_*_Jnt` 修正骨、`twist`、掌骨、武器 / 挂点都当肢体辅助骨（不做布料） |
+| `ue_mannequin` | Marvel Rivals 等 UE4 / UE5 小白人命名 | `spine_01..05` 取头、中、尾三根做 Spine / Spine1 / Spine2；`*_Fix_*_Jnt` 修正骨、`twist`、掌骨、武器 / 挂点都当肢体辅助骨（不做布料）；分开的脚趾骨（`bigtoe / index / middle / ring / pinky _phalange_l/r`）并进 `ball_l/r`；胸骨跳过 `*_end` 标记骨 |
 | `re_engine` | 生化危机 2 / 3 重制版（RE Engine，经 RE Mesh Editor） | `hips` 改成枢纽，`COG`、`Null_Offset` 去掉；头下面 100 多根表情骨并进头（不保留表情）；没有胸骨，用胸肌辅助骨 `pecA_muscle` 做胸部物理；无名指 / 小指的 `_0` 是掌骨 |
 | `rigify_twk` | Rigify 风格、变形链由 `.twk` 骨组成（HS2 的 Venom 移植） | 扭转骨夹在链中间（上臂 → 扭转 → 前臂），按 Biped 扭转辅助骨命名；舌头、身体器官的骨链标成辅助骨 |
 
@@ -69,3 +69,11 @@ PMX 打印 `BIPED_PMX={json}`，写 `<out>\<名字>.pmx`、`textures\`、`<名�
 - **Jill 的脸是黑的**：RE 贴图的 alpha 是金属度，被当成了透明度。修在 `scripts/re_engine/build_blend.py`，改成 `CHANNEL_PACKED`。
 - **HS2 Venom 只剩头**：UV 分在别的格里，见上面第 1 条。
 - **HS2 Venom 的爪子**：张手时像一根根棍子，其实是爪子本来就长（指尖离手腕 45 cm），不是错误。
+
+后来 Marvel Rivals 的 She-Venom（#6188，第一个走 `ue_mannequin` 的 PMX）从导出报告里又查出两个，舞蹈视频里不明显：
+
+- **脚趾成了布料**：Venom 每只脚有 5 根脚趾、每根 2 节，挂在 `ball_*`（足先EX）下面。布料识别把这 5 条短链当成一片「外套」，
+  加了 20 个物理刚体，MMD 里脚趾会甩。现在映射里把脚趾骨的权重并进 `ball_*`（MMD 只有一根脚尖骨）。
+  看报告的 `physics.garments`：身体模型这里应该是空的，出现名字里带 `phalange`、`toe` 的就是这种情况。
+- **右胸没有物理**：胸骨是 `L/R_Chest_Muscle_01_Jnt`，每根后面还挂着一个没有皮肤的 `*_end` 标记骨，两者都匹配胸骨正则。
+  按集合的随机顺序挑，右边挑中了 `_end`（报告 `bust_physics` 写「no skin」）。现在按名字排序，并跳过 `_end`。

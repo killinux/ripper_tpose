@@ -59,6 +59,10 @@ def log(msg):
     print("[mr] " + msg, flush=True)
 
 
+def srgb_to_linear(c):
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
 def role_of(param, tex_path):
     for role, rx in ROLE_RE:
         if rx.search(param):
@@ -251,10 +255,16 @@ def build_material(mat, spec):
         mat.blend_method = "BLEND"
         mat.shadow_method = "NONE"
         return {"hidden": "effect shell"}
+    flat = spec.get("flat")           # export_mod.py --colour: a stand-in for a colour map the game could not give
+    if flat:
+        bsdf.label = "替身颜色（游戏贴图没读出来，--colour）"
+        bsdf.inputs["Base Color"].default_value = (*[srgb_to_linear(c) for c in flat[:3]], 1.0)
+        bsdf.inputs["Roughness"].default_value = flat[3]
     if not roles:
-        bsdf.inputs["Base Color"].default_value = MISSING_GREY
-        bsdf.inputs["Roughness"].default_value = 0.6
-        return {"missing": True}
+        if not flat:
+            bsdf.inputs["Base Color"].default_value = MISSING_GREY
+            bsdf.inputs["Roughness"].default_value = 0.6
+        return {"missing": True, "flat": flat}
     base = None
     if "basecolor" in roles:
         img = image(roles["basecolor"][1], True)
@@ -280,11 +290,11 @@ def build_material(mat, spec):
                 L.new(sep.outputs["R"], ao.inputs["Color2"])
                 colour_out = ao.outputs["Color"]
             used["orm"] = img.name
-    else:
+    elif not flat:
         bsdf.inputs["Roughness"].default_value = 0.55
     if colour_out is not None:
         L.new(colour_out, bsdf.inputs["Base Color"])
-    else:
+    elif not flat:
         bsdf.inputs["Base Color"].default_value = MISSING_GREY
     if "normal" in roles:
         img = image(roles["normal"][1], False)

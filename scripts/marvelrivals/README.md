@@ -16,6 +16,8 @@ python -I scripts\marvelrivals\export_mod.py "<mod>" --variant "Cape off" --form
 | `--mesh` | `lobby` | 用大厅模型 `SK_*_Lobby`（英雄展示用，细节更多）；`game` 用局内模型 |
 | `--variant` | 全部 | 只导路径匹配这个正则的变体 |
 | `--formats` | `blend,pmx,xps` | |
+| `--extra-textures <目录>` | 无 | 游戏给不出的贴图（映射文件过期，见坑 2）按名字到这个目录里找，可以写多个。例如别的 mod 里带着的游戏原版贴图：HS2 的 Venom 移植带着 `T_1035001_Head_D / N / ORM`。文件名后面带数字编号（`T_1035001_Head_D_3133077305.png`）也认 |
+| `--colour "<正则>=r,g,b[,粗糙度]"` | 无 | 还是没有颜色贴图的材质用这个颜色（sRGB 0–1）代替灰色，可以写多个。节点上标「替身颜色」 |
 
 ## 需要什么
 
@@ -62,6 +64,22 @@ python -I scripts\marvelrivals\export_mod.py "<mod>" --variant "Cape off" --form
    这一步能**找到**贴图，但游戏的贴图本身还是要新的映射文件才能解码。
    新的 usmap 来源：Nexus #13477 Variant Skin Studio 的 SkinStudio App 里带着 `Marvel.usmap`，需要用户用浏览器下载。
    放到 `E:\tools\marvelrivals\_mappings\` 后改 `USMAP` 常量即可。
+
+   **等新映射文件期间的替身做法**（2026-11-15，She-Venom #6188，用户说「没有材质」）：
+
+   - 这个 mod 只带了短上衣和丁字裤（`MI_Mommy`），头、身体、腿用的是游戏原版 Venom 的材质 `MI_1035001_Head / Body / Equip`，都是灰的；
+   - **头**：HS2 那个 Venom 移植版（`E:\game_export\HoneySelect2\Venom`）的头和 She-Venom 的头面数完全一样（46,462），
+     是同一个游戏网格，它带的 `T_1035001_Head_*` 就是游戏原版贴图，用 `--extra-textures` 直接套上；
+   - **身体和腿**：移植版的身体是另做的网格，贴图对不上，用 `--colour` 给深藏青黑色加光泽。颜色对照的是 mod 作者在 Nexus 的预览图；
+   - 先给每个材质刷一种纯色渲一张图，看清楚哪个材质盖哪里，再决定用什么补。
+
+   ```powershell
+   python -I scripts\marvelrivals\export_mod.py "<She-Venom 的 .rar>" `
+       --extra-textures "E:\game_export\HoneySelect2\Venom\blend\Venom_MarvelRivals_Fouetty\textures" `
+       --colour "^MI_1035001_(Body|Equip)$=0.07,0.075,0.10,0.3"
+   ```
+
+   报告里每个材质记着 `from_extra`（哪张贴图是从别处来的）和 `flat`（替身颜色）。拿到新映射文件后，去掉这两个参数重新导出，就是游戏原版。
 3. 没有自发光贴图的轮廓光、特效外壳，比如 `*_Rim_HeroDetails`、父材质 `M_RimOnly`，在游戏里由专门的着色器画在身体外面。
    当普通表面会把身体整个盖住，所以留在文件里，设成全透明。
 4. Marvel Rivals 每个材质实例都覆盖了 `OpacityMaskClipValue`，这不代表材质是镂空的。只有混合模式写明 Masked，
