@@ -141,6 +141,60 @@ python delete_archived.py --delete-all --keep D:\roe_exports
 每个目录删之前的一刻再核对一遍（每个文件都已归档且没改过、或是登记过的中间产物），有 junction / 符号链接的不删
 （递归删除不能顺着链接删到别处），最近 30 分钟（`--min-age`）内有写入的不删。
 
+## 临时文件清点（多窗口）：`temp_survey.py` + `delete_paths.py`
+
+`delete_archived.py` 只管 `games.py` 里登记过的 D 盘导出目录。用户问「还有哪些临时文件，多窗口的都检查下」时，
+要看的地方还有这些：
+
+| 位置 | 是什么 |
+|---|---|
+| `%TEMP%\claude\<项目哈希>\<会话 id>\scratchpad` | 各窗口现在的临时目录（2026-11-14 升级 Claude Code 后的路径） |
+| `%TEMP%\claude\E--code-othercode-ripper-tpose\<会话 id>\scratchpad` 等 | 升级前的旧路径：会话还开着，也不再往里写 |
+| `D:\<游戏>_exports`、`D:\<任务名>` | 各窗口的工作目录，没登记的也算 |
+| `%TEMP%\*_autosave.blend`、`quit.blend` | Blender 的崩溃恢复文件。文件名里是进程号：那个 Blender 还开着、或者是当天的，就留着 |
+| `%LOCALAPPDATA%\CrashDumps` | 崩溃转储 |
+| `E:\game_export\<游戏>\_meta\backup_*`、`<游戏>\_work` | 修复前的备份、导出缓存 |
+
+会话 id 是哪个窗口：看 `~\.claude\projects\<项目>\<会话 id>.jsonl` 里最后一个 `"agentName"`。
+`temp_survey.py --claude-temp` 会自动标出来。
+
+```powershell
+python temp_survey.py --claude-temp                        # 每个窗口的临时目录：大小、最新写入、属于哪个窗口
+python temp_survey.py D:\sbm D:\hs_gantz                   # 指定目录：大小、文件数、最新写入、硬链接、数据量、链接点
+python temp_survey.py --children $env:TEMP --exclude claude
+python temp_survey.py --find "backup|_work$|trial" --depth 4 E:\game_export   # 存档里的备份 / 缓存目录
+python temp_survey.py --breakdown <目录>                   # 大目录里是什么：按子目录、按扩展名、渲染帧占多少
+python delete_paths.py --dry-run D:\sbm                    # 先看会删什么
+python delete_paths.py D:\sbm D:\hs_gantz                  # 整个删
+python delete_paths.py --data-only --keep-ext .jpg,.mp4,.gif <旧临时目录>   # 只删数据：脚本、日志、json、jpg 对比图、mp4 留着
+python delete_paths.py --frames-only <旧临时目录>         # 只删渲染帧（30 张图以上的文件夹里的非 jpg 图）、.blend1、.pyc
+```
+
+做法（用户定的规矩）：
+1. 先清点，出一张表，分成「我的 / 缓存 / 别的窗口的 / 用户自己的 / 保留」。每行写全路径、大小、是什么、谁做的。
+2. 用户勾了哪几行就只删哪几行。登记过的 D 盘导出目录用 `delete_archived.py --delete` 删。
+3. 删完核对，报每个盘腾出多少；删到别的窗口的东西，要发消息告诉那个窗口。
+
+`delete_paths.py` 的保护：
+- 拒绝删盘符根目录、`E:\Downloads`、系统目录和 `~\.claude`。
+- 目录里 30 分钟内（`--min-age`）有文件被写过就跳过：可能有别的窗口在用。
+- junction 和符号链接：整个删时只删链接本身，部分删（`--data-only` / `--frames-only`）时不碰。
+- 部分删的时候，原来就是空的文件夹不删。
+
+注意：
+- 硬链接的文件删了不腾空间。比如 `E:\marvelrivals_work` 的 81.6 GB 里，81.5 GB 是游戏文件的硬链接。
+  `temp_survey.py` 的 linked 一栏单独列出这部分。
+- 部分删完以后，别的窗口笔记里指向旧临时目录里 .pmx / .blend / .png 的路径就失效了。
+
+2026-11-15 第一次用（用户：「D:\sdef_compare 删了吧，还有哪些临时文件也清理一下，多窗口的都检查下」）。
+用户在表里勾了这些，删掉以后 C 盘多出 64.7 GB、D 盘 22.7 GB、E 盘 6.0 GB：
+- D:\sdef_compare；
+- D:\eldenring_exports、D:\sekiro_exports（用 `delete_archived.py --delete` 删）；
+- D:\sbm、D:\hs_gantz、D:\stellarblade_npc；
+- `E:\game_export\CCFF7R\_work\raw`；
+- ROE 11-15 的修复前备份 `backup_替换前_20261115`；
+- 六个窗口旧临时目录里的数据，一共 64.5 GB。
+
 ## 画廊链接
 
 各游戏的画廊页（`scripts\<游戏>\html\index.html`）里的图片和链接是 `file:///D:/...` 绝对路径。归档后

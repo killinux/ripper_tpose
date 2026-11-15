@@ -14,6 +14,31 @@
 
 ---
 
+## 2026-11-15 — 临时文件清点和删除：`scripts/archive/temp_survey.py` + `delete_paths.py`
+
+用户：「D:\sdef_compare 删了吧，还有哪些临时文件也清理一下，多窗口的都检查下」。以前每次清理都临时写脚本，这次做成仓库里的两个脚本，和只管登记过的 D 盘导出目录的 `delete_archived.py` 放在一起。
+
+- `temp_survey.py` 只读，清点这些地方：
+  - 各窗口的临时目录，`--claude-temp` 按会话记录标出属于哪个窗口；
+  - D 盘工作目录、%TEMP%、存档里的备份和缓存。
+  - 每行给大小、最新写入、硬链接（删了不腾空间）、数据量和链接点。
+- `delete_paths.py` 只删用户在表里勾的：
+  - 三种删法：整个删；只删数据（脚本、日志、对比图、视频留着）；只删渲染帧。
+  - 30 分钟内有写入的目录跳过；junction 不跟进；`E:\Downloads` 和盘符根目录不删。
+- 这次删掉的（都是用户在表里勾的）：
+  - D:\sdef_compare；
+  - 用 `delete_archived.py` 删的 D:\eldenring_exports 和 D:\sekiro_exports；
+  - D:\sbm、D:\hs_gantz、D:\stellarblade_npc；
+  - CCFF7R 的 `_work\raw` 缓存；
+  - ROE 11-15 的修复前备份；
+  - 六个窗口 11-14 以前旧临时目录里的数据（脚本、日志、jpg、mp4 留着）。
+  - 一共腾出约 94 GB：C 盘 64.7、D 盘 22.7、E 盘 6.0。
+- 没勾的留着：%TEMP% 里 34 个旧的 Blender 自动保存（2.79 GB）、崩溃转储、ROE 和 Vindictus 10 月的旧备份。
+
+**用户怎么用**：见 `scripts/archive/README.md` 的「临时文件清点（多窗口）」一节。
+
+---
+
 ## 2026-11-15 — 女毒液模型调研页进仓库：`scripts/venom` + `html/venom_female_models.html`
 
 用户收尾时说「该提交的都提交吧」。这一页（女性毒液模型在哪能下到）一直是临时目录里的脚本生成的，没进仓库。
