@@ -168,18 +168,31 @@ def _base_map(mdef):
     return mdef["textures"].get("_BaseMap", {}).get("texture", "")
 
 
+PIECE = re.compile(r"_obj\d+", re.IGNORECASE)      # a suit piece's name: Rana_OniHorn_obj001 (family ones: pc_f_nk_hair)
+
+
 def pick_material(materials, albedo, source, old_name, suit=None):
     if not albedo:
-        return None
+        return by_name(materials, old_name, suit)
     for suffix in EXPORT_SUFFIXES:                 # a PMX / XPS export texture names its material
         if albedo.lower().endswith(suffix):
             base = albedo[:-len(suffix)]
             return next((n for n in materials if safe_name(n) == base), None)
     albedo = re.sub(r"__[0-9a-f]{8}(?=_rgbx_)", "", albedo)      # a material's own copy of a shared name
     cands = [n for n, d in materials.items() if _base_map(d).lower() == albedo.lower()]
-    # <name>@<suit>: the suit's own definition of a piece another suit names alike (hq_material_data)
-    own = [n for n in cands if suit and n.lower().endswith("@" + suit)]
-    cands = own or [n for n in cands if "@" not in n] or cands
+    pick = _pick_among([n for n in cands if "@" not in n] or cands, source, old_name)
+    # <name>@<suit>: the suit's own definition of the piece picked, which another suit names alike (hq_material_data:
+    # g01 sleepwear / yoga Rouffe_Underwear_obj001) - never another piece's.  Until 2026-11-15 any @<suit> material on
+    # the albedo won: the oni suit's hair strand Rana_Onihair_obj001@oni draws the family hair albedo tinted orange-red
+    # and took the main hair, the whole head came out red (Rana is silver-haired)
+    if pick and suit and "@" not in pick:
+        own = next((n for n in cands if n.lower() == ("%s@%s" % (pick, suit)).lower()), None)
+        if own:
+            return own
+    return pick
+
+
+def _pick_among(cands, source, old_name):
     if source in cands:
         return source
     if len(cands) > 1 and old_name:
@@ -189,11 +202,35 @@ def pick_material(materials, albedo, source, old_name, suit=None):
         named = [n for n in cands if n.lower() == stem or (len(stem) >= 8 and n.lower().startswith(stem))]
         if named:
             return min(named, key=len)
+        # a suit piece's slot takes a piece's material, any other slot (pc_f01_nk_hair_00_hair_mat, hair, body) a
+        # family / model one: the oni strand Rana_Onihair_obj001 shares the family hair albedo pc_f_nk_hair
+        piece = bool(PIECE.search(old_name))
+        cands = [n for n in cands if bool(PIECE.search(n)) == piece] or cands
     if len(cands) > 1:
         skin = "skin" in (old_name or "").lower()
         cands = [n for n in cands if ("skin" in n.lower()) == skin] or cands
         cands.sort(key=lambda n: ("_ld" in n.lower(), n))
     return cands[0] if cands else None
+
+
+def by_name(materials, old_name, suit=None):
+    """A slot without a colour texture: the game material export_suits.py named it after (<game material>_mat), the
+    suit's own definition first.  The assembler finds a piece's albedo only in the suit's own bundles: the oni suit's
+    hair strand draws the family hair albedo (head bundle), so its slot came without one and stayed plain (2026-11-15).
+    The add-on's head slots (eye_overlay ...) have no game material of their name.  A name export_suits.py cut short
+    (Rouffe_SecretaryGlasses_obj001_Transpare_mat) matches by its start, the shortest such name."""
+    stem = re.sub(r"_mat$", "", re.sub(r"\.\d{3}$", "", (old_name or "").lower()))
+    if len(stem) < 8:
+        return None
+    names = [n for n in materials if n.lower().split("@")[0] == stem] or \
+        [n for n in materials if n.lower().split("@")[0].startswith(stem)]
+    if not names:
+        return None
+    shortest = min(len(n.split("@")[0]) for n in names)
+    names = [n for n in names if len(n.split("@")[0]) == shortest]
+    own = [n for n in names if suit and n.lower().endswith("@" + suit)]
+    names = own or [n for n in names if "@" not in n] or names
+    return names[0]
 
 
 HEAD_SLOTS = ("face", "eye", "lash", "brow", "eye_overlay")    # the ROE add-on's own head slots

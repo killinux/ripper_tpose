@@ -1117,10 +1117,19 @@ def main():
             raise SystemExit("no page to lay out again: %s" % out_path)
         manifest, source_root = page_header(out_path)
         models, suits, nudes, nomesh = [], [], [], []
+    elif not os.path.isfile(manifest_path) and patterns and os.path.isfile(out_path):
+        # a suit / nude card on its own (export_new.py f01:oni) after the export root was emptied (D:\roe_exports
+        # deleted 2026-11-14, the 11-15 re-export of f01:oni brought back only f01 and the suit): no model manifest to
+        # read, so no model card - the page's own header, the suit / nude cards from the source root
+        manifest, _root = page_header(out_path)
+        models, nomesh = [], []
+        suits = collect_suits(source_root, thumb_dir, args.force, wanted)
+        nudes = collect_nudes(source_root, thumb_dir, args.force, set(), wanted)
+        nudes += collect_completed(source_root, thumb_dir, args.force, wanted)
     else:
         if not os.path.isfile(manifest_path):
             raise SystemExit("manifest not found: %s\n先跑一次 export_character_models.ps1；"
-                             "只改版面用 --relayout" % manifest_path)
+                             "只改版面用 --relayout；单独几张套装 / 裸模卡片用 --only" % manifest_path)
         manifest, models, nomesh = collect(manifest_path, thumb_dir, args.force, wanted)
         if args.fresh and not models:
             raise SystemExit("manifest has no PASS entries: %s" % manifest_path)
