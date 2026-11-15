@@ -45,7 +45,12 @@ Per outfit (E:\game_export\StellarBlade\<char>\blend\<package>\<label>.blend), d
 A material is looked up by the instance's name, then as <name>_mod: swap_mod_mesh.py packages (a CNS outfit such as
 Vindictus Demon Maiden, its own mesh in a copy of a game outfit's package) name the materials built from the mod's maps
 so, and their PMX carries the same names.
-The archived .blend is only read.  The add-on picks the HQ .blend that holds most of a PMX's materials (per layer for
+More outfits come from the registry _meta\hq_materials\mod_outfits.json (2026-11-15: 48 looks of 12 mods; REGISTRY):
+their variant's files are hardlinked from the archived mod sources and named as patches (a replacer at the game's own
+path otherwise loses to the game's package at random), the mesh's slots may name the game's own instances (read too),
+the textures the archived package lacks are exported into textures\extra (fetch_textures()), and a CNS outfit's default
+texture options replace the flattened chain's (apply_overrides()).
+The archived .blend is only read (fetched maps are added to its textures\extra).  The add-on picks the HQ .blend that holds most of a PMX's materials (per layer for
 a pmx_layers.py model), so the Reika and Vindictus Fiona PMX take every material from their own HQ .blend and the
 nude layer from the nude's; the Cooling Suit and the other Eve PMX keep theirs (a tie goes to the first folder in
 name order: Eve before Fiona).
@@ -69,6 +74,12 @@ USMAP = os.path.join(ARCHIVE, "_meta", "mappings", "StellarBlade_1.1.0.usmap")
 # Windows' own bsdtar reads .rar (RAR5) too; a GNU tar first in PATH (Git Bash) takes "E:" for a remote host
 TAR = r"C:\Windows\System32\tar.exe" if os.path.isfile(r"C:\Windows\System32\tar.exe") else shutil.which("tar")
 HEAD = "MI_EVE_Head_V02"          # Eve's face material in every outfit .blend: the skin's subsurface comes from it
+MOD_SOURCES = os.path.join(ARCHIVE, "_meta", "mod_sources")
+# more outfits, one JSON entry per package folder (2026-11-15: the 48 looks of 12 mods - Nikke Plus, Cake Unveiled,
+# Crimson Wings BBB / OP, ...): same keys as OUTFITS plus "files" (groups of the variant's .pak / .utoc / .ucas under
+# MOD_SOURCES, each group hardlinked into its own folder next to the game's Paks) and "any_mount" (the mod's packages
+# sit under any mount name - SB_CNS/Content, CNS_CWings/Content ... - so /Game/<path> is looked up as */Content/<path>)
+REGISTRY = os.path.join(DATA, "mod_outfits.json")
 # package folder -> character, the mod's content folder, the outfit's skeletal mesh (its material slots); "packages":
 # what to read first when the folder is the game's own (default: the whole folder); "slots": only these (the barefoot
 # variant's mesh keeps empty heels / pubic-hair slots); "archive" + "member": a mod that is not installed, read from
@@ -111,11 +122,12 @@ def parent_of(export):
     return quoted(((export.get("Properties") or {}).get("Parent") or {}).get("ObjectName", ""))
 
 
-def package_glob(object_path):
-    """/Game/Art/X/MI_Y.0 -> SB/Content/Art/X/MI_Y.* (CUE4Parse wants a wildcard for a single package)"""
+def package_glob(object_path, any_mount=False):
+    """/Game/Art/X/MI_Y.0 -> SB/Content/Art/X/MI_Y.* (CUE4Parse wants a wildcard for a single package); any_mount:
+    */Content/Art/X/MI_Y.* - a mod mounted under its own name keeps its packages at /Game/<path> for the game"""
     path = object_path.split(".")[0]
     if path.startswith("/Game/"):
-        path = "SB/Content/" + path[len("/Game/"):]
+        path = ("*/Content/" if any_mount else "SB/Content/") + path[len("/Game/"):]
     return path + ".*"
 
 
@@ -133,6 +145,28 @@ def mod_paks(entry, paks, work):
     mod that is not installed a folder in `work` with the variant's files from its archive and a junction to the
     game's Paks (the mod's instances name game parents).  Without a "member" the mod's files sit at the archive's root
     (Vindictus Demon Maiden's zip) and are unpacked into <work>/Paks/mod.  Returns (folder, junction or None)."""
+    if entry.get("files"):
+        # the variant's own files (archived mod sources), each group in its own folder: a pack's other variants
+        # (another Crimson Wings mesh at the same path, an add-on that hides parts) stay out
+        folder = os.path.join(work, "Paks")
+        for k, group in enumerate(entry["files"]):
+            sub = os.path.join(folder, "m%d" % k)
+            os.makedirs(sub)
+            for f in group:
+                src = f if os.path.isabs(f) else os.path.join(MOD_SOURCES, f)
+                stem, ext = os.path.splitext(os.path.basename(src))
+                # named as a patch: CUE4Parse mounts in parallel and keeps the higher read order between two
+                # containers holding the same package path ("_P" ranks above the game's pakchunks; with equal
+                # orders the winner is random - a replacer such as Revealing Crimson Wings' CH_P_EVE_39 came out
+                # as the game's own mesh in 2 runs of 3)
+                name = stem + ext if stem.lower().endswith("_p") else stem + "_P" + ext
+                os.link(src, os.path.join(sub, name))      # the work folder sits on the sources' drive
+        link = os.path.join(folder, "game")
+        r = subprocess.run(["cmd", "/c", "mklink", "/J", link, paks], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        if r.returncode != 0:
+            raise SystemExit("mklink /J failed: " + r.stdout + r.stderr)
+        return folder, link
     if not entry.get("archive"):
         return paks, None
     folder = os.path.join(work, "Paks")
@@ -170,25 +204,71 @@ def index_json(root):
     return out
 
 
-def read_game(patterns, json_dir, paks):
-    """the mod's packages' JSON plus every parent instance / master they name"""
+def read_game(patterns, json_dir, paks, any_mount=False):
+    """the mod's packages' JSON plus every parent instance / master they name; any_mount: also the instances the
+    skeletal mesh names that are not the mod's (a replacer keeps the game's own, e.g. Crimson Wings' UV1 / UV2)"""
     cue4parse(patterns, json_dir, paks)
     asked = set()
     for _level in range(8):
         mats = index_json(json_dir)
-        wanted = []
+        refs = []
         for e in mats.values():
-            if not e.get("Type", "").startswith("MaterialInstance"):
-                continue
-            ref = ((e.get("Properties") or {}).get("Parent") or {}).get("ObjectPath", "")
-            if ref and quoted(((e.get("Properties") or {}).get("Parent") or {}).get("ObjectName", "")) not in mats \
-                    and ref not in asked:
+            t = e.get("Type", "")
+            if t.startswith("MaterialInstance"):
+                p = (e.get("Properties") or {}).get("Parent") or {}
+                refs.append((quoted(p.get("ObjectName", "")), p.get("ObjectPath", "")))
+            elif t == "SkeletalMesh" and any_mount:
+                for s in e.get("SkeletalMaterials") or []:
+                    m = s.get("Material") or {}
+                    refs.append((quoted(m.get("ObjectName", "")), m.get("ObjectPath", "")))
+        wanted = []
+        for name, ref in refs:
+            if ref and name not in mats and ref not in asked:
                 asked.add(ref)
-                wanted.append(package_glob(ref))
+                wanted.append(package_glob(ref, any_mount))
         if not wanted:
             return mats
         cue4parse(wanted, json_dir, paks)
     return index_json(json_dir)
+
+
+def fetch_textures(staged_list, tex_dir, paks, any_mount):
+    """textures the flattened instances name that the outfit folder lacks (a replacer's game instances whose maps the
+    archived package never exported, a mod map no slot of swap_mod_mesh.py used) -> PNG in textures\\extra.  One
+    CUE4Parse call per texture, .uasset only (its .ubulk in parallel would write the same file); a texture CUE4Parse
+    cannot find is listed, not fatal.  Returns (fetched, not found)."""
+    have = set()
+    for sub in ("", "extra", "mod"):
+        d = os.path.join(tex_dir, sub)
+        if os.path.isdir(d):
+            have |= {os.path.splitext(f)[0].lower() for f in os.listdir(d) if f.lower().endswith(".png")}
+    want = {}
+    for staged in staged_list:
+        for t in staged[0]["Properties"]["TextureParameterValues"]:
+            n = texture_name(t["ParameterValue"])
+            if n.lower() not in have:
+                want.setdefault(n, t["ParameterValue"]["ObjectPath"])
+    got, missing = [], []
+    if not want:
+        return got, missing
+    extra = os.path.join(tex_dir, "extra")
+    os.makedirs(extra, exist_ok=True)
+    tmp = tempfile.mkdtemp(prefix="hq_tex_")
+    try:
+        for n, op in sorted(want.items()):
+            try:
+                cue4parse([package_glob(op, any_mount)[:-2] + ".uasset"], tmp, paks, fmt="png")
+            except SystemExit:
+                pass
+            hits = glob.glob(os.path.join(tmp, "**", n + ".png"), recursive=True)
+            if hits:
+                shutil.copy2(hits[0], os.path.join(extra, n + ".png"))
+                got.append(n)
+            else:
+                missing.append(n)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return got, missing
 
 
 def master_defaults(master):
@@ -277,6 +357,21 @@ def flatten(name, mats):
 
 def texture_name(value):
     return value["ObjectPath"].split("/")[-1].split(".")[0]
+
+
+def apply_overrides(staged, overrides, note):
+    """a CNS outfit's default texture options ({parameter: /Game/... texture}, the .dekcns.json TextureOptions at
+    their Value): CNS sets them on the slot's material at run time, so they win over the flattened chain"""
+    tex = staged[0]["Properties"]["TextureParameterValues"]
+    for param, path in overrides.items():
+        obj = {"ObjectName": "Texture2D'%s'" % path.split(".")[-1], "ObjectPath": path.split(".")[0] + ".0"}
+        hit = next((t for t in tex if t["ParameterInfo"]["Name"].lower() == param.lower()), None)
+        if hit is not None:
+            hit["ParameterValue"] = obj
+        else:
+            tex.append({"ParameterInfo": {"Name": param, "Association": "EMaterialParameterAssociation::GlobalParameter",
+                                          "Index": -1}, "ParameterValue": obj})
+    note["cns_textures"] = overrides
 
 
 def skin_record(staged, tex_dir):
@@ -424,27 +519,54 @@ def run_outfit(package, args):
     json_dir, staged_dir = os.path.join(data, "mi_json"), os.path.join(data, "staged")
     shutil.rmtree(staged_dir, ignore_errors=True)
     os.makedirs(staged_dir)
-    work = tempfile.mkdtemp(prefix="hq_mod_")
+    any_mount = bool(entry.get("any_mount"))
+    tex_dir = os.path.join(folder, "textures")
+    work_root = None
+    if entry.get("files"):              # hardlinks of the archived mod sources: the work folder on their drive
+        work_root = os.path.join(DATA, "_work")
+        os.makedirs(work_root, exist_ok=True)
+    work = tempfile.mkdtemp(prefix="hq_mod_", dir=work_root)
+    flat = {}
     try:
         paks, _link = mod_paks(entry, args.paks, work)
-        mats = read_game(entry.get("packages") or [mod_dir + "/*"], json_dir, paks)
+        mats = read_game(entry.get("packages") or [mod_dir + "/*"], json_dir, paks, any_mount)
+        mesh = mats.get(mesh_name)
+        if mesh is None:
+            raise SystemExit("%s: skeletal mesh %s not in the mod's JSON" % (package, mesh_name))
+        used = []
+        for slot in mesh.get("SkeletalMaterials") or []:
+            name = quoted((slot.get("Material") or {}).get("ObjectName", ""))
+            if name and name not in used and (not entry.get("slots") or name in entry["slots"]):
+                used.append(name)
+        for name in used:
+            flat[name] = flatten(name, mats)
+            if flat[name][0] is not None and name in (entry.get("overrides") or {}):
+                apply_overrides(flat[name][0], entry["overrides"][name], flat[name][1])
+        # one instance on two slots with different CNS options: the .blend has a copy per extra slot
+        # (<material>__slot<n>), flattened from the same instance under that name with its own options
+        for mname, sm in (entry.get("slot_materials") or {}).items():
+            staged, note = flatten(sm["instance"], mats)
+            if staged is None:
+                continue
+            staged = json.loads(json.dumps(staged))
+            staged[0]["Name"] = mname
+            note = dict(note, slot_copy_of=sm["instance"])
+            apply_overrides(staged, sm.get("overrides") or {}, note)
+            flat[mname] = (staged, note)
+            used.append(mname)
+        if any_mount:
+            got, missing = fetch_textures([s for s, _n in flat.values() if s is not None], tex_dir, paks, True)
+            if got or missing:
+                log("%s textures from the game / mod into textures\\extra: %d%s" % (
+                    package, len(got), ("; not found: " + ", ".join(missing)) if missing else ""))
     finally:
         link = os.path.join(work, "Paks", "game")
         if os.path.lexists(link):
             os.rmdir(link)                          # the junction only - never the game's Paks it points to
         shutil.rmtree(work, ignore_errors=True)
-    mesh = mats.get(mesh_name)
-    if mesh is None:
-        raise SystemExit("%s: skeletal mesh %s not in the mod's JSON" % (package, mesh_name))
-    used = []
-    for slot in mesh.get("SkeletalMaterials") or []:
-        name = quoted((slot.get("Material") or {}).get("ObjectName", ""))
-        if name and name not in used and (not entry.get("slots") or name in entry["slots"]):
-            used.append(name)
-    tex_dir = os.path.join(folder, "textures")
     notes, skins = {}, {}
     for name in used:
-        staged, note = flatten(name, mats)
+        staged, note = flat[name]
         if staged is None:
             notes[name] = {"error": "not a material instance in the JSON"}
             continue
@@ -694,6 +816,9 @@ def main():
     ap.add_argument("--only", default="", help="comma-separated package folders (default: all of %s)" % ", ".join(OUTFITS))
     ap.add_argument("--paks", default=PAKS, help="the game's Paks folder with the mods in ~mods")
     args = ap.parse_args()
+    if os.path.isfile(REGISTRY):
+        for k, v in json.load(open(REGISTRY, encoding="utf-8")).items():
+            OUTFITS.setdefault(k, v)
     wanted = [p.strip() for p in args.only.split(",") if p.strip()] or list(OUTFITS)
     for package in wanted:
         run_outfit(package, args)

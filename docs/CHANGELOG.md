@@ -14,6 +14,51 @@
 
 ---
 
+## 2026-11-15 — 剑星：12 个 Nexus mod 出 Blender / 高清 Blender / PMX / XPS（22 套已导，26 套等依赖）+ mod 画廊；PMX：手肘膝盖 SDEF 新工具（样品）；剑星高清材质原理文档
+
+用户在 `E:\Downloads\eve_mod_download` 下了 12 个剑星 mod，要求都转成高清 Blender、PMX、XPS，转完做画廊。拆开有 72 种变体，
+用户选了「每种网格一份」：48 套。
+
+**结果**（成品在 `E:\game_export\StellarBlade\Eve\{blend,xps,pmx}\<包名>\`）
+
+| mod | 套数 | 状态 |
+|---|---|---|
+| Nikke Plus（#347） | 9（全身 / 连体衣 / 无外套 × 3 种身材） | 已导 |
+| Crimson Wings OP（#3543） | 4（短 1 / 短 2 / 原版 / 长） | 已导 |
+| Original Proportions（#30） | 3（赤足带阴毛、高跟、高跟带阴毛；赤足以前导过） | 已导 |
+| YoRHa 礼服（#550）、YoRHa 2B 制服（#3577）、Black Sling（#4109）、Albion Nell（#4061）、Nude Natural（#740）、Revealing Crimson Wings（#221） | 各 1 | 已导 |
+| Cake 冷却服（#533） | 9 | 等 #1183「All in One for CNS」（皮肤材质在里面） |
+| Crimson Wings BBB（#1933） | 16（40 个变体里不同的网格） | 等「Base Textures For Replacement」和「Nude and Stocking」5.1 |
+| Skin Suit Undressed（#3929） | 1 | 等贴图文件「Bigger Areola」 |
+
+每套：`.blend`（PMX / XPS 由它导出）、`_HQ.blend`（游戏参数的材质）、PMX（26 个 MMD 表情、物理）、XPS、`插件效果_游戏材质对比.jpg`、
+`README.txt`；mod 原件在 `_meta\mod_sources\<mod>\`。画廊 `E:\game_export\StellarBlade\_mod画廊\index.html`（56 张卡片，含之前导过的 8 套）。
+
+**怎么用**：`scripts/stellarblade/nexus_batch/README.md`（`batch.py` → `finish.py archive / sources / registry / hq / addon / readme /
+gallery`；依赖下好后 `add_dep.py`）。
+
+**原理和新踩的坑**（`scripts/stellarblade/README.md`「一批 Nexus mod」一节）
+1. 读网格时 mod 的文件要当补丁（`<名>_P.*`）：CUE4Parse 并行挂载，同一路径的包谁赢是随机的，替换型 mod 3 次里 2 次读成了游戏原版网格。
+2. UE Viewer 的 PSK 是每段网格一个材质（没面的槽不写、两段共用的写两次、关掉的段也写），槽名按 section 对、用三角形数核对；关掉的段去掉。
+3. 只改参数的 mod 材质实例没有 `.mat`：沿 `Parent` 链拿最近一层归档里有的游戏材质（新索引 `_meta\material_index.json`，197 个 .blend、
+   603 个材质名），都没有就用 CUE4Parse 导出的贴图现做。父材质叫 `Hide` 的部件游戏里不画，去掉。
+4. CNS 默认选项（`.dekcns.json` 的 `TextureOptions[Value]`）：底色直接换，其余贴图进高清版；默认关的 `MaterialToggles` 去掉。
+   同一个游戏材质挂在两个槽上、选项不同时（Nikke Plus 无外套款）拆成 `<材质>__slot<n>`，否则鞋子会被染成粉色。
+5. `hq_mod_outfits.py`：登记表 `_meta\hq_materials\mod_outfits.json`（`files` / `any_mount` / `overrides` / `slot_materials`），网格槽直接引用的
+   游戏材质也读，归档缺的贴图导出到 `textures\extra\`。新 `scripts/stellarblade/mod_gallery.py` 生成画廊。
+
+**PMX：手肘、膝盖 SDEF**（pmx-todo 第 6 项，用户挑的，先做样品）：`scripts/vindictus/pmx_sdef.py` 只改正好挂在两根骨上的顶点，剑星、FF7、HS2
+一个都没有（关节一圈挂着游戏自己的修正辅助骨）。新 `scripts/pmx_tools/pmx_sdef_rings.py`：辅助骨按层级归到关节两侧，付与关节骨 r < 1 的
+半角修正骨按比例分，两边都有权重的顶点改成 SDEF（C = 关节骨头）。样品 `Eve\pmx\Mod_BlackSling\Eve_Mod_BlackSling_SDEF.pmx`（1070 个顶点）
++ `SDEF对比_手肘.jpg`：弯 120° 时关节一圈到肘中心的距离，原版平均缩到 0.90、最塌 0.51，SDEF 1.00；膝 110° 原版 0.94 / 0.55。
+MMD 本体自己算 SDEF；Blender 要在侧栏「杂项」→「MMD SDEF驱动器」绑定。等用户看过再定铺开范围。
+
+**文档**：新 `docs/stellarblade-hq-materials.md`（剑星高清材质的原理：为什么另存 `_HQ.blend`、存档目录、怎么做出来、插件怎么找、要放在哪），
+插件 README 加了链接。
+
+**验证**：22 套的插件实测全部材质换得上（15–37 个），没有缺贴图，两种状态再导出的 PMX 逐字节一致，去掉插件后节点清零；
+PMX 26 个表情、权重没有漏到无关骨头；存档自检 66/66；SDEF 样品除 1070 个顶点外和原文件一致。
+
 ## 2026-11-15 — 女毒液 mod 批量转换：生化危机 3 / HS2 / Marvel Heroes 出高清 .blend + PMX + XPS；新增通用 PMX 骨骼映射、RE Engine 和 Marvel Rivals 流程；修正 Marvel Heroes 的骨骼旋转
 
 用户在 `E:\Downloads\Venom_mod` 下了 14 个 mod，要求都转成高清 Blender、PMX 和 XPS。这些 mod 分属 5 个游戏。

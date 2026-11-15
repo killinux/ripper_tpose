@@ -11,7 +11,7 @@
 | 3 | 换装 / 换头的后半程 | **10-31 做完**：挑零件、拆开；跨游戏换装（星刃 Eve 的套装 → a08）；跨游戏换头（Eve ↔ a08）。没做：脸只到下巴的模型 |
 | 4 | PMX 覆盖面 | 待挑 |
 | 5 | 表情 | **10-25 做了「表情移植」插件 + FF7 第一批 2 个，等用户看效果** |
-| 6 | 手肘、膝盖的变形（SDEF） | 待挑 |
+| 6 | 手肘、膝盖的变形（SDEF） | **11-15 用户挑了，做了样品**：新工具 `scripts/pmx_tools/pmx_sdef_rings.py`（辅助骨归边 + 半角修正骨按比例），Black Sling 样品 + 对比图在存档里，等用户看效果再定铺开范围 |
 | 7 | 动作适配体型 | 待挑 |
 | 8 | 标准化小缺口 + 整批体检 | 待挑 |
 
@@ -137,6 +137,19 @@
 - **现状**：只有 Vindictus 用了（Fiona 2036 个顶点）；ROE、FF7、星刃、对魔忍都是 0。
 - MMD 本体自己会算 SDEF，用上以后手肘、膝盖大角度弯曲不会捏扁。
 - `scripts/vindictus/pmx_sdef.py` 本来任何 PMX 都能用，只是没用到别家。
+- **2026-11-15 用户挑了这项。** 摸底（每个游戏抽一个 PMX）：`pmx_sdef.py` 只改「正好挂在关节骨和它父骨两根骨上」的顶点，
+  剑星、FF7、HS2 一个都没有，永劫无间、第一后裔、对魔忍几十个——这些游戏的关节一圈挂着游戏自己的修正辅助骨（剑星 Ab-L-Elbow /
+  BrochiDn / Knee-SubA，FF7 L_Elbow_Spo / L_Knee_Spo，HS2 cf_J_ArmElboura_s_L / cf_J_LegKnee_back_s_L，永劫无间 elbow help /
+  knee help，第一后裔 Bn_Shape_Elbow_L）。游戏里它们由动画蓝图驱动，我们的 PMX 里大多只是跟着父骨走。
+- 新工具 `scripts/pmx_tools/pmx_sdef_rings.py`：关节一圈每根骨按层级归到关节骨一侧（前臂 / 小腿和它们下面的骨）或父骨一侧
+  （上臂 / 大腿，连同 付与 自它们的扭转骨）；付与关节骨 r < 1 的半角修正骨（剑星 Ab-L-Knee 付与 左ひざ ×0.48，ROE knee_L，
+  FF7 L_Knee_Spo，HS2 LegKnee_back / low，永劫无间 knee help）按 r / 1 - r 分到两边。两边都有权重、又没有挂别的骨的顶点
+  改成 (父骨, 关节骨) 的 SDEF，C = R0 = R1 = 关节骨的头。各游戏抽样：每个关节一两百到一千多个顶点；第一后裔的膝盖有几百个顶点
+  挂着别的骨，原样不动。
+- 样品 Black Sling（`E:\game_export\StellarBlade\Eve\pmx\Mod_BlackSling\Eve_Mod_BlackSling_SDEF.pmx`，原文件旁边，
+  1070 个顶点：肘 158 ×2、膝 377 ×2）；对比图 `SDEF对比_手肘.jpg`：弯 120° 时，关节一圈顶点到肘中心的距离原版平均缩到 0.90、
+  最塌 0.51，SDEF 1.00；膝 110° 原版平均 0.94、最塌 0.55。Blender 里要绑 SDEF 驱动才看得到（侧栏「杂项」→「MMD SDEF驱动器」→
+  绑定，偏好设置 › 文件路径 › 自动运行 Python 脚本打开），MMD 本体自己会算。等用户看效果再定铺开范围。
 
 ## 7. 动作适配体型
 

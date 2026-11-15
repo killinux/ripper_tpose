@@ -618,6 +618,38 @@ mod 的结构：
 **文件**（`E:\game_export\StellarBlade\Eve\`）：`blend\Mod_VindictusDemonMaiden\`（.blend、`_HQ.blend`、`README.txt`）、`xps\Mod_VindictusDemonMaiden\`、
 `pmx\Mod_VindictusDemonMaiden\`；数据 `_meta\hq_materials\Mod_VindictusDemonMaiden\`。
 
+**一批 Nexus mod（2026-11-15：12 个 mod、48 套，`hq_mod_outfits.py` 的登记表 + `mod_gallery.py`）**
+
+用户下载到 `E:\Downloads\eve_mod_download` 的 12 个 mod（Nikke Plus、Cake Unveiled 冷却服、Crimson Wings BBB / OP、YoRHa 礼服 / 2B 制服、
+Black Sling、Albion Nell、Nude Natural、Skin Suit Undressed、Original Proportions、Revealing Crimson Wings）拆开有 72 种变体；
+用户选了「每种网格一份」：48 套（Crimson Wings BBB 的 40 个替换包按 PSK 顶点 md5 只有 16 种网格）。每套走 Demon Maiden 那条线
+（`swap_mod_mesh.py` 换进已归档的原版成品 → XPS / PMX / 预览 → 归档 → 高清版 → 插件实测），中间多了一步「补材质」。
+批处理脚本在 [`nexus_batch/`](nexus_batch/README.md)；这里记做法和坑。
+
+- **读网格要带上游戏的 Paks，mod 的文件要当补丁**：CUE4Parse 并行挂载，两个容器里有同一路径的包（替换型 mod，如 Revealing Crimson Wings
+  的 `CH_P_EVE_39`）时取「读取顺序」高的；名字带 `_P` 的是补丁，高于游戏的 pakchunk。不带 `_P` 时谁赢是随机的（3 次里 2 次读成了
+  游戏原版网格）。现在硬链接时一律命名成 `<名>_P.*`（`hq_mod_outfits.py` 的 `files` 也是）。
+- **UE Viewer 的 PSK 是「每段网格一个材质」**：LOD0 每个 section 一个，按 section 顺序；没有面的槽不写（Nikke Plus 无外套款的
+  `MI_Basebody_V02_F2`、裸体的空鞋 / 阴毛槽），两段共用的槽写两次，游戏里关掉的段也写（Crimson Wings OP：UV2 两段 + 1766 个三角形的代理段）。
+  所以槽名要按 section 对，用每段的三角形数核对；关掉的段按游戏去掉。
+- **只改参数的 mod 材质实例**（YoRHa 礼服把原版 5 个材质拆成 25 个部件，各自只改参数）UE Viewer 不写 `.mat`：沿 `Parent` 链往上，
+  拿最近一层在已归档 .blend 里有的游戏材质，复制一份按 mod 实例的名字命名（高清版和插件按这个名字找）。哪个 .blend 里有哪个材质，先扫一遍
+  存档建索引（197 个 .blend、603 个材质名，只读名字）。都没有的（Black Sling 的墨镜 `MI_ACC_GLA_13`）用 CUE4Parse 导出它的贴图现做；
+  连贴图都没有的（深色镜片）取实例的颜色值。
+- **父材质叫 `Hide`** 的槽游戏里不画（YoRHa 礼服的手臂 / 腿 / 手的皮肤藏在手套、丝袜下面，阴毛默认关），这些面去掉。
+- **CNS 的默认选项**：`.dekcns.json`（有尾逗号，要宽松解析）的 `TextureOptions` 按 `Value` 取默认贴图（Nikke Plus 默认粉色衣服 + 粉色外套，
+  Cake 的肤色），底色在普通 .blend 里就换上，ORM / 法线 / 遮罩写进登记表的 `overrides`，高清版里换；`MaterialToggles` 默认关的槽
+  （YoRHa 2B 制服 12 个：透明版、手、大腿、靴子下的腿、高跟鞋、阴毛）去掉。
+  - 同一个游戏材质实例挂在两个槽上、两个槽的 CNS 选项又不同时（Nikke Plus 无外套款：槽 0 和槽 1 都是 `MI_CH_P_EVE_Nikke_06_UV1`，一个配衣服颜色、
+    一个配上身颜色），游戏里每个槽是各自的动态实例；Blender 里共用一个材质，后一个选项会盖掉前一个（鞋子变粉、腰侧一块白）。所以后面的槽
+    复制一份材质，叫 `<材质>__slot<槽号>`；登记表里写进 `slot_materials`，高清版按这个名字单独展开（插件 17/17）。
+- **缺依赖的 mod 先不导**：Crimson Wings BBB 要作者的「Base Textures For Replacement」（皮肤槽 `SkinEve` 在里面），Cake 的皮肤在另一个 mod
+  #1183「Reusable Skin Material」里，Skin Suit Undressed 只下了网格没下贴图。
+- `hq_mod_outfits.py` 新增登记表 `_meta\hq_materials\mod_outfits.json`（键同 `OUTFITS`，另有 `files`：存档里 mod 源文件的分组，`any_mount`：
+  mod 自己的挂载名，`/Game/<路径>` 按 `*/Content/<路径>` 找，`overrides`：CNS 默认贴图）；`read_game` 也跟进网格槽直接引用的游戏材质实例；
+  归档成品里没有的贴图（替换型 mod 用到的游戏贴图、`swap_mod_mesh.py` 没用到的 mod 贴图）导出到 `textures\extra\`。
+- 画廊：`python mod_gallery.py --looks <清单.json>` → `E:\game_export\StellarBlade\_mod画廊\index.html`（缩略图在 `thumbs\`，链接都是相对路径）。
+
 ## `validate_eve.py`
 
 脚本导入 Eve 的标准身体、完整 Face_003、默认发型和独立长马尾。身体/头发 PSK 会检查

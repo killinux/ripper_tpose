@@ -10,6 +10,8 @@
 - 自发光；
 - 贴花的透明裁切：腿上的「SUPER」白字。
 
+原理（`_HQ.blend` 怎么来的、插件怎么找、要放在哪个目录）见 [`docs/stellarblade-hq-materials.md`](../../../docs/stellarblade-hq-materials.md)。
+
 PMX 格式只装得下一张颜色贴图。导出时已经把游戏颜色乘上了 AO，还把亮的部分拆成了 `<材质>_gloss`，用 sphere 贴图加高光
 （见 `scripts/stellarblade/README.md`「高清材质」）。其余效果只能在 Blender 里加回来。插件不删 mmd_tools 的任何节点：
 随时能切回 MMD 着色，用 mmd_tools 再导出 PMX 也和原来一样。
