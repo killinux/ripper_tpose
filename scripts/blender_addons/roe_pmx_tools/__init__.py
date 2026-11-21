@@ -234,7 +234,8 @@ class ROEPMX_OT_convert(bpy.types.Operator):
                 raise RuntimeError("Convert_to_MMD5 did not register one_click_convert")
             meshes, arm = _state["meshes"], _state["armatures"][0]
             root, stats = work.convert_rig_to_mmd(arm, meshes, _state["slots"], _state["missing_optional"],
-                                                  _state["helper_plans"], _state["skin_before"])
+                                                  _state["helper_plans"], _state["skin_before"],
+                                                  bust=True, collider_fixes=True)
             stats["arm_down_deg"] = _state["apose"]
             stats["premerged_helpers"] = _state.get("premerged", [])
             stats["reparented_helpers"] = _state["helpers"]
@@ -247,8 +248,10 @@ class ROEPMX_OT_convert(bpy.types.Operator):
             _log(settings, "③ %d 根骨, 両目 %s, 表情 %d, 权重空洞 %d" % (
                      stats.get("bones", 0), "有" if stats.get("both_eyes_bone") else "无",
                      _count(stats.get("face_morphs")), stats.get("weight_holes", 0)),
-                 "   物理: 身体 %s, 布料 %s (%d 件), 撕裂边 %d" % (
-                     physics.get("body", "-"), physics.get("cloth", "-"), _count(physics.get("garments")),
+                 "   物理: 身体 %s, 胸 %d 侧, 布料 %s (%d 件), 撕裂边 %d" % (
+                     physics.get("body", "-"),
+                     sum(1 for line in physics.get("bust") or () if " swings " in line),
+                     physics.get("cloth", "-"), _count(physics.get("garments")),
                      (stats.get("distortion") or {}).get("torn", 0)),
                  "   下一步: ④ 导出 PMX（可先用 MMD 页签的 Cloth Physics / Face Morphs 面板调整）")
         except Exception as exc:

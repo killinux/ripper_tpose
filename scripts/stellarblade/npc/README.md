@@ -126,16 +126,29 @@ python hq_npc_looks.py --only Iberis   # 单个
 前后各加几步，都是 NPC 才有的情况：
 
 - **三副骨架合一**：脸、头发各带一副骨架，挂在身体骨架下，静止姿势对齐、骨骼同名。导出脚本只认一副，
-  所以先把同名骨合并（核对位置差 < 0.01 cm），只有脸 / 头发骨架才有、而且带蒙皮的骨骼才复制过去，
-  网格改绑身体骨架。Raven：脸骨架 185 根全部同名；头发骨架多出的 25 根（武器、齿轮、饰品）都没有蒙皮，没复制。
+  所以先把同名骨合并，只有脸 / 头发骨架才有、而且带蒙皮的骨骼才复制过去，网格改绑身体骨架。
+  Raven：脸骨架 185 根全部同名；头发骨架多出的 25 根（武器、齿轮、饰品）都没有蒙皮，没复制。
+  - 合并前核对同名骨的位置，只核对带蒙皮的，差 0.5 cm 以内算对齐。
+  - Citizen_08 的眼睑辅助骨差 0.25 cm。
+  - Scarlet 的脸骨架里骨盆和绳子挂点差 1.1 cm，但上面没有蒙皮，不算。
 - **表情**：Raven 的脸带游戏自己的 180 个形态键（`jaw_open`、`upLid_down_L`、`lipCorner_pull` …，不是 ARKit 的名字），
   Eve 那套 ARKit 配方用不上；`NPC_RECIPES` 用这些名字混出 28 个 MMD 标准表情（あいうえお、まばたき、笑い、
   ウィンク 两种、眉毛、口角、ワ、ん），原来的 180 个也一起导出（「その他」）。`_L` / `_left` 是角色自己的左边
   （核对过：`upLid_down_L` 闭的是左脚那一侧的眼睛）；`jaw_open` 自己会带下牙。
 - **头发物理**：头发骨骼叫 `HBN_*` / `HBn_*`，物理插件只给名字里有 hair 的头下链条加物理，所以改名成 `Hair_*`
   （`HBn_Root` 是头皮，不动）。Raven 13 条发束、133 根骨。
-- **挂在扭转辅助骨上的饰品链**：Raven 右大腿的饰品链挂在 `Ab-R-Thigh-Tw1` 下，物理插件把这根带大腿肉的辅助骨
-  当成链的第一节去晃；这种链改挂到辅助骨的父骨（大腿本身）上。
+- **挂在身体辅助骨上的链**：扭转骨和肌肉 / 关节修正骨上带着身体自己的蒙皮。
+  - Raven 右大腿的饰品链挂在 `Ab-R-Thigh-Tw1` 下，Scarlet 的裙片挂在大腿肌肉骨 `Ab-L/R-Venter2` 下。
+  - 物理插件把这根辅助骨当成链的第一节去晃，大腿就跟着裙子晃。
+  - 这种链改挂到往上第一根不是辅助骨的骨上，也就是大腿本身（`BODY_HELPER`）。
+- **几个网格都带表情**：Lily 的头和眼睛 / 眉毛 / 睫毛是两个网格，各带 52 个 ARKit 形态键。
+  - 导出脚本只在一个头网格上混表情，这里给另一个网格也混出同名的。PMX 里合成一个表情，眨眼时眼皮和睫毛一起动。
+  - ARKit 头没有 MetaHuman 的 `TeethLowerDown` 时（Lily），配方去掉这个键，`jawOpen` 自己带下牙
+    （和 `scripts/firstdescendant` 一样）；不去掉的话，あいうえお 会被跳过。
+- **重复的网格**：Lily 的造型里既有完整的 `CH_NPC_01_Lilly`（身体 + 头），又有单独的 `CH_NPC_01_Face`，
+  同一个头两份（各 8580 个顶点），MMD 里会闪。一个网格的材质都在另一个网格上、95% 的顶点和它重合，就去掉。
+- **脚趾**：Rael 的骨架把脚趾写成辅助骨 `Ab-L-Toe0` / `Ab-R-Toe0`，挂在 `Bip001-L-Foot` / `Bip001-R-Foot` 下。
+  导出脚本靠 Biped 名找脚尖、定模型朝向，所以改名成 `Bip001-L-Toe0` / `Bip001-R-Toe0`。
 - **贴图透明度**（`../../pmx_tools/texture_alpha_blender.py`）：MMD 会把贴图透明度乘进材质。
   只被不透明材质用的贴图补成 1（Raven 的眼睛贴图有透明度 0 的地方）；只被裁切材质用的贴图按游戏的裁切值
   重新映射（Raven 的长发原来中位数 0.25、游戏在 0.333 处裁切，MMD 里又稀又透）。
@@ -145,10 +158,16 @@ python hq_npc_looks.py --only Iberis   # 单个
   每个造型要选「贴身」的材质：Raven 是 `BaseBody` + `Suit01`（紧身战衣）+ 头。
 
 结果（`E:\game_export\StellarBlade\Raven\pmx\Raven\`）：`Raven.pmx`、`textures\`、`表情一览.jpg`、`Raven_手势舞.mp4`、
-`Raven_converted.blend`。其余 17 个造型等用户看过样品再做。
+`Raven_converted.blend`。
+
+10-31 批量转了另外 17 个造型，每个造型一个 PMX 文件夹，带手势舞视频。
+- 做完 12 个：AirborneSquad、Enya、Iberis、Kara、Kaya、Lily_01、Maid、MotherSphere、Olivia、Raven_Nude、Roxanne、Tachy_NPC。
+- 暂停 5 个：Citizen_08、Rael、Scarlet、Su、Tachy_Boss。
+  - 前 4 个做到一半时，系统内存不够，把任务杀掉了。用户说先暂停。
+- 上面「三副骨架合一」里只核对带蒙皮的骨，还有后三条（几个网格都带表情、重复的网格、脚趾），都是批量里遇到后加的。
 
 ## 还没做
 
-- 其余 17 个造型的 PMX（样品 Raven 等用户看）；XPS。
+- PMX 批量剩下的 5 个（Citizen_08、Rael、Scarlet、Su、Tachy_Boss），等用户说再跑；XPS。
 - 表情：Raven 的脸带游戏形态键（10-31 核实）；其它角色的脸带不带，批量时逐个看。
 - 皮肤的高清接法（`MA_Skin_EVE` / `MA_Skin_NPC` 的 `ORSS Mask`）。

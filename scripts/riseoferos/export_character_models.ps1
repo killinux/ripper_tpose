@@ -317,6 +317,20 @@ foreach ($entry in $entries) {
                         ", rigid bodies " + $mc.physics.rigid_bodies + ", joints " +
                         $mc.physics.joints + ", morphs " + @($mc.face_morphs).Count) `
                         -ForegroundColor DarkCyan
+                    if (@($mc.physics.bust).Count) {
+                        Write-Host ("      bust: " +
+                            (@($mc.physics.bust) -join '; ')) -ForegroundColor DarkCyan
+                    }
+                    if (@($mc.physics.bust_costume).Count) {
+                        Write-Host ("      costume on the breasts: " +
+                            (@($mc.physics.bust_costume) -join '; ')) -ForegroundColor DarkCyan
+                    }
+                    if ($mc.physics.collider_stops -or @($mc.physics.released_overlaps).Count) {
+                        Write-Host ("      colliders: " + $mc.physics.collider_stops +
+                            " garment bones kept out of the body measurement, " +
+                            @($mc.physics.released_overlaps).Count +
+                            " rest overlaps released") -ForegroundColor DarkCyan
+                    }
                     if (@($mc.physics.cloth_chains).Count) {
                         Write-Host ("      garments: " +
                             (@($mc.physics.cloth_chains) -join '; ')) -ForegroundColor DarkCyan

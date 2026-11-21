@@ -14,6 +14,47 @@
 
 ---
 
+## 2026-11-21 — 补交 ROE_pmx 窗口积压的改动：ROE PMX 默认带胸部物理，`render_pmx_dance.py` 特写 / MMD 物理 / 先烘焙，剑星 NPC 转 PMX 的修正，蒙皮权重指南
+
+这些改动是 9-06 到 10-31 写的，一直在用，E 盘交付的文件就是用它们做的，只是没提交。
+
+**改了什么**
+
+- **ROE 导出 PMX 默认带胸部物理和碰撞体修正**
+  - `export_character_model_blender.export_pmx` 和 ROE PMX Tools 插件的「③ 转换」都调
+    `convert_rig_to_mmd(..., bust=True, collider_fixes=True)`。
+  - 这两个功能的代码早就在仓库里，但默认关着。以前用仓库里的代码导出，PMX 没有胸部物理，和 E 盘上的文件不一样。
+  - 插件日志多一项「胸 N 侧」；`export_character_models.ps1` 多打印胸部、胸前衣物和碰撞体的统计。
+- **`scripts/riseoferos/render_pmx_dance.py`**
+  - 第 6 个参数 `full` / `chest` / `chest:<角度>`：`chest` 是跟着上半身走的胸部特写，角度 28 是斜前方，90 是左侧。
+  - 第 7 个参数 `blender` / `mmd` / `mmd:<重力>[:<子步数>]`：`mmd` 让关节按 MMD 的方式工作（`scripts/mmd_physics/mmd_like.py`）。
+  - 动作前留 30 帧过渡，音乐对齐动作第 0 帧，开头不会把头发、布料甩飞。
+  - 渲染前先烘焙物理。不烘焙时，渲出来的物理和逐帧模拟的不一样：g05 的胸被拉回静止姿势，饰带甩到胸前。
+  - 已推的文档和脚本早就在用 `mmd` / `chest`：ROE 动作视频、第一后裔、永劫无间、爆衣、剑星和 HS2 的批量。之前仓库里的版本不认这两个参数。
+- **`scripts/stellarblade/npc/export_npc_pmx.py`**：10-31 剑星 NPC 转 PMX 批量时加的修正，写进了 `scripts/stellarblade/npc/README.md`「导出 PMX」。
+  - 合并骨架时只核对带蒙皮的同名骨，容差 0.5 cm。
+  - 挂在身体辅助骨（扭转骨、肌肉 / 关节修正骨）下的布料链，改挂到往上第一根不是辅助骨的骨。
+  - 几个网格都带表情形态键时，每个都混出同名表情。没有 `TeethLowerDown` 的 ARKit 头，配方去掉这个键。
+  - 去掉只是另一个网格一部分的重复网格。
+  - 写成辅助骨的脚趾改成 Biped 名。
+- **`docs/skin-weighting-guide.md`**（9-27 写的）：蒙皮权重的业内做法，Blender 里能用的插件、设置和快捷键，和本仓库导出管线的关系。
+
+**怎么用**：命令不变。`render_pmx_dance.py` 的两个新参数可以不写，默认还是 `full` 和 `blender`。
+
+**兼容性**
+
+- 用仓库代码导出的 ROE PMX 从此带胸部物理，和 E 盘上已有的文件一致。
+- `render_pmx_dance.py` 不写新参数时，只多了 30 帧过渡和渲染前烘焙。
+
+**验证**
+
+- 这些改动写好后一直在用：E 盘的 ROE PMX、9-27 以后的跳舞预览、10-31 批量的 32 个 PMX（剑星 12 个，HS2 20 个）。
+  批量后期加的 0.5 cm 容差，当时 Citizen_08 用它导出成功。
+- 11-21 用干净副本（已提交的代码加这次的改动）把 Rael 重新导出到临时目录，E 盘的文件没动。
+  - 10-31 只有她没导完：脚趾刚改完名，烘焙贴图时任务被杀。
+  - 这次成功，没有报错：290 根骨、74 个刚体、94 个关节，网格没有撕裂，脚趾是 `Bip001-L/R-Toe0`。
+- 批量本身还停在剑星 12 / 17、HS2 20 / 27，剩下的等用户说再跑。
+
 ## 2026-11-21 — 漫威争锋：换上新映射文件，She-Venom 用上游戏原版贴图
 
 用户下载了 Variant Skin Studio（Nexus #13477）。

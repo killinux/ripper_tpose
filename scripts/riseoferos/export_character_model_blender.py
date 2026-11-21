@@ -2149,7 +2149,8 @@ def export_pmx(path, meshes, armatures):
     apose = apose_arms(arm, meshes, slots)
     skin_before = snapshot_skin(arm, meshes)
     root, stats = convert_rig_to_mmd(arm, meshes, slots, missing_optional,
-                                     helper_plans, skin_before)
+                                     helper_plans, skin_before,
+                                     bust=True, collider_fixes=True)
     stats["arm_down_deg"] = apose
     stats["premerged_helpers"] = premerged
     stats["reparented_helpers"] = helpers
