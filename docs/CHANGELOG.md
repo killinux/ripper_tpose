@@ -14,6 +14,31 @@
 
 ---
 
+## 2026-11-21 — 漫威争锋：换上新映射文件，She-Venom 用上游戏原版贴图
+
+用户下载了 Variant Skin Studio（Nexus #13477）。
+
+- **映射文件**：只从下载包里取出 `app\blender\Marvel.usmap`（2026-09-24），包里别的东西不运行。
+  - SHA256 和它自带的 `SHA256SUMS.txt` 对得上；
+  - 放到 `E:\tools\marvelrivals\_mappings\SkinStudio_1.0.6-Marvel.usmap`；
+  - `export_mod.py` 默认用它，新加的 `--usmap` 可以换回别的。
+- **效果**：游戏本体的材质参数、父材质的混合模式、游戏贴图都读得出来了。
+  - She-Venom #6188 重导：身体、头、装饰全是游戏原版贴图，上衣和丁字裤是 mod 自带的；
+  - 11-15 的替身版（头借 HS2 移植版的贴图、身体用纯色）备份在 `E:\game_export\MarvelRivals\_meta\backup_替身版_20261121\`。
+- **第一次读全参数暴露的两个问题**（`build_blend.py`）：
+  - 贴图分角色原来是先到先得，还看贴图名后缀。Venom 的特效噪声贴图 `FX - ChangeColor - NoiseTex` 排在 `BaseColor` 前面，整个身体刷成了绿黄噪声。
+    现在先看参数名，后缀只补还空着的角色，特效 / 细节参数不参与。
+  - 读出来的混合模式所有身体材质都是 Masked（给溶解特效用），颜色贴图的 alpha 其实全满。
+    现在要颜色贴图里真有透明像素才裁剪。
+- **检查**：
+  - PMX 跳默认测试舞，没有撕裂；
+  - XPS 0 警告，没有没权重的顶点；
+  - 前后对比图 `材质对比_替身版vs游戏原版.jpg`。
+
+**用户怎么用**：模型在 `E:\game_export\MarvelRivals\Venom\{blend,pmx,xps}\She-Venom_6188\`，舞蹈检查视频在 `pmx\She-Venom_6188\_check\dance.mp4`。
+
+---
+
 ## 2026-11-15 — 临时文件清点和删除：`scripts/archive/temp_survey.py` + `delete_paths.py`
 
 用户：「D:\sdef_compare 删了吧，还有哪些临时文件也清理一下，多窗口的都检查下」。以前每次清理都临时写脚本，这次做成仓库里的两个脚本，和只管登记过的 D 盘导出目录的 `delete_archived.py` 放在一起。

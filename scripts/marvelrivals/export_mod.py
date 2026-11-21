@@ -36,7 +36,12 @@ import fix_utoc  # noqa: E402
 
 CLI = r"E:\tools\cue4parse_cli_ff7\cue4parse.exe"
 TOOLS = r"E:\tools\marvelrivals"
-USMAP = os.path.join(TOOLS, "_mappings", "S1_1_release-Marvel.usmap")
+# Mappings, newest first.  SkinStudio 1.0.6 (Nexus #13477 Variant Skin Studio, its app\blender\Marvel.usmap of
+# 2026-09-24) also reads the current game's own material instances and textures; the public season-1 file only reads
+# what mods cooked with it (README 坑 2).  --usmap picks another one.
+USMAPS = ["SkinStudio_1.0.6-Marvel.usmap", "S1_1_release-Marvel.usmap"]
+USMAP = next((os.path.join(TOOLS, "_mappings", n) for n in USMAPS
+              if os.path.isfile(os.path.join(TOOLS, "_mappings", n))), os.path.join(TOOLS, "_mappings", USMAPS[-1]))
 KEY_FILE = os.path.join(TOOLS, "_keys", "marvelrivals_aes.txt")
 SEVEN_ZIP = r"E:\tools\7zip\7z.exe"
 BLENDER = r"D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
@@ -461,6 +466,7 @@ def contact_sheet(files, dst):
 
 
 def main():
+    global USMAP                      # cli() reads it; --usmap overrides the default
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source")
     ap.add_argument("--name", help="label prefix (default: from the archive name)")
@@ -476,8 +482,12 @@ def main():
     ap.add_argument("--colour", action="append", default=[], metavar="REGEX=r,g,b[,roughness]",
                     help="stand-in sRGB colour (0-1) for materials matching REGEX that still have no colour map; "
                          "repeatable")
+    ap.add_argument("--usmap", default=USMAP, help="mappings file (default: the newest one in %s)" %
+                    os.path.join(TOOLS, "_mappings"))
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    USMAP = args.usmap
+    log("mappings: " + USMAP)
     paks, global_dir = game_paks()
     if not global_dir:
         raise SystemExit("Marvel Rivals' global.utoc not found (install the game, or let Steam start downloading it)")

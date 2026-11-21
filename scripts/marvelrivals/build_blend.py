@@ -7,11 +7,14 @@ spec.json: {"name", "psk", "scale": 0.01, "materials": {slot: {"textures": {para
             "vectors": {}, "blend_mode": "", "clip": 0.333, "two_sided": false, "path": mi path}}}
 
 Materials (the game's character shaders, parameter names as the material instances use them):
-  BaseColor / Diffuse / Albedo        -> Base Color (alpha = mask when the instance is Masked / has a clip value)
+  BaseColor / Diffuse / Albedo        -> Base Color (alpha cuts out only when the blend mode is Masked AND the alpha
+                                         really has transparent texels)
   Normal                              -> Normal Map (UE = DirectX: green flipped)
   ORM (also SRMH-style packs in that slot) -> R ambient occlusion (multiplied into the colour), G roughness, B metallic
   SpecularTexture / Specular          -> Specular (R channel)
   Emissive*                           -> Emission
+The parameter name decides first; a texture name suffix (_D / _N / _ORM ...) only fills a role still empty, and
+effect / detail parameters (FX ... NoiseTex, FlowMapNormal, NormalMask_Tex, <id>_BaseNoiseTex ...) never do.
 Slots whose material instance is not in the mod nor in an installed game get a flat grey and are listed in the report.
 UE centimetres -> metres; the rig is turned to face -Y by the direction its toes point.
 """
@@ -63,15 +66,44 @@ def srgb_to_linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
-def role_of(param, tex_path):
+# Effect / detail / mask parameters hold textures whose names end in _D / _N / _M as well (Venom:
+# "FX - ChangeColor - NoiseTex" = T_1035103_Noise_26_001_D, "FlowMapNormal", "NormalMask_Tex", "103561_BaseNoiseTex",
+# "VenousGrowthPath"); they never stand in for the base colour / normal / ORM.
+EFFECT_PARAM_RE = re.compile(r"fx|noise|flow|growth|venous|mask_?tex|detail|ramp|matcap|rim|dissolve|^\d{4,}_", re.I)
+
+
+def param_role(param):
     for role, rx in ROLE_RE:
         if rx.search(param):
             return role
+    return None
+
+
+def suffix_role(tex_path):
     stem = re.sub(r"_\d{5,}$", "", os.path.splitext(os.path.basename(tex_path))[0])   # <name>_<path id>.png
     for role, rx in SUFFIX_ROLE:
         if rx.search(stem):
             return role
     return None
+
+
+def assign_roles(textures):
+    """role -> (param, texture).  The parameter's own name decides first (BaseColor / Normal / ORM ...); a texture's
+    name suffix (_D / _N / _ORM) only fills roles that are still empty, and never from effect / detail parameters.
+    2026-11-21: Venom's instances list "FX - ChangeColor - NoiseTex", "FlowMapNormal" and "NormalMask_Tex" before
+    BaseColor / Normal / ORM, and first-come-first-served by suffix painted the whole body with a green noise map."""
+    roles = {}
+    for param, path in textures.items():
+        role = param_role(param)
+        if role and role not in roles:
+            roles[role] = (param, path)
+    for param, path in textures.items():
+        if EFFECT_PARAM_RE.search(param):
+            continue
+        role = suffix_role(path)
+        if role and role not in roles:
+            roles[role] = (param, path)
+    return roles
 
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -242,11 +274,7 @@ def build_material(mat, spec):
     out = node("ShaderNodeOutputMaterial", 700, 0)
     bsdf = node("ShaderNodeBsdfPrincipled", 350, 0)
     L.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
-    roles = {}
-    for param, path in spec.get("textures", {}).items():
-        role = role_of(param, path)
-        if role and role not in roles:
-            roles[role] = (param, path)
+    roles = assign_roles(spec.get("textures", {}))
     used = {}
     if FX_RE.search(mat.name) and "basecolor" not in roles:
         # rim-light / effect shells (M_RimOnly, *_HeroDetails ...) are drawn by special shaders around the body;
@@ -350,9 +378,13 @@ def build_material(mat, spec):
     # Cut-out only when the material says Masked.  An instance that merely overrides OpacityMaskClipValue (every Marvel
     # Rivals instance does) is not masked by that; when the blend mode is unknown (parent not available) hair-like
     # materials whose colour map really has transparent texels are cut out.
+    # With current mappings the parents' blend modes come through, and Marvel Rivals' skin / body parents are all
+    # Masked (M_Common_Body, M_1035001_Skin_1035 - for dissolve effects) while their colour maps are opaque: cut out
+    # only when the colour map's alpha really has transparent texels.
     blend = str(spec.get("blend_mode", "")).lower()
-    masked = blend.endswith("masked")
-    if not blend and base is not None and HAIRLIKE.search(mat.name) and alpha_share(base.image) > 0.02:
+    share = alpha_share(base.image) if base is not None else 0.0
+    masked = blend.endswith("masked") and share > 0.001
+    if not blend and base is not None and HAIRLIKE.search(mat.name) and share > 0.02:
         masked = True
     if masked and base is not None:
         L.new(base.outputs["Alpha"], bsdf.inputs["Alpha"])
