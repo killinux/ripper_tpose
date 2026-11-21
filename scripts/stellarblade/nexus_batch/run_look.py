@@ -29,6 +29,7 @@ from pathlib import Path
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from looks import BY_LABEL, LOOKS, MODS  # noqa: E402
+from retex import JsonIndex, retex_for  # noqa: E402
 
 SB = r"E:\code\othercode\ripper_tpose\scripts\stellarblade"
 sys.path.insert(0, SB)
@@ -346,6 +347,7 @@ def main():
                 fetch[n] = object_path
                 return n                                        # resolved after the fetch
             spec_slots, hidden_by_mod = [], []
+            jidx = JsonIndex(WORK / mod / "cue" / label / "json")
             for s in slots:
                 src = (sw.get(s["use"]) or {}).get("source", "")
                 need = src in ("as imported", "none", "")
@@ -357,13 +359,24 @@ def main():
                 rec = {"index": s["index"], "name": s["use"], "need": need, "ancestors": s["chain"][1:],
                        "sources": {x: index[x] for x in s["chain"][1:] if x in index}, "textures": {},
                        "vectors": s.get("vectors", {}), "scalars": s.get("scalars", {}), "blend": s.get("blend")}
-                if need and not rec["sources"]:
+                if need:
+                    # also when an archived ancestor exists: fill_materials falls back to these when the ancestor's
+                    # colour image is none of this instance's maps (Crimson Wings' vinyl Inst_1 / Inst_2 would get
+                    # the master's default MI_CH_NPC_Lilly_01_Skin_2_A on the outfit's UVs)
                     t = s["textures"]
                     for k, keys in (("base", BASE_KEYS), ("normal", NORMAL_KEYS), ("orm", ORM_KEYS)):
                         op = pick(t, keys)
                         if op:
                             rec["textures"][k] = png_for(op)
                     rec["textures"]["alpha_masked"] = (s.get("blend") or "").endswith(("Masked", "Translucent"))
+                    rec["own_maps"] = sorted({v.split(".")[0].rsplit("/", 1)[-1] for v in t.values() if v})
+                if need and len(s["chain"]) > 1:
+                    # the copied ancestor keeps its own maps: the ones this instance sets itself go in afterwards
+                    # (Crimson Wings' Inst_1 = the vinyl MI_EVE_Cos_08_Vinyl + the outfit's own Baked NormalMap);
+                    # a map the ancestor only gets from its master's graph has no image to find by name - left out
+                    rec["retex"] = {anc: [{"param": d["param"], "from": d["from"].split(".")[0].rsplit("/", 1)[-1],
+                                           "png": png_for(d["to"])} for d in diffs if d["from"]]
+                                    for anc, diffs in retex_for(jidx, s["chain"]).items()}
                 spec_slots.append(rec)
             # CNS numbers the mesh's material slots; the Blender object has only the drawn ones (slots.json)
             to_blender = {}
@@ -393,6 +406,10 @@ def main():
                     v = rec["textures"].get(k)
                     if v and not os.path.isfile(v):
                         rec["textures"][k] = got.get(v)
+                for diffs in (rec.get("retex") or {}).values():
+                    for d in diffs:
+                        if d["png"] and not os.path.isfile(d["png"]):
+                            d["png"] = got.get(d["png"])
             overrides = [dict(o, png=got.get(o["png"], o["png"])) for o in overrides]
             missing_tex = [o["png"] for o in overrides if not os.path.isfile(o["png"])]
             overrides = [o for o in overrides if os.path.isfile(o["png"])]

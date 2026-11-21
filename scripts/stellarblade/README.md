@@ -636,6 +636,21 @@ Black Sling、Albion Nell、Nude Natural、Skin Suit Undressed、Original Propor
   拿最近一层在已归档 .blend 里有的游戏材质，复制一份按 mod 实例的名字命名（高清版和插件按这个名字找）。哪个 .blend 里有哪个材质，先扫一遍
   存档建索引（197 个 .blend、603 个材质名，只读名字）。都没有的（Black Sling 的墨镜 `MI_ACC_GLA_13`）用 CUE4Parse 导出它的贴图现做；
   连贴图都没有的（深色镜片）取实例的颜色值。
+  - **抄来的祖先材质要换上实例自己的贴图；底色图不是实例的就别抄**（2026-11-21，Crimson Wings 裸体款）：
+    - 底层贴图包里的 `Inst_1` / `Inst_2` 是游戏透明乳胶 `MI_EVE_Cos_08_Vinyl` 的实例（GlassColor 黑，正面不透明度 0.32），
+      自己只改了 `Baked NormalMap`，换成 Crimson Wings 的 UV1 / UV2 法线。
+    - 归档里这个乳胶的简化材质只有一张漫反射：NPC 的皮肤图 `MI_CH_NPC_Lilly_01_Skin_2_A`。它是母材质节点里默认引用的，
+      不是这条链上任何实例的参数，贴到 Crimson Wings 的 UV 上，领口就成了一片花纹。
+    - 现在 `fill_materials.py` 抄完祖先，先按图名换上实例自己设的贴图（`nexus_batch/retex.py`），再检查底色图。底色图不在实例的贴图里，
+      就不抄祖先，改用实例自己的贴图和数值现做：颜色向量、粗糙度、半透明材质的正面不透明度。做出来是半透明的黑色乳胶。
+    - `python retex.py ALL` 扫过已导出的套：另外只有 YoRHa 2B 制服的 5 个透明版槽。它们 CNS 默认关掉，面已经去掉，不用重做。
+  - **现做的材质没有底色贴图，要生成一张纯色贴图**（2026-11-21）：
+    - XPS / PMX 导出（blender2xps 的 `material_is_translucent_shell`）把「透明度是 0.001 到 0.5 之间的常数」的材质当成辅助壳，
+      也就是眼部遮挡壳、泪液这类，PMX 里透明度直接写 0。
+    - Crimson Wings 的乳胶（0.32）和 Black Sling 的深色镜片因此在 MMD 里看不见；只有法线图的材质，PMX 还会把法线图当成颜色贴图。
+    - 现在 `fill_materials.py` 给这种材质生成一张 8×8 的 `<材质>_colour.png`（颜色加透明度），接到 Base Color，半透明的也接到 Alpha。
+      PMX 里就是漫反射 1 加这张贴图，透明度在贴图里。
+    - 每套 PMX 日志（`pmx\_logs\<包名>.log`）里的 `shells` 应该只有面部那 6 个辅助壳。
 - **父材质叫 `Hide`** 的槽游戏里不画（YoRHa 礼服的手臂 / 腿 / 手的皮肤藏在手套、丝袜下面，阴毛默认关），这些面去掉。
 - **CNS 的默认选项**：`.dekcns.json`（有尾逗号，要宽松解析）的 `TextureOptions` 按 `Value` 取默认贴图（Nikke Plus 默认粉色衣服 + 粉色外套，
   Cake 的肤色），底色在普通 .blend 里就换上，ORM / 法线 / 遮罩写进登记表的 `overrides`，高清版里换；`MaterialToggles` 默认关的槽
@@ -644,7 +659,10 @@ Black Sling、Albion Nell、Nude Natural、Skin Suit Undressed、Original Propor
     一个配上身颜色），游戏里每个槽是各自的动态实例；Blender 里共用一个材质，后一个选项会盖掉前一个（鞋子变粉、腰侧一块白）。所以后面的槽
     复制一份材质，叫 `<材质>__slot<槽号>`；登记表里写进 `slot_materials`，高清版按这个名字单独展开（插件 17/17）。
 - **缺依赖的 mod 先不导**：Crimson Wings BBB 要作者的「Base Textures For Replacement」（皮肤槽 `SkinEve` 在里面），Cake 的皮肤在另一个 mod
-  #1183「Reusable Skin Material」里，Skin Suit Undressed 只下了网格没下贴图。
+  #1183「Reusable Skin Material」里，Skin Suit Undressed 只下了网格没下贴图。2026-11-21 这几个依赖文件下齐了，`add_dep.py` 解开后
+  补导了 26 套。
+  - Crimson Wings 的「Nude and Stocking」更新包把裸体、裸体加丝袜两个三件套放在同一个文件夹里，包路径相同。按文件夹放进 staging
+    会两个都挂上，就是第一条的随机问题。所以 `looks.py` 按文件名只放不带丝袜的那个（staging 条目可以写成 `(mod, 文件夹, 文件名)`）。
 - `hq_mod_outfits.py` 新增登记表 `_meta\hq_materials\mod_outfits.json`（键同 `OUTFITS`，另有 `files`：存档里 mod 源文件的分组，`any_mount`：
   mod 自己的挂载名，`/Game/<路径>` 按 `*/Content/<路径>` 找，`overrides`：CNS 默认贴图）；`read_game` 也跟进网格槽直接引用的游戏材质实例；
   归档成品里没有的贴图（替换型 mod 用到的游戏贴图、`swap_mod_mesh.py` 没用到的 mod 贴图）导出到 `textures\extra\`。

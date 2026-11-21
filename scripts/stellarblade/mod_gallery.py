@@ -183,7 +183,9 @@ def main():
             meta = html.escape(mod.get("note") or "")
         sections.append('<section><h2>%s</h2><div class="meta">%s</div><div class="grid">%s</div></section>' % (
             html.escape(mod["title"]), meta, "\n".join(cards)))
-    summary = "%d 个 mod，%d 套造型，已导出 %d 套（灰色的在等下载或还没导）" % (n_mods, n_all, n_done)
+    summary = "%d 个 mod，%d 套造型，已导出 %d 套" % (n_mods, n_all, n_done)
+    if n_done < n_all:
+        summary += "（灰色的在等下载或还没导）"
     if n_earlier:
         summary += "；另有之前导过的 %d 套" % n_earlier
     page = PAGE

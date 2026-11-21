@@ -7,16 +7,23 @@ fill.json (written by run_look.py's fill step):
   "slots": [{"index", "name" (the instance), "need": true when swap_mod_mesh left it empty,
              "ancestors": [parent instance, ..., master] (from the game's JSON),
              "sources": {ancestor name: [archived .blend, ...]},   (material_index.json)
-             "textures": {"base", "normal", "orm", "alpha_masked"}}]  (PNG files for an instance no .blend has)
+             "textures": {"base", "normal", "orm", "alpha_masked"},   (PNG files for an instance no .blend has)
+             "retex": {ancestor: [{"param", "from", "png"}]}}]       (maps the instance sets itself, retex.py: put
+                                                                    into the ancestor's copy in place of image "from")
   "overrides": [{"index", "param", "png"}]   CNS default texture options (base colour ones are applied here)
   "hide": [slot index, ...]                  CNS material toggles that are off by default: their faces go
 An empty slot gets, in this order: a copy of the nearest ancestor material found in this .blend (also as <name>_mod)
 or in an archived game .blend (appended; its images copied into the package's textures\\), renamed to the slot's own
-instance name (the HQ step and the add-on look materials up by that name); else a Principled material built from the
-instance's flattened maps (base colour, DirectX normal, ORM = R occlusion / G roughness / B metallic).
+instance name (the HQ step and the add-on look materials up by that name), with the maps the instance sets itself
+swapped in ("retex"); else - also when the copy's colour image is none of the instance's maps ("own_maps": the
+master's default texture, wrong on the mod's UVs) - a Principled material built from the instance's flattened maps
+(base colour, DirectX normal, ORM = R occlusion / G roughness / B metallic), what they lack taken from its values
+(colour vector, roughness, a translucent one's face-on opacity); a colour that is no map goes in as an 8 x 8 texture
+(constant_image: the exporters read colour and transparency from the colour texture).
 Prints SB_FILL={json}."""
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -78,6 +85,28 @@ def image(path, colour):
     img.colorspace_settings.name = "sRGB" if colour else "Non-Color"
     img.filepath = "//textures/mod/" + os.path.basename(path)
     return img
+
+
+def lin2srgb(c):
+    c = max(0.0, min(1.0, c))
+    return 12.92 * c if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055
+
+
+def constant_image(name, rgb, alpha):
+    """An 8 x 8 PNG of one colour + alpha in the package's textures\\mod\\.  The exporters take a material's colour
+    and transparency from its colour texture: a constant Base Color / Alpha alone reads as a helper shell when the
+    alpha is under 0.5 (blender2xps material_is_translucent_shell -> PMX alpha 0, the part vanishes: Crimson Wings'
+    vinyl, Black Sling's dark lens), and with a normal map as the only image the PMX takes that as its colour."""
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
+    path = os.path.join(pkg, "textures", "mod", safe + "_colour.png")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    gen = bpy.data.images.new(safe + "_colour_gen", 8, 8, alpha=True)
+    gen.pixels = [lin2srgb(rgb[0]), lin2srgb(rgb[1]), lin2srgb(rgb[2]), max(0.0, min(1.0, alpha))] * 64
+    gen.filepath_raw = path
+    gen.file_format = "PNG"
+    gen.save()
+    bpy.data.images.remove(gen)                 # a generated image would come back blank from the saved .blend
+    return image(path, True)
 
 
 def build(name, tex):
@@ -156,7 +185,7 @@ for s in spec["slots"]:
         if cur is not None and cur.users == 0:
             bpy.data.materials.remove(cur)
         continue
-    new, how = None, None
+    new, how, used = None, None, None
     for a in s.get("ancestors", []):
         for cand in (a, a + "_mod"):
             m = bpy.data.materials.get(cand)
@@ -172,28 +201,71 @@ for s in spec["slots"]:
                 if m is not None:
                     bpy.data.materials.remove(m)
         if new is not None:
+            used = a
             break
-    if new is None and any(s.get("textures", {}).get(k) for k in ("base", "normal")):
-        new, how = build(name + "__tmp", s["textures"]), "built from the game's maps (%s)" % ", ".join(
-            k for k in ("base", "normal", "orm") if s["textures"].get(k))
-    if new is None and s.get("vectors"):
-        # no maps at all (BlackSling's dark sunglass lens): the instance's colour / opacity values
-        col = next((v for k, v in s["vectors"].items() if "color" in k.lower() and "emissive" not in k.lower()
-                    and isinstance(v, dict)), None)
-        if col is not None:
-            new = build(name + "__tmp", {})
-            p = next(n for n in new.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    # the maps the instance sets itself (retex.py): swapped into the copy, found by the ancestor's image names
+    for r in (s.get("retex") or {}).get(used, []) if used else []:
+        hits = 0
+        if r.get("png") and os.path.isfile(r["png"]):
+            for n in new.node_tree.nodes:
+                if n.type == "TEX_IMAGE" and n.image:
+                    stem = os.path.splitext(os.path.basename(bpy.path.abspath(n.image.filepath) or n.image.name))[0]
+                    if stem.lower() == r["from"].lower():
+                        n.image = image(r["png"], n.image.colorspace_settings.name == "sRGB")
+                        hits += 1
+        report.setdefault("retextured", {}).setdefault(name, []).append(
+            [r["param"], r["from"], os.path.basename(r.get("png") or "") or None, hits])
+    # an ancestor copy whose colour image is none of this instance's maps shows the master graph's default texture
+    # (the archived vinyl MI_EVE_Cos_08_Vinyl: an NPC skin atlas) on the mod's UVs - build from the instance instead
+    if new is not None and used is not None and s.get("own_maps") is not None:
+        bn = base_image_node(new)
+        if bn is not None:
+            stem = os.path.splitext(os.path.basename(bpy.path.abspath(bn.image.filepath) or bn.image.name))[0]
+            if stem.lower() not in {x.lower() for x in s["own_maps"]}:
+                report.setdefault("foreign_colour", {})[name] = [used, stem]
+                bpy.data.materials.remove(new)
+                new, how, used = None, None, None
+    tex = s.get("textures") or {}
+    col = next((v for k, v in (s.get("vectors") or {}).items() if "color" in k.lower()
+                and "emissive" not in k.lower() and isinstance(v, dict)), None)
+    if new is None and (tex.get("base") or tex.get("normal") or col is not None):
+        # the instance's own maps; what they lack from its values: colour (BlackSling's dark sunglass lens, the
+        # vinyl's black GlassColor), roughness, and for a translucent one its face-on opacity
+        new = build(name + "__tmp", tex)
+        p = next(n for n in new.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        notes = []
+        if not tex.get("base") and col is not None:
             p.inputs["Base Color"].default_value = (col.get("R", 0.5), col.get("G", 0.5), col.get("B", 0.5), 1.0)
-            sc = {k.lower(): v for k, v in (s.get("scalars") or {}).items()}
+            notes.append("colour %.2f %.2f %.2f" % tuple(p.inputs["Base Color"].default_value[:3]))
+        sc = {k.lower(): v for k, v in (s.get("scalars") or {}).items() if isinstance(v, (int, float))}
+        if not tex.get("orm"):
             rough = next((v for k, v in sc.items() if "rough" in k), None)
             if rough is not None:
                 p.inputs["Roughness"].default_value = max(0.0, min(1.0, rough))
-            if (s.get("blend") or "").endswith("Translucent"):
-                op = next((v for k, v in sc.items() if "opacity" in k), 0.6)
-                p.inputs["Alpha"].default_value = max(0.05, min(1.0, op))
-                new.blend_method, new.shadow_method = "BLEND", "HASHED"
-            how = "constant from the instance's values (colour %.2f %.2f %.2f)" % tuple(
-                p.inputs["Base Color"].default_value[:3])
+                notes.append("roughness %.2f" % p.inputs["Roughness"].default_value)
+        translucent = (s.get("blend") or "").endswith("Translucent")
+        if translucent:
+            op = sc.get("opacity")
+            if op is None:
+                op = next((v for k, v in sc.items() if "opacity" in k and "inner" in k), None)
+            if op is None:
+                op = next((v for k, v in sc.items() if "opacity" in k and "fresnel" not in k), 0.6)
+            p.inputs["Alpha"].default_value = max(0.05, min(1.0, op))
+            new.blend_method, new.shadow_method = "BLEND", "HASHED"
+            notes.append("alpha %.2f" % p.inputs["Alpha"].default_value)
+        if not tex.get("base"):
+            # the colour (and alpha) as a texture, so the XPS / PMX exporters see the part (constant_image)
+            n = new.node_tree.nodes.new("ShaderNodeTexImage")
+            n.location = (-700, 250)
+            n.image = constant_image(name, p.inputs["Base Color"].default_value[:3],
+                                     p.inputs["Alpha"].default_value if translucent else 1.0)
+            new.node_tree.links.new(n.outputs["Color"], p.inputs["Base Color"])
+            if translucent:
+                new.node_tree.links.new(n.outputs["Alpha"], p.inputs["Alpha"])
+            notes.append("colour texture %s" % os.path.basename(n.image.filepath))
+        maps = [k for k in ("base", "normal", "orm") if tex.get(k)]
+        how = ("built from the game's maps (%s)" % ", ".join(maps) if maps else "constant") + \
+              (" + the instance's values (%s)" % ", ".join(notes) if notes else "")
     if new is None:
         report["left_empty"].append(name)
         continue

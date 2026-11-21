@@ -14,6 +14,53 @@
 
 ---
 
+## 2026-11-21 — 剑星 Nexus mod：依赖下齐，剩下 26 套补完（48 套全部导完）；补材质修三处：实例自己的贴图、母材质的默认图、半透明材质被当成辅助壳
+
+11-15 那批 48 套里有 26 套在等依赖文件。今天用户下齐了 4 个：
+
+- Crimson Wings 的「Base Textures For Replacement」和「Nude and Stocking」；
+- #1183「All in One for CNS」；
+- Skin Suit Undressed 的贴图。
+
+这 26 套都导完、归档了。画廊 `scripts/stellarblade/nexus_batch/index.html`（存档里另有一份）48 套齐全。
+
+**结果**（成品在 `E:\game_export\StellarBlade\Eve\{blend,xps,pmx}\<包名>\`）
+
+| mod | 套数 |
+|---|---|
+| Crimson Wings BBB（#1933） | 16：红色旗袍 8、透明乳胶 7、裸体 1 |
+| Cake 冷却服（#533，皮肤用 #1183） | 9 |
+| Skin Suit Undressed（#3929） | 1 |
+
+Black Sling（11-15 已归档）也重导了一次：它的深色墨镜片以前在 PMX / XPS 里看不见（见下面第 3 条）。旁边的 SDEF 样品是用旧 PMX 做的，
+没动。
+
+**修了什么**（`scripts/stellarblade/nexus_batch/`）
+
+1. **Nude 更新包**（`looks.py`）：Crimson Wings 的「Nude and Stocking」更新包里，裸体和裸体加丝袜两个三件套在同一个文件夹，包路径相同。
+   按文件夹放进 staging 会两个都挂上，读出来是哪个看运气。现在按文件名只放不带丝袜的那个；staging 条目可以写成 `(mod, 文件夹, 文件名)`。
+2. **抄来的祖先材质**（`run_look.py` 的 fill 步、`fill_materials.py`，新增 `retex.py`）：
+   - 抄完先按图名换上实例自己设的贴图。
+   - 抄来的底色图不是实例自己的贴图（是母材质节点里默认引用的图），就不抄，改用实例的贴图和数值现做：颜色向量、粗糙度、
+     半透明材质的正面不透明度（`Opacity Inner`）。
+   - Crimson Wings 的乳胶 `Inst_1` / `Inst_2` 是游戏透明乳胶 `MI_EVE_Cos_08_Vinyl` 的实例。归档里这个乳胶的简化材质只有一张 NPC 皮肤图，
+     原来抄过来贴在领口和裙子上，满是花纹。现在是半透明的黑色 PVC。
+3. **半透明材质被当成辅助壳**（`fill_materials.py`）：XPS / PMX 导出把透明度在 0.001 到 0.5 之间的常数材质当成眼部遮挡壳这类辅助件，
+   PMX 里透明度写 0；只有法线图的材质，PMX 会把法线图当颜色贴图。现在现做的材质没有底色贴图时，生成一张 8×8 的
+   `<材质>_colour.png`（颜色加透明度），接到 Base Color，半透明的也接 Alpha。
+
+另外：`mod_gallery.py` 全部导完时摘要不再写「灰色的在等下载」；`scripts/stellarblade/README.md`「一批 Nexus mod」一节和
+`nexus_batch/README.md` 补了这几条。
+
+**验证**
+
+- 26 套 9 步全过；归档自检 78/78，重导的 9 套 27/27；高清版 26/26。
+- 插件实测：每套 15 到 23 个材质全部换上，没有缺图；对比图里乳胶和镜片在「MMD 着色」「游戏材质」两边都看得见。
+- 每个新导的 PMX 日志里，被当成辅助壳的只剩面部 6 个。
+- 插件实测里 Nude 和 Black Sling 两种模式再导出的 PMX 有一个顶点的法线不同：那个顶点的三角形正反各一份，法线方向本来不确定，
+  和材质无关。
+- `python retex.py ALL` 扫过其他已导的套：只有 YoRHa 2B 制服的 5 个透明版槽受影响，它们 CNS 默认关掉、面已去掉，不用重做。
+
 ## 2026-11-21 — 漫威争锋：其余 7 个毒液 mod 批量转换（共 20 套）、脚本修正，毒液合集画廊扩到 13 个来源
 
 用户选了「#4249 的 12 种体型全转」「只换贴图的两个套在模型上一起转」。每套都有 blend / PMX / XPS，PMX 跳默认测试舞检查。

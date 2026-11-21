@@ -13,10 +13,11 @@
 | `stage.py` | 把下载的压缩包拷到 `D:\stellarblade_exports\mods\<mod>\` 解开，列出每个 `.utoc` 里的包路径 |
 | `export_variants.py` | 合集包的每个变体分别用 UE Viewer 导出，按 PSK 顶点的 md5 分组（Crimson Wings BBB：40 个变体 16 种网格） |
 | `run_look.py` | 一套的各步：stage → umodel → cue（CUE4Parse 带游戏 Paks 读网格，各槽的材质实例、父链、贴图）→ swap（`../swap_mod_mesh.py`）→ fill（`fill_materials.py`）→ texfix → xps → pmx → preview；每步结果记在 `<mod>\looks\<label>\status.json` |
-| `fill_materials.py` | Blender 里补材质：空槽拿最近一层父材质的游戏材质（本文件或任何归档 .blend，索引 `_meta\material_index.json`），都没有就用游戏贴图现做；CNS 默认贴图选项；默认隐藏的部件去掉；重渲预览 |
+| `fill_materials.py` | Blender 里补材质：空槽拿最近一层父材质的游戏材质（本文件或任何归档 .blend，索引 `_meta\material_index.json`），再换上实例自己设的贴图；抄来的底色图不是实例自己的（母材质的默认图），或者都没有，就用实例的游戏贴图 + 颜色 / 粗糙度 / 不透明度现做；CNS 默认贴图选项；默认隐藏的部件去掉；重渲预览 |
 | `batch.py` | 多套并行跑 `run_look.py`（同一 staging 的 umodel 只跑一次） |
 | `finish.py` | 收尾：archive（`../../archive/archive_exports.py`）、sources（mod 原件拷到 `_meta\mod_sources\<mod>\`）、registry（`_meta\hq_materials\mod_outfits.json`）、hq（`../hq_mod_outfits.py`）、addon（`test_addon.py` + `make_sheet.py` → `插件效果_游戏材质对比.jpg`）、readme、gallery（`../mod_gallery.py`） |
 | `material_index.py` | 扫所有归档 .blend 的材质名 → `_meta\material_index.json` |
+| `retex.py` | 实例在「抄来的祖先材质」之上自己设的贴图（fill 步用它把这些图换进副本）；`python retex.py ALL` 只读扫一遍已导的套，看哪些槽受影响 |
 | `add_dep.py` / `wait_deps.py` | 依赖文件：解包 / 在下载目录按 mod 号 + 精确字节数等它出现（只读） |
 | `progress.py` | 跑批时每套到了哪一步、有没有报错 |
 | `inventory.py` / `cns_meshes.py` | 只读清点：压缩包里有哪些三件套；CNS 的 `.dekcns.json` 里每个变体用哪个网格 |

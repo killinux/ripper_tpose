@@ -148,10 +148,15 @@ for _lk in LOOKS:
     if any(f is None for f in _found):
         continue
     if _lk["label"].endswith("_Nude"):
-        _upd = _dep_dirs(_lk["mod"], NUDE_UPDATE)
-        if _upd is None:
+        # the update has its two triples in ONE folder (Romaera_CW_Nude_1566_P + Romaera_CW_NudeStocking_1566_P), both
+        # at the same package path: stage only the non-stocking one, by stem (a folder-wide stage would mount both and
+        # CUE4Parse would pick one at random - trap 1)
+        _root = _WORK / _lk["mod"] / "unzipped"
+        _utocs = sorted((_root / NUDE_UPDATE).rglob("*.utoc")) if (_root / NUDE_UPDATE).is_dir() else []
+        _pick = [u for u in _utocs if "stocking" not in u.stem.lower()] or _utocs[:1]
+        if not _pick:
             continue
-        _lk["stage"] = [(_lk["mod"], s) for s in _upd if "stocking" not in s.lower()] or [(_lk["mod"], _upd[0])]
+        _lk["stage"] = [(_lk["mod"], str(u.parent.relative_to(_root)).replace("\\", "/"), u.stem) for u in _pick]
     for _f in _found:
         _lk["stage"] = list(_lk["stage"]) + [(_lk["mod"], s) for s in _f]
     _lk.pop("needs", None)
