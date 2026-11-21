@@ -70,8 +70,8 @@
     "files": ["She-Venom-6188-1-0-1769253670.rar"],
     "picture": "nexus/6188-1769253529-600711065.png"
    },
-   "converted": "2026-11-15，scripts/marvelrivals：CUE4Parse 读 mod 和装好的游戏；PMX / XPS 用 biped_pmx（骨骼映射 ue_mannequin）。",
-   "notes": "现在是替身版：mod 只带了短上衣和丁字裤的贴图，头、身体、腿用的是游戏原版 Venom 的材质，而公开的映射文件（第 1 赛季）读不出现在游戏本体的贴图。头用 HS2 移植版（本页第 5 个）里带的游戏原版头部贴图（同一个网格）；身体和腿照作者预览图用深藏青黑替身颜色，没有肌理，后脑和脖子交界有色差。下载 Nexus #13477 Variant Skin Studio 带的新版映射文件后重新导出，就是全原版。身高 2.5 m。",
+   "converted": "2026-11-21，scripts/marvelrivals：CUE4Parse 读 mod 和装好的游戏，映射文件用 Nexus #13477 Variant Skin Studio 带的新版；PMX / XPS 用 biped_pmx（骨骼映射 ue_mannequin）。",
+   "notes": "mod 带了女性身体、短上衣和丁字裤；头、身体、腿是游戏原版 Venom 的材质和贴图（深色共生体、白眼斑、红舌头）。11-15 第一次转时映射文件太旧，读不出游戏贴图，做的是替身版，备份在 E:\\game_export\\MarvelRivals\\_meta\\backup_替身版_20261121\\。身高 2.5 m。",
    "models": [{"glob": "MarvelRivals/Venom/*/She-Venom_6188", "thumb_panels": 4, "thumb_top": 0.577}]
   },
   {
@@ -87,8 +87,150 @@
     "files": ["[Fouetty] Venom Marvel Rivals v1.0.zipmod"]
    },
    "converted": "2026-11-15，scripts/honeyselect2/studio_item_export.py（AssetStudio 导 FBX，UnityPy 导贴图）；PMX / XPS 用 biped_pmx（骨骼映射 rigify_twk），手指已拉直。",
-   "notes": "把 Marvel Rivals 的 Venom 移植成 HS2 Studio 道具：男性 Venom，带一个成人向的附加网格（DAZ G9 部件），原样保留。张开手时长爪子像一根根棍子，是模型本来的比例（指尖离手腕 45 cm）。它带的头部贴图就是游戏原版的，She-Venom 的替身版借用了它。",
+   "notes": "把 Marvel Rivals 的 Venom 移植成 HS2 Studio 道具：男性 Venom，带一个成人向的附加网格（DAZ G9 部件），原样保留。张开手时长爪子像一根根棍子，是模型本来的比例（指尖离手腕 45 cm）。它带的头部贴图就是游戏原版的，11-15 She-Venom 的替身版借用过。",
    "models": [{"glob": "HoneySelect2/Venom/*/Venom_MarvelRivals_Fouetty", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "06_漫威争锋_SheVenom_over_SpiderMan_mod5032",
+   "short": "Marvel Rivals She-Venom over Spider-Man #5032",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "She-Venom over Spider-Man",
+   "source": {
+    "site": "Nexus Mods #5032",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/5032",
+    "author": "Jinxy（上传者 GetJinxyed）",
+    "date": "2025-11-28",
+    "files": ["Symbiote She-Venom over Spider-Man-5032-1-1764305019.rar"],
+    "picture": "nexus/5032-1764304882-764870998.png"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals，同上。",
+   "notes": "替换蜘蛛侠的一套皮肤（1036502）：黑色共生体 She-Venom，胸前和背后有白色蜘蛛标志，白眼带网纹。贴图是 mod 自带的。成人向。",
+   "models": [{"glob": "MarvelRivals/SpiderMan/*/Symbiote_She-Venom_over_Spider-Man_5032", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "07_漫威争锋_SymbioteStorm_Thicc_mod3899",
+   "short": "Marvel Rivals Symbiote Storm Thicc #3899",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "Symbiote Storm Thicc",
+   "source": {
+    "site": "Nexus Mods #3899",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/3899",
+    "author": "Stivvvv",
+    "date": "2025-08-05",
+    "files": ["Symbiote Storm Thicc-3899-1-1754417247.zip"],
+    "picture": "nexus/3899-1754417111-517669034.jpg"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals，同上。两个变体各一套。",
+   "notes": "替换风暴的共生体皮肤（游戏里的 1015503）：身材更丰满；材质和贴图是游戏原版的（黑色共生体、白色饰边、银白头发）。有披风 / 无披风两套。成人向。",
+   "models": [{"glob": "MarvelRivals/Storm/*/Symbiote_Storm_Thicc_3899_Cape_on", "thumb_panels": 4, "thumb_top": 0.577},
+              {"glob": "MarvelRivals/Storm/*/Symbiote_Storm_Thicc_3899_Cape_off", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "08_漫威争锋_SymbioteStorm_PersonalEdit_mod3739",
+   "short": "Marvel Rivals Symbiote Storm Personal Edit #3739",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "Symbiote Storm-Personal Edit",
+   "source": {
+    "site": "Nexus Mods #3739",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/3739",
+    "author": "Jinxy（上传者 GetJinxyed）",
+    "date": "2025-07-21",
+    "files": ["Symbiote Storm-Personal Edit-3739-1-1753126739.rar"],
+    "picture": "nexus/3739-1753126639-1668750331.png"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals，同上。",
+   "notes": "同样替换风暴的共生体皮肤（1015503）。作者说明：去掉披风和护肩，更亮、更丰满（mod 带了改过的模型和高光 / ORM 贴图）。成人向。",
+   "models": [{"glob": "MarvelRivals/Storm/*/Symbiote_Storm-Personal_Edit_3739", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "09_漫威争锋_ThiccStorm_mod4249",
+   "short": "Marvel Rivals Thicc Storm #4249（12 种体型）",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "Thicc Storm (Symbiote Storm)",
+   "source": {
+    "site": "Nexus Mods #4249",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/4249",
+    "author": "LazyPainter（上传者 LazyPainter2002）",
+    "date": "2025-09-07（2026-03-08 更新）",
+    "files": ["Thicc Storm (Symbiote Storm)-4249-2-0-1772990587.zip"],
+    "picture": "nexus/4249-1772990342-2067505012.jpg"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals，同上。包里 12 种体型各一套；Anti-Venom 配色见下一节。",
+   "notes": "替换风暴的共生体皮肤（1015503），材质和贴图是游戏原版的。有披风（Default）：L / M / XL / XXL / XXXL；无披风（No Cape）：L / M / XL / XL 上身 + L 下身 / XXL / XXXL / Normal（原版身材）。包里的 _Physics 只有物理资产，没有模型，没转。成人向。",
+   "models": [{"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_Default_L", "thumb_panels": 4, "thumb_top": 0.577},
+              {"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_Default_M", "thumb_panels": 4, "thumb_top": 0.577},
+              {"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_Default_XL", "thumb_panels": 4, "thumb_top": 0.577},
+              {"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_Default_XXL", "thumb_panels": 4, "thumb_top": 0.577},
+              {"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_Default_XXXL", "thumb_panels": 4, "thumb_top": 0.577},
+              {"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_No_Cape_*", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "10_漫威争锋_ThiccStorm_AntiVenom_mod4249",
+   "short": "Marvel Rivals Thicc Storm #4249 Anti-Venom 配色",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "Thicc Storm (Symbiote Storm) — Anti-Venom",
+   "source": {
+    "site": "Nexus Mods #4249",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/4249",
+    "author": "LazyPainter（上传者 LazyPainter2002）",
+    "date": "2025-09-07（2026-03-08 更新）",
+    "files": ["Thicc Storm (Symbiote Storm)-4249-2-0-1772990587.zip"],
+    "picture": "nexus/4249-1772990342-2067505012.jpg"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals：包里的 _Anti-Venom 只换贴图，用 --overlay 叠在默认体型 M（有披风）上。",
+   "notes": "白色反毒液（Anti-Venom）配色：白身体、深色饰边、银白头发，和作者预览图左边那张一样。成人向。",
+   "models": [{"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_Default_M_Anti-Venom", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "11_漫威争锋_SleekSymbioteStorm_mod6269",
+   "short": "Marvel Rivals Sleek Symbiote Storm #6269",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "Sleek Symbiote Storm",
+   "source": {
+    "site": "Nexus Mods #6269",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/6269",
+    "author": "Glowingyellow（上传者 GlowingYellow）",
+    "date": "2026-01-27",
+    "files": ["Symbiote Stormy-6269-6-1769534170.zip"],
+    "picture": "nexus/6269-1769534125-2032125408.png"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals：这个 mod 只换贴图。游戏自己的那套模型用现在的映射文件读不出来，所以用 --overlay-mod 套在 #4249 的默认体型 M（同一套皮肤，UV 一样）上。",
+   "notes": "作者说明：去掉共生体风暴皮肤上多余的颜色——黑色共生体、银白头发、白色肩刺。身材是 #4249 的 M 号，不是游戏原版身材。",
+   "models": [{"glob": "MarvelRivals/Storm/*/Thicc_Storm_Symbiote_Storm_4249_Default_M_Symbiote_Stormy_6269", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "12_漫威争锋_SymbioteSueStorm_mod7406",
+   "short": "Marvel Rivals Symbiote Sue Storm #7406",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "Symbiote Sue Storm-Invisible Woman",
+   "source": {
+    "site": "Nexus Mods #7406",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/7406",
+    "author": "GetJinxyed",
+    "date": "2026-03-23",
+    "files": ["Symbiote Sue Storm-Invisible Woman-Compatible UJP-7406-2-1774309458.rar"],
+    "picture": "nexus/7406-1774300417-1876070591.png"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals，同上。",
+   "notes": "替换隐形女侠的默认皮肤（1050001），共生体配色，贴图是 mod 自带的。成人向。",
+   "models": [{"glob": "MarvelRivals/InvisibleWoman/*/Symbiote_Sue_Storm-Invisible_Woman-Compatible_UJP_7406", "thumb_panels": 4, "thumb_top": 0.577}]
+  },
+  {
+   "dir": "13_漫威争锋_SymbioticAssassin_BlackWidow_mod10647",
+   "short": "Marvel Rivals Symbiotic Assassin Black Widow #10647",
+   "game": "Marvel Rivals（漫威争锋）",
+   "title": "Symbiotic Assassin Black Widow - Custom Skin",
+   "source": {
+    "site": "Nexus Mods #10647",
+    "url": "https://www.nexusmods.com/marvelrivals/mods/10647",
+    "author": "Saturn（上传者 0xSaturn）",
+    "date": "2026-07-10",
+    "files": ["Symbiotic Assassin - Black Widow (Default Skin) 10647 1.0 2026-07-09T23-12Z oET5q7AFA.zip"],
+    "picture": "nexus/10647-1783554825-1023013179.png"
+   },
+   "converted": "2026-11-21，scripts/marvelrivals，同上（这个 mod 的容器头写着加密、目录索引却是明文，fix_utoc.py 在副本上修好再读）。",
+   "notes": "黑寡妇默认皮肤的共生体配色版，带作者自己的材质和贴图。作者另外提供的特效和变声 mod 不是模型，没转。",
+   "models": [{"glob": "MarvelRivals/BlackWidow/*/Symbiotic_Assassin_-_Black_Widow_Default_Skin_10647", "thumb_panels": 4, "thumb_top": 0.577}]
   }
  ]
 }

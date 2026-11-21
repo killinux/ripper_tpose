@@ -1,7 +1,11 @@
 """Marvel Rivals Nexus mod (.zip / .rar / folder of *_P.pak / .utoc / .ucas) -> HD .blend + PMX + XPS.
 
     python -I scripts\\marvelrivals\\export_mod.py <mod archive or folder> [--name Label] [--out-root E:\\game_export\\MarvelRivals]
-           [--variant REGEX] [--mesh lobby|game] [--formats blend,pmx,xps] [--no-preview] [--list]
+           [--variant REGEX] [--overlay REGEX] [--mesh lobby|game] [--formats blend,pmx,xps] [--no-preview] [--list]
+           [--usmap FILE]
+
+A variant without a skeletal mesh that replaces a game skin's textures (a recolour) is exported on that skin's own
+mesh from the installed game; --overlay stages such a variant on top of the mod's mesh variants instead.
 
 What it needs:
   * the CUE4Parse CLI (E:\\tools\\cue4parse_cli_ff7\\cue4parse.exe), the game's mappings (.usmap) and AES key
@@ -42,6 +46,9 @@ TOOLS = r"E:\tools\marvelrivals"
 USMAPS = ["SkinStudio_1.0.6-Marvel.usmap", "S1_1_release-Marvel.usmap"]
 USMAP = next((os.path.join(TOOLS, "_mappings", n) for n in USMAPS
               if os.path.isfile(os.path.join(TOOLS, "_mappings", n))), os.path.join(TOOLS, "_mappings", USMAPS[-1]))
+# A mod's own assets were cooked by the game build of their day; what does not deserialise with USMAP (an empty JSON,
+# no .psk, no PNG) is tried again with these older mappings (--usmap-old; "none" turns it off).
+USMAP_OLD = os.path.join(TOOLS, "_mappings", USMAPS[-1])
 KEY_FILE = os.path.join(TOOLS, "_keys", "marvelrivals_aes.txt")
 SEVEN_ZIP = r"E:\tools\7zip\7z.exe"
 BLENDER = r"D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
@@ -135,7 +142,9 @@ def link_or_copy(src, dst):
         shutil.copy2(src, dst)
 
 
-def stage(variant_dir, stage_dir, paks, global_dir, aes):
+def stage(variant_dir, stage_dir, paks, global_dir, aes, overlays=()):
+    """Game containers (hard links) + the variant's containers as zzmod_* (mounted after the game, so they win) +
+    --overlay variants' containers as zzzz_overlay_* (mounted last: a recolour on top of the variant's mesh)."""
     if os.path.isdir(stage_dir):
         shutil.rmtree(stage_dir)
     os.makedirs(stage_dir)
@@ -147,26 +156,27 @@ def stage(variant_dir, stage_dir, paks, global_dir, aes):
     elif global_dir:
         for f in ("global.utoc", "global.ucas"):
             shutil.copy2(os.path.join(global_dir, f), os.path.join(stage_dir, f))
-    for f in os.listdir(variant_dir):
-        src = os.path.join(variant_dir, f)
-        if not os.path.isfile(src) or not f.lower().endswith((".pak", ".utoc", ".ucas")):
-            continue
-        dst = os.path.join(stage_dir, "zzmod_" + f)
-        if f.lower().endswith(".utoc"):
-            with open(src, "rb") as fh:
-                data = fh.read()
-            new = fix_utoc.fix(data, aes)
-            with open(dst, "wb") as fh:
-                fh.write(new if new is not None else data)
-            if new is not None:
-                fixed.append(f)
-        else:
-            shutil.copy2(src, dst)
+    for prefix, folder in [("zzmod_", variant_dir)] + [("zzzz_overlay%d_" % i, o) for i, o in enumerate(overlays)]:
+        for f in os.listdir(folder):
+            src = os.path.join(folder, f)
+            if not os.path.isfile(src) or not f.lower().endswith((".pak", ".utoc", ".ucas")):
+                continue
+            dst = os.path.join(stage_dir, prefix + f)
+            if f.lower().endswith(".utoc"):
+                with open(src, "rb") as fh:
+                    data = fh.read()
+                new = fix_utoc.fix(data, aes)
+                with open(dst, "wb") as fh:
+                    fh.write(new if new is not None else data)
+                if new is not None:
+                    fixed.append(f)
+            else:
+                shutil.copy2(src, dst)
     return fixed
 
 
-def cli(stage_dir, patterns, out_dir, fmt=None, listing=False):
-    cmd = [CLI, "-i", stage_dir, "-g", "GAME_MarvelRivals", "-m", USMAP, "-k", key(), "-y"]
+def cli(stage_dir, patterns, out_dir, fmt=None, listing=False, usmap=None):
+    cmd = [CLI, "-i", stage_dir, "-g", "GAME_MarvelRivals", "-m", usmap or USMAP, "-k", key(), "-y"]
     if out_dir:
         cmd += ["-o", out_dir]
     for p in patterns:
@@ -208,20 +218,38 @@ def read_json(out_dir, package):
         return json.load(f)
 
 
-def export_material_jsons(stage_dir, out_dir, mi_paths):
+def mat_object(data):
+    """The MaterialInstance / Material object of a CUE4Parse JSON export, or None ('{}' = it did not deserialise)."""
+    if not isinstance(data, list):
+        return None
+    return next((o for o in data if isinstance(o, dict) and (str(o.get("Type", "")).startswith("MaterialInstance")
+                                                             or o.get("Type") == "Material")), None)
+
+
+def export_material_jsons(stage_dir, out_dir, mi_paths, old_read=None, real=lambda pkg: pkg):
     """JSON of every material instance and all their parents, one CLI call per generation (each call mounts the
-    whole game, so they are batched)."""
+    whole game, so they are batched).  A package that comes out empty with the current mappings is exported again with
+    the older ones (USMAP_OLD): mods are cooked by the game build of their day - #5032's own MI_1036001_Head_Inst gave
+    '{}' with the 2026-09 mappings and its slot fell back to Spider-Man's head textures by name.  Those go into
+    old_read."""
     done, todo = set(), {p for p in mi_paths if p}
     for _ in range(8):
         todo -= done
         if not todo:
             break
-        cli(stage_dir, sorted(obj_to_package(p) for p in todo), out_dir, fmt="json")
+        cli(stage_dir, sorted(real(obj_to_package(p)) for p in todo), out_dir, fmt="json")
+        empty = sorted(p for p in todo if mat_object(read_json(out_dir, obj_to_package(p))) is None)
+        if empty and USMAP_OLD and os.path.normcase(USMAP_OLD) != os.path.normcase(USMAP):
+            cli(stage_dir, [real(obj_to_package(p)) for p in empty], out_dir, fmt="json", usmap=USMAP_OLD)
+            for p in empty:
+                if mat_object(read_json(out_dir, obj_to_package(p))) is not None and old_read is not None:
+                    old_read.add(p)
         done |= todo
         nxt = set()
         for p in todo:
             data = read_json(out_dir, obj_to_package(p)) or []
-            obj = next((o for o in data if o.get("Type", "").startswith("MaterialInstance")), None)
+            obj = next((o for o in data if isinstance(o, dict)
+                        and str(o.get("Type", "")).startswith("MaterialInstance")), None)
             parent = (obj or {}).get("Properties", {}).get("Parent") or {}
             if parent.get("ObjectPath"):
                 nxt.add(parent["ObjectPath"])
@@ -232,11 +260,8 @@ def material_chain(out_dir, mi_obj_path, depth=0):
     """Texture / scalar / vector parameters of a material instance, the child overriding its parents (JSON already
     exported by export_material_jsons)."""
     pkg = obj_to_package(mi_obj_path)
-    data = read_json(out_dir, pkg)
-    res = {"textures": {}, "scalars": {}, "vectors": {}, "chain": [mi_obj_path], "found": data is not None}
-    if not data:
-        return res
-    obj = next((o for o in data if o.get("Type", "").startswith("MaterialInstance") or o.get("Type") == "Material"), None)
+    obj = mat_object(read_json(out_dir, pkg))
+    res = {"textures": {}, "scalars": {}, "vectors": {}, "chain": [mi_obj_path], "found": obj is not None}
     if obj is None:
         return res
     props = obj.get("Properties", {})
@@ -251,8 +276,13 @@ def material_chain(out_dir, mi_obj_path, depth=0):
                 res[k] = sub[k]
     for t in props.get("TextureParameterValues", []):
         v = t.get("ParameterValue")
+        pname = t["ParameterInfo"]["Name"]
         if v and v.get("ObjectPath"):
-            res["textures"][t["ParameterInfo"]["Name"]] = v["ObjectPath"]
+            res["textures"][pname] = v["ObjectPath"]
+        elif pname in res["textures"]:
+            # the child sets the slot to None = switches the parent's map off (#7406 JinxyInvisible: Emissive /
+            # SpecularTexture None over Spider-Man's head instance - kept, Spider-Man's emissive lit Sue's skin pale)
+            del res["textures"][pname]
     for t in props.get("ScalarParameterValues", []):
         res["scalars"][t["ParameterInfo"]["Name"]] = t.get("ParameterValue")
     for t in props.get("VectorParameterValues", []):
@@ -320,39 +350,106 @@ def flat_colour(names, rules):
     return None
 
 
-def export_variant(label, variant_dir, args, paks, global_dir, work):
+def is_mesh(p):
+    return bool(re.search(r"/SK_[^/]+\.uasset$", p, re.I)) and not re.search(
+        r"skeleton|animbp|anim_?blueprint|physics", p, re.I)
+
+
+def texture_skins(pkgs):
+    """(hero id, skin id) of the game skins whose textures a texture-only mod replaces:
+    .../Characters/1015/1015503/Texture/T_1015503_Body_D.uasset -> ("1015", "1015503")"""
+    out = []
+    for p in pkgs:
+        m = re.search(r"/Characters/(\d{4})/(\d{7})/[^/]+/T_[^/]+\.uasset$", p, re.I)
+        if m and m.groups() not in out:
+            out.append(m.groups())
+    return out
+
+
+def export_variant(label, variant_dir, args, paks, global_dir, work, overlays=()):
+    """overlays: [(folder of containers, tag)] staged on top of the variant (--overlay / --overlay-mod)."""
+    tags = [t for _, t in overlays]
+    overlays = [d for d, _ in overlays]
     pkgs = mod_packages(variant_dir, global_dir, work)
-    meshes = [p for p in pkgs if re.search(r"/SK_[^/]+\.uasset$", p, re.I)
-              and not re.search(r"skeleton|animbp|anim_?blueprint|physics", p, re.I)]
+    meshes = [p for p in pkgs if is_mesh(p)]
+    stage_dir = os.path.join(work, "stage")
+    fixed, game_mesh = None, None
     if not meshes:
-        return {"label": label, "skipped": "no skeletal mesh in this variant (texture / physics only)",
-                "packages": len(pkgs)}
+        # A recolour of a game skin (#6269 Stormy, #4249's _Anti-Venom): that skin's own mesh comes from the installed
+        # game, and the mod's textures replace the game's through the stage order.
+        skins = texture_skins(pkgs)
+        if not (skins and paks):
+            return {"label": label, "skipped": "no skeletal mesh and no game skin textures in this variant "
+                                               "(physics only, or the game is not installed)", "packages": len(pkgs)}
+        hero_id, skin_id = skins[0]
+        fixed = stage(variant_dir, stage_dir, paks, global_dir, key(), overlays)
+        out = cli(stage_dir, ["Marvel/Content/Marvel/Characters/%s/%s/Meshes/*" % (hero_id, skin_id)], None,
+                  listing=True)
+        meshes = [l.strip() for l in out.splitlines() if is_mesh(l.strip())]
+        if not meshes:
+            return {"label": label, "skipped": "texture-only variant, but the game has no mesh for skin %s" % skin_id}
+        game_mesh = "texture-only mod: the game's own mesh of skin %s with the mod's textures" % skin_id
     lobby = [p for p in meshes if re.search(r"_lobby\.uasset$", p, re.I)]
     game = [p for p in meshes if p not in lobby]
     mesh = (lobby or game)[0] if args.mesh == "lobby" else (game or lobby)[0]
     hero_id = (re.search(r"/Characters/(\d{4})/", mesh) or re.search(r"(\d{4})", mesh)).group(1)
     hero = HEROES.get(hero_id, "Hero" + hero_id)
-    stage_dir = os.path.join(work, "stage")
-    fixed = stage(variant_dir, stage_dir, paks, global_dir, key())
+    if fixed is None:
+        fixed = stage(variant_dir, stage_dir, paks, global_dir, key(), overlays)
     exp = os.path.join(work, "export")
-    log("  %s: mesh %s (%s), %s" % (label, mesh, hero, "game installed" if paks else "mod + global only"))
+    if os.path.isdir(exp):            # a PNG left by an earlier run must not stand in for one this run fails to export
+        shutil.rmtree(exp)
+    log("  %s: mesh %s (%s), %s%s%s" % (label, mesh, hero, "game installed" if paks else "mod + global only",
+                                         " - " + game_mesh if game_mesh else "",
+                                         " + overlay " + ", ".join(tags) if tags else ""))
     cli(stage_dir, [mesh], exp)                       # .psk/.pskx (+ textures it names when they resolve)
     cli(stage_dir, [mesh], exp, fmt="json")
     mj = read_json(exp, mesh) or []
     sk = next((o for o in mj if o.get("Type") == "SkeletalMesh"), {})
     psks = glob.glob(os.path.join(exp, "**", os.path.splitext(os.path.basename(mesh))[0] + ".psk*"), recursive=True)
+    if not psks and USMAP_OLD and os.path.normcase(USMAP_OLD) != os.path.normcase(USMAP):
+        cli(stage_dir, [mesh], exp, usmap=USMAP_OLD)            # a mod mesh cooked by an older game build
+        cli(stage_dir, [mesh], exp, fmt="json", usmap=USMAP_OLD)
+        mj = read_json(exp, mesh) or []
+        sk = next((o for o in mj if isinstance(o, dict) and o.get("Type") == "SkeletalMesh"), {})
+        psks = glob.glob(os.path.join(exp, "**", os.path.splitext(os.path.basename(mesh))[0] + ".psk*"),
+                         recursive=True)
+        if psks:
+            log("    mesh read with the older mappings")
     if not psks:
-        return {"label": label, "error": "mesh export failed", "mesh": mesh}
+        why = "mesh export failed"
+        if sk and not sk.get("LODModels"):
+            # 2026-11-21, the game's own SK_1015_1015503_Lobby with the 09-24 mappings: only "Skeleton" parses, no LODs
+            # - the game's skeletal meshes are cooked by a newer build than the mappings (mods' meshes still read)
+            why += (": the SkeletalMesh does not deserialise with these mappings (0 LODs; newer than the usmap) - "
+                    "for a texture-only mod use --overlay-mod on a mod mesh of the same skin")
+        return {"label": label, "error": why, "mesh": mesh, "game_mesh": game_mesh}
     mats, tex_pkgs = {}, set()
     slots = sk.get("SkeletalMaterials", [])
-    export_material_jsons(stage_dir, exp, [(s.get("Material") or {}).get("ObjectPath") for s in slots])
+    # The CLI matches package paths case-sensitively, and some mods pack under "marvel/Content/..." (#5032): an object
+    # path's package is asked for in the case the mod (or an overlay) really has it, else its own '{}' comes back.
+    case = {}
+    for d in overlays:
+        case.update({p.lower(): p for p in mod_packages(d, global_dir, os.path.join(work, "_lo"))})
+    case.update({p.lower(): p for p in pkgs})
+
+    def real(pkg):
+        return case.get(pkg.lower(), pkg)
+
+    old_read = set()
+    export_material_jsons(stage_dir, exp, [(s.get("Material") or {}).get("ObjectPath") for s in slots], old_read,
+                          real)
     listings = {}
     for slot in slots:
         name = slot.get("MaterialSlotName") or "slot"
         mi = (slot.get("Material") or {}).get("ObjectPath")
         info = material_chain(exp, mi) if mi else {"textures": {}, "found": False, "chain": []}
+        if mi in old_read:
+            info["old_mappings"] = True
         folder = skin_folder(mi)
-        if mi and folder:
+        # guessing by name only when NO texture parameter came through: added to a readable instance it would put
+        # the game skin's maps on a mod's own UV layout
+        if mi and folder and not info["textures"]:
             if folder not in listings:
                 out = cli(stage_dir, [folder + "/*"], None, listing=True)
                 listings[folder] = [l.strip() for l in out.splitlines() if l.strip().lower().endswith(".uasset")]
@@ -365,18 +462,25 @@ def export_variant(label, variant_dir, args, paks, global_dir, work):
         mats.setdefault(name, info)
         for t in info["textures"].values():
             tex_pkgs.add(obj_to_package(t))
+    def png_of(pkg):
+        p = os.path.join(exp, *pkg[:-len(".uasset")].split("/")) + ".png"
+        if not os.path.isfile(p):
+            c = glob.glob(os.path.join(exp, "**", os.path.basename(p)), recursive=True)
+            p = c[0] if c else p
+        return p
+
     if tex_pkgs:
-        cli(stage_dir, sorted(tex_pkgs), exp, fmt="png")
+        cli(stage_dir, sorted(real(p) for p in tex_pkgs), exp, fmt="png")
+        missing = sorted(real(p) for p in tex_pkgs if not os.path.isfile(png_of(p)))
+        if missing and USMAP_OLD and os.path.normcase(USMAP_OLD) != os.path.normcase(USMAP):
+            cli(stage_dir, missing, exp, fmt="png", usmap=USMAP_OLD)
     names_of = {}                     # mats holds each info under its instance name AND its slot name: resolve once
     for k, v in mats.items():
         names_of.setdefault(id(v), (v, []))[1].append(k)
     for info, names in names_of.values():
         resolved, extra = {}, {}
         for param, t in info["textures"].items():
-            png = os.path.join(exp, *obj_to_package(t)[:-len(".uasset")].split("/")) + ".png"
-            if not os.path.isfile(png):
-                c = glob.glob(os.path.join(exp, "**", os.path.basename(png)), recursive=True)
-                png = c[0] if c else png
+            png = png_of(obj_to_package(t))
             if not os.path.isfile(png):
                 # not decodable from the game (old mappings): the same texture from another source, by name
                 f = find_extra_texture(t, args.extra_textures)
@@ -393,6 +497,13 @@ def export_variant(label, variant_dir, args, paks, global_dir, work):
             flat = flat_colour(names, args.colour)
             if flat:
                 info["flat"] = flat
+    # a re-export replaces the whole set: files an earlier run wrote (another texture naming, the stand-in maps, the
+    # XPS exporter's leftovers - it does not empty its folder) must not stay beside the new ones
+    for fmt in ("blend", "pmx", "xps"):
+        old = os.path.join(args.out_root, hero, fmt, label)
+        if os.path.isdir(old):
+            shutil.rmtree(old)
+            log("    replaced the earlier %s\\%s" % (fmt, label))
     blend_dir = os.path.join(args.out_root, hero, "blend", label)
     os.makedirs(blend_dir, exist_ok=True)
     spec = {"name": label, "psk": psks[0], "scale": 0.01, "materials": mats}
@@ -417,9 +528,11 @@ def export_variant(label, variant_dir, args, paks, global_dir, work):
     if built["previews"]:
         contact_sheet(built["previews"], os.path.join(blend_dir, "preview.png"))
     rep = {"label": label, "hero": hero, "mesh": mesh, "other_meshes": [m for m in meshes if m != mesh],
+           "game_mesh": game_mesh, "overlays": tags,
            "fixed_containers": fixed, "game_installed": bool(paks), "blend": blend, "built": built,
            "materials": {k: {"chain": v.get("chain"), "found": v.get("found"), "textures": sorted(v["textures"]),
-                             "from_extra": v.get("from_extra", {}), "flat": v.get("flat")}
+                             "from_extra": v.get("from_extra", {}), "flat": v.get("flat"),
+                             "guessed": v.get("guessed", []), "old_mappings": v.get("old_mappings", False)}
                          for k, v in mats.items()}}
     formats = args.formats.split(",")
     biped = os.path.join(REPO, "scripts", "pmx_tools", "biped_pmx")
@@ -466,7 +579,7 @@ def contact_sheet(files, dst):
 
 
 def main():
-    global USMAP                      # cli() reads it; --usmap overrides the default
+    global USMAP, USMAP_OLD           # cli() reads them; --usmap / --usmap-old override the defaults
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source")
     ap.add_argument("--name", help="label prefix (default: from the archive name)")
@@ -484,10 +597,20 @@ def main():
                          "repeatable")
     ap.add_argument("--usmap", default=USMAP, help="mappings file (default: the newest one in %s)" %
                     os.path.join(TOOLS, "_mappings"))
+    ap.add_argument("--overlay", action="append", default=[], metavar="REGEX",
+                    help="variant folders (texture-only recolours) staged ON TOP of every exported variant; they are "
+                         "not exported on their own, the label gets their folder name; repeatable")
+    ap.add_argument("--overlay-mod", action="append", default=[], metavar="ARCHIVE",
+                    help="another mod (.zip / .rar / folder) whose containers are staged on top of every exported "
+                         "variant - a texture-only recolour of the same skin; the label gets its name + id; repeatable")
+    ap.add_argument("--usmap-old", default=USMAP_OLD,
+                    help="older mappings tried again for what does not deserialise with --usmap (mods cooked by an "
+                         "older game build); 'none' = off")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     USMAP = args.usmap
-    log("mappings: " + USMAP)
+    USMAP_OLD = None if args.usmap_old.lower() == "none" or not os.path.isfile(args.usmap_old) else args.usmap_old
+    log("mappings: %s (retry with %s)" % (USMAP, USMAP_OLD))
     paks, global_dir = game_paks()
     if not global_dir:
         raise SystemExit("Marvel Rivals' global.utoc not found (install the game, or let Steam start downloading it)")
@@ -501,22 +624,49 @@ def main():
     if os.path.isdir(src_dir):
         shutil.rmtree(src_dir)
     unpack(args.source, src_dir)
-    vs = variants(src_dir)
+    all_vs = variants(src_dir)
+    rels = {v: os.path.relpath(v, src_dir) for v in all_vs}
+    # a top folder every variant shares ("Thicc Storm (Symbiote Storm)\Default\M", "...\No Cape\XL") says nothing:
+    # labels drop it -> Thicc_Storm_Symbiote_Storm_4249_Default_M
+    parts = [r.split(os.sep) for r in rels.values() if r not in (".", "")]
+    common = 0
+    if len(parts) > 1:
+        while all(len(p) > common + 1 and p[common] == parts[0][common] for p in parts):
+            common += 1
+    own = [v for v in all_vs if any(re.search(o, rels[v], re.I) for o in args.overlay)]
+    overlays = [(v, safe(os.path.basename(v))) for v in own]
+    for i, path in enumerate(args.overlay_mod):
+        # another mod's recolour (#6269 Stormy) on this mod's meshes of the same skin
+        obase = os.path.splitext(os.path.basename(path.rstrip("\\/")))[0]
+        oname, oid = nexus_name(obase)
+        odir = os.path.join(work, "_overlay%d" % i)
+        if os.path.isdir(odir):
+            shutil.rmtree(odir)
+        unpack(path, odir)
+        overlays += [(v, safe(oname) + ("_" + oid if oid else "")) for v in variants(odir)]
+    vs = [v for v in all_vs if v not in own]
     if args.variant:
-        vs = [v for v in vs if re.search(args.variant, os.path.relpath(v, src_dir), re.I)]
-    log("%s: %d variant(s); game %s" % (base, len(vs), "installed at " + paks if paks else "NOT installed (mod + global only)"))
+        vs = [v for v in vs if re.search(args.variant, rels[v], re.I)]
+
+    def label_of(v):
+        rel = os.sep.join(rels[v].split(os.sep)[common:]) if rels[v] not in (".", "") else ""
+        tail = "_" + safe(rel.replace(os.sep, "_")) if rel else ""
+        tail += "".join("_" + t for t in dict.fromkeys(t for _, t in overlays))
+        return prefix + (("_" + mod_id) if mod_id else "") + re.sub(r"_{2,}", "_", tail)
+
+    log("%s: %d variant(s)%s; game %s" % (base, len(vs), " + overlay " + ", ".join(t for _, t in overlays)
+                                          if overlays else "",
+                                          "installed at " + paks if paks else "NOT installed (mod + global only)"))
     if args.list:
         for v in vs:
-            log("  [%s]" % os.path.relpath(v, src_dir))
+            log("  [%s] -> %s" % (rels[v], label_of(v)))
             for p in mod_packages(v, global_dir, os.path.join(work, "_l")):
                 log("     " + p)
         return
     reports = []
     for v in vs:
-        rel = os.path.relpath(v, src_dir)
-        tail = "" if rel in (".", "") else "_" + safe(rel.replace(os.sep, "_"))
-        label = prefix + (("_" + mod_id) if mod_id else "") + tail
-        reports.append(export_variant(label, v, args, paks, global_dir, os.path.join(work, safe(rel) or "root")))
+        sub = (safe(rels[v]) or "root") + "".join("+" + t for t in dict.fromkeys(t for _, t in overlays))
+        reports.append(export_variant(label_of(v), v, args, paks, global_dir, os.path.join(work, sub), overlays))
     with open(os.path.join(work, "report.json"), "w", encoding="utf-8") as f:
         json.dump(reports, f, indent=1, ensure_ascii=False, default=str)
     log("MR_EXPORT_DONE=" + json.dumps([{k: r.get(k) for k in ("label", "hero", "blend", "skipped", "error")}

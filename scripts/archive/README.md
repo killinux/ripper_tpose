@@ -209,7 +209,7 @@ python delete_paths.py --frames-only <旧临时目录>         # 只删渲染帧
 
 ```powershell
 python make_collection.py collections\gantz.json        # → E:\game_export\_GANTZ合集\
-python make_collection.py collections\venom.json        # → E:\game_export\_毒液合集\（2026-11-15，5 个来源 6 个模型）
+python make_collection.py collections\venom.json        # → E:\game_export\_毒液合集\（2026-11-21，13 个来源 26 个模型）
 ```
 
 把好几个游戏里同一个主题的成品放到一个目录下，再配一个注明出处的画廊。清单是 JSON（`collections\gantz.json`）：输出目录、归档根目录，
@@ -217,7 +217,8 @@ python make_collection.py collections\venom.json        # → E:\game_export\_�
 形如 `<游戏>/<角色>/<格式>/<造型>`；格局不同的目录写 `fmt`）。脚本：
 
 - 把这些目录里的每个文件**硬链接**到 `<输出>\<来源目录>\<格式>\<造型>\`：和归档在同一个盘，不另占空间；在合集里改文件就是改归档里那一份。
-  重新跑会换成新的链接；清单里不再有的目录不动（会列出来）。
+  重新跑会换成新的链接；每个造型目录是归档目录的镜像，归档里已经没有的文件（重新导出后不再生成的旧贴图）在合集里也删掉，
+  输出里 `pruned` 是删了几个（2026-11-21 加的：She-Venom 重导后，合集里还留着替身版的贴图）。清单里不再有的来源目录不动（会列出来）。
 - 每个造型一张缩略图（`_thumbs\`，从预览图来，或者用 `thumb_from` 指定）；来源的宣传图（mod 页面的图）放 `_thumbs\source\`。
   预览图是正面 / 侧面 / 背面拼成一长条的（ELDEN RING / 只狼的 .blend 预览，2700×1200），在那一项写 `"thumb_panels": 3`，
   缩略图只取最左边的正面；不写的话整条缩进竖卡片，人很小。

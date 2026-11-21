@@ -15,7 +15,8 @@ converted and what it lacks, and which archived folders belong to it ("glob" und
     "thumb_top": f keeps the top fraction f of it, for sheets with a row of close-ups under the body views);
   * links the check videos it finds in the folders (*.mp4, e.g. pmx/<model>/_check/dance.mp4) on the model's card;
   * copies the source's own picture (the mod page's image) into _thumbs/source/.
-Then writes <out>/index.html (the gallery, local files only) and <out>/说明.md.  Re-running replaces the links;
+Then writes <out>/index.html (the gallery, local files only) and <out>/说明.md.  Re-running replaces the links and
+mirrors each model folder (a file the archived folder no longer has is removed from the collection too); section
 folders the spec no longer names are left alone (listed in the run's output).
 """
 import argparse
@@ -57,6 +58,16 @@ def link_tree(src, dst, stats):
                 shutil.copy2(s, d)
                 stats["copied"] += 1
             stats["bytes"] += os.path.getsize(s)
+    # a mirror: files a re-export no longer writes go too (2026-11-21, She-Venom #6188 re-exported with the game's
+    # textures - its stand-in maps were still in the collection)
+    for dp, _dirs, files in os.walk(dst, topdown=False):
+        rel = os.path.relpath(dp, dst)
+        for f in files:
+            if not os.path.exists(os.path.normpath(os.path.join(src, rel, f))):
+                os.remove(os.path.join(dp, f))
+                stats["pruned"] = stats.get("pruned", 0) + 1
+        if dp != dst and not os.listdir(dp):
+            os.rmdir(dp)
 
 
 def find_preview(folder, model):
@@ -94,7 +105,7 @@ def build(spec, dry):
     root, out = spec["root"], spec["out"]
     os.makedirs(os.path.join(out, "_thumbs", "source"), exist_ok=True)
     sections = []
-    stats = {"linked": 0, "kept": 0, "copied": 0, "bytes": 0}
+    stats = {"linked": 0, "kept": 0, "copied": 0, "pruned": 0, "bytes": 0}
     for sec in spec["sections"]:
         models = {}
         for item in sec.get("models", []):

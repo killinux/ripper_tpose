@@ -87,18 +87,35 @@ def suffix_role(tex_path):
     return None
 
 
+# Engine placeholders: constant maps a shader slot gets when it does not use the slot (Storm's hair instance has
+# ORM = T_Common_LinearBlack: as AO it turned the hair black).  Never used for ORM / specular.
+PLACEHOLDER_RE = re.compile(r"^(t_common_(black|white|grey|gray|linear_?black|linear_?white|linear_?gr[ae]y|flat_?normal"
+                            r"|normal|default\w*)|img_pure_\w+)$", re.I)     # constants, not T_Common_EyeShadow_4
+# overlays the game draws with special shaders (eye highlight: Opacity 0 + a highlight mask): hidden like FX shells
+HIDDEN_CHAIN_RE = re.compile(r"eye_?highlight|eye_?reflection", re.I)
+
+
+def tex_stem(path):
+    return re.sub(r"_\d{5,}$", "", os.path.splitext(os.path.basename(path))[0])
+
+
 def assign_roles(textures):
     """role -> (param, texture).  The parameter's own name decides first (BaseColor / Normal / ORM ...); a texture's
-    name suffix (_D / _N / _ORM) only fills roles that are still empty, and never from effect / detail parameters.
+    name suffix (_D / _N / _ORM) only fills roles that are still empty, never from effect / detail parameters and never
+    from a parameter that already has a role (Storm's hair OpacityMask = T_*_Hair_01_M is not an ORM pack).
     2026-11-21: Venom's instances list "FX - ChangeColor - NoiseTex", "FlowMapNormal" and "NormalMask_Tex" before
     BaseColor / Normal / ORM, and first-come-first-served by suffix painted the whole body with a green noise map."""
-    roles = {}
+    roles, taken = {}, set()
     for param, path in textures.items():
         role = param_role(param)
+        if role in ("orm", "specular", "emissive") and PLACEHOLDER_RE.match(tex_stem(path)):
+            taken.add(param)
+            continue
         if role and role not in roles:
             roles[role] = (param, path)
+            taken.add(param)
     for param, path in textures.items():
-        if EFFECT_PARAM_RE.search(param):
+        if param in taken or EFFECT_PARAM_RE.search(param) or PLACEHOLDER_RE.match(tex_stem(path)):
             continue
         role = suffix_role(path)
         if role and role not in roles:
@@ -219,16 +236,25 @@ tex_out = os.path.join(out_dir, "textures")
 os.makedirs(tex_out, exist_ok=True)
 
 
+IMAGES = {}
+
+
 def image(path, colour):
+    """One image datablock per (file, colour space).  A file used both ways - #7406's JinxySymD is the symbiote's
+    BaseColor AND its SpecularTexture - must not share one datablock: loading it the second time as Non-Color made the
+    colour map Non-Color too, and a dark 33/255 sRGB map rendered as linear 0.13 (light grey)."""
     if not path or not os.path.isfile(path):
         return None
     dst = os.path.join(tex_out, os.path.basename(path))
     if os.path.normcase(os.path.abspath(path)) != os.path.normcase(dst) and (
             not os.path.isfile(dst) or os.path.getsize(dst) != os.path.getsize(path)):
         shutil.copy2(path, dst)
-    img = bpy.data.images.load(dst, check_existing=True)
-    img.colorspace_settings.name = "sRGB" if colour else "Non-Color"
-    return img
+    key = (os.path.normcase(os.path.abspath(dst)), bool(colour))
+    if key not in IMAGES:
+        img = bpy.data.images.load(dst, check_existing=False)
+        img.colorspace_settings.name = "sRGB" if colour else "Non-Color"
+        IMAGES[key] = img
+    return IMAGES[key]
 
 
 HAIRLIKE = re.compile(r"hair|lash|brow|fur|feather|lace|fringe|tassel", re.I)
@@ -244,6 +270,109 @@ def is_dxt5nm(img, step=97):
     img.pixels.foreach_get(px)
     r, a = px[0::4][::step], px[3::4][::step]
     return bool(len(r)) and float(r.mean()) > 0.95 and float(a.std()) > 0.02
+
+
+def vec3(v):
+    """A vector parameter ({"R","G","B","A"}) -> (r, g, b) or None."""
+    if isinstance(v, dict) and all(k in v for k in "RGB"):
+        return (float(v["R"]), float(v["G"]), float(v["B"]))
+    return None
+
+
+def prepare_base(base, mask=None, tint=None, opacity=None):
+    """The colour map as the game's shader shows it, baked into one RGBA image beside it (<name>_A.png with an alpha
+    mask, else <name>_T.png) - so Blender, the PMX exporter and the XPS exporter all see the same thing:
+      * BaseTint (a linear colour multiplied in the shader: Sue Storm's outer hair 0.7 grey, Storm's 1.1);
+      * the opacity mask's red channel as alpha (Storm's hair OpacityMask T_1015503_Hair_01_M - 55 % of it the gaps
+        between strands; Sue's eye shadow T_Common_EyeShadow_4), times OpacityMultiplier when the instance has one.
+    Returns the base unchanged when there is nothing to bake."""
+    if tint is not None and all(abs(c - 1.0) < 0.02 for c in tint):
+        tint = None
+    if mask is None and tint is None and opacity is None:
+        return base
+    key = (base.filepath_raw, mask.filepath_raw if mask else None, tint, opacity)
+    if key in PACKED:                  # two hair instances share the same maps: one image
+        return PACKED[key]
+    import numpy as np
+    w, h = base.size
+    b = np.empty(w * h * 4, dtype=np.float32)
+    base.pixels.foreach_get(b)
+    if tint is not None:
+        rgb = b.reshape(-1, 4)[:, :3]
+        lin = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4) * np.array(tint, np.float32)
+        lin = np.clip(lin, 0.0, 1.0)
+        b.reshape(-1, 4)[:, :3] = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * lin ** (1 / 2.4) - 0.055)
+    if mask is not None:
+        if tuple(mask.size) != (w, h):
+            mask = mask.copy()
+            mask.scale(w, h)
+        m = np.empty(len(mask.pixels), dtype=np.float32)
+        mask.pixels.foreach_get(m)
+        b[3::4] = m[0::mask.channels] if mask.channels > 1 else m
+    if opacity is not None:
+        b[3::4] *= float(opacity)
+    stem = os.path.splitext(os.path.basename(base.filepath_raw or base.name))[0]
+    suffix = "_A" if (mask is not None or opacity is not None) else "_T"
+    if len([k for k in PACKED if k[0] == key[0]]):
+        suffix += str(len([k for k in PACKED if k[0] == key[0]]) + 1)     # same map, another tint / mask
+    path = os.path.join(tex_out, stem + suffix + ".png")
+    img = bpy.data.images.new(stem + suffix, w, h, alpha=True)
+    img.pixels.foreach_set(b)
+    img.filepath_raw = path
+    img.file_format = "PNG"
+    img.save()
+    img.colorspace_settings.name = "sRGB"
+    img.alpha_mode = "STRAIGHT"
+    PACKED[key] = img
+    return img
+
+
+PACKED = {}
+
+
+def bake_eyeball(iris, sclera, scalars, vectors, size=1024):
+    """UE's eye shader (M_Common_Eye_Opt) draws IrisBaseColor only inside a disc of radius IrisUVRadius around the
+    eyeball UV's centre and ScleraBaseColor (x ScleraTint) outside, blended over IrisBorderWidth.  Used as a plain
+    colour map the iris texture covered the whole eyeball and the eyes came out black (#7406, 2026-11-21).  Bakes that
+    layout into <iris>_eyeball.png."""
+    import numpy as np
+
+    def pixels(img):
+        w, h = img.size
+        a = np.empty(w * h * 4, dtype=np.float32)
+        img.pixels.foreach_get(a)
+        return a.reshape(h, w, 4), w, h
+
+    def sample(arr, w, h, u, v):
+        return arr[np.clip((v * h).astype(int), 0, h - 1), np.clip((u * w).astype(int), 0, w - 1)]
+
+    r = float(scalars.get("IrisUVRadius") or 0.15)
+    border = float(scalars.get("IrisBorderWidth") or 0.02)
+    ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
+    u, v = (xs + 0.5) / size, (ys + 0.5) / size
+    du, dv = u - 0.5, v - 0.5
+    d = np.sqrt(du * du + dv * dv)
+    I, iw, ih = pixels(iris)
+    out = sample(I, iw, ih, np.clip(du / (2 * r) + 0.5, 0, 1), np.clip(dv / (2 * r) + 0.5, 0, 1)).copy()
+    if sclera is not None:
+        S, sw, sh = pixels(sclera)
+        sc = sample(S, sw, sh, u, v).copy()
+        tint = vec3(vectors.get("ScleraTint"))
+        if tint:
+            sc[..., :3] *= np.array(tint, np.float32)   # sRGB-encoded values scaled: close enough for a tint < 1
+    else:
+        sc = np.ones_like(out) * np.array([0.85, 0.85, 0.85, 1.0], np.float32)
+    t = np.clip((d - (r - border)) / max(border, 1e-4), 0.0, 1.0)[..., None]     # 0 inside the iris, 1 on the sclera
+    out = out * (1.0 - t) + sc * t
+    out[..., 3] = 1.0
+    stem = os.path.splitext(os.path.basename(iris.filepath_raw or iris.name))[0]
+    img = bpy.data.images.new(stem + "_eyeball", size, size, alpha=True)
+    img.pixels.foreach_set(out.astype(np.float32).ravel())
+    img.filepath_raw = os.path.join(tex_out, stem + "_eyeball.png")
+    img.file_format = "PNG"
+    img.save()
+    img.colorspace_settings.name = "sRGB"
+    return img
 
 
 def alpha_share(img, cut=0.33, step=7):
@@ -276,13 +405,15 @@ def build_material(mat, spec):
     L.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
     roles = assign_roles(spec.get("textures", {}))
     used = {}
-    if FX_RE.search(mat.name) and "basecolor" not in roles:
-        # rim-light / effect shells (M_RimOnly, *_HeroDetails ...) are drawn by special shaders around the body;
-        # as a plain surface they would cover it, so they stay in the file, invisible
+    hidden_overlay = any(HIDDEN_CHAIN_RE.search(c or "") for c in spec.get("chain", []))
+    if (FX_RE.search(mat.name) and "basecolor" not in roles) or hidden_overlay:
+        # rim-light / effect shells (M_RimOnly, *_HeroDetails ...) and eye-highlight overlays (MI_EyeHighlight: Opacity
+        # 0 + a highlight mask, #7406's Eyes_02) are drawn by special shaders; as a plain surface they would cover the
+        # body / the eyes, so they stay in the file, invisible
         bsdf.inputs["Alpha"].default_value = 0.0
         mat.blend_method = "BLEND"
         mat.shadow_method = "NONE"
-        return {"hidden": "effect shell"}
+        return {"hidden": "eye highlight overlay" if hidden_overlay else "effect shell"}
     flat = spec.get("flat")           # export_mod.py --colour: a stand-in for a colour map the game could not give
     if flat:
         bsdf.label = "替身颜色（游戏贴图没读出来，--colour）"
@@ -294,9 +425,31 @@ def build_material(mat, spec):
             bsdf.inputs["Roughness"].default_value = 0.6
         return {"missing": True, "flat": flat}
     base = None
+    tex = spec.get("textures", {})
+    if tex.get("IrisBaseColor"):
+        # UE eye shader: iris disc + sclera, baked into one eyeball map (bake_eyeball)
+        iris = image(tex["IrisBaseColor"], True)
+        if iris:
+            eye = bake_eyeball(iris, image(tex.get("ScleraBaseColor"), True), spec.get("scalars") or {},
+                               spec.get("vectors") or {})
+            IMAGES[(os.path.normcase(os.path.abspath(eye.filepath_raw)), True)] = eye
+            roles["basecolor"] = ("IrisBaseColor", eye.filepath_raw)
+            used["eyeball"] = "%s (iris r %.3f) + %s" % (iris.name, float((spec.get("scalars") or {}).get(
+                "IrisUVRadius") or 0.15), os.path.basename(tex.get("ScleraBaseColor") or "-"))
     if "basecolor" in roles:
         img = image(roles["basecolor"][1], True)
         if img:
+            mask = None
+            if "opacity" in roles and not PLACEHOLDER_RE.match(tex_stem(roles["opacity"][1])):
+                mask = image(roles["opacity"][1], False)
+            tint = vec3((spec.get("vectors") or {}).get("BaseTint"))
+            opm = (spec.get("scalars") or {}).get("OpacityMultiplier")
+            opm = float(opm) if isinstance(opm, (int, float)) and opm < 0.999 else None
+            new = prepare_base(img, mask, tint, opm)
+            if new is not img:
+                used["baked"] = {"from": img.name, "alpha": mask.name if mask else None, "tint": tint,
+                                 "opacity": opm}
+                img = new
             base = node("ShaderNodeTexImage", -700, 300, roles["basecolor"][0])
             base.image = img
             used["basecolor"] = img.name
@@ -381,19 +534,28 @@ def build_material(mat, spec):
     # With current mappings the parents' blend modes come through, and Marvel Rivals' skin / body parents are all
     # Masked (M_Common_Body, M_1035001_Skin_1035 - for dissolve effects) while their colour maps are opaque: cut out
     # only when the colour map's alpha really has transparent texels.
+    # Translucent parents (M_Common_Translucent_Lobby: #7406's outer hair cards, eye shadow) blend by their alpha
+    # softly; transparency there also means partial alpha, not only texels under the clip value.
     blend = str(spec.get("blend_mode", "")).lower()
-    share = alpha_share(base.image) if base is not None else 0.0
-    masked = blend.endswith("masked") and share > 0.001
+    translucent = "translucent" in blend
+    share = alpha_share(base.image, cut=0.98 if translucent else 0.33) if base is not None else 0.0
+    masked = (blend.endswith("masked") or translucent) and share > 0.001
     if not blend and base is not None and HAIRLIKE.search(mat.name) and share > 0.02:
         masked = True
     if masked and base is not None:
         L.new(base.outputs["Alpha"], bsdf.inputs["Alpha"])
-        mat.blend_method = "CLIP"
-        mat.shadow_method = "CLIP"
-        mat.alpha_threshold = float(spec.get("clip") or 0.3333)
+        if translucent:
+            mat.blend_method = "BLEND"
+            mat.shadow_method = "HASHED"
+            mat.show_transparent_back = False
+        else:
+            mat.blend_method = "CLIP"
+            mat.shadow_method = "CLIP"
+            mat.alpha_threshold = float(spec.get("clip") or 0.3333)
     mat.use_backface_culling = not spec.get("two_sided", False)
     mat["mr_instance"] = spec.get("path", "")
-    return {"used": used, "masked": bool(masked and base is not None)}
+    return {"used": used, "masked": bool(masked and base is not None),
+            "translucent": bool(masked and translucent and base is not None)}
 
 
 report = {"materials": {}, "missing": []}

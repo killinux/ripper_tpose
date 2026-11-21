@@ -58,8 +58,9 @@ def exported_mods():
             if not (os.path.isfile(os.path.join(char_dir, "pmx", label, label + ".pmx"))
                     and os.path.isfile(os.path.join(char_dir, "xps", label, label + ".xps"))):
                 continue
-            m = re.search(r"_(\d{3,6})(?:_[A-Za-z][\w-]*)?$", label)
-            if m:
+            # every mod id in the label: a recolour laid over another mod's body names both
+            # (Thicc_Storm_Symbiote_Storm_4249_Default_M_Symbiote_Stormy_6269 -> 4249 and 6269)
+            for m in re.finditer(r"_(\d{3,6})(?=_|$)", label):
                 found.setdefault((domain, int(m.group(1))), blend)
     return found
 
