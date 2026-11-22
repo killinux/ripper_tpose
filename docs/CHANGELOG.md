@@ -14,6 +14,28 @@
 
 ---
 
+## 2026-11-22 — 剑星：mod 画廊补齐最后 4 套（Gantz Sling 三套的高清版、赤足的 XPS）；`hq_mod_outfits.py` 修两个读错游戏原版的坑
+
+1. **起因**：`_mod画廊` 62 张卡片里 4 张发灰（少一种格式），都是之前做的：Gantz Sling 三套（11-14，`swap_mod_mesh.py`）没有高清 Blender，
+   Original Proportions 赤足没有 XPS。用户：「补」。
+2. **补的**：
+   - 赤足：`blender2xps` 从归档的 `Eve_Nude_Barefoot.blend` 导出（189 根骨、10 个网格、113494 顶点），`archive_exports.py stellarblade --only Nude_Barefoot` 归档（自检通过）。
+   - Gantz Sling：三个 zip 解到 `_meta\mod_sources\GantzSling_mtsqn\unzipped\`，登记进 `_meta\hq_materials\mod_outfits.json`（54 → 57 条），
+     `hq_mod_outfits.py --only Mod_GantzSling[_RedKeyholeSuit|_KeyholeDress]` 出 `_HQ.blend`；插件对比图 `插件效果_游戏材质对比.jpg`；画廊 62/62。
+3. **修复**（`scripts/stellarblade/hq_mod_outfits.py`）：
+   - **CUE4Parse 的列表不跨容器合并**：替换型 mod 的包和游戏的包同一路径时，通配符两份都导出、并行写同一个 JSON（Gantz Sling 第一次跑就文件占用崩了；
+     不崩时谁后写完算谁）。新 `listed()`：先 `-l` 把通配符换成精确的 `.uasset` 路径（不分大小写去重，同一 `/Game` 路径在两个挂载名下取 mod 自己的，
+     没有就取游戏的 `SB/Content`），精确路径取读取顺序最高的一份（mod 的 `_P`）；`fetch_textures()` 一次列表、逐张精确导出；超长命令行分批。
+   - **同名贴图先找到游戏那份**：`hq_materials.py` 按 `--textures` 顺序找，原来 `textures\mod`（mod 自己的贴图）排最后，替换型 mod 用游戏原名的贴图
+     被底包的游戏原版顶掉；现在 `textures\mod` 排第一（`skin_record()` 同）。
+4. **影响到已交付的**：查了这批 54 套。材质实例没有读错的（只有 Gantz Sling 撞上第一个坑）。第二个坑影响 12 套高清版：Crimson Wings BBB 的 8 套
+   （两张法线 `UV1_N` / `UV2_N`）、Crimson Wings OP 的 4 套（底色 `UV1_A`）；它们的 PMX 带的是 mod 自己的贴图（md5 核对过），
+   只有插件切到「游戏材质」时用到的高清版不对。用户：「1做」→ 用修好的脚本重做（`finish.py hq` / `finish.py addon`），
+   插件每套 16–18 个材质全换上、没缺图、两种模式再导出一致；存档里同名贴图接错的 24 处 → 0 处。
+5. **验证**：Gantz Sling 三套高清版的材质实例和 mod 自己那份参数一致（贴图 / 标量 / 颜色）；5 张同名贴图都接的是 mod 的；
+   插件在 4 个 PMX 上（含 MoreJiggle，它用 Gantz Sling 的高清版）都是 17/17 换上、没缺图、两种模式再导出的 PMX 一致。
+   Keyhole dress 第 4 个槽（21896 面）mod 网格挂的是 `MI_CH_P_EVE_V02_TypeB_Back`，普通版按槽名用了 29 号的材质，高清版这块沿用普通版。
+
 ## 2026-11-22 — 剑星：5 个 Vindictus mod 出 Blender / 高清 Blender / PMX / XPS（6 套）；批处理新加「换发型 / 加饰品」和「布料段下垂 + 飘带物理」
 
 11-14 调研的剑星 Vindictus mod，当时只做了 Demon Maiden 一个样品（只有服装）。用户下齐了剩下的 7 个文件，这次补完。

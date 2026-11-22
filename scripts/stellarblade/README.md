@@ -705,6 +705,31 @@ Black Sling、Albion Nell、Nude Natural、Skin Suit Undressed、Original Propor
 - Laniakea 的侧马尾在 Blender 里用 mmd_tools 默认物理时，一开始就翻到头顶上；用预览的 `--physics mmd`
   （按 MMD 本体的 Bullet）是正常的。这一套的跳舞预览按 MMD 方式渲染（`looks.py` 的 `preview_args`）。
 
+**画廊补齐 + 高清版的两个坑（2026-11-22 下午）**
+
+画廊里有 4 张卡片发灰，都是之前做的，各少一种格式：Gantz Sling 三套（11-14 用 `swap_mod_mesh.py` 做的）没有高清版，
+Original Proportions 赤足没有 XPS。
+
+- 赤足：`blender2xps` 从归档的 `Eve_Nude_Barefoot.blend` 导出（189 根骨、10 个网格、11.3 万顶点，没有警告），
+  再 `archive_exports.py stellarblade --only Nude_Barefoot` 归档。
+- Gantz Sling：三个 zip 解到 `_meta\mod_sources\GantzSling_mtsqn\unzipped\<zip 名>\`（挂载名 `SB/Content`），登记进
+  `_meta\hq_materials\mod_outfits.json`（槽取 `mod_swap.json` 的 `slot_names`），再 `hq_mod_outfits.py --only <包名>`。
+- **坑 1：CUE4Parse 的列表不跨容器合并。** 替换型 mod 的包和游戏自己的包路径一样，`-l` 会各列一次（游戏 229267 个 + mod 16 个，
+  一个没去重）。按通配符要，两份都导出，并行写同一个 JSON：要么文件被占用崩溃（Gantz Sling 第一次就是），要么谁后写完算谁。
+  精确路径只取读取顺序最高的那份（mod 的 `_P`，试了 3 次都是 mod 的）。
+  - `hq_mod_outfits.py` 现在先 `-l` 把通配符换成精确的 `.uasset` 路径再导出（`listed()`）：不分大小写去重；同一个 `/Game` 路径
+    在两个挂载名下时，取这个 mod 自己的那份，没有就取游戏的 `SB/Content`（不取 `~mods` 里别的 mod 的）。贴图（`fetch_textures()`）也这样。
+  - 查过这批 54 套：mod 自带的、游戏里也有的材质实例，高清版没有一个读成游戏那份，只有 Gantz Sling 撞上了。
+- **坑 2：同名贴图先找到游戏那份。** `hq_materials.py` 的 `find_texture()` 按 `--textures` 的顺序找，每个目录先找本层再找 `extra\`。
+  `hq_mod_outfits.py` 原来把 `textures\mod`（换网格那步放的 mod 自己的贴图）排在最后。替换型 mod 的贴图用的是游戏原名，就被
+  `textures\` / `extra\` 里底包的游戏原版顶掉了。现在 `textures\mod` 排第一个（皮肤贴图的 `skin_record()` 也是）。
+  - 已经交付的高清版里有 12 套受影响：Crimson Wings BBB 的 8 套（Lux / Vinyl / Nude）两张法线
+    `CH_P_EVE_OneMillion_01_UV1_N` / `UV2_N`，Crimson Wings OP 的 4 套底色 `UV1_A`。其余同名的两份内容一样，或者高清版没用到。
+    这 12 套的 PMX 带的是 mod 自己的贴图（md5 核对过），只有插件切到「游戏材质」时用的高清版不对。
+    11-22 已重做（`finish.py hq` + `finish.py addon`）：插件每套 16–18 个材质全换上、没缺图，存档里同名贴图接错的 24 处 → 0 处。
+- Keyhole dress 的第 4 个槽（21896 个面）：mod 的网格挂的是 `CH_P_EVE_09_V02` 的 `MI_CH_P_EVE_V02_TypeB_Back`，
+  `swap_mod_mesh.py` 按槽名 `MI_CH_P_EVE_29_03` 拿了 29 号的材质。高清版这块沿用普通版，4 个材质换了 3 个。
+
 ## `validate_eve.py`
 
 脚本导入 Eve 的标准身体、完整 Face_003、默认发型和独立长马尾。身体/头发 PSK 会检查

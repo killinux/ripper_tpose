@@ -45,7 +45,8 @@ Per outfit (E:\game_export\StellarBlade\<char>\blend\<package>\<label>.blend), d
 A material is looked up by the instance's name, then as <name>_mod: swap_mod_mesh.py packages (a CNS outfit such as
 Vindictus Demon Maiden, its own mesh in a copy of a game outfit's package) name the materials built from the mod's maps
 so, and their PMX carries the same names.
-More outfits come from the registry _meta\hq_materials\mod_outfits.json (2026-11-15: 48 looks of 12 mods; REGISTRY):
+More outfits come from the registry _meta\hq_materials\mod_outfits.json (2026-11-15: 48 looks of 12 mods; 11-22: the 6
+Vindictus looks and the three Gantz Sling looks of 11-14 - 57 entries; REGISTRY):
 their variant's files are hardlinked from the archived mod sources and named as patches (a replacer at the game's own
 path otherwise loses to the game's package at random), the mesh's slots may name the game's own instances (read too),
 the textures the archived package lacks are exported into textures\extra (fetch_textures()), and a CNS outfit's default
@@ -131,13 +132,81 @@ def package_glob(object_path, any_mount=False):
     return path + ".*"
 
 
-def cue4parse(patterns, out_dir, paks, fmt="json"):
-    cmd = [CUE4PARSE, "-i", paks, "-g", "GAME_UE4_26", "-m", USMAP, "-f", fmt, "-y", "-o", out_dir]
+OWN = {}        # a Paks folder mod_paks() made -> lower-case paths of the converted mod's own packages (listed())
+CMD_CHARS = 24000   # exact paths per CUE4Parse call: Windows' command line ends at 32767 characters
+
+
+def package_lines(text):
+    """the package paths in a `cue4parse -l` listing (its other lines all hold a colon), .uasset / .umap only"""
+    out = []
+    for line in text.splitlines():
+        s = line.strip()
+        if "/" in s and ":" not in s and os.path.splitext(s)[1].lower() in (".uasset", ".umap"):
+            out.append(s)
+    return out
+
+
+def own_packages(folders):
+    """lower-case paths of the packages in these folders' containers alone - the converted mod's (a listing needs no
+    global.utoc)"""
+    own = set()
+    for d in folders:
+        r = subprocess.run([CUE4PARSE, "-i", d, "-g", "GAME_UE4_26", "-m", USMAP, "-l", "-p", "*"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        own |= {s.lower() for s in package_lines(r.stdout)}
+    return own
+
+
+def listed(patterns, paks):
+    """the packages CUE4Parse's wildcards match, one copy each.  Its listing is not merged across containers: a
+    replacer's package comes once from the mod and once from the game at the same path (2026-11-22, Gantz Sling's
+    MI_EVE_Cos_15_Inner_Original / MI_EVE_Cos_15_Back_Type__B: 2 matches each, 229267 + 16 assets listed), and a
+    texture's .ubulk comes with its .uasset; asked for by wildcard, every copy is exported in parallel into the one
+    JSON / PNG - a sharing-violation crash, or whichever copy was written last.  An exact path takes the copy of the
+    highest read order (the mod's "_P" patch; 3 exports out of the mod + game folders were the mod's copy each time).
+    One /Game path under two mounts (any_mount's */Content/...) keeps the converted mod's own copy, else the game's
+    (SB/Content: not another mod's copy from ~mods); the case is the listing's (a mesh may name ".../materials/...")."""
+    cmd = [CUE4PARSE, "-i", paks, "-g", "GAME_UE4_26", "-m", USMAP, "-l"]
     for p in patterns:
         cmd += ["-p", p]
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
-        raise SystemExit("cue4parse failed:\n" + r.stdout[-3000:] + r.stderr[-3000:])
+        raise SystemExit("cue4parse -l failed:\n" + r.stdout[-3000:] + r.stderr[-3000:])
+    own = OWN.get(paks, set())
+    seen, groups = set(), {}
+    for s in package_lines(r.stdout):
+        k = s.lower()
+        if k not in seen:
+            seen.add(k)
+            groups.setdefault(k.split("/content/", 1)[-1], []).append(s)
+    out = []
+    for paths in groups.values():
+        pick = [p for p in paths if p.lower() in own] or [p for p in paths if p.lower().startswith("sb/content/")]
+        out.append((pick or paths)[0])
+    return out
+
+
+def cue4parse(patterns, out_dir, paks, fmt="json"):
+    """export these packages; a wildcard is first turned into exact paths (listed())"""
+    if any("*" in p for p in patterns):
+        exact = [p for p in patterns if "*" not in p]
+        low = {p.lower() for p in exact}
+        patterns = exact + [p for p in listed([p for p in patterns if "*" in p], paks) if p.lower() not in low]
+    chunks, cur = [], []
+    for p in patterns:
+        if cur and sum(len(x) + 4 for x in cur) + len(p) > CMD_CHARS:
+            chunks.append(cur)
+            cur = []
+        cur.append(p)
+    if cur:
+        chunks.append(cur)
+    for chunk in chunks:
+        cmd = [CUE4PARSE, "-i", paks, "-g", "GAME_UE4_26", "-m", USMAP, "-f", fmt, "-y", "-o", out_dir]
+        for p in chunk:
+            cmd += ["-p", p]
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode != 0:
+            raise SystemExit("cue4parse failed:\n" + r.stdout[-3000:] + r.stderr[-3000:])
 
 
 def mod_paks(entry, paks, work):
@@ -161,6 +230,7 @@ def mod_paks(entry, paks, work):
                 # as the game's own mesh in 2 runs of 3)
                 name = stem + ext if stem.lower().endswith("_p") else stem + "_P" + ext
                 os.link(src, os.path.join(sub, name))      # the work folder sits on the sources' drive
+        OWN[folder] = own_packages([os.path.join(folder, "m%d" % k) for k in range(len(entry["files"]))])
         link = os.path.join(folder, "game")
         r = subprocess.run(["cmd", "/c", "mklink", "/J", link, paks], capture_output=True, text=True,
                            encoding="utf-8", errors="replace")
@@ -181,6 +251,7 @@ def mod_paks(entry, paks, work):
     if r.returncode != 0 or not found:
         raise SystemExit("could not unpack %s from %s:\n%s" % (member or "the mod's files", entry["archive"],
                                                                r.stdout + r.stderr))
+    OWN[folder] = own_packages([sub])
     link = os.path.join(folder, "game")
     r = subprocess.run(["cmd", "/c", "mklink", "/J", link, paks], capture_output=True, text=True, encoding="utf-8",
                        errors="replace")
@@ -235,8 +306,9 @@ def read_game(patterns, json_dir, paks, any_mount=False):
 def fetch_textures(staged_list, tex_dir, paks, any_mount):
     """textures the flattened instances name that the outfit folder lacks (a replacer's game instances whose maps the
     archived package never exported, a mod map no slot of swap_mod_mesh.py used) -> PNG in textures\\extra.  One
-    CUE4Parse call per texture, .uasset only (its .ubulk in parallel would write the same file); a texture CUE4Parse
-    cannot find is listed, not fatal.  Returns (fetched, not found)."""
+    listing for all (listed(): one copy each - a mod's map at the game's path was listed twice), then one CUE4Parse
+    call per texture by its exact .uasset path; a texture CUE4Parse cannot find is listed, not fatal.  Returns
+    (fetched, not found)."""
     have = set()
     for sub in ("", "extra", "mod"):
         d = os.path.join(tex_dir, sub)
@@ -255,9 +327,16 @@ def fetch_textures(staged_list, tex_dir, paks, any_mount):
     os.makedirs(extra, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="hq_tex_")
     try:
-        for n, op in sorted(want.items()):
+        pats = {n: package_glob(op, any_mount)[:-2] + ".uasset" for n, op in want.items()}
+        wild = sorted({p for p in pats.values() if "*" in p})
+        found = {}                          # one listing for all: one copy per texture (listed())
+        for s in (listed(wild, paks) if wild else []):
+            found.setdefault(os.path.splitext(os.path.basename(s))[0].lower(), s)
+        for n, pat in sorted(pats.items()):
+            path = found.get(n.lower()) if "*" in pat else pat
             try:
-                cue4parse([package_glob(op, any_mount)[:-2] + ".uasset"], tmp, paks, fmt="png")
+                if path:
+                    cue4parse([path], tmp, paks, fmt="png")
             except SystemExit:
                 pass
             hits = glob.glob(os.path.join(tmp, "**", n + ".png"), recursive=True)
@@ -384,7 +463,7 @@ def skin_record(staged, tex_dir):
         name = t.get(key)
         if not name:
             return None
-        for sub in ("", "extra", "mod"):            # mod\: the mod's own maps, as swap_mod_mesh.py copies them
+        for sub in ("mod", "", "extra"):            # mod\ first: the mod's own maps, as swap_mod_mesh.py copies them
             path = os.path.join(tex_dir, sub, name + ".png")
             if os.path.isfile(path):
                 return path
@@ -594,9 +673,15 @@ def run_outfit(package, args):
         log("%s %-12s %s%s%s" % (package, name, " -> ".join(note.get("chain", [])), "  [glow]" if "glow" in note else "",
                                  "  [skin]" if note.get("skin") else ""))
     text = []
-    tex_args = ["--textures", tex_dir]
+    # hq_materials.py find_texture() takes the first --textures folder (then its extra\) holding the name.  A swap
+    # package keeps the mod's own maps in textures\mod, and a replacer ships them under the base outfit's names, whose
+    # game copies sit in textures\ / extra\ - so textures\mod goes first (2026-11-22: Gantz Sling's
+    # CH_P_EVE_15_Back_N / _ORM / _A_Type_B and Crimson Wings' OneMillion_01_UV1_N / UV2_N / UV1_A had been wired
+    # from the game's copies)
+    tex_args = []
     if os.path.isdir(os.path.join(tex_dir, "mod")):      # a swap_mod_mesh.py package keeps the mod's maps there
         tex_args += ["--textures", os.path.join(tex_dir, "mod")]
+    tex_args += ["--textures", tex_dir]
     r1 = subprocess.run([sys.executable, os.path.join(HERE, "hq_materials.py"), "--mi-json", staged_dir] + tex_args +
                         ["--out", data], capture_output=True, text=True, encoding="utf-8", errors="replace")
     text.append("== hq_materials.py\n" + r1.stdout + r1.stderr)
