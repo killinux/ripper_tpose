@@ -668,6 +668,43 @@ Black Sling、Albion Nell、Nude Natural、Skin Suit Undressed、Original Propor
   归档成品里没有的贴图（替换型 mod 用到的游戏贴图、`swap_mod_mesh.py` 没用到的 mod 贴图）导出到 `textures\extra\`。
 - 画廊：`python mod_gallery.py --looks <清单.json>` → `E:\game_export\StellarBlade\_mod画廊\index.html`（缩略图在 `thumbs\`，链接都是相对路径）。
 
+**Vindictus 那批 mod（2026-11-22：5 个 mod、6 套，同一套批处理脚本）**
+
+11-14 调研的剑星 Vindictus mod，当时只做了 Demon Maiden 一个样品。用户下齐以后补完：
+
+| 一套 | mod | 底包 | 另外做了什么 |
+|---|---|---|---|
+| `Mod_HeraldOfGoddess` | #1670 CNS | `CH_P_EVE_23` | — |
+| `Mod_VindictusLaniakea` | #2233 CNS | `CH_P_EVE_01_Body` | 换上它的 CNS 发型；前臂上的布料飘带转成下垂 |
+| `Mod_EvilMaid` | #1347 替换型 | `CH_P_EVE_37_TypeB` | 加上它的角（替换圣诞 DLC 的雪橇耳饰） |
+| `Mod_SummerVacation`、`_Tits` | #1487 替换型 | `CH_P_EVE_51` | — |
+| `Mod_VindictusDemonMaiden_Hair` | #1807 CNS + 发型替换 | `CH_P_EVE_01_Body` | 换上它的发型（替换游戏的 `EVE_HR_Nikke_03`，带角） |
+
+- **CNS 服装的底包按它引用的物理资产挑**：Herald of Goddess 的网格写的是 `CH_P_EVE_23_Physics` / `CH_P_EVE_23_AnimBP`，
+  裙摆挂在 23 号的 34 根 `Ab-*-Skirt*` 骨上。换进身体底包时这些骨没有，裙子会不跟着动；换进 23 号，234 根骨全对上，误差 0.003 cm。
+  Laniakea 的参考骨架整体大 0.35%，试了 7 个底包（含 6 个 Nikke 服装）误差都在 0.4 cm 上下，用身体底包。
+- **songeda 的替换型 mod 挂载名是自己起的**（`evilmaid2337/Content/art/...`、`summer651/Content/...`），对应游戏的 `/Game/...`。
+  `any_mount` 按 `*/Content/<路径>` 找，mod 的容器带 `_P` 优先，cue 那步按分段三角形数核对，确认读到的是 mod 的网格。
+  它们还换了身体贴图（`CH_EVE_BaseBody_V02_*`），texfix 按同名替换。
+- **发型挂在 `SC_Hair` 上，`SC_Hair` 就在 `Bip001-Head`，没有偏移**（`CH_P_EVE_01_Skeleton` 的挂点表）。
+  - 游戏挂的是发型网格的组件坐标系，发型根骨自己的朝向不起作用。
+  - 归档包里默认发型的根骨叫 `Hair_Root`，当初是把它对到挂点上的。
+  - 直接把新发型的根骨对到 `Hair_Root`，只对根骨朝向和默认发型一样的发型成立：Nikke_03 发型这样放上去转了 180°，前发在脑后，左右也对调了。
+  - 现在的做法：挂点坐标系 = `Hair_Root` 的骨骼矩阵去掉导入器的骨骼轴约定，是一个轴的循环置换（`attach_hair.py` 的 `SOCKET_FROM_HAIR_ROOT`）。
+  - Laniakea 的侧马尾、Evil maid 的角也按这个放，位置都对。
+- **游戏头发材质 `MA_CH_Hair`**：颜色是发根色 → 发梢色。走向按 `HairTexture` 那张 ADIR 贴图的第 4 个通道，发根是 0、发梢是 1；
+  另外 R 是发丝遮罩，G 是深度，B 是发束编号。透明用 `Alpha` 参数那张图。CNS 发型的默认颜色在 `VectorControls` 里，游戏运行时套上，这里也套。
+  Laniakea 是金发加蓝色发梢。
+- **布料模拟的段**（网格分段的 `CorrespondClothAssetIndex >= 0`，游戏用 NvCloth 模拟）：网格里存的是绑定姿势。
+  Laniakea 前臂上两条 1 米多长的飘带，在绑定姿势里水平伸在身后。`hang_cloth.py` 把这种长条按挂接点转成垂直下垂，
+  再顺着它加一串骨骼（`Streamer_L/R_01..`，每节 15 cm 左右），PMX 导出的 mmd_cloth_physics 按飘带做物理。
+  只转不加骨骼时，飘带刚性跟着前臂，跳舞一抬手就竖到头顶上。
+- **发型的物理靠骨骼名**：PMX 导出的 mmd_cloth_physics 只给头骨下面名字像头发的骨骼做物理
+  （`hair|ponytail|twintail|braid|bang|fringe`）。Laniakea 的 `joint2..30`、Nikke_03 的 `Ab-Front-*` 起初都没有物理，
+  `attach_hair.py` 给它们加了 `Hair_` 前缀以后：Demon Maiden 27 条链，Laniakea 3 条。
+- Laniakea 的侧马尾在 Blender 里用 mmd_tools 默认物理时，一开始就翻到头顶上；用预览的 `--physics mmd`
+  （按 MMD 本体的 Bullet）是正常的。这一套的跳舞预览按 MMD 方式渲染（`looks.py` 的 `preview_args`）。
+
 ## `validate_eve.py`
 
 脚本导入 Eve 的标准身体、完整 Face_003、默认发型和独立长马尾。身体/头发 PSK 会检查

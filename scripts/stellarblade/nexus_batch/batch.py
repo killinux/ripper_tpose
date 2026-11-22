@@ -51,7 +51,7 @@ def one(label, steps, redo):
 def main():
     a = sys.argv[1:]
     jobs = int(a[a.index("--jobs") + 1]) if "--jobs" in a else 3
-    steps = a[a.index("--steps") + 1] if "--steps" in a else "stage,umodel,cue,swap,fill,texfix,xps,pmx,preview"
+    steps = a[a.index("--steps") + 1] if "--steps" in a else "stage,umodel,cue,swap,fill,texfix,cloth,hair,xps,pmx,preview"
     redo = a[a.index("--redo") + 1] if "--redo" in a else ""
     names = [x for i, x in enumerate(a) if not x.startswith("--") and (i == 0 or a[i - 1] not in ("--jobs", "--steps", "--redo"))]
     labels = pick(names)

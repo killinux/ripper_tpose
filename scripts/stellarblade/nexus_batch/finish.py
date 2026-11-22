@@ -165,12 +165,27 @@ def addon_one(lk):
     return p, keep
 
 
+def attachments(st):
+    """run_look.py's hair step: {"hair" / "acc1" ...: {"attach", "fill", ...}} (the first 11-22 runs wrote the hair's
+    record flat)"""
+    h = st.get("hair") or {}
+    if "attach" in h:
+        return {"hair": h}
+    return {k: v for k, v in h.items() if isinstance(v, dict) and "attach" in v}
+
+
+def turned_cloth(st):
+    return [g for g in (st.get("cloth") or {}).get("groups") or [] if g.get("turned_deg") is not None]
+
+
 def readme_one(lk):
     p = package(lk["label"])
     st = status(lk)
     meta = MODS[lk["mod"]]
     fill = st.get("fill") or {}
     fit = (st.get("swap") or {}).get("bone_fit") or {}
+    att = attachments(st)
+    hang = turned_cloth(st)
     folder = os.path.join(ARCHIVE, "Eve", "blend", p)
     hq_ok = os.path.isfile(os.path.join(folder, lk["label"] + "_HQ.blend"))
     addon = ((st.get("addon") or {}).get("lines") or [])
@@ -183,10 +198,28 @@ def readme_one(lk):
          "这个文件夹是独立的：.blend 里的贴图全部用 //textures/ 相对路径引用，整个文件夹拷到别的电脑",
          "（保持目录结构不变）直接双击 .blend 就能打开。",
          "This folder is self-contained: every texture is referenced relatively from textures\\.", "",
-         "做法 / How (2026-11-15)",
-         "  mod 的网格换进已归档的 %s 成品（scripts/stellarblade/swap_mod_mesh.py）：脸、头发、马尾是游戏原版，" % lk["base"],
+         "做法 / How (%s)" % lk.get("date", "2026-11-15"),
+         "  mod 的网格换进已归档的 %s 成品（scripts/stellarblade/swap_mod_mesh.py）：%s，" % (
+             lk["base"], "脸是游戏原版，头发换成了 mod 的发型" if "hair" in att else "脸、头发、马尾是游戏原版"),
          "  同名骨骼对齐误差 %s cm。" % fit.get("rms_cm"),
-         "  The mod's mesh swapped into the archived %s package; face and hair are the game's." % lk["base"]]
+         "  The mod's mesh swapped into the archived %s package; %s." % (
+             lk["base"], "the face is the game's, the hair the mod's" if "hair" in att else "face and hair are the game's")]
+    if "hair" in att:
+        L.append("  mod 的发型 %s 挂在头骨上（游戏的 SC_Hair 挂点就在 Bip001-Head，nexus_batch/attach_hair.py），" %
+                 lk["hair"]["mesh"].rsplit("/", 1)[-1])
+        L.append("  原来的头发、马尾和它们的骨骼去掉；发色按游戏头发材质的发根 / 发梢颜色（有 CNS 默认颜色时用它）。")
+    for k in sorted(att):
+        if k.startswith("acc"):
+            a = att[k]
+            L.append("  饰品 %s：mod 替换游戏的 %s，同一个挂点，整个绑在头骨上。" % (
+                a["attach"].get("name"), (a.get("mesh") or "").rsplit("/", 1)[-1]))
+    if hang:
+        L.append("  游戏里用布料模拟的部分（%s）：网格里是绑定姿势、水平伸在身后，这里按挂接点转成自然下垂" %
+                 "、".join("%s 上 %.0f cm" % (g["bone"], g["length_cm"]) for g in hang))
+        L.append("  （nexus_batch/hang_cloth.py），再顺着它加一串骨骼（Streamer_*），PMX 里有飘带物理。")
+    if "mmd" in (lk.get("preview_args") or []):
+        L.append("  PMX 的跳舞预览按 MMD 本体的物理方式渲染：在 Blender 里用 mmd_tools 默认的物理，侧马尾一开始就会翻到头顶上，")
+        L.append("  MMD 里正常。")
     if fill.get("filled"):
         L.append("  mod 只改参数、贴图继承游戏的材质（%d 个）：接的是最近一层父材质的游戏贴图，或从游戏里导出的贴图。" % len(fill["filled"]))
     if fill.get("overrides"):
@@ -216,7 +249,9 @@ SHORT = {"NikkePlus": "Nikke Plus", "AlbionGirls": "Albion Nell", "CakeUnveiledC
          "YoRHaCeremonial": "YoRHa 礼服", "BlackSling": "Black Sling", "CrimsonWingsBBB": "Crimson Wings BBB",
          "CrimsonWingsOP": "Crimson Wings OP", "SkinSuitUndressed": "Skin Suit Undressed",
          "EveNudeNatural": "Nude Natural", "EveOriginalProportions": "Original Proportions",
-         "RevealingCrimsonWings": "Revealing CW", "YoRHaN2TypeB": "YoRHa 2B 制服", "Earlier": "之前导过的"}
+         "RevealingCrimsonWings": "Revealing CW", "YoRHaN2TypeB": "YoRHa 2B 制服", "Earlier": "之前导过的",
+         "VindictusDemonMaiden": "Demon Maiden 发型+角", "VindictusLaniakea": "Laniakea", "HeraldOfGoddess": "Herald of Goddess",
+         "EvilMaid": "Evil maid", "SummerVacation": "Summer vacation"}
 EARLIER = [   # the mod exports before 11-15 (character folder, label, title)
     ("Fiona", "Eve_Mod_VindictusFiona", "Vindictus Fiona（#1145）"),
     ("Eve", "Eve_Mod_VindictusDemonMaiden", "Vindictus Demon Maiden（#1807）"),
@@ -243,6 +278,13 @@ def look_notes(lk):
         out.append("默认不显示的 %d 个部件已去掉" % len(f["hidden"]))
     if f.get("filled"):
         out.append("%d 个材质接游戏父材质的贴图" % len(f["filled"]))
+    att = attachments(st)
+    if "hair" in att:
+        out.append("换上 mod 的发型")
+    if any(k.startswith("acc") for k in att):
+        out.append("加上 mod 的饰品（角）")
+    if turned_cloth(st):
+        out.append("布料段转成下垂")
     up = next((ln for ln in ((st.get("addon") or {}).get("lines") or []) if ln.startswith("upgraded")), "")
     if up:
         a, _, b = up.replace(";", " ").split()[1:4]

@@ -14,6 +14,9 @@ fill    : fill_materials.py: slots swap left empty get their nearest ancestor's 
           archived one, material_index.json) or one built from the game's maps; CNS default texture options; CNS
           toggles that are off by default remove their faces
 texfix  : the mod's textures that replace game textures of the same name copied over the package's copies
+cloth   : hang_cloth.py: sections the game simulates as cloth (the PSK has their bind pose) hang from where
+          they attach (Laniakea's arm streamers)
+hair    : lk['hair']: the mod's hairstyle in place of Eve's hair (attach_hair.py), its materials (fill_materials)
 xps / pmx / preview : blender2xps, export_pmx_blender.py, preview_pmx_blender.py --dance-views front,back
 """
 import hashlib
@@ -47,7 +50,7 @@ CUE = r"E:\tools\cue4parse_cli\cue4parse.exe"
 BLENDER = r"D:\Program Files\blender-3.6.15-windows-x64\blender.exe"
 B2X = r"E:\code\othercode\blender2xps\tools\batch_export_blends.py"
 MATERIAL_INDEX = r"E:\game_export\StellarBlade\_meta\material_index.json"   # material_index.py writes it
-ALL_STEPS = ["stage", "umodel", "cue", "swap", "fill", "texfix", "xps", "pmx", "preview"]
+ALL_STEPS = ["stage", "umodel", "cue", "swap", "fill", "texfix", "cloth", "hair", "xps", "pmx", "preview"]
 BASE_KEYS = ("basecolor", "base color", "diffuse", "albedo", "basecolour", "base_color")
 NORMAL_KEYS = ("baked normalmap", "normal", "basenormal", "normalmap", "normal map")
 ORM_KEYS = ("orm", "arm")
@@ -168,7 +171,7 @@ def cns_defaults(lk):
     """the CNS registration of this look's mesh: default texture options, materials hidden by default"""
     mesh_name = lk["mesh"].rsplit("/", 1)[-1].lower()
     tail = "/".join(lk["mesh"].split("/")[2:]).lower()
-    out = {"overrides": [], "hide": [], "parameters": [], "fit": None}
+    out = {"overrides": [], "hide": [], "parameters": [], "fit": None, "vectors": []}
     for j in (WORK / lk["mod"] / "unzipped").rglob("*.dekcns.json"):
         doc = lenient_json(j)
         for fit in doc if isinstance(doc, list) else [doc]:
@@ -200,6 +203,10 @@ def cns_defaults(lk):
                     out["overrides"].append({"index": t.get("MaterialIndex", 0), "param": t.get("ParamName"),
                                              "texture": texs[v], "option": (t.get("OptionNames") or [""] * (v + 1))[v],
                                              "name": t.get("DisplayName")})
+            for t in ut.get("VectorControls") or []:      # default colours (Laniakea's hair: root / tip)
+                if t.get("ParamName") and isinstance(t.get("Value"), list) and len(t["Value"]) >= 3:
+                    out["vectors"].append({"index": t.get("MaterialIndex", 0), "param": t["ParamName"],
+                                           "value": t["Value"]})
             return out
     return out
 
@@ -209,6 +216,165 @@ def pick(textures, keys):
         if k.lower() in keys:
             return v
     return None
+
+
+def read_slots(lk, mesh_path, counts, jdir, paks_dir):
+    """CUE4Parse a mesh of the look (with the game Paks) -> one slot per PSK material (= LOD0 section): the instance,
+    its chain, flattened maps / vectors / scalars, disabled, cloth-simulated.  Returns (slots, mesh JSON, all_slots)."""
+    shutil.rmtree(jdir, ignore_errors=True)
+    try:
+        with GamePaks(paks_dir, lk["stage"]) as paks:
+            mats = hq.read_game([mesh_path + ".uasset"], str(jdir), paks, any_mount=True)
+    except SystemExit as e:
+        raise StepError("CUE4Parse: %s" % str(e)[-600:])
+    mesh = mats.get(mesh_path.rsplit("/", 1)[-1])
+    if mesh is None or mesh.get("Type") != "SkeletalMesh":
+        raise StepError("CUE4Parse wrote no SkeletalMesh for %s" % mesh_path)
+    psk_mats, psk_faces = counts["materials"], counts["faces_per_material"]
+    # UE Viewer writes one PSK material per LOD0 SECTION, in section order: a slot no section uses is left
+    # out (the Nikke Plus jacketless mesh's MI_Basebody_V02_F2, the nude bodies' empty heels / pubic-hair
+    # slots), a slot two sections use comes twice, a disabled section is there too (Crimson Wings OP: UV2 in
+    # sections 1 and 3, a 1766-triangle proxy section the game does not draw) - checked by triangle counts
+    sections = (mesh.get("LODModels") or [{}])[0].get("Sections") or []
+    if len(sections) != len(psk_mats) or [s.get("NumTriangles", 0) for s in sections] != psk_faces:
+        raise StepError("PSK materials %s (faces %s) do not match the mesh's sections %s (triangles %s): the "
+                        "game's own mesh, not the mod's?" % (psk_mats, psk_faces,
+                                                             [s.get("MaterialIndex") for s in sections],
+                                                             [s.get("NumTriangles") for s in sections]))
+    all_slots = mesh.get("SkeletalMaterials") or []
+    order = [s.get("MaterialIndex", 0) for s in sections]
+    slots = []
+    for i, j in enumerate(order):
+        m = all_slots[j]
+        mat = m.get("Material") or {}
+        path = mat.get("ObjectPath") or ""
+        mi = hq.quoted(mat.get("ObjectName", "")) if mat else ""
+        psk_name = psk_mats[i]
+        use = mi or (psk_name if psk_name and not re.match(r"material_?\d+$", psk_name, re.I) else "") \
+            or m.get("MaterialSlotName") or "slot%d" % i
+        chain, textures, blendmode, vectors, scalars = [], {}, None, {}, {}
+        if mi:
+            staged, note = hq.flatten(mi, mats)
+            chain = note.get("chain", [])
+            blendmode = note.get("blend")
+            if staged:
+                pr = staged[0]["Properties"]
+                textures = {t["ParameterInfo"]["Name"]: t["ParameterValue"]["ObjectPath"]
+                            for t in pr["TextureParameterValues"]}
+                vectors = {t["ParameterInfo"]["Name"]: t["ParameterValue"] for t in pr["VectorParameterValues"]}
+                scalars = {t["ParameterInfo"]["Name"]: t["ParameterValue"] for t in pr["ScalarParameterValues"]}
+        slots.append({"index": i, "mesh_index": j, "MaterialSlotName": m.get("MaterialSlotName"),
+                      "disabled": bool(sections[i].get("bDisabled")),
+                      # the game simulates this section as cloth (NvCloth); the PSK holds its bind pose
+                      "cloth": int(sections[i].get("CorrespondClothAssetIndex", -1)
+                                   if sections[i].get("CorrespondClothAssetIndex") is not None else -1) >= 0,
+                      "resolved": path or None, "psk": psk_name, "use": use, "chain": chain,
+                      "textures": textures, "blend": blendmode, "vectors": vectors, "scalars": scalars,
+                      "MaterialInterface": {"ObjectName": "MaterialInstanceConstant'%s'" % use}})
+    return slots, mesh, [all_slots[j].get("MaterialSlotName") for j in range(len(all_slots)) if j not in order]
+
+
+def run_fill(lk, label, slots, uout, lw, blend, obj, need_of, cns, jdir, tag):
+    """fill.json for one object of the package (the outfit, or the attached hair) -> fill_materials.py.
+    need_of(slot) says whether the slot is still empty.  Returns (report, textures not found)."""
+    mod = lk["mod"]
+    index = json.load(open(MATERIAL_INDEX, encoding="utf-8"))
+    mod_png = {}
+    for p in uout.rglob("*.png"):
+        mod_png.setdefault(p.stem.lower(), str(p))
+    fetch = {}
+
+    def png_for(object_path):
+        n = object_path.split(".")[0].rsplit("/", 1)[-1]
+        if n.lower() in mod_png:
+            return mod_png[n.lower()]
+        fetch[n] = object_path
+        return n                                        # resolved after the fetch
+    spec_slots, hidden_by_mod = [], []
+    jidx = JsonIndex(jdir)
+    # CNS colour controls (Laniakea's hair: root / tip colours per material) are what the game shows by default
+    cns_vectors = {}
+    for v in cns.get("vectors") or []:
+        cns_vectors.setdefault(v["index"], {})[v["param"]] = v["value"]
+    for s in slots:
+        need = need_of(s)
+        if s.get("disabled") or any(HIDE_RE.match(x) for x in s["chain"][1:]):
+            # the mod points the slot at an invisible material (YoRHa Ceremonial's arms / legs / hands skin
+            # under gloves and stockings, its pubic hair: parent "Hide") - not drawn in the game
+            hidden_by_mod.append(s["index"])
+            continue
+        vectors = dict(s.get("vectors", {}))
+        for param, val in cns_vectors.get(s.get("mesh_index", s["index"]), {}).items():
+            vectors[param] = {"R": val[0], "G": val[1], "B": val[2], "A": val[3] if len(val) > 3 else 1.0}
+        rec = {"index": s["index"], "name": s["use"], "need": need, "ancestors": s["chain"][1:],
+               "sources": {x: index[x] for x in s["chain"][1:] if x in index}, "textures": {},
+               "vectors": vectors, "scalars": s.get("scalars", {}), "blend": s.get("blend")}
+        if need:
+            # also when an archived ancestor exists: fill_materials falls back to these when the ancestor's
+            # colour image is none of this instance's maps (Crimson Wings' vinyl Inst_1 / Inst_2 would get
+            # the master's default MI_CH_NPC_Lilly_01_Skin_2_A on the outfit's UVs)
+            t = s["textures"]
+            for k, keys in (("base", BASE_KEYS), ("normal", NORMAL_KEYS), ("orm", ORM_KEYS),
+                            ("hair_alpha", ("alpha",)), ("hair_adir", ("hairtexture",))):
+                op = pick(t, keys)
+                if op:
+                    rec["textures"][k] = png_for(op)
+            rec["textures"]["alpha_masked"] = (s.get("blend") or "").endswith(("Masked", "Translucent"))
+            rec["own_maps"] = sorted({v.split(".")[0].rsplit("/", 1)[-1] for v in t.values() if v})
+        if need and len(s["chain"]) > 1:
+            # the copied ancestor keeps its own maps: the ones this instance sets itself go in afterwards
+            # (Crimson Wings' Inst_1 = the vinyl MI_EVE_Cos_08_Vinyl + the outfit's own Baked NormalMap);
+            # a map the ancestor only gets from its master's graph has no image to find by name - left out
+            rec["retex"] = {anc: [{"param": d["param"], "from": d["from"].split(".")[0].rsplit("/", 1)[-1],
+                                   "png": png_for(d["to"])} for d in diffs if d["from"]]
+                            for anc, diffs in retex_for(jidx, s["chain"]).items()}
+        spec_slots.append(rec)
+    # CNS numbers the mesh's material slots; the Blender object has only the drawn ones (slots.json)
+    to_blender = {}
+    for s in slots:
+        to_blender.setdefault(s.get("mesh_index", s["index"]), []).append(s["index"])
+    hide = [i for j in cns["hide"] for i in to_blender.get(j, [])]
+    overrides = []
+    for o in cns["overrides"]:
+        for i in to_blender.get(o["index"], []):
+            overrides.append({"index": i, "param": o["param"], "png": png_for(o["texture"]),
+                              "texture": o["texture"], "option": o["option"], "name": o["name"]})
+    got = {}
+    if fetch:
+        fdir = lw / (tag + "_tex" if tag != "fill" else "fill_tex")
+        fdir.mkdir(exist_ok=True)
+        with GamePaks(WORK / mod / "cue" / label / "paks", lk["stage"]) as paks:
+            for n, op in fetch.items():
+                try:
+                    hq.cue4parse([hq.package_glob(op, True)[:-2] + ".uasset"], str(fdir), paks, fmt="png")
+                except SystemExit:
+                    pass
+                hits = list(fdir.rglob(n + ".png"))
+                if hits:
+                    got[n] = str(hits[0])
+    for rec in spec_slots:
+        for k in ("base", "normal", "orm", "hair_alpha", "hair_adir"):
+            v = rec["textures"].get(k)
+            if v and not os.path.isfile(v):
+                rec["textures"][k] = got.get(v)
+        for diffs in (rec.get("retex") or {}).values():
+            for d in diffs:
+                if d["png"] and not os.path.isfile(d["png"]):
+                    d["png"] = got.get(d["png"])
+    overrides = [dict(o, png=got.get(o["png"], o["png"])) for o in overrides]
+    missing_tex = [o["png"] for o in overrides if not os.path.isfile(o["png"])]
+    overrides = [o for o in overrides if os.path.isfile(o["png"])]
+    spec = {"object": obj, "slots": spec_slots, "overrides": overrides,
+            "hide": sorted(set(hide) | set(hidden_by_mod)), "hidden_by_mod": hidden_by_mod,
+            "mesh_index": {s["index"]: s.get("mesh_index", s["index"]) for s in slots}}
+    json.dump(spec, open(lw / (tag + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    rc, dt = run([BLENDER, "-b", "--factory-startup", str(blend), "--python",
+                  os.path.join(HERE, "fill_materials.py"), "--", str(lw / (tag + ".json"))], lw / (tag + ".log"))
+    text = open(lw / (tag + ".log"), encoding="utf-8", errors="replace").read()
+    if "SB_FILL=" not in text:
+        raise StepError("%s failed rc %s (see %s)" % (tag, rc, lw / (tag + ".log")))
+    rep = json.loads(text.split("SB_FILL=", 1)[1].splitlines()[0])
+    return dict(rep, seconds=round(dt)), missing_tex
 
 
 def main():
@@ -255,62 +421,13 @@ def main():
             status[step] = dict(psk=str(psk), **psk_counts(psk))
         elif step == "cue":
             cd = WORK / mod / "cue" / label
-            jdir = cd / "json"
-            shutil.rmtree(jdir, ignore_errors=True)
-            try:
-                with GamePaks(cd / "paks", lk["stage"]) as paks:
-                    mats = hq.read_game([lk["mesh"] + ".uasset"], str(jdir), paks, any_mount=True)
-            except SystemExit as e:
-                raise StepError("CUE4Parse: %s" % str(e)[-600:])
-            mesh = mats.get(lk["mesh"].rsplit("/", 1)[-1])
-            if mesh is None or mesh.get("Type") != "SkeletalMesh":
-                raise StepError("CUE4Parse wrote no SkeletalMesh for %s" % lk["mesh"])
-            psk_mats = status["umodel"]["materials"]
             if "faces_per_material" not in status["umodel"]:
                 status["umodel"].update(psk_counts(Path(status["umodel"]["psk"])))
-            psk_faces = status["umodel"]["faces_per_material"]
-            # UE Viewer writes one PSK material per LOD0 SECTION, in section order: a slot no section uses is left
-            # out (the Nikke Plus jacketless mesh's MI_Basebody_V02_F2, the nude bodies' empty heels / pubic-hair
-            # slots), a slot two sections use comes twice, a disabled section is there too (Crimson Wings OP: UV2 in
-            # sections 1 and 3, a 1766-triangle proxy section the game does not draw) - checked by triangle counts
-            sections = (mesh.get("LODModels") or [{}])[0].get("Sections") or []
-            if len(sections) != len(psk_mats) or [s.get("NumTriangles", 0) for s in sections] != psk_faces:
-                raise StepError("PSK materials %s (faces %s) do not match the mesh's sections %s (triangles %s): the "
-                                "game's own mesh, not the mod's?" % (psk_mats, psk_faces,
-                                                                     [s.get("MaterialIndex") for s in sections],
-                                                                     [s.get("NumTriangles") for s in sections]))
-            all_slots = mesh.get("SkeletalMaterials") or []
-            order = [s.get("MaterialIndex", 0) for s in sections]
-            slots = []
-            for i, j in enumerate(order):
-                m = all_slots[j]
-                mat = m.get("Material") or {}
-                path = mat.get("ObjectPath") or ""
-                mi = hq.quoted(mat.get("ObjectName", "")) if mat else ""
-                psk_name = psk_mats[i]
-                use = mi or (psk_name if psk_name and not re.match(r"material_?\d+$", psk_name, re.I) else "") \
-                    or m.get("MaterialSlotName") or "slot%d" % i
-                chain, textures, blendmode, vectors, scalars = [], {}, None, {}, {}
-                if mi:
-                    staged, note = hq.flatten(mi, mats)
-                    chain = note.get("chain", [])
-                    blendmode = note.get("blend")
-                    if staged:
-                        pr = staged[0]["Properties"]
-                        textures = {t["ParameterInfo"]["Name"]: t["ParameterValue"]["ObjectPath"]
-                                    for t in pr["TextureParameterValues"]}
-                        vectors = {t["ParameterInfo"]["Name"]: t["ParameterValue"] for t in pr["VectorParameterValues"]}
-                        scalars = {t["ParameterInfo"]["Name"]: t["ParameterValue"] for t in pr["ScalarParameterValues"]}
-                slots.append({"index": i, "mesh_index": j, "MaterialSlotName": m.get("MaterialSlotName"),
-                              "disabled": bool(sections[i].get("bDisabled")),
-                              "resolved": path or None, "psk": psk_name, "use": use, "chain": chain,
-                              "textures": textures, "blend": blendmode, "vectors": vectors, "scalars": scalars,
-                              "MaterialInterface": {"ObjectName": "MaterialInstanceConstant'%s'" % use}})
+            slots, mesh, undrawn = read_slots(lk, lk["mesh"], status["umodel"], cd / "json", cd / "paks")
             json.dump(slots, open(lw / "slots.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             status[step] = {"slots": [(s["MaterialSlotName"], s["use"], bool(s["resolved"]), len(s["chain"]))
                                       for s in slots],
-                            "undrawn_slots": [all_slots[j].get("MaterialSlotName") for j in range(len(all_slots))
-                                              if j not in order],
+                            "undrawn_slots": undrawn, "cloth_slots": [s["index"] for s in slots if s["cloth"]],
                             "skeleton": ((mesh.get("Properties") or {}).get("Skeleton") or {}).get("ObjectName")}
         elif step == "swap":
             base = ARCH_EVE / lk["base"]
@@ -328,104 +445,59 @@ def main():
             status[step] = {"bone_fit": rep.get("bone_fit"), "slots": rep.get("slots"),
                             "missing_textures": rep.get("missing_textures", []), "height_cm": rep.get("height_cm"),
                             "seconds": round(dt)}
-            for later in ("fill", "texfix", "xps", "pmx", "preview"):
+            for later in ("fill", "texfix", "cloth", "hair", "xps", "pmx", "preview"):
                 status.pop(later, None)                    # a new package: the later steps must run again
         elif step == "fill":
             slots = json.load(open(lw / "slots.json", encoding="utf-8"))
-            index = json.load(open(MATERIAL_INDEX, encoding="utf-8"))
             sw = status["swap"]["slots"] or {}
             cns = cns_defaults(lk)
-            mod_png = {}
-            for p in uout.rglob("*.png"):
-                mod_png.setdefault(p.stem.lower(), str(p))
-            wanted, fetch = {}, {}
-
-            def png_for(object_path):
-                n = object_path.split(".")[0].rsplit("/", 1)[-1]
-                if n.lower() in mod_png:
-                    return mod_png[n.lower()]
-                fetch[n] = object_path
-                return n                                        # resolved after the fetch
-            spec_slots, hidden_by_mod = [], []
-            jidx = JsonIndex(WORK / mod / "cue" / label / "json")
-            for s in slots:
-                src = (sw.get(s["use"]) or {}).get("source", "")
-                need = src in ("as imported", "none", "")
-                if s.get("disabled") or any(HIDE_RE.match(x) for x in s["chain"][1:]):
-                    # the mod points the slot at an invisible material (YoRHa Ceremonial's arms / legs / hands skin
-                    # under gloves and stockings, its pubic hair: parent "Hide") - not drawn in the game
-                    hidden_by_mod.append(s["index"])
-                    continue
-                rec = {"index": s["index"], "name": s["use"], "need": need, "ancestors": s["chain"][1:],
-                       "sources": {x: index[x] for x in s["chain"][1:] if x in index}, "textures": {},
-                       "vectors": s.get("vectors", {}), "scalars": s.get("scalars", {}), "blend": s.get("blend")}
-                if need:
-                    # also when an archived ancestor exists: fill_materials falls back to these when the ancestor's
-                    # colour image is none of this instance's maps (Crimson Wings' vinyl Inst_1 / Inst_2 would get
-                    # the master's default MI_CH_NPC_Lilly_01_Skin_2_A on the outfit's UVs)
-                    t = s["textures"]
-                    for k, keys in (("base", BASE_KEYS), ("normal", NORMAL_KEYS), ("orm", ORM_KEYS)):
-                        op = pick(t, keys)
-                        if op:
-                            rec["textures"][k] = png_for(op)
-                    rec["textures"]["alpha_masked"] = (s.get("blend") or "").endswith(("Masked", "Translucent"))
-                    rec["own_maps"] = sorted({v.split(".")[0].rsplit("/", 1)[-1] for v in t.values() if v})
-                if need and len(s["chain"]) > 1:
-                    # the copied ancestor keeps its own maps: the ones this instance sets itself go in afterwards
-                    # (Crimson Wings' Inst_1 = the vinyl MI_EVE_Cos_08_Vinyl + the outfit's own Baked NormalMap);
-                    # a map the ancestor only gets from its master's graph has no image to find by name - left out
-                    rec["retex"] = {anc: [{"param": d["param"], "from": d["from"].split(".")[0].rsplit("/", 1)[-1],
-                                           "png": png_for(d["to"])} for d in diffs if d["from"]]
-                                    for anc, diffs in retex_for(jidx, s["chain"]).items()}
-                spec_slots.append(rec)
-            # CNS numbers the mesh's material slots; the Blender object has only the drawn ones (slots.json)
-            to_blender = {}
-            for s in slots:
-                to_blender.setdefault(s.get("mesh_index", s["index"]), []).append(s["index"])
-            cns["hide"] = [i for j in cns["hide"] for i in to_blender.get(j, [])]
-            overrides = []
-            for o in cns["overrides"]:
-                for i in to_blender.get(o["index"], []):
-                    overrides.append({"index": i, "param": o["param"], "png": png_for(o["texture"]),
-                                      "texture": o["texture"], "option": o["option"], "name": o["name"]})
-            got = {}
-            if fetch:
-                fdir = lw / "fill_tex"
-                fdir.mkdir(exist_ok=True)
-                with GamePaks(WORK / mod / "cue" / label / "paks", lk["stage"]) as paks:
-                    for n, op in fetch.items():
-                        try:
-                            hq.cue4parse([hq.package_glob(op, True)[:-2] + ".uasset"], str(fdir), paks, fmt="png")
-                        except SystemExit:
-                            pass
-                        hits = list(fdir.rglob(n + ".png"))
-                        if hits:
-                            got[n] = str(hits[0])
-            for rec in spec_slots:
-                for k in ("base", "normal", "orm"):
-                    v = rec["textures"].get(k)
-                    if v and not os.path.isfile(v):
-                        rec["textures"][k] = got.get(v)
-                for diffs in (rec.get("retex") or {}).values():
-                    for d in diffs:
-                        if d["png"] and not os.path.isfile(d["png"]):
-                            d["png"] = got.get(d["png"])
-            overrides = [dict(o, png=got.get(o["png"], o["png"])) for o in overrides]
-            missing_tex = [o["png"] for o in overrides if not os.path.isfile(o["png"])]
-            overrides = [o for o in overrides if os.path.isfile(o["png"])]
-            spec = {"object": "Eve_Body_Mesh_01", "slots": spec_slots, "overrides": overrides,
-                    "hide": sorted(set(cns["hide"]) | set(hidden_by_mod)), "hidden_by_mod": hidden_by_mod,
-                    "mesh_index": {s["index"]: s.get("mesh_index", s["index"]) for s in slots}}
-            json.dump(spec, open(lw / "fill.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-            rc, dt = run([BLENDER, "-b", "--factory-startup", str(blend), "--python",
-                          os.path.join(HERE, "fill_materials.py"), "--", str(lw / "fill.json")], lw / "fill.log")
-            text = open(lw / "fill.log", encoding="utf-8", errors="replace").read()
-            if "SB_FILL=" not in text:
-                raise StepError("fill failed rc %s (see %s)" % (rc, lw / "fill.log"))
-            rep = json.loads(text.split("SB_FILL=", 1)[1].splitlines()[0])
+            rep, missing_tex = run_fill(lk, label, slots, uout, lw, blend, "Eve_Body_Mesh_01",
+                                        lambda s: (sw.get(s["use"]) or {}).get("source", "") in ("as imported", "none", ""),
+                                        cns, WORK / mod / "cue" / label / "json", "fill")
             status[step] = dict(rep, cns_fit=cns["fit"], cns_parameters=cns["parameters"],
-                                cns_material_overrides=cns.get("material_overrides"), textures_not_found=missing_tex,
-                                seconds=round(dt))
+                                cns_material_overrides=cns.get("material_overrides"), textures_not_found=missing_tex)
+        elif step == "cloth":
+            # sections the game simulates as cloth hang where the PSK's bind pose put them (Laniakea's arm
+            # streamers stick out a metre behind her): long pieces are turned to hang from where they attach
+            slots = json.load(open(lw / "slots.json", encoding="utf-8"))
+            cloth = [s["index"] for s in slots if s.get("cloth") and not s.get("disabled")]
+            if not cloth:
+                status[step] = {"none": True}
+            else:
+                rc, dt = run([BLENDER, "-b", "--factory-startup", str(blend), "--python",
+                              os.path.join(HERE, "hang_cloth.py"), "--", "--slots", ",".join(map(str, cloth))],
+                             lw / "cloth.log")
+                text = open(lw / "cloth.log", encoding="utf-8", errors="replace").read()
+                if "SB_CLOTH=" not in text:
+                    raise StepError("cloth failed rc %s (see %s)" % (rc, lw / "cloth.log"))
+                status[step] = dict(json.loads(text.split("SB_CLOTH=", 1)[1].splitlines()[0]), seconds=round(dt))
+        elif step == "hair":
+            # on the SC_Hair socket (= Bip001-Head): a mod hairstyle in place of Eve's hair (lk["hair"]), accessories
+            # that replace one of the game's (lk["acc"], Evil maid's horns for the Christmas earcuff) - attach_hair.py,
+            # then their materials
+            todo = ([("hair", lk["hair"], [])] if lk.get("hair") else []) + \
+                [("acc%d" % (k + 1), a, ["--keep-hair", "--rigid", a.get("bone", "Bip001-Head"),
+                                         "--name", a.get("name", "Eve_Acc_Mesh_%02d" % (k + 1))])
+                 for k, a in enumerate(lk.get("acc") or [])]
+            status[step] = {"none": True} if not todo else {}
+            cd = WORK / mod / "cue" / label
+            for tag, part, extra in todo:
+                psk = find_psk(uout, part["mesh"])
+                if psk is None:
+                    raise StepError("UE Viewer wrote no PSK for %s" % part["mesh"])
+                pslots, _mesh, _und = read_slots(lk, part["mesh"], psk_counts(psk), cd / (tag + "_json"), cd / "paks")
+                json.dump(pslots, open(lw / (tag + "_slots.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+                rc, dt = run([BLENDER, "-b", "--factory-startup", str(blend), "--python",
+                              os.path.join(HERE, "attach_hair.py"), "--", "--psk", str(psk)] + extra, lw / (tag + ".log"))
+                text = open(lw / (tag + ".log"), encoding="utf-8", errors="replace").read()
+                if "SB_HAIR=" not in text:
+                    raise StepError("%s failed rc %s (see %s)" % (tag, rc, lw / (tag + ".log")))
+                attach = json.loads(text.split("SB_HAIR=", 1)[1].splitlines()[0])
+                pcns = cns_defaults(dict(lk, mesh=part["mesh"]))
+                rep, missing_tex = run_fill(lk, label, pslots, uout, lw, blend, attach["name"], lambda s: True, pcns,
+                                            cd / (tag + "_json"), tag + "_fill")
+                status[step][tag] = {"mesh": part["mesh"], "attach": attach, "fill": rep, "cns_fit": pcns["fit"],
+                                     "textures_not_found": missing_tex, "seconds": round(dt) + rep.get("seconds", 0)}
         elif step == "texfix":
             mod_png = {}
             for p in uout.rglob("*.png"):
@@ -468,7 +540,8 @@ def main():
         elif step == "preview":
             plog = PMX_OUT / "_logs" / (label + "_preview.log")
             rc, dt = run([BLENDER, "-b", "--python", os.path.join(SB, "preview_pmx_blender.py"), "--",
-                          "--pmx", status["pmx"]["pmx"], "--dance-views", "front,back"], plog, timeout=3600)
+                          "--pmx", status["pmx"]["pmx"], "--dance-views", "front,back"] + list(lk.get("preview_args", [])),
+                         plog, timeout=3600)
             text = open(plog, encoding="utf-8", errors="replace").read()
             if "PMX_PREVIEW=" not in text:
                 raise StepError("preview failed rc %s (see %s)" % (rc, plog))

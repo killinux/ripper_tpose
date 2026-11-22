@@ -14,6 +14,53 @@
 
 ---
 
+## 2026-11-22 — 剑星：5 个 Vindictus mod 出 Blender / 高清 Blender / PMX / XPS（6 套）；批处理新加「换发型 / 加饰品」和「布料段下垂 + 飘带物理」
+
+11-14 调研的剑星 Vindictus mod，当时只做了 Demon Maiden 一个样品（只有服装）。用户下齐了剩下的 7 个文件，这次补完。
+
+**结果**（成品在 `E:\game_export\StellarBlade\Eve\{blend,xps,pmx}\<包名>\`，画廊 `scripts/stellarblade/nexus_batch/index.html` 现在 54 套）
+
+| 一套 | mod | 底包 | 另外做了什么 |
+|---|---|---|---|
+| `Mod_HeraldOfGoddess` | #1670 CNS | `CH_P_EVE_23` | — |
+| `Mod_VindictusLaniakea` | #2233 CNS | `CH_P_EVE_01_Body` | 换上它的 CNS 发型（金色侧马尾、蓝色发梢）；前臂上两条飘带转成下垂、有物理 |
+| `Mod_EvilMaid` | #1347 替换型 | `CH_P_EVE_37_TypeB` | 加上它的角（替换圣诞 DLC 的雪橇耳饰）；身体用 mod 的皮肤贴图 |
+| `Mod_SummerVacation`、`_Tits` | #1487 替换型 | `CH_P_EVE_51` | 身体用 mod 的皮肤贴图 |
+| `Mod_VindictusDemonMaiden_Hair` | #1807 CNS + 发型替换 | `CH_P_EVE_01_Body` | 换上它的发型（白发夹红发、黑角）；11-14 只有服装的那套还在 |
+
+**新加 / 改了什么**（`scripts/stellarblade/nexus_batch/`）
+
+- **`attach_hair.py`（新）**：清单里写了 `hair`（mod 的发型）或 `acc`（饰品）的套，在 run_look 新加的 `hair` 一步里挂上去：
+  - 游戏把发型挂在 `SC_Hair` 挂点上，它就在 `Bip001-Head`，没有偏移（`CH_P_EVE_01_Skeleton` 的挂点表）。
+    挂的是发型网格的组件坐标系，发型根骨自己的朝向不起作用。
+  - 归档包里默认发型的根骨 `Hair_Root` 当初是对到挂点上的。直接把新发型的根骨对上去，Nikke_03 发型转了 180°。
+    现在挂点坐标系 = `Hair_Root` 的骨骼矩阵去掉导入器的骨骼轴约定（一个轴的循环置换），三套的方向都对。
+  - 发型换掉 Eve 原来的三个头发物体和它们的 38 根骨骼；和底包重名的骨骼（`Root`、Laniakea 的 `root`）加 `Hair2_`，
+    名字不像头发的加 `Hair_`。PMX 导出的 mmd_cloth_physics 只给头骨下面名字像头发的骨骼做物理。
+  - 饰品（`--keep-hair --rigid Bip001-Head`）不删东西，整个绑在头骨上。
+- **`hang_cloth.py`（新）**，run_look 的 `cloth` 一步：网格分段带布料模拟资产（`CorrespondClothAssetIndex >= 0`）的，
+  游戏里由 NvCloth 模拟，网格里存的是绑定姿势。Laniakea 的飘带因此水平伸在身后一米多。
+  - 长于 25 cm 的长条按挂接点转成竖直下垂；
+  - 顺着它加一串骨骼（`Streamer_L/R_01..07`），PMX 里有飘带物理。不加骨骼时，飘带刚性跟着前臂，一抬手就竖到头顶上。
+- **补材质**（`fill_materials.py`、`run_look.py`）：
+  - 父链里有游戏头发母材质 `MA_CH_Hair` 的槽，按发根色 → 发梢色做。渐变走向用 `HairTexture`（ADIR）的第 4 个通道，
+    透明用 `Alpha` 贴图，和归档里的头发材质一样是 Principled + 透明图。
+  - CNS 的默认颜色（`VectorControls`）套进去，比如 Laniakea 的金发、蓝色发梢。
+  - cue / fill 两步抽成 `read_slots()` / `run_fill()`，发型和饰品也用它们。
+- **`looks.py` / `stage.py`**：
+  - 加上这 6 套；
+  - `stage.py` 的清单可以写完整路径；
+  - Laniakea 的舞蹈预览按 MMD 物理方式渲染（`preview_args`）。在 Blender 里用 mmd_tools 默认物理时，它的侧马尾一开始就翻到头顶上；MMD 方式下正常。
+- `finish.py`：README 和画廊卡片写上换发型 / 饰品 / 布料段；`scripts/stellarblade/README.md` 新加「Vindictus 那批 mod」一节。
+
+**验证**
+
+- 6 套 11 步全过，归档自检全过，高清版 6/6。
+- 插件实测：每套 15 到 21 个材质全部换上，没有缺图，重导出一致。
+- PMX 里被当成辅助壳的只有面部 6 个。
+- 物理：Demon Maiden 头发 27 条链、143 个刚体；Laniakea 头发 3 条链，两条飘带各 8 个刚体。静止时链根漂移都小于 3 cm。
+- 渲染核对：Demon Maiden 和 Laniakea 的前发在前、长发在后；Evil maid 的角左右对称长在头顶两侧。
+
 ## 2026-11-21 — 剑星 Nexus mod：依赖下齐，剩下 26 套补完（48 套全部导完）；补材质修三处：实例自己的贴图、母材质的默认图、半透明材质被当成辅助壳
 
 11-15 那批 48 套里有 26 套在等依赖文件。今天用户下齐了 4 个：

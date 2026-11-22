@@ -1,5 +1,5 @@
 """The 48 Eve looks from the 12 Stellar Blade mods in E:\\Downloads\\eve_mod_download (user 11-15: one per distinct
-mesh).  Each look: label (Eve_Mod_<x> / Eve_Nude_<x>), the work folder under D:\\stellarblade_exports\\mods, the
+mesh), and since 11-22 the Vindictus mods of the 11-14 survey (Herald of Goddess, Laniakea, Evil maid, Summer vacation).  Each look: label (Eve_Mod_<x> / Eve_Nude_<x>), the work folder under D:\\stellarblade_exports\\mods, the
 .pak/.utoc/.ucas folders to stage (relative to <mod>\\unzipped; non-recursive), the mesh's virtual package path, the
 archived Eve package it is swapped into, credits.  `needs`: download still missing (look waits)."""
 
@@ -28,6 +28,16 @@ MODS = {
                                   file="RevealingCrimsonWingsNoPantiesV2 1.5"),
     "YoRHaN2TypeB": dict(nexus=3577, author="DeltaDNova", title="CNS - YoRHa No.2 Type B Uniform - Modular",
                          file="YoRHa N2 TypeB Uniform CNS v1.2.1"),
+    # 2026-11-22: the Stellar Blade Vindictus mods of the 11-14 survey (Demon Maiden's outfit alone was done 11-14)
+    "VindictusDemonMaiden": dict(nexus=1807, author="AlomX", title="Vindictus - Demon Maiden - CNS Compatible",
+                                 file="Vindictus - DemonMaiden - Outfit 1.0 + Hair 1.0"),
+    "VindictusLaniakea": dict(nexus=2233, author="AlomX", title="Vindictus - Laniakea Set. Charon's Signature - CNS only",
+                              file="Vindictus - Laniakea 1.0"),
+    "HeraldOfGoddess": dict(nexus=1670, author="NezYx0", title="EVE - Herald of Goddess",
+                            file="(CNS) EVE - Herald of Goddess 1.1.1"),
+    "EvilMaid": dict(nexus=1347, author="songeda", title="Evil maid from Vindictus", file="Evil maid 1.2 + Evil maid horn 1.0"),
+    "SummerVacation": dict(nexus=1487, author="songeda", title="Summer vacation",
+                           file="Summer vacation 1.1 / Summer vacation tits 1.1"),
 }
 
 LOOKS = []
@@ -120,8 +130,34 @@ for name, sub in CW.items():
          needs=["#1933 Crimson Wings Base Textures For Replacement 5.1"] +
                (["#1933 Crimson Wings Nude and Stocking 5.1"] if name == "Nude" else []))
 
+# --- 2026-11-22: the Vindictus mods (CNS outfits on the plain body package, songeda's replacers on the outfit they
+# replace; their mounts are the mod's own name, e.g. evilmaid2337/Content/art/... = /Game/Art/...)
+look("Eve_Mod_HeraldOfGoddess", "HeraldOfGoddess", [("HeraldOfGoddess", "~mods/CustomNanosuitSystem")],
+     "SB/Content/OutfitMods/Herald_of_Goddess/CH_P_EVE_HOG", "CH_P_EVE_23", "Herald of Goddess", date="2026-11-22")  # 23's skirt bones
+look("Eve_Mod_VindictusLaniakea", "VindictusLaniakea", [("VindictusLaniakea", ".")],
+     "SB/Content/OutfitMods/VindictusLaniakea/Laniakea", "CH_P_EVE_01_Body", "Vindictus Laniakea",
+     hair=dict(mesh="SB/Content/OutfitMods/VindictusLaniakeaHair/Laniakea_hair"), date="2026-11-22",
+     # Blender's default (mmd_tools) physics flips the side ponytail over the head at once; MMD's way keeps it down
+     preview_args=["--physics", "mmd"])      # its CNS hair (side ponytail)
+look("Eve_Mod_EvilMaid", "EvilMaid",
+     [("EvilMaid", "Evil maid-1347-1-2-1752854499"), ("EvilMaid", "Evil maid horn-1347-1-0-1752387385")],
+     "evilmaid2337/Content/art/character/PC/CH_P_EVE_37/CH_P_EVE_37_TypeB", "CH_P_EVE_37_TypeB", "Evil Maid (Vindictus)",
+     # the horns replace the Christmas DLC's sleigh earcuff: a one-bone accessory on SC_Hair (= the head bone)
+     acc=[dict(mesh="evilacc/Content/art/character/pc/00_acc/acc_ear_christmas_02/ACC_EAR_Christmas_02",
+               name="Eve_Horn_Mesh_01")], date="2026-11-22")
+look("Eve_Mod_VindictusDemonMaiden_Hair", "VindictusDemonMaiden",
+     [("VindictusDemonMaiden", "Vindictus - DemonMaiden - Outfit-1807-1-0-1754919465"),
+      ("VindictusDemonMaiden", "Vindictus - DemonMaiden - Hair-1807-1-0-1754919553")],
+     "SB/Content/OutfitMods/VindictusDemonMaidenOutfit/CH_P_EVE_DemonMaiden", "CH_P_EVE_01_Body",
+     "Vindictus Demon Maiden (with her hair and horns)",
+     hair=dict(mesh="SB/Content/DLC_2/Art/Character/PC/00_HR/EVE_HR_Nikke_03/EVE_HR_Nikke_03"), date="2026-11-22")  # replaces that hair
+for name, sub in (("", "Summer vacation-1487-1-1-1752848183"), ("_Tits", "Summer vacation tits-1487-1-1-1752848216")):
+    look("Eve_Mod_SummerVacation" + name, "SummerVacation", [("SummerVacation", sub)],
+         "summer651/Content/Art/Character/PC/CH_P_EVE_51/CH_P_EVE_51", "CH_P_EVE_51",
+         "Summer Vacation" + (" (tits)" if name else ""), date="2026-11-22")
+
 BY_LABEL = {lk["label"]: lk for lk in LOOKS}
-assert len(BY_LABEL) == len(LOOKS) == 48, len(LOOKS)
+assert len(BY_LABEL) == len(LOOKS), len(LOOKS)
 
 # dependency downloads (add_dep.py unpacks them into <work>\<mod>\unzipped\<dep>\): once a mod's dep folders are
 # there, its looks stage them too (every folder in them holding a .utoc) and stop waiting

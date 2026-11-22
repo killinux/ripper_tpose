@@ -33,6 +33,14 @@ MODS = {
     "EveOriginalProportions": ["EveOriginalProportions-30-2-1-1750283806.rar"],
     "RevealingCrimsonWings": ["RevealingCrimsonWingsNoPantiesV2-221-1-5-1750608867.zip"],
     "YoRHaN2TypeB": ["YoRHa N2 TypeB Uniform CNS v1.2.1 3577 1.2.1 2026-08-17T13-13Z cG409a51z.zip"],
+    # 2026-11-22: the Stellar Blade Vindictus mods (full paths: they sit elsewhere in the download folders)
+    "VindictusDemonMaiden": [r"E:\Downloads\1114\Vindictus - DemonMaiden - Outfit-1807-1-0-1754919465.zip",
+                             r"E:\Downloads\Vindictus - DemonMaiden - Hair-1807-1-0-1754919553.zip"],
+    "VindictusLaniakea": [r"E:\Downloads\Vindictus - Laniakea-2233-1-0-1759784265.rar"],
+    "HeraldOfGoddess": [r"E:\Downloads\(CNS) EVE - Herald of Goddess-1670-1-1-1-1753797247.zip"],
+    "EvilMaid": [r"E:\Downloads\Evil maid-1347-1-2-1752854499.zip", r"E:\Downloads\Evil maid horn-1347-1-0-1752387385.zip"],
+    "SummerVacation": [r"E:\Downloads\Summer vacation-1487-1-1-1752848183.zip",
+                       r"E:\Downloads\Summer vacation tits-1487-1-1-1752848216.zip"],
 }
 
 
@@ -53,7 +61,7 @@ def main(names):
         d.mkdir(parents=True, exist_ok=True)
         un = d / "unzipped"
         for a in MODS[short]:
-            src, dst = SRC / a, d / a
+            src, dst = SRC / a, d / Path(a).name           # a full path in MODS replaces SRC
             if not dst.exists() or dst.stat().st_size != src.stat().st_size:
                 shutil.copy2(src, dst)
             sub = un / Path(a).stem if len(MODS[short]) > 1 else un

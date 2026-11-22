@@ -152,6 +152,53 @@ def build(name, tex):
     return m
 
 
+def hair_material(name, s):
+    """The game's hair shader (MA_CH_Hair) cut down to what the archive's hair materials are (Principled + an opacity
+    map, HASHED): colour RootColor -> TipColor along the strand by the HairTexture ADIR's 4th channel (0 at the root,
+    1 at the tip; R = strand mask, G = depth, B = strand id), opacity = the Alpha map, Roughness.  CNS colour
+    controls are already in the vectors (run_look.py).  The PMX / XPS exporters bake the node colour + alpha."""
+    tex = s.get("textures") or {}
+    vec = s.get("vectors") or {}
+    sc = {k.lower(): v for k, v in (s.get("scalars") or {}).items() if isinstance(v, (int, float))}
+
+    def colour(key, default):
+        v = vec.get(key)
+        return (v.get("R", default[0]), v.get("G", default[1]), v.get("B", default[2]), 1.0) if isinstance(v, dict) \
+            else default
+    root = colour("RootColor", (0.02, 0.016, 0.012, 1.0))
+    tip = colour("TipColor", root)
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    out.location = (500, 0)
+    p = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    nt.links.new(p.outputs["BSDF"], out.inputs["Surface"])
+    p.inputs["Specular"].default_value = sc.get("specular", 0.5)
+    p.inputs["Roughness"].default_value = max(0.05, min(1.0, sc.get("roughness", 0.3)))
+    mix = nt.nodes.new("ShaderNodeMixRGB")
+    mix.location = (-300, 200)
+    mix.inputs["Color1"].default_value = root
+    mix.inputs["Color2"].default_value = tip
+    mix.inputs["Fac"].default_value = 0.5
+    nt.links.new(mix.outputs["Color"], p.inputs["Base Color"])
+    notes = ["root %.2f %.2f %.2f" % root[:3], "tip %.2f %.2f %.2f" % tip[:3]]
+    if tex.get("hair_adir") and os.path.isfile(tex["hair_adir"]):
+        n = nt.nodes.new("ShaderNodeTexImage")
+        n.image, n.location = image(tex["hair_adir"], False), (-700, 300)
+        n.image.alpha_mode = "CHANNEL_PACKED"
+        nt.links.new(n.outputs["Alpha"], mix.inputs["Fac"])
+        notes.append("along %s" % os.path.basename(tex["hair_adir"]))
+    if tex.get("hair_alpha") and os.path.isfile(tex["hair_alpha"]):
+        n = nt.nodes.new("ShaderNodeTexImage")
+        n.image, n.location = image(tex["hair_alpha"], False), (-700, -100)
+        nt.links.new(n.outputs["Color"], p.inputs["Alpha"])
+        m.blend_method, m.shadow_method = "HASHED", "HASHED"
+        notes.append("opacity %s" % os.path.basename(tex["hair_alpha"]))
+    return m, "hair (MA_CH_Hair): " + ", ".join(notes)
+
+
 def base_image_node(mat):
     """the image node that feeds the Principled Base Color (through mix / multiply nodes)"""
     p = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
@@ -186,7 +233,10 @@ for s in spec["slots"]:
             bpy.data.materials.remove(cur)
         continue
     new, how, used = None, None, None
-    for a in s.get("ancestors", []):
+    if "MA_CH_Hair" in s.get("ancestors", []):
+        # hair: the archive's copies are one fixed colour (Eve's near-black) - built from this instance's values
+        new, how = hair_material(name + "__tmp", s)
+    for a in s.get("ancestors", []) if new is None else []:
         for cand in (a, a + "_mod"):
             m = bpy.data.materials.get(cand)
             if m is not None and m is not cur and has_images(m):
